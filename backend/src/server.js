@@ -1,15 +1,12 @@
-// server.js — entry point. Wires middleware + routes together.
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const adminUsers = require("./routes/adminUsers");
+require('dotenv').config();
+const { createApp } = require('./app');
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 4000;
 
-app.get("/health", (req, res) => res.json({ ok: true }));
-app.use("/api/admin/users", adminUsers);
+const app = createApp();
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Brick x Brick backend listening on http://localhost:${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Auth mode: ${process.env.AUTH_MODE || 'stub'}`);
+});

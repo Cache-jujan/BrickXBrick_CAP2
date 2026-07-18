@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment variables — contains the Supabase service-role key and the
+# Neon connection string. Never commit this file.
+.env
+.env.local
+
+# Uploaded receipt files are a temporary local staging area only; the
+# real, permanent copies live in Cloudflare R2. Keep the folder in git
+# (via .gitkeep) but not its contents — receipts can contain financial/PII
+# data and shouldn't sit in git history.
+uploads/receipts/*
+!uploads/receipts/.gitkeep
+
+# Logs
+npm-debug.log*
+*.log
+
+# OS / editor junk
+.DS_Store
+.vscode/
+
+# Build output, if a bundler/TS step gets added later
+dist/
+coverage/
+
+gcp-vision-key.json
+*-key.json
