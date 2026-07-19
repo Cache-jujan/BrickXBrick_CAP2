@@ -3,12 +3,18 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const adminUsers = require("./routes/adminUsers");
+const { requireAuth } = require("./middleware/auth"); // adjust path if yours differs
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+app.get("/api/me", requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+
 app.use("/api/admin/users", adminUsers);
 
 const PORT = process.env.PORT || 3000;
