@@ -1,9 +1,9 @@
-// server.js — entry point. Wires middleware + routes together.
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const adminUsers = require("./routes/adminUsers");
-const { requireAuth } = require("./middleware/auth"); // adjust path if yours differs
+const authRoutes = require("./routes/auth");
+const { requireAuth } = require("./middleware/auth");
 
 const app = express();
 app.use(cors());
@@ -16,6 +16,7 @@ app.get("/api/me", requireAuth, (req, res) => {
 });
 
 app.use("/api/admin/users", adminUsers);
+app.use("/api/auth", authRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
