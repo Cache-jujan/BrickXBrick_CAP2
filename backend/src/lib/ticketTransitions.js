@@ -1,9 +1,16 @@
 // ticketTransitions.js — F4 ticket-status state machine.
 // Pending is the only starting state; Resolved/Rejected are terminal.
-// Any other transition is rejected with a 409 (see server.js error middleware).
+//
+// Pending -> Acknowledged or Rejected
+// Acknowledged -> Resolved or Rejected
+//
+// Note: this table only enforces which STATES a transition may occur between.
+// It does not know WHO is making the transition. routes/tickets.js applies
+// additional role-based preconditions on top of this (e.g. a PM may only
+// reject from Pending, never from Acknowledged) — see the /reject handler.
 
 const ALLOWED_TRANSITIONS = {
-    Pending: ["Acknowledged", "Resolved", "Rejected"],
+    Pending: ["Acknowledged", "Rejected"],
     Acknowledged: ["Resolved", "Rejected"],
     Resolved: [],
     Rejected: []
