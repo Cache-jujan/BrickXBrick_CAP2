@@ -4,6 +4,7 @@ const cors = require("cors");
 const adminUsers = require("./routes/adminUsers");
 const authRoutes = require("./routes/auth");
 const { requireAuth } = require("./middleware/auth");
+const syncRoutes = require("./routes/sync");
 
 const app = express();
 app.use(cors());
@@ -20,3 +21,5 @@ app.use("/api/auth", authRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
+
+app.use("/api/sync", syncRoutes);
