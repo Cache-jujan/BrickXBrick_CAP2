@@ -17,6 +17,7 @@ app.get("/api/me", requireAuth, (req, res) => {
 
 app.use("/api/admin/users", adminUsers);
 app.use("/api/auth", authRoutes);
+app.use("/api/receipts", require("./routes/receipts"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
