@@ -29,6 +29,7 @@ router.post("/", async (req, res) => {
 
     return res.status(201).json({ status: "synced", uuid });
   } catch (err) {
+    console.error("SYNC ERROR:", err); 
     res.status(500).json({ error: err.message });
   }
 });
