@@ -1,0 +1,92 @@
+/*
+  Brick x Brick — design tokens
+  -------------------------------------------------------------
+  Palette pulled from the project's own title slide: a deep rust/oxide
+  orange as the dominant brand color, a warm cream for soft highlights,
+  and a dark maroon-brown for high-contrast text on cream. Neutral ink
+  and paper tones carry the actual UI surfaces so the orange stays a
+  genuine accent rather than fighting with body content.
+*/
+
+:root {
+  /* Surfaces */
+  --color-bg: #f7f4ef;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1ece3;
+  --color-border: #e4ddd0;
+  --color-border-strong: #d1c7b4;
+
+  /* Text */
+  --color-ink: #241a12;
+  --color-ink-soft: #5c4f3f;
+  --color-ink-faint: #8f8271;
+
+  /* Brand — rust/oxide orange, the dominant accent */
+  --color-brick: #b34a1e;
+  --color-brick-dark: #8a3416;
+  --color-brick-darker: #6e2a12;
+  --color-brick-light: #d97b45;
+  --color-brick-tint: #fbe9dc;
+
+  /* Cream — soft highlight surface, echoes the title-slide pill */
+  --color-cream: #f6e6be;
+  --color-cream-ink: #3d1610;
+
+  /* Secondary accent — used sparingly for informational/neutral states */
+  --color-blueprint: #5c6b6a;
+  --color-blueprint-tint: #e8ebe9;
+
+  /* Status */
+  --color-status-active: #2f6f4e;
+  --color-status-active-bg: #e3efe7;
+  --color-status-risk: #a5751f;
+  --color-status-risk-bg: #f5ecd9;
+  --color-status-overdue: #b34a1e;
+  --color-status-overdue-bg: #fbe9dc;
+  --color-status-inactive: #6b5f4d;
+  --color-status-inactive-bg: #ece6d8;
+
+  /* Feedback */
+  --color-danger: #a23223;
+  --color-danger-bg: #fbe4df;
+  --color-success: #2f6f4e;
+  --color-success-bg: #e3efe7;
+
+  /* Type */
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8375rem;
+  --text-base: 0.9625rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+
+  /* Spacing scale (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(36, 26, 18, 0.06);
+  --shadow-md: 0 8px 20px -8px rgba(36, 26, 18, 0.14);
+  --shadow-lg: 0 16px 32px -12px rgba(36, 26, 18, 0.22);
+
+  /* Layout */
+  --content-max: 1320px;
+  --form-max: 600px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration: 150ms;
+}

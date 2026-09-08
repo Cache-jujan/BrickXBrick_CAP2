@@ -1,0 +1,30 @@
+.create-project {
+  max-width: var(--form-max);
+}
+
+.create-project-title {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-5);
+}
+
+.create-project-card form {
+  display: flex;
+  flex-direction: column;
+}
+
+.create-project-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.create-project-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.create-project-card .banner {
+  margin-bottom: var(--space-4);
+}
