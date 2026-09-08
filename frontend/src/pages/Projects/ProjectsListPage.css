@@ -1,0 +1,33 @@
+.projects-header {
+  margin-bottom: var(--space-5);
+}
+
+.projects-filters {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-4);
+}
+
+.projects-filter {
+  height: 32px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.projects-filter:hover {
+  border-color: var(--color-ink);
+}
+
+.projects-filter-active {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: #fff;
+}
