@@ -50,15 +50,15 @@ async function recalcMilestoneProgress(client, milestoneId) {
     const isNowAtRisk = newStatus === "At Risk" || newStatus === "Overdue";
 
     await client.query(
-        `UPDATE milestones
-            SET completionPercentage = $1,
-                status = $2,
-                completedAt = CASE
-                    WHEN $2 = 'Completed' AND completedAt IS NULL THEN NOW()
-                    WHEN $2 != 'Completed' THEN NULL
-                    ELSE completedAt
-                END
-          WHERE milestoneId = $3`,
+            `UPDATE milestones
+                SET completionPercentage = $1,
+                    status = $2::varchar,
+                    completedAt = CASE
+                        WHEN $2::varchar = 'Completed' AND completedAt IS NULL THEN NOW()
+                        WHEN $2::varchar != 'Completed' THEN NULL
+                        ELSE completedAt
+                    END
+            WHERE milestoneId = $3`,
         [completionPercentage, newStatus, milestoneId]
     );
 
