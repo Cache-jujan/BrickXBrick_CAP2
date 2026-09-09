@@ -29,10 +29,10 @@ app.use("/api/tickets", ticketRoutes);
 //Project Routes
 app.use("/api/projects", projectRoutes);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
-
 app.use("/api/sync", syncRoutes);
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message, details: err.details });
 });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
