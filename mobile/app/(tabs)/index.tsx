@@ -18,8 +18,8 @@ import { OcrResultModal, type OcrResult } from "@/components/ocr-result-modal";
 
 // EXPO_PUBLIC_ prefix is required for Expo to bundle an env var into the app —
 // anything without that prefix is invisible on device, only on your machine.
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.0.107:3000";
-
+import { API_URL } from "@/constants/api";
+console.log("API_URL:", API_URL);
 type Status = "idle" | "uploading" | "success" | "error";
 
 function formatBytes(bytes?: number) {
