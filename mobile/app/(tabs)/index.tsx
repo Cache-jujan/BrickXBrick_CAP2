@@ -10,10 +10,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 
 import { CaptureOptionCard } from "@/components/capture-option-card";
 import { FilePreview, type FileState } from "@/components/file-preview";
-import { OcrResultModal, type OcrResult } from "@/./components/ocr-result-modal";
+import { OcrResultModal, type OcrResult } from "@/components/ocr-result-modal";
 
 // EXPO_PUBLIC_ prefix is required for Expo to bundle an env var into the app —
 // anything without that prefix is invisible on device, only on your machine.
@@ -101,23 +102,22 @@ export default function CaptureScreen() {
     setErrorMessage(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", {
-        uri: file.uri,
-        name: file.name,
-        type: file.type === "image" ? "image/jpeg" : "application/pdf",
-      } as any);
+      const uploadResult = await FileSystem.uploadAsync(
+        `${API_URL}/api/receipts/scan`,
+        file.uri,
+        {
+          httpMethod: "POST",
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: "file",
+          mimeType: file.type === "image" ? "image/jpeg" : "application/pdf",
+        }
+      );
 
-      const response = await fetch(`${API_URL}/api/receipts/scan`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server responded ${response.status}`);
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        throw new Error(`Server responded ${uploadResult.status}`);
       }
 
-      const data = await response.json();
+      const data = JSON.parse(uploadResult.body);
 
       // Backend doesn't extract line items yet — default to an empty list
       // so the modal's items UI has something safe to render either way.
@@ -128,8 +128,8 @@ export default function CaptureScreen() {
     } catch (err) {
       console.error("Upload failed:", err);
 
-      const isNetworkError =
-        err instanceof TypeError && /network request failed/i.test(err.message);
+      const message = err instanceof Error ? err.message : String(err);
+      const isNetworkError = /network|connect|timed out|unreachable/i.test(message);
 
       setErrorMessage(
         isNetworkError
