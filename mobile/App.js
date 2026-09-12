@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, TextInput, Button, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import NetInfo from '@react-native-community/netinfo';
@@ -8,6 +8,7 @@ import { syncAllPending } from './sync';
 export default function App() {
   const [input, setInput] = useState('');
   const [records, setRecords] = useState([]);
+  const isSyncingRef = useRef(false);
 
   const refresh = useCallback(() => {
     setRecords(getAllRecords());
@@ -18,7 +19,7 @@ export default function App() {
     refresh();
 
     const unsubscribe = NetInfo.addEventListener(state => {
-      if (state.isConnected) {
+      if (state.isConnected && !isSyncingRef.current) {
         handleSync();
       }
     });
@@ -34,12 +35,19 @@ export default function App() {
     refresh();
   };
 
-const handleSync = async () => {
-  const results = await syncAllPending(getUnsyncedRecords, markSynced);
-  console.log('SYNC RESULTS:', JSON.stringify(results, null, 2));
-  refresh();
-  Alert.alert('Sync done', `${results.length} record(s) processed`);
-};
+  const handleSync = async () => {
+    if (isSyncingRef.current) return; // covers the manual "Sync now" button too
+    isSyncingRef.current = true;
+    try {
+      const results = await syncAllPending(getUnsyncedRecords, markSynced);
+      console.log('SYNC RESULTS:', JSON.stringify(results, null, 2));
+      refresh();
+      Alert.alert('Sync done', `${results.length} record(s) processed`);
+    } finally {
+      isSyncingRef.current = false;
+    }
+  };
+
 
   return (
     <View style={styles.container}>
@@ -57,7 +65,7 @@ const handleSync = async () => {
         data={records}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <Text>{item.payload} — {item.synced ? '✅ synced' : '⏳ pending'}</Text>
+          <Text>{item.payload} — {item.synced ? '✅ synced :>' : '⏳ pending :| '}</Text>
         )}
       />
     </View>

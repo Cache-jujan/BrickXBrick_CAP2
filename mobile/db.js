@@ -25,7 +25,7 @@ export function getAllRecords() {
 }
 
 export function getUnsyncedRecords() {
-  return db.getAllSync('SELECT * FROM sync_test_records WHERE synced = 0;');
+  return db.getAllSync('SELECT * FROM sync_test_records WHERE synced = 0 ORDER BY created_at ASC;');
 }
 
 export function markSynced(id) {
