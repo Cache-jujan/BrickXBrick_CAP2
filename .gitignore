@@ -9,4 +9,4 @@ android/app/build/
 ios/build/
 geth-data/
 keystore/
-password.txt
+password.txt".env" 

@@ -25,6 +25,13 @@ app.get("/api/me", requireAuth, (req, res) => {
 
 app.use("/api/admin/users", adminUsers);
 app.use("/api/auth", authRoutes);
+app.use("/api/receipts", require("./routes/receipts"));
+
+//Ticket Routes 
+app.use("/api/tickets", ticketRoutes);
+
+//Project Routes
+app.use("/api/projects", projectRoutes);
 
 //Ticket Routes  (F4)
 app.use("/api/tickets", ticketRoutes);
@@ -42,4 +49,12 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend listening on port ${PORT}`);
+});
+
+app.use("/api/sync", syncRoutes);
+app.use((err, req, res, next) => {
+  res.status(err.status || 500).json({ error: err.message, details: err.details });
+});
