@@ -1,0 +1,35 @@
+.banner {
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid transparent;
+}
+
+.banner-title {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.banner-body {
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+}
+
+.banner-error {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.banner-empty {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-ink-soft);
+  text-align: center;
+  padding: var(--space-7) var(--space-5);
+}
+
+.banner-info {
+  background: var(--color-blueprint-tint);
+  border-color: var(--color-blueprint);
+  color: var(--color-blueprint);
+}

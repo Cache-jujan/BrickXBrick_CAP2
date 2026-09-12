@@ -1,7 +1,7 @@
 // tickets.js — F4 ticket creation, acknowledgment, and status transitions.
 
 const express = require("express");
-const { query } = require("../lib/db");
+const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { assertLegalTransition } = require("../lib/ticketTransitions");
@@ -18,6 +18,15 @@ async function getTicket(ticketId) {
         throw err;
     }
     return result.rows[0];
+}
+
+// Small shared helper so every handler logs the same shape of row.
+async function logTransition(client, { ticketId, fromStatus, toStatus, changedBy }) {
+    await client.query(
+        `INSERT INTO ticket_status_transitions (ticketId, fromStatus, toStatus, changedBy)
+         VALUES ($1, $2, $3, $4)`,
+        [ticketId, fromStatus, toStatus, changedBy]
+    );
 }
 
 // POST / — Site Manager creates a ticket on their own assigned project.
@@ -55,15 +64,28 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             throw err;
         }
 
-        const result = await query(
-            `INSERT INTO tickets
-               (projectId, submittedBy, ticketType, subject, description, photoURL)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING *`,
-            [projectID, req.user.id, ticketType, subject, description || null, photoURL || null]
-        );
+        const ticket = await withTransaction(async (client) => {
+            const insertResult = await client.query(
+                `INSERT INTO tickets
+                   (projectId, submittedBy, ticketType, subject, description, photoURL)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 RETURNING *`,
+                [projectID, req.user.id, ticketType, subject, description || null, photoURL || null]
+            );
+            const newTicket = insertResult.rows[0];
 
-        res.status(201).json(result.rows[0]);
+            // Initial audit row: no prior state, lands straight on Pending.
+            await logTransition(client, {
+                ticketId: newTicket.ticketid,
+                fromStatus: null,
+                toStatus: "Pending",
+                changedBy: req.user.id,
+            });
+
+            return newTicket;
+        });
+
+        res.status(201).json(ticket);
     } catch (err) {
         next(err);
     }
@@ -72,7 +94,7 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
 // GET /assigned — tickets currently routed to the calling Purchaser.
 // Pending tickets are naturally excluded: assignedTo is NULL until a PM
 // acknowledges and assigns a Purchaser.
-router.get("/assigned", async (req, res, next) => {
+router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const result = await query(
             "SELECT * FROM tickets WHERE assignedTo = $1 ORDER BY createdAt DESC",
@@ -139,18 +161,33 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
         const ticket = await getTicket(req.params.id);
         assertLegalTransition(ticket.status, "Acknowledged");
 
-        const result = await query(
-            "UPDATE tickets SET status = 'Acknowledged', assignedTo = $1, acknowledgedAt = NOW(), updatedAt = NOW() WHERE ticketId = $2 AND status = $3 RETURNING *",
-            [assignedTo, req.params.id, ticket.status]
-        );
+        const updated = await withTransaction(async (client) => {
+            const updateResult = await client.query(
+                `UPDATE tickets
+                    SET status = 'Acknowledged', assignedTo = $1, acknowledgedBy = $2,
+                        acknowledgedAt = NOW(), updatedAt = NOW()
+                  WHERE ticketId = $3 AND status = $4
+                  RETURNING *`,
+                [assignedTo, req.user.id, req.params.id, ticket.status]
+            );
 
-        if (result.rowCount === 0) {
-            const err = new Error("Ticket status changed before this request was completed");
-            err.status = 409;
-            throw err;
-        }
+            if (updateResult.rowCount === 0) {
+                const err = new Error("Ticket status changed before this request was completed");
+                err.status = 409;
+                throw err;
+            }
 
-        res.json(result.rows[0]);
+            await logTransition(client, {
+                ticketId: req.params.id,
+                fromStatus: ticket.status,
+                toStatus: "Acknowledged",
+                changedBy: req.user.id,
+            });
+
+            return updateResult.rows[0];
+        });
+
+        res.json(updated);
     } catch (err) {
         next(err);
     }
@@ -169,18 +206,32 @@ router.patch("/:id/resolve", requireRole("Purchaser"), async (req, res, next) =>
 
         assertLegalTransition(ticket.status, "Resolved");
 
-        const result = await query(
-            "UPDATE tickets SET status = 'Resolved', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW() WHERE ticketId = $2 AND status = $3 RETURNING *",
-            [req.user.id, req.params.id, ticket.status]
-        );
+        const updated = await withTransaction(async (client) => {
+            const updateResult = await client.query(
+                `UPDATE tickets
+                    SET status = 'Resolved', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW()
+                  WHERE ticketId = $2 AND status = $3
+                  RETURNING *`,
+                [req.user.id, req.params.id, ticket.status]
+            );
 
-        if (result.rowCount === 0) {
-            const err = new Error("Ticket status changed before this request was completed");
-            err.status = 409;
-            throw err;
-        }
+            if (updateResult.rowCount === 0) {
+                const err = new Error("Ticket status changed before this request was completed");
+                err.status = 409;
+                throw err;
+            }
 
-        res.json(result.rows[0]);
+            await logTransition(client, {
+                ticketId: req.params.id,
+                fromStatus: ticket.status,
+                toStatus: "Resolved",
+                changedBy: req.user.id,
+            });
+
+            return updateResult.rows[0];
+        });
+
+        res.json(updated);
     } catch (err) {
         next(err);
     }
@@ -213,18 +264,32 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser"), async (
 
         assertLegalTransition(ticket.status, "Rejected");
 
-        const result = await query(
-            "UPDATE tickets SET status = 'Rejected', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW() WHERE ticketId = $2 AND status = $3 RETURNING *",
-            [req.user.id, req.params.id, ticket.status]
-        );
+        const updated = await withTransaction(async (client) => {
+            const updateResult = await client.query(
+                `UPDATE tickets
+                    SET status = 'Rejected', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW()
+                  WHERE ticketId = $2 AND status = $3
+                  RETURNING *`,
+                [req.user.id, req.params.id, ticket.status]
+            );
 
-        if (result.rowCount === 0) {
-            const err = new Error("Ticket status changed before this request was completed");
-            err.status = 409;
-            throw err;
-        }
+            if (updateResult.rowCount === 0) {
+                const err = new Error("Ticket status changed before this request was completed");
+                err.status = 409;
+                throw err;
+            }
 
-        res.json(result.rows[0]);
+            await logTransition(client, {
+                ticketId: req.params.id,
+                fromStatus: ticket.status,
+                toStatus: "Rejected",
+                changedBy: req.user.id,
+            });
+
+            return updateResult.rows[0];
+        });
+
+        res.json(updated);
     } catch (err) {
         next(err);
     }

@@ -7,6 +7,9 @@ const ticketRoutes = require("./routes/tickets");
 const projectRoutes = require("./routes/projects");
 const { requireAuth } = require("./middleware/auth");
 const syncRoutes = require("./routes/sync");
+const milestoneRoutes = require("./routes/milestones");
+const taskRoutes = require("./routes/tasks");
+
 
 const app = express();
 app.use(cors());
@@ -29,6 +32,21 @@ app.use("/api/tickets", ticketRoutes);
 
 //Project Routes
 app.use("/api/projects", projectRoutes);
+
+//Ticket Routes  (F4)
+app.use("/api/tickets", ticketRoutes);
+
+//Project Routes
+app.use("/api/projects", projectRoutes);
+
+//Milestone Routes (F3)
+app.use("/api/milestones", milestoneRoutes);
+app.use("/api/tasks", taskRoutes);
+
+app.use("/api/sync", syncRoutes);
+app.use((err, req, res, next) => {
+  res.status(err.status || 500).json({ error: err.message, details: err.details });
+});
 
 const PORT = process.env.PORT || 3000;
 
