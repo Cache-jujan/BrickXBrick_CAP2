@@ -89,7 +89,7 @@ CREATE TABLE Expenses (
     amount              DECIMAL(12,2) NOT NULL CHECK (amount >= 0),
     receiptDate         DATE NOT NULL,
     category            VARCHAR(50) NOT NULL, -- Labor | Materials | Equipment | Other -- CHECK NOT CREATED YET, Labor category should not be included.
-    birValidationStatus VARCHAR(20) NOT NULL CHECK (birValidationStatus IN ('Formal-Tax-Deductible', 'Informal')), 
+    birValidationStatus VARCHAR(30) NOT NULL CHECK (birValidationStatus IN ('Formal-Tax-Deductible', 'Informal')), 
     receiptImageURL     TEXT NOT NULL, -- AES-256 encrypted, stored in Cloudflare R2
     status              VARCHAR(30) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')), 
     submittedAt         TIMESTAMP NOT NULL DEFAULT NOW(),
