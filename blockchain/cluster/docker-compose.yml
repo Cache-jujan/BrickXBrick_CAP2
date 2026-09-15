@@ -1,0 +1,92 @@
+version: "3.9"
+services:
+  node1:
+    image: ethereum/client-go:v1.13.15
+    container_name: bxb-clique-node1
+    command:
+      - --datadir=/data
+      - --config=/data/config.toml
+      - --networkid=15150
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3,personal,admin,clique,txpool
+      - --http.corsdomain=*
+      - --http.vhosts=*
+      - --port=30303
+      - --nodiscover
+      - --unlock=0xb591b59117B473dFb9Dd679aB8D8F358BD973EB3
+      - --password=/data/password.txt
+      - --allow-insecure-unlock
+      - --mine
+      - --miner.etherbase=0xb591b59117B473dFb9Dd679aB8D8F358BD973EB3
+      - --syncmode=full
+      - --verbosity=3
+    ports:
+      - "8551:8545"
+    volumes:
+      - ./node1:/data
+    networks:
+      - clique-net
+
+  node2:
+    image: ethereum/client-go:v1.13.15
+    container_name: bxb-clique-node2
+    command:
+      - --datadir=/data
+      - --config=/data/config.toml
+      - --networkid=15150
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3,personal,admin,clique,txpool
+      - --http.corsdomain=*
+      - --http.vhosts=*
+      - --port=30303
+      - --nodiscover
+      - --unlock=0x73e822e31429Ee266477800406C9694D39bA242f
+      - --password=/data/password.txt
+      - --allow-insecure-unlock
+      - --mine
+      - --miner.etherbase=0x73e822e31429Ee266477800406C9694D39bA242f
+      - --syncmode=full
+      - --verbosity=3
+    ports:
+      - "8552:8545"
+    volumes:
+      - ./node2:/data
+    networks:
+      - clique-net
+
+  node3:
+    image: ethereum/client-go:v1.13.15
+    container_name: bxb-clique-node3
+    command:
+      - --datadir=/data
+      - --config=/data/config.toml
+      - --networkid=15150
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3,personal,admin,clique,txpool
+      - --http.corsdomain=*
+      - --http.vhosts=*
+      - --port=30303
+      - --nodiscover
+      - --unlock=0xe5a488d38451276b0ab13350ce198a6a61d72443
+      - --password=/data/password.txt
+      - --allow-insecure-unlock
+      - --mine
+      - --miner.etherbase=0xe5a488d38451276b0ab13350ce198a6a61d72443
+      - --syncmode=full
+      - --verbosity=3
+    ports:
+      - "8553:8545"
+    volumes:
+      - ./node3:/data
+    networks:
+      - clique-net
+
+networks:
+  clique-net:
+    driver: bridge
