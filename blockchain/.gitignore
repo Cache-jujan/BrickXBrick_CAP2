@@ -1,0 +1,8 @@
+node_modules/ 
+.env 
+data/ 
+cluster/node1/geth/ 
+cluster/node2/geth/ 
+cluster/node3/geth/ 
+*.log
+.env

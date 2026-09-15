@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+  geth:
+    image: ethereum/client-go:stable
+    container_name: bxb-geth-dev
+    restart: unless-stopped
+    command:
+      - --dev
+      - --dev.period=1
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3,personal,txpool
+      - --http.corsdomain=*
+      - --http.vhosts=*
+      - --datadir=/root/.ethereum
+      - --verbosity=3
+    ports:
+      - "8545:8545"
+    volumes:
+      - geth-data:/root/.ethereum
+volumes:
+  geth-data:
