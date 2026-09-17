@@ -9,3 +9,4 @@ CREATE TABLE notifications (
     isRead            BOOLEAN NOT NULL DEFAULT FALSE,
     createdAt         TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
