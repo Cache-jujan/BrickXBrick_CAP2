@@ -13,6 +13,8 @@ const receiptRoutes = require("./routes/receipts");
 const syncRoutes = require("./routes/sync");
 const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
+const blockchainRoutes = require("./routes/blockchain");
+
 
 const app = express();
 app.use(cors());
@@ -32,6 +34,7 @@ app.use("/api/tickets", ticketRoutes);            // F4 tickets
 app.use("/api/expenses", expenseRoutes);          // F6 expenses
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
+app.use("/api/blockchain", blockchainRoutes);     // F12 audit trail
 
 // --- Error handler (must stay last, after all routes) ---
 app.use((err, req, res, next) => {
@@ -43,3 +46,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend listening on port ${PORT}`);
 });
+
