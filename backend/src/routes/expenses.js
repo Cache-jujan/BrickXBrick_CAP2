@@ -6,6 +6,8 @@ const express = require("express");
 const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
+const { checkDuplicate, checkVendor } = require("../lib/fraudScreening");
+const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -149,7 +151,32 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             ]
         );
 
-        res.status(201).json(result.rows[0]);
+        const expense = result.rows[0];
+
+        const isDup = await checkDuplicate(expense);
+        if (isDup) {
+            
+            await query(
+                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
+                 VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
+                [expense.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
+            );
+        }
+
+        const vendorIssue = await checkVendor(expense);
+        if (vendorIssue) {
+            const reason = vendorIssue === "not_found"
+                ? "Vendor not found in VendorMasterList"
+                : "Vendor found in VendorMasterList but approvalStatus = 'Flagged'";
+
+            await query(
+                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
+                 VALUES ($1, 'system', 'Vendor_Validation', $2)`,
+                [expense.expenseid, reason]
+            );
+        }
+
+        res.status(201).json(expense);
     } catch (err) {
         next(err);
     }
@@ -168,12 +195,95 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET /:id — single expense.
+// GET /:id — role-scoped: Purchaser sees only their own submissions,
+// GM/PM can see any expense (they need this for review/approval/reporting).
 router.get("/:id", async (req, res, next) => {
     try {
         const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (result.rowCount === 0) {
             const err = new Error("Not found");
+            err.status = 404;
+            throw err;
+        }
+        const expense = result.rows[0];
+
+        const isOwner = expense.submittedby === req.user.id;
+        const isReviewer = ["Project Manager", "General Manager"].includes(req.user.role);
+
+        if (!isOwner && !isReviewer) {
+            const err = new Error("You do not have access to this expense record");
+            err.status = 403;
+            throw err;
+        }
+
+        res.json(expense);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PATCH /:id/approve — PM/GM only. Marks Approved, then submits SHA-256
+// hash to the Geth PoA cluster and persists the confirmed tx to
+// BlockchainLogs. If nodes are insufficient, blockchainStatus stays
+// "Pending" so a scheduled retry (see server.js) can pick it up later.
+router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
+    try {
+        const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
+        if (result.rowCount === 0) {
+            const err = new Error("Expense not found");
+            err.status = 404;
+            throw err;
+        }
+        const expense = result.rows[0];
+        if (expense.status === "Approved") {
+            const err = new Error("Expense is already approved");
+            err.status = 409;
+            throw err;
+        }
+
+        await query(
+            "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2",
+            [req.user.id, req.params.id]
+        );
+
+        const hash = canonicalizeExpense(expense);
+
+        try {
+            const { txHash, blockNumber, validatorNodeCount } =
+                await submitHashWithTimeout(hash);
+
+            await query(
+                `INSERT INTO BlockchainLogs
+                   (expenseID, actorID, txHash, blockNumber, eventType, validatorNodeCount, consensusType)
+                 VALUES ($1, $2, $3, $4, 'ExpenseApproved', $5, 'Clique')`,
+                [req.params.id, req.user.id, txHash, blockNumber, validatorNodeCount]
+            );
+            await query("UPDATE Expenses SET blockchainStatus = 'Confirmed' WHERE expenseID = $1", [req.params.id]);
+
+            res.json({ status: "Approved", blockchain: { txHash, blockNumber, validatorNodeCount } });
+        } catch (chainErr) {
+            console.error("Blockchain submission deferred:", chainErr.message);
+            await query("UPDATE Expenses SET blockchainStatus = 'Pending' WHERE expenseID = $1", [req.params.id]);
+            res.status(202).json({
+                status: "Approved",
+                blockchain: null,
+                warning: "Blockchain submission deferred — insufficient validator nodes online. Will retry automatically.",
+            });
+        }
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PATCH /:id/reject — PM/GM only. No blockchain write for rejected expenses.
+router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
+    try {
+        const result = await query(
+            "UPDATE Expenses SET status = 'Rejected', approvedBy = $1 WHERE expenseID = $2 RETURNING *",
+            [req.user.id, req.params.id]
+        );
+        if (result.rowCount === 0) {
+            const err = new Error("Expense not found");
             err.status = 404;
             throw err;
         }
