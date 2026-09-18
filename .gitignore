@@ -10,3 +10,4 @@ ios/build/
 geth-data/
 keystore/
 password.txt".env" 
+backend/keystore/
