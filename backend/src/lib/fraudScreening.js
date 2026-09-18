@@ -18,4 +18,28 @@ async function checkDuplicate(expense) {
     return result.rowCount > 0;
 }
 
-module.exports = { checkDuplicate };
+// Layer 2: vendor validation.
+// Flags an expense if its vendorName has no match in VendorMasterList
+// (case-insensitive, trimmed), or if the matched vendor's approvalStatus
+// is 'Flagged'.
+// NOTE: amount-deviation vs historicalAverage is a separate check, deferred —
+// scope not confirmed for F9, raise with team before building.
+async function checkVendor(expense) {
+    const { vendorname } = expense;
+
+    if (!vendorname) return false;
+
+    const result = await query(
+        `SELECT vendorID, approvalStatus FROM VendorMasterList
+         WHERE LOWER(TRIM(vendorName)) = LOWER(TRIM($1))`,
+        [vendorname]
+    );
+
+    if (result.rowCount === 0) return "not_found";
+
+    if (result.rows[0].approvalstatus === "Flagged") return "flagged";
+
+    return false;
+}
+
+module.exports = { checkDuplicate, checkVendor };
