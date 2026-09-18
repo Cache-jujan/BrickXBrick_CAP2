@@ -6,7 +6,7 @@ services:
     command:
       - --datadir=/data
       - --config=/data/config.toml
-      - --networkid=15150
+      - --networkid=31337
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
@@ -35,7 +35,7 @@ services:
     command:
       - --datadir=/data
       - --config=/data/config.toml
-      - --networkid=15150
+      - --networkid=31337
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
@@ -64,7 +64,7 @@ services:
     command:
       - --datadir=/data
       - --config=/data/config.toml
-      - --networkid=15150
+      - --networkid=31337
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
