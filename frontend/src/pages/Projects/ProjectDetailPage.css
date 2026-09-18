@@ -42,3 +42,11 @@
   font-size: var(--text-md);
   font-weight: 600;
 }
+
+.project-detail-section-head {
+  margin: var(--space-7) 0 var(--space-4);
+}
+
+.project-detail-milestone-list {
+  gap: var(--space-4);
+}

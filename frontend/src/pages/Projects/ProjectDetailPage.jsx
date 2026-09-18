@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getProject } from "../../api/projectsApi";
+import { getProjectOverview } from "../../api/projectsApi";
 import { extractErrorMessage } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
+import { MilestoneCard } from "../../components/milestones/MilestoneCard";
 import "./ProjectDetailPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -21,6 +23,7 @@ const DATE = new Intl.DateTimeFormat("en-PH", {
 
 export function ProjectDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [project, setProject] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -29,7 +32,7 @@ export function ProjectDetailPage() {
     let cancelled = false;
     setLoading(true);
     setError("");
-    getProject(id)
+    getProjectOverview(id)
       .then((data) => {
         if (!cancelled) setProject(data);
       })
@@ -47,6 +50,11 @@ export function ProjectDetailPage() {
   if (loading) return <p className="dashboard-loading">Loading project…</p>;
   if (error) return <Banner tone="error" title={error} />;
   if (!project) return null;
+
+  // Only the Project Manager who owns this project may add milestones/
+  // tasks — mirrors getOwnedProject's check in backend/src/routes/
+  // milestones.js. General Manager sees the same section read-only.
+  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id;
 
   return (
     <div className="project-detail">
@@ -73,6 +81,37 @@ export function ProjectDetailPage() {
           label="Expected End Date"
           value={project.enddate ? DATE.format(new Date(project.enddate)) : "Not set"}
         />
+        <Fact label="Overall Progress" value={`${Number(project.progress || 0)}%`} />
+      </div>
+
+      <div className="project-detail-milestones">
+        <div className="spread project-detail-section-head">
+          <h2>Milestones</h2>
+          {canManage && (
+            <Link to={`/projects/${project.projectid}/milestones/new`} className="btn btn-primary">
+              + Add Milestone
+            </Link>
+          )}
+        </div>
+
+        {project.milestones.length === 0 ? (
+          <Banner tone="empty" title="No milestones yet">
+            {canManage
+              ? "Break this project down by adding its first milestone."
+              : "The Project Manager hasn't added any milestones yet."}
+          </Banner>
+        ) : (
+          <div className="stack project-detail-milestone-list">
+            {project.milestones.map((milestone) => (
+              <MilestoneCard
+                key={milestone.milestoneid}
+                milestone={milestone}
+                projectId={project.projectid}
+                canManage={canManage}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
