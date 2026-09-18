@@ -29,11 +29,11 @@ for (const addr of sorted) {
 
 const genesis = {
   config: {
-    chainId: 15150,
+    chainId: 31337,
     homesteadBlock: 0, eip150Block: 0, eip155Block: 0, eip158Block: 0,
     byzantiumBlock: 0, constantinopleBlock: 0, petersburgBlock: 0,
     istanbulBlock: 0, berlinBlock: 0, londonBlock: 0,
-    clique: { period: 2, epoch: 30000 }
+    clique: { period: 15, epoch: 30000 }
   },
   difficulty: "1",
   gasLimit: "8000000",
