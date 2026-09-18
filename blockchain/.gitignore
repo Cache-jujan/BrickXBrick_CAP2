@@ -6,3 +6,9 @@ cluster/node2/geth/
 cluster/node3/geth/ 
 *.log
 .env
+cluster/node1/password.txt
+cluster/node2/password.txt
+cluster/node3/password.txt
+cluster/node1/keystore/
+cluster/node2/keystore/
+cluster/node3/keystore/

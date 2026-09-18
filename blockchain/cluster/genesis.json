@@ -1,6 +1,6 @@
 {
   "config": {
-    "chainId": 15150,
+    "chainId": 31337,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -12,7 +12,7 @@
     "berlinBlock": 0,
     "londonBlock": 0,
     "clique": {
-      "period": 2,
+      "period": 15,
       "epoch": 30000
     }
   },
