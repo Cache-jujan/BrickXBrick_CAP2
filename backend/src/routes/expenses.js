@@ -6,6 +6,8 @@ const express = require("express");
 const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
+const { checkDuplicate } = require("../lib/fraudScreening");
+
 
 const router = express.Router();
 router.use(requireAuth);
@@ -149,7 +151,19 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             ]
         );
 
-        res.status(201).json(result.rows[0]);
+        const expense = result.rows[0];
+
+        const isDup = await checkDuplicate(expense);
+        if (isDup) {
+            
+            await query(
+                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
+                 VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
+                [expense.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
+            );
+        }
+
+        res.status(201).json(expense);
     } catch (err) {
         next(err);
     }
