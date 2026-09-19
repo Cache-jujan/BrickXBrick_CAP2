@@ -48,8 +48,10 @@ export function CreateTaskPage() {
       });
       navigate(`/projects/${projectId}`, { replace: true });
     } catch (err) {
-      // Backend 400s here with "no Site Manager assigned yet" when the
-      // project has no SM — extractErrorMessage surfaces it verbatim.
+      // The "no Site Manager assigned" 400 is caught upstream on
+      // ProjectDetailPage (this link is hidden without one), but keep
+      // this as a fallback in case the project's SM was unassigned
+      // between page loads.
       setFormError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
     } finally {
       setSubmitting(false);

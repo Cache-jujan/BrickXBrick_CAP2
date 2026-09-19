@@ -1,7 +1,8 @@
 import "./ProgressBar.css";
 
-// Same tone family as Badge's STATUS_TONE map, scoped to the statuses a
-// milestone can actually hold (On Track / At Risk / Overdue / Completed).
+// Milestone status is server-derived (deriveStatus in milestoneProgress.js)
+// from due-date proximity + completion % — never set by the frontend.
+// This just picks a fill color to match Badge's tone for the same status.
 const FILL_TONE = {
   "On Track": "active",
   Completed: "active",

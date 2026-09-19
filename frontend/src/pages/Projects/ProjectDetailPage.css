@@ -47,6 +47,10 @@
   margin: var(--space-7) 0 var(--space-4);
 }
 
+.project-detail-milestones .banner {
+  margin-bottom: var(--space-4);
+}
+
 .project-detail-milestone-list {
   gap: var(--space-4);
 }
