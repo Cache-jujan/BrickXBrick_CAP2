@@ -169,6 +169,19 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
+// GET / — GM/PM view of all expenses, optional ?projectId= filter (used by ProjectDetailPage)
+router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const { projectId } = req.query;
+        const base = `SELECT e.*, u.name AS submittedbyname
+                      FROM Expenses e JOIN Users u ON u.userid = e.submittedBy`;
+        const result = projectId
+            ? await query(`${base} WHERE e.projectID = $1 ORDER BY e.submittedAt DESC`, [projectId])
+            : await query(`${base} ORDER BY e.submittedAt DESC`);
+        res.json(result.rows);
+    } catch (err) { next(err); }
+});
+
 // GET /:id — role-scoped: Purchaser sees only their own submissions,
 // GM/PM can see any expense (they need this for review/approval/reporting).
 router.get("/:id", async (req, res, next) => {

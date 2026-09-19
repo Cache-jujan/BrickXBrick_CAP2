@@ -20,3 +20,10 @@ export async function createProject(payload) {
   const { data } = await apiClient.post("/api/projects", payload);
   return data;
 }
+
+// GET /api/projects/eligible-managers — Active Project Managers only, for
+// the Create Project PM dropdown (GM only)
+export async function getEligibleManagers() {
+  const { data } = await apiClient.get("/api/projects/eligible-managers");
+  return data;
+}

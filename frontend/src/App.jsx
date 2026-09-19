@@ -11,6 +11,9 @@ import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
+import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
+import { ForgotPasswordPage } from "./pages/Login/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/Login/ResetPasswordPage";
 
 // The backend's requireRole(...) on GET /api/projects still allows all four
 // roles (GM/PM/SM/Purchaser) — that's correct, since the mobile app (Site
@@ -26,6 +29,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route
             element={
@@ -73,6 +78,16 @@ export default function App() {
               element={
                 <RoleRoute allow={["System Administrator"]}>
                   <UserManagementPage />
+                </RoleRoute>
+              }
+            />
+
+             {/* F12 — blockchain audit verification, General Manager only */}
+            <Route
+              path="/blockchain/verify"
+              element={
+                <RoleRoute allow={["General Manager"]}>
+                  <VerifyExpensePage />
                 </RoleRoute>
               }
             />

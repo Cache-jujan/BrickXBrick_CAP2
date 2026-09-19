@@ -70,4 +70,54 @@ router.get("/alerts", requireRole("General Manager", "System Administrator"), as
     }
 });
 
+// GET /project/:projectId — summary for the project's Financial/Blockchain section.
+// GM/PM only (same access level as viewing the project itself).
+router.get("/project/:projectId", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const logsResult = await query(
+            `SELECT bl.txhash, bl.blocknumber, bl.timestamp, bl.expenseid, bl.validatornodecount
+               FROM BlockchainLogs bl
+               JOIN Expenses e ON e.expenseid = bl.expenseid
+              WHERE e.projectid = $1
+              ORDER BY bl.timestamp DESC`,
+            [req.params.projectId]
+        );
+
+        const alertsResult = await query(
+            `SELECT ta.alertid, ta.expenseid, ta.detectedat
+               FROM tamper_alerts ta
+               JOIN Expenses e ON e.expenseid = ta.expenseid
+              WHERE e.projectid = $1 AND ta.resolvedat IS NULL`,
+            [req.params.projectId]
+        );
+
+        res.json({
+            confirmedCount: logsResult.rowCount,
+            lastCheckedAt: logsResult.rows[0]?.timestamp || null,
+            logs: logsResult.rows,
+            openAlerts: alertsResult.rows,
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;
+// PATCH /api/blockchain/alerts/:id/resolve — GM/SysAdmin marks an alert as
+// investigated.
+router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
+    try {
+        const result = await query(
+            "UPDATE tamper_alerts SET resolvedAt = NOW() WHERE alertID = $1 AND resolvedAt IS NULL RETURNING *",
+            [req.params.id]
+        );
+        if (result.rowCount === 0) {
+            const err = new Error("Alert not found or already resolved");
+            err.status = 404;
+            throw err;
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        next(err);
+    }
+});

@@ -15,7 +15,7 @@ const syncRoutes = require("./routes/sync");
 const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
-const { canonicalizeExpense, submitHashWithTimeout } = require("./lib/blockchainService");
+const { canonicalizeExpense, submitHashWithTimeout, getOnChainHash } = require("./lib/blockchainService");const notificationRoutes = require("./routes/notifications");
 
 
 const app = express();
@@ -37,6 +37,8 @@ app.use("/api/expenses", expenseRoutes);          // F6 expenses
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
 app.use("/api/blockchain", blockchainRoutes);     // F12 audit trail
+
+app.use("/api/notifications", notificationRoutes); // notifications
 
 // --- Error handler (must stay last, after all routes) ---
 app.use((err, req, res, next) => {
@@ -65,6 +67,91 @@ async function retryPendingBlockchainWrites() {
     }
 }
 setInterval(retryPendingBlockchainWrites, 60_000);
+
+// F12: proactively re-check every Confirmed expense's hash against the
+// chain on a timer, instead of waiting for a GM to click "Verify" manually.
+// On a mismatch: log it permanently, flip the expense to TamperDetected
+// (which naturally excludes it from future scans), and notify every
+// active System Administrator and the project's GM.
+async function scanForTampering() {
+    const confirmed = await query(
+        "SELECT * FROM Expenses WHERE blockchainStatus = 'Confirmed' LIMIT 50"
+    );
+
+    for (const expense of confirmed.rows) {
+        try {
+            const logResult = await query(
+                "SELECT * FROM BlockchainLogs WHERE expenseID = $1 ORDER BY timestamp DESC LIMIT 1",
+                [expense.expenseid]
+            );
+            if (logResult.rowCount === 0) continue; // no chain record yet, skip
+
+            const log = logResult.rows[0];
+            const recomputedHash = canonicalizeExpense(expense);
+
+            let onChainHash;
+            let reason;
+            try {
+                onChainHash = await getOnChainHash(log.txhash);
+            } catch (lookupErr) {
+                // Reorg dropped the tx, or the node lost it. This used to be
+                // swallowed silently by the outer catch, which meant this
+                // expense was never checked again on any future scan.
+                onChainHash = null;
+                reason = `on-chain transaction ${log.txhash} could not be found (${lookupErr.message})`;
+            }
+
+            if (onChainHash !== null && recomputedHash === onChainHash) continue; // still matches, nothing to do
+
+            reason = reason || "recomputed hash does not match the stored on-chain value";
+
+            // Mismatch (or missing tx) found — permanent log + status flip.
+            await query(
+                `INSERT INTO tamper_alerts (expenseID, recomputedHash, onChainHash)
+                 VALUES ($1, $2, $3)`,
+                [expense.expenseid, recomputedHash, onChainHash || "MISSING"]
+            );
+            await query(
+                "UPDATE Expenses SET blockchainStatus = 'TamperDetected' WHERE expenseID = $1",
+                [expense.expenseid]
+            );
+
+            const message = `Tamper detected: expense "${expense.vendorname}" (₱${expense.amount}) — ${reason}.`;
+
+            // Notify every active System Administrator.
+            const admins = await query(
+                "SELECT userid FROM users WHERE role = 'System Administrator' AND status = 'Active'"
+            );
+            for (const admin of admins.rows) {
+                await query(
+                    `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                     VALUES ($1, 'TamperAlert', 'Expense', $2, $3)`,
+                    [admin.userid, expense.expenseid, message]
+                );
+            }
+
+            // Also notify the project's GM directly — they're the one who
+            // reviews it from the ProjectDetailPage Blockchain Audit section.
+            const projectResult = await query(
+                "SELECT createdby FROM projects WHERE projectid = $1",
+                [expense.projectid]
+            );
+            if (projectResult.rowCount > 0) {
+                await query(
+                    `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                     VALUES ($1, 'TamperAlert', 'Expense', $2, $3)`,
+                    [projectResult.rows[0].createdby, expense.expenseid, message]
+                );
+            }
+
+            console.log(`TAMPER DETECTED on expense ${expense.expenseid} — ${reason}`);
+        } catch (e) {
+            // Genuinely unexpected failure (DB down, etc). Loud, not silent.
+            console.error(`Tamper scan crashed on expense ${expense.expenseid}:`, e);
+        }
+    }
+}
+setInterval(scanForTampering, 180_000); // every 3 minutes
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend listening on port ${PORT}`);

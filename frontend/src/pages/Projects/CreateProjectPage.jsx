@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { createProject } from "../../api/projectsApi";
+import { createProject, getEligibleManagers } from "../../api/projectsApi";
 import { extractErrorMessage } from "../../api/client";
 import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
@@ -15,6 +15,7 @@ const EMPTY_FORM = {
   budget: "",
   startDate: "",
   endDate: "",
+  projectManagerId: "",
 };
 
 export function CreateProjectPage() {
@@ -23,6 +24,26 @@ export function CreateProjectPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [managers, setManagers] = useState([]);
+  const [managersLoading, setManagersLoading] = useState(true);
+  const [managersError, setManagersError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    getEligibleManagers()
+      .then((data) => {
+        if (!cancelled) setManagers(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setManagersError(extractErrorMessage(err, "Couldn't load Project Managers."));
+      })
+      .finally(() => {
+        if (!cancelled) setManagersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function updateField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -39,6 +60,9 @@ export function CreateProjectPage() {
     }
     if (form.endDate && form.startDate && form.endDate < form.startDate) {
       errors.endDate = "End date can't be before the start date.";
+    }
+    if (!form.projectManagerId) {
+      errors.projectManagerId = "Select a Project Manager.";
     }
     return errors;
   }
@@ -62,6 +86,7 @@ export function CreateProjectPage() {
         budget: Number(form.budget),
         startDate: form.startDate,
         endDate: form.endDate || undefined,
+        projectManagerId: form.projectManagerId,
       });
       navigate(`/projects/${project.projectid}`, { replace: true });
     } catch (err) {
@@ -102,6 +127,33 @@ export function CreateProjectPage() {
             error={fieldErrors.clientName}
             onChange={(e) => updateField("clientName", e.target.value)}
           />
+
+          {managersError && <Banner tone="error" title={managersError} />}
+
+          {!managersLoading && !managersError && managers.length === 0 && (
+            <Banner tone="warning" title="No Project Managers available">
+              Create a Project Manager account first (System Administrator → User Accounts) before starting a new project.
+            </Banner>
+          )}
+
+          <Field
+            label="Project Manager"
+            as="select"
+            required
+            value={form.projectManagerId}
+            error={fieldErrors.projectManagerId}
+            disabled={managersLoading || managers.length === 0}
+            onChange={(e) => updateField("projectManagerId", e.target.value)}
+          >
+            <option value="">
+              {managersLoading ? "Loading…" : "Select a Project Manager"}
+            </option>
+            {managers.map((m) => (
+              <option key={m.userid} value={m.userid}>
+                {m.name.trim()} ({m.email})
+              </option>
+            ))}
+          </Field>
 
           <Field
             label="Target Budget in PHP"
