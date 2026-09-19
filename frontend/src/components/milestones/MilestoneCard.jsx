@@ -10,9 +10,11 @@ const DATE = new Intl.DateTimeFormat("en-PH", {
   day: "numeric",
 });
 
-// Tasks are binary WBS leaf items (F5) — completionpercentage is always
-// 0 or 100, so each task's own Badge is enough; no per-task progress bar.
-export function MilestoneCard({ milestone, projectId, canManage }) {
+// Tasks only ever move Pending -> Completed through the F5 review flow
+// (SM submits a photo on mobile, PM acknowledges) — nothing on this page
+// can change a task's status, so each task is shown as read-only: name,
+// due date, and its current Badge. No photo/review action here.
+export function MilestoneCard({ milestone, projectId, canManage, hasSiteManager }) {
   return (
     <Card className="milestone-card">
       <div className="spread milestone-card-head">
@@ -47,14 +49,22 @@ export function MilestoneCard({ milestone, projectId, canManage }) {
           </ul>
         )}
 
-        {canManage && (
-          <Link
-            to={`/projects/${projectId}/milestones/${milestone.milestoneid}/tasks/new`}
-            className="milestone-card-add-task"
-          >
-            + Add Task
-          </Link>
-        )}
+        {canManage &&
+          (hasSiteManager ? (
+            <Link
+              to={`/projects/${projectId}/milestones/${milestone.milestoneid}/tasks/new`}
+              className="milestone-card-add-task"
+            >
+              + Add Task
+            </Link>
+          ) : (
+            // Backend 400s POST /:id/tasks when project.siteManagerId is
+            // null — catch it here instead of letting the PM hit a dead
+            // end on the create-task page.
+            <p className="milestone-card-add-task-blocked">
+              Assign a Site Manager to this project before adding tasks.
+            </p>
+          ))}
       </div>
     </Card>
   );
