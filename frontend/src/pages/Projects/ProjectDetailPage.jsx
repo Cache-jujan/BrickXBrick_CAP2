@@ -23,6 +23,7 @@ export function ProjectDetailPage() {
   const canVerify = user.role === "General Manager"; // matches backend requireRole on /verify/:id
 
   const [project, setProject] = useState(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -41,12 +42,22 @@ export function ProjectDetailPage() {
     let cancelled = false;
     setLoading(true);
     setError("");
+    setAccessDenied(false);
     getProjectOverview(id)
       .then((data) => {
         if (!cancelled) setProject(data);
       })
       .catch((err) => {
-        if (!cancelled) setError(extractErrorMessage(err, "Couldn't load this project."));
+        if (cancelled) return;
+        // assertProjectAccess in projects.js 403s a Project Manager who
+        // isn't this project's projectmanagerid — the plain project list
+        // still broadcasts to every PM, so this is a reachable, expected
+        // state rather than an actual error.
+        if (err?.response?.status === 403) {
+          setAccessDenied(true);
+        } else {
+          setError(extractErrorMessage(err, "Couldn't load this project."));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -103,15 +114,27 @@ export function ProjectDetailPage() {
   }
 
   if (loading) return <p className="dashboard-loading">Loading project…</p>;
+
+  if (accessDenied) {
+    return (
+      <Banner tone="info" title="You don't manage this project">
+        Only this project's assigned Project Manager or a General Manager can view its details.
+      </Banner>
+    );
+  }
   if (error) return <Banner tone="error" title={error} />;
   if (!project) return null;
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-  // Only the Project Manager who owns this project may add milestones/
-  // tasks — mirrors getOwnedProject's check in backend/src/routes/
-  // milestones.js. General Manager sees the same section read-only.
+  // Only the owning Project Manager may add milestones/tasks — mirrors
+  // getOwnedProject's check in backend/src/routes/milestones.js. General
+  // Manager sees the same section, read-only.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id;
+  // POST /:id/tasks 400s if the project has no Site Manager assigned —
+  // gate the "+ Add Task" affordance on it instead of letting a PM hit
+  // that dead end on the create-task page.
+  const hasSiteManager = Boolean(project.sitemanagerid);
 
   return (
     <div className="project-detail">
@@ -148,6 +171,13 @@ export function ProjectDetailPage() {
           )}
         </div>
 
+        {!hasSiteManager && canManage && (
+          <Banner tone="info" title="No Site Manager assigned">
+            You can still add milestones, but tasks can't be created until a Site Manager is
+            assigned to this project.
+          </Banner>
+        )}
+
         {project.milestones.length === 0 ? (
           <Banner tone="empty" title="No milestones yet">
             {canManage
@@ -162,6 +192,7 @@ export function ProjectDetailPage() {
                 milestone={milestone}
                 projectId={project.projectid}
                 canManage={canManage}
+                hasSiteManager={hasSiteManager}
               />
             ))}
           </div>

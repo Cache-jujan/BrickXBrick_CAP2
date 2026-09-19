@@ -78,3 +78,9 @@
 .milestone-card-add-task:hover {
   text-decoration: underline;
 }
+
+.milestone-card-add-task-blocked {
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--color-ink-faint);
+}

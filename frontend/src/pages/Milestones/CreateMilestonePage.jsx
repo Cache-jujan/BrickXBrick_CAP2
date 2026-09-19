@@ -42,8 +42,7 @@ export function CreateMilestonePage() {
 
     setSubmitting(true);
     try {
-      // Backend destructures projectID (capital ID) off req.body —
-      // see backend/src/routes/milestones.js POST /.
+      // milestones.js destructures projectID (capital ID) off req.body.
       await createMilestone({
         projectID: projectId,
         name: form.name.trim(),
