@@ -99,6 +99,23 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
   }
 });
 
+// GET /eligible-managers — GM only. Returns just enough info (id, name,
+// email) to populate the Create Project PM dropdown. Deliberately NOT
+// reusing adminUsers.js's full user list — that's System Administrator
+// only and exposes fields (status, lockoutUntil).
+router.get("/eligible-managers", requireRole("General Manager"), async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT userID, name, email FROM users
+       WHERE role = 'Project Manager' AND status = 'Active'
+       ORDER BY name ASC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Shared helper: throws 403 unless caller is GM, or the PM assigned to this project.
 async function assertProjectAccess(project, user) {
   if (user.role === "General Manager") return;

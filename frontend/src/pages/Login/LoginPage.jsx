@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ROLE_DASHBOARDS } from "../../context/AuthContext";
 import { extractErrorMessage } from "../../api/client";
@@ -158,9 +158,9 @@ export function LoginPage() {
 
             <div className="login-form-row">
               <span />
-              <a href="#" className="login-forgot" onClick={(e) => e.preventDefault()}>
+              <Link to="/forgot-password" className="login-forgot">
                 Forgot Password?
-              </a>
+              </Link>
             </div>
 
             <Button type="submit" disabled={submitting} className="login-submit">

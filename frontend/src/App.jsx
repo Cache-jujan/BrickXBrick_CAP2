@@ -13,6 +13,10 @@ import { CreateMilestonePage } from "./pages/Milestones/CreateMilestonePage";
 import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
+import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
+import { ForgotPasswordPage } from "./pages/Login/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/Login/ResetPasswordPage";
+import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 
 // The backend's requireRole(...) on GET /api/projects still allows all four
 // roles (GM/PM/SM/Purchaser) — that's correct, since the mobile app (Site
@@ -28,6 +32,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route
             element={
@@ -97,6 +103,26 @@ export default function App() {
               element={
                 <RoleRoute allow={["System Administrator"]}>
                   <UserManagementPage />
+                </RoleRoute>
+              }
+            />
+
+             {/* F12 — blockchain audit verification, General Manager only */}
+            <Route
+              path="/blockchain/verify"
+              element={
+                <RoleRoute allow={["General Manager"]}>
+                  <VerifyExpensePage />
+                </RoleRoute>
+              }
+            />
+
+            {/* F12 — open tamper alerts, GM + System Administrator per backend requireRole on /alerts */}
+            <Route
+              path="/blockchain/alerts"
+              element={
+                <RoleRoute allow={["General Manager", "System Administrator"]}>
+                  <TamperAlertsPage />
                 </RoleRoute>
               }
             />
