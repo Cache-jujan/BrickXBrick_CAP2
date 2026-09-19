@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getProject } from "../../api/projectsApi";
+import { getProjectOverview } from "../../api/projectsApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
-import { useAuth } from "../../context/AuthContext";
+import { MilestoneCard } from "../../components/milestones/MilestoneCard";
 import "./ProjectDetailPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
@@ -40,11 +41,19 @@ export function ProjectDetailPage() {
     let cancelled = false;
     setLoading(true);
     setError("");
-    getProject(id)
-      .then((data) => { if (!cancelled) setProject(data); })
-      .catch((err) => { if (!cancelled) setError(extractErrorMessage(err, "Couldn't load this project.")); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    getProjectOverview(id)
+      .then((data) => {
+        if (!cancelled) setProject(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(extractErrorMessage(err, "Couldn't load this project."));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -99,6 +108,11 @@ export function ProjectDetailPage() {
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
+  // Only the Project Manager who owns this project may add milestones/
+  // tasks — mirrors getOwnedProject's check in backend/src/routes/
+  // milestones.js. General Manager sees the same section read-only.
+  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id;
+
   return (
     <div className="project-detail">
       <Link to="/projects" className="project-detail-back">← Back to Projects</Link>
@@ -116,8 +130,42 @@ export function ProjectDetailPage() {
       <div className="project-detail-facts">
         <Fact label="Budget" value={PESO.format(project.budget)} />
         <Fact label="Start Date" value={DATE.format(new Date(project.startdate))} />
-        <Fact label="Expected End Date" value={project.enddate ? DATE.format(new Date(project.enddate)) : "Not set"} />
+        <Fact
+          label="Expected End Date"
+          value={project.enddate ? DATE.format(new Date(project.enddate)) : "Not set"}
+        />
+        <Fact label="Overall Progress" value={`${Number(project.progress || 0)}%`} />
         <Fact label="Expenses Logged" value={PESO.format(totalExpenses)} />
+      </div>
+
+      <div className="project-detail-milestones">
+        <div className="spread project-detail-section-head">
+          <h2>Milestones</h2>
+          {canManage && (
+            <Link to={`/projects/${project.projectid}/milestones/new`} className="btn btn-primary">
+              + Add Milestone
+            </Link>
+          )}
+        </div>
+
+        {project.milestones.length === 0 ? (
+          <Banner tone="empty" title="No milestones yet">
+            {canManage
+              ? "Break this project down by adding its first milestone."
+              : "The Project Manager hasn't added any milestones yet."}
+          </Banner>
+        ) : (
+          <div className="stack project-detail-milestone-list">
+            {project.milestones.map((milestone) => (
+              <MilestoneCard
+                key={milestone.milestoneid}
+                milestone={milestone}
+                projectId={project.projectid}
+                canManage={canManage}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="spread dashboard-section-head">

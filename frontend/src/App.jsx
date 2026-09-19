@@ -9,6 +9,8 @@ import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { ProjectsListPage } from "./pages/Projects/ProjectsListPage";
 import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
+import { CreateMilestonePage } from "./pages/Milestones/CreateMilestonePage";
+import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
@@ -68,6 +70,28 @@ export default function App() {
               element={
                 <RoleRoute allow={WEB_BROADCAST_ROLES}>
                   <ProjectDetailPage />
+                </RoleRoute>
+              }
+            />
+
+            {/* F3 — milestone/task creation is Project Manager-only (GM is
+                excluded here, unlike project creation which is GM-only).
+                RoleRoute only checks role; ownership of the specific
+                project is re-checked inside ProjectDetailPage's canManage
+                and enforced for real by the backend's getOwnedProject. */}
+            <Route
+              path="/projects/:id/milestones/new"
+              element={
+                <RoleRoute allow={["Project Manager"]}>
+                  <CreateMilestonePage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="/projects/:id/milestones/:milestoneId/tasks/new"
+              element={
+                <RoleRoute allow={["Project Manager"]}>
+                  <CreateTaskPage />
                 </RoleRoute>
               }
             />
