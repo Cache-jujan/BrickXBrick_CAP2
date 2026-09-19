@@ -62,7 +62,13 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
 router.get("/alerts", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
     try {
         const result = await query(
-            "SELECT * FROM tamper_alerts WHERE resolvedAt IS NULL ORDER BY detectedAt DESC"
+            `SELECT ta.alertid, ta.expenseid, ta.recomputedhash, ta.onchainhash, ta.detectedat,
+                    e.vendorname, e.amount, e.projectid, p.name AS projectname
+               FROM tamper_alerts ta
+               JOIN Expenses e ON e.expenseid = ta.expenseid
+               LEFT JOIN Projects p ON p.projectid = e.projectid
+              WHERE ta.resolvedat IS NULL
+              ORDER BY ta.detectedat DESC`
         );
         res.json(result.rows);
     } catch (err) {

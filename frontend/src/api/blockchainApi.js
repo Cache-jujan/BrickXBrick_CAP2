@@ -14,3 +14,8 @@ export async function getProjectBlockchainSummary(projectId) {
   const { data } = await apiClient.get(`/api/blockchain/project/${projectId}`);
   return data;
 }
+
+export async function resolveTamperAlert(alertId) {
+  const { data } = await apiClient.patch(`/api/blockchain/alerts/${alertId}/resolve`);
+  return data;
+}

@@ -16,6 +16,7 @@ import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
 import { ForgotPasswordPage } from "./pages/Login/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/Login/ResetPasswordPage";
+import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 
 // The backend's requireRole(...) on GET /api/projects still allows all four
 // roles (GM/PM/SM/Purchaser) — that's correct, since the mobile app (Site
@@ -112,6 +113,16 @@ export default function App() {
               element={
                 <RoleRoute allow={["General Manager"]}>
                   <VerifyExpensePage />
+                </RoleRoute>
+              }
+            />
+
+            {/* F12 — open tamper alerts, GM + System Administrator per backend requireRole on /alerts */}
+            <Route
+              path="/blockchain/alerts"
+              element={
+                <RoleRoute allow={["General Manager", "System Administrator"]}>
+                  <TamperAlertsPage />
                 </RoleRoute>
               }
             />
