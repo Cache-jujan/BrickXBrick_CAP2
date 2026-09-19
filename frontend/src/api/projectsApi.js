@@ -14,6 +14,13 @@ export async function getProject(id) {
   return data;
 }
 
+// GET /api/projects/:id/overview — project + progress + milestones[],
+// each with tasks[] nested. GM/PM only, same access rule as getProject.
+export async function getProjectOverview(id) {
+  const { data } = await apiClient.get(`/api/projects/${id}/overview`);
+  return data;
+}
+
 // POST /api/projects — General Manager only
 // payload: { name, description, clientName, budget, startDate, endDate }
 export async function createProject(payload) {
