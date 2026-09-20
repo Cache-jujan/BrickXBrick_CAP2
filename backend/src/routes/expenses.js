@@ -108,11 +108,11 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 err.status = 403;
                 throw err;
             }
-            if (ticket.status !== "Resolved") {
-                const err = new Error("Ticket must be Resolved before an expense can be linked to it");
-                err.status = 409;
-                throw err;
-            }
+                if (!["Acknowledged", "Resolved"].includes(ticket.status)) {
+            const err = new Error("Ticket must be Acknowledged before an expense can be linked to it");
+            err.status = 409;
+            throw err;
+}
 
             projectID = ticket.projectid;
         }
