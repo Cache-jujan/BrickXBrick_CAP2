@@ -18,7 +18,8 @@ const JWKS = createRemoteJWKSet(new URL(process.env.SUPABASE_JWKS_URL), {
   timeoutDuration: 5_000,   // ms before a JWKS fetch is aborted
 });
 
-const EXPECTED_ISSUER = `${process.env.SUPABASE_URL}/auth/v1`;
+const EXPECTED_ISSUER =
+  `${process.env.SUPABASE_URL.trim( ).replace(/\/+$/, "")}/auth/v1`;
 const EXPECTED_AUDIENCE = "authenticated";
 
 async function requireAuth(req, res, next) {
