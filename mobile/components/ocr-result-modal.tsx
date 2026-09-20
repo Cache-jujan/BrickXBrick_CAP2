@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -9,6 +10,10 @@ import {
   View,
 } from "react-native";
 
+// UI-local line item shape — this is what the editable rows in the modal
+// use. It is NOT the same shape the backend speaks (see BackendLineItem
+// below); the mapping between the two happens in the useEffect (in) and
+// handleConfirm (out).
 export type LineItem = {
   id: string;
   name: string;
@@ -16,13 +21,30 @@ export type LineItem = {
   price: string;
 };
 
+// Shape of one entry in receiptFields.js's `lineItems` — what /receipts/scan
+// returns and what POST /expenses expects back.
+export type BackendLineItem = {
+  description: string;
+  amount: number;
+  quantity: number | null;
+  unitPrice: number | null;
+};
+
+// Matches receiptFields.js's toExpenseDraft() output field-for-field, so a
+// confirmed OcrResult can be POSTed to /api/expenses with no further
+// translation. `[key: string]: any` lets extra backend-only fields
+// (receiptImageURL, birPermitNumber, quantity, confidence, ocrError,
+// rawText, birValidationStatus, missingBirFields) pass through untouched —
+// this modal doesn't display them, but index.tsx still carries them in
+// ocrResult for later use.
 export type OcrResult = {
-  storeName: string | null;
+  vendorName: string | null;
   tin: string | null;
-  orSiNumber: string | null;
-  amount: string | null;
-  date: string | null;
-  items?: LineItem[];
+  birNumber: string | null;
+  amount: number | string | null;
+  receiptDate: string | null;
+  lineItems?: BackendLineItem[];
+  [key: string]: any;
 };
 
 type Props = {
@@ -49,11 +71,11 @@ function makeId() {
 }
 
 export function OcrResultModal({ visible, result, locked, onConfirm, onClose }: Props) {
-  const [storeName, setStoreName] = useState("");
+  const [vendorName, setVendorName] = useState("");
   const [tin, setTin] = useState("");
-  const [orSiNumber, setOrSiNumber] = useState("");
+  const [birNumber, setBirNumber] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState("");
+  const [receiptDate, setReceiptDate] = useState("");
   const [items, setItems] = useState<LineItem[]>([]);
 
   // Re-seed the editable copy whenever a fresh OCR result comes in.
@@ -61,12 +83,21 @@ export function OcrResultModal({ visible, result, locked, onConfirm, onClose }: 
   // user edits, and it's what gets handed back via onConfirm.
   useEffect(() => {
     if (!result) return;
-    setStoreName(result.storeName ?? "");
+    setVendorName(result.vendorName ?? "");
     setTin(result.tin ?? "");
-    setOrSiNumber(result.orSiNumber ?? "");
-    setAmount(result.amount ?? "");
-    setDate(result.date ?? "");
-    setItems(result.items?.length ? result.items : []);
+    setBirNumber(result.birNumber ?? "");
+    setAmount(result.amount != null ? String(result.amount) : "");
+    setReceiptDate(result.receiptDate ?? "");
+    setItems(
+      result.lineItems?.length
+        ? result.lineItems.map((li) => ({
+            id: makeId(),
+            name: li.description ?? "",
+            quantity: li.quantity != null ? String(li.quantity) : "",
+            price: li.amount != null ? String(li.amount) : "",
+          }))
+        : []
+    );
   }, [result]);
 
   function updateItem(id: string, patch: Partial<LineItem>) {
@@ -81,8 +112,46 @@ export function OcrResultModal({ visible, result, locked, onConfirm, onClose }: 
     setItems((prev) => [...prev, { id: makeId(), name: "", quantity: "1", price: "" }]);
   }
 
+  // This is a *warning*, not the lock itself — tapping "Confirm Details"
+  // doesn't lock anything until the user explicitly agrees here. Once they
+  // do, `locked` flips true upstream and every input in this sheet becomes
+  // permanently read-only for this receipt.
   function handleConfirm() {
-    onConfirm({ storeName, tin, orSiNumber, amount, date, items });
+    Alert.alert(
+      "Confirm receipt details?",
+      "You can review and edit these fields as many times as you like right now, but once confirmed they lock and can't be changed again. Continue?",
+      [
+        { text: "Keep editing", style: "cancel" },
+        {
+          text: "Confirm",
+          style: "destructive",
+          onPress: () =>
+            onConfirm({
+              // Spread the original scan result FIRST so fields this modal
+              // never displays — receiptImageURL, birPermitNumber, quantity,
+              // confidence, etc. — survive into the confirmed object instead
+              // of being dropped. The user-edited fields below then override
+              // their stale counterparts from the original scan.
+              ...(result ?? {}),
+              vendorName,
+              tin,
+              birNumber,
+              amount: amount ? Number(amount) : null,
+              receiptDate,
+              // Drop rows with no name typed — mirrors normalizeLineItems()
+              // on the backend, which would reject them anyway.
+              lineItems: items
+                .filter((it) => it.name.trim().length > 0)
+                .map((it) => ({
+                  description: it.name.trim(),
+                  amount: Number(it.price) || 0,
+                  quantity: it.quantity ? Number(it.quantity) : null,
+                  unitPrice: null,
+                })),
+            }),
+        },
+      ]
+    );
   }
 
   return (
@@ -97,21 +166,46 @@ export function OcrResultModal({ visible, result, locked, onConfirm, onClose }: 
           <Text style={styles.subtitle}>
             {locked
               ? "These details are locked in for this receipt."
-              : "Check the fields below — you can only edit these once."}
+              : "Fix anything OCR missed. You can edit or clear any field, and this can only be confirmed once."}
           </Text>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-            <Field label="Store" value={storeName} onChangeText={setStoreName} editable={!locked} />
-            <Field label="TIN" value={tin} onChangeText={setTin} editable={!locked} />
-            <Field label="OR/SI #" value={orSiNumber} onChangeText={setOrSiNumber} editable={!locked} />
+            <Field
+              label="Store"
+              value={vendorName}
+              onChangeText={setVendorName}
+              onClear={() => setVendorName("")}
+              editable={!locked}
+            />
+            <Field
+              label="TIN"
+              value={tin}
+              onChangeText={setTin}
+              onClear={() => setTin("")}
+              editable={!locked}
+            />
+            <Field
+              label="OR/SI #"
+              value={birNumber}
+              onChangeText={setBirNumber}
+              onClear={() => setBirNumber("")}
+              editable={!locked}
+            />
             <Field
               label="Amount"
               value={amount}
               onChangeText={setAmount}
+              onClear={() => setAmount("")}
               editable={!locked}
               keyboardType="decimal-pad"
             />
-            <Field label="Date" value={date} onChangeText={setDate} editable={!locked} />
+            <Field
+              label="Date"
+              value={receiptDate}
+              onChangeText={setReceiptDate}
+              onClear={() => setReceiptDate("")}
+              editable={!locked}
+            />
 
             <View style={styles.itemsHeader}>
               <Text style={styles.itemsTitle}>Items Purchased</Text>
@@ -160,6 +254,7 @@ export function OcrResultModal({ visible, result, locked, onConfirm, onClose }: 
                     onPress={() => removeItem(item.id)}
                     hitSlop={8}
                     style={styles.removeBtn}
+                    accessibilityLabel={`Delete ${item.name || "item"}`}
                   >
                     <Text style={styles.removeText}>✕</Text>
                   </Pressable>
@@ -194,26 +289,45 @@ function Field({
   label,
   value,
   onChangeText,
+  onClear,
   editable,
   keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
+  onClear?: () => void;
   editable: boolean;
   keyboardType?: "default" | "decimal-pad" | "numeric";
 }) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={[styles.fieldInput, !editable && styles.fieldInputLocked]}
-        value={value}
-        editable={editable}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        placeholder="—"
-      />
+      <View style={styles.fieldInputRow}>
+        <TextInput
+          style={[
+            styles.fieldInput,
+            styles.fieldInputFlex,
+            !editable && styles.fieldInputLocked,
+          ]}
+          value={value}
+          editable={editable}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType}
+          placeholder={editable ? "Not detected — tap to add" : "—"}
+          placeholderTextColor="#B7AF9C"
+        />
+        {editable && value.length > 0 && onClear && (
+          <Pressable
+            onPress={onClear}
+            hitSlop={8}
+            style={styles.fieldClearBtn}
+            accessibilityLabel={`Clear ${label}`}
+          >
+            <Text style={styles.fieldClearText}>✕</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -267,6 +381,11 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     marginBottom: 4,
   },
+  fieldInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   fieldInput: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -277,9 +396,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.ink,
   },
+  fieldInputFlex: {
+    flex: 1,
+  },
   fieldInputLocked: {
     backgroundColor: "#F1ECE2",
     color: COLORS.muted,
+  },
+  fieldClearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F6E3E3",
+  },
+  fieldClearText: {
+    color: COLORS.danger,
+    fontWeight: "700",
+    fontSize: 12,
   },
   itemsHeader: {
     flexDirection: "row",
