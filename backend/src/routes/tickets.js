@@ -129,6 +129,14 @@ router.get("/submitted", async (req, res, next) => {
 // This is the point at which a specific Purchaser is assigned to the ticket.
 router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res, next) => {
     try {
+        const ticket = await getTicket(req.params.id);
+
+        if (ticket.tickettype === "Report") {
+            const err = new Error("Report tickets are resolved directly by the PM, not acknowledged — use /resolve instead");
+            err.status = 400;
+            throw err;
+        }
+
         const { assignedTo } = req.body;
 
         if (!assignedTo) {
@@ -158,7 +166,6 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
             throw err;
         }
 
-        const ticket = await getTicket(req.params.id);
         assertLegalTransition(ticket.status, "Acknowledged");
 
         const updated = await withTransaction(async (client) => {
@@ -193,18 +200,40 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
     }
 });
 
-// PATCH /:id/resolve — assigned Purchaser only, Acknowledged -> Resolved.
-router.patch("/:id/resolve", requireRole("Purchaser"), async (req, res, next) => {
+// PATCH /:id/resolve — Material Request/Work Item: assigned Purchaser only,
+// Acknowledged -> Resolved. Report: Project Manager only, Pending ->
+// Resolved directly — Report never goes through /acknowledge, so this is
+// intentionally NOT run through assertLegalTransition (that table only
+// knows Acknowledged -> Resolved; Pending -> Resolved is a Report-only
+// exception, not a general state-machine rule).
+router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
 
-        if (ticket.assignedto !== req.user.id) {
-            const err = new Error("Only the assigned Purchaser can resolve this ticket");
-            err.status = 403;
-            throw err;
+        if (ticket.tickettype === "Report") {
+            if (req.user.role !== "Project Manager") {
+                const err = new Error("Only the Project Manager can resolve a Report ticket");
+                err.status = 403;
+                throw err;
+            }
+            if (ticket.status !== "Pending") {
+                const err = new Error("Report tickets can only be resolved while Pending");
+                err.status = 409;
+                throw err;
+            }
+        } else {
+            if (req.user.role !== "Purchaser") {
+                const err = new Error("Only the assigned Purchaser can resolve this ticket");
+                err.status = 403;
+                throw err;
+            }
+            if (ticket.assignedto !== req.user.id) {
+                const err = new Error("Only the assigned Purchaser can resolve this ticket");
+                err.status = 403;
+                throw err;
+            }
+            assertLegalTransition(ticket.status, "Resolved");
         }
-
-        assertLegalTransition(ticket.status, "Resolved");
 
         const updated = await withTransaction(async (client) => {
             const updateResult = await client.query(

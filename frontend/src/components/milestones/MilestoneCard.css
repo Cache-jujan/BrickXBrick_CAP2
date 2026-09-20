@@ -1,0 +1,86 @@
+.milestone-card-head {
+  margin-bottom: var(--space-4);
+}
+
+.milestone-card-name {
+  font-size: var(--text-md);
+  line-height: 1.3;
+  margin-bottom: var(--space-1);
+}
+
+.milestone-card-due {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.milestone-card-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.milestone-card-progress .progress-bar {
+  flex: 1;
+}
+
+.milestone-card-progress-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  min-width: 3ch;
+  text-align: right;
+}
+
+.milestone-card-empty {
+  font-size: var(--text-sm);
+  color: var(--color-ink-faint);
+  margin-bottom: var(--space-3);
+}
+
+.milestone-card-task-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.milestone-card-task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.milestone-card-task-name {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.milestone-card-task-due {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+
+.milestone-card-add-task {
+  display: inline-block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-brick);
+  text-decoration: none;
+}
+.milestone-card-add-task:hover {
+  text-decoration: underline;
+}
+
+.milestone-card-add-task-blocked {
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--color-ink-faint);
+}

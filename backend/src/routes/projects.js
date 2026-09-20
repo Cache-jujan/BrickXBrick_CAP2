@@ -99,9 +99,34 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
   }
 });
 
-// SINGLE
+// GET /eligible-managers — GM only. Returns just enough info (id, name,
+// email) to populate the Create Project PM dropdown. Deliberately NOT
+// reusing adminUsers.js's full user list — that's System Administrator
+// only and exposes fields (status, lockoutUntil).
+router.get("/eligible-managers", requireRole("General Manager"), async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT userID, name, email FROM users
+       WHERE role = 'Project Manager' AND status = 'Active'
+       ORDER BY name ASC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Shared helper: throws 403 unless caller is GM, or the PM assigned to this project.
+async function assertProjectAccess(project, user) {
+  if (user.role === "General Manager") return;
+  if (user.role === "Project Manager" && project.projectmanagerid === user.id) return;
+  const err = new Error("You do not have access to this project");
+  err.status = 403;
+  throw err;
+}
+
 // SINGLE — includes computed overall progress (mean of milestone completion %)
-router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
+router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT p.projectid, p.createdby, p.name, p.description, p.clientname, p.status,
@@ -114,16 +139,18 @@ router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) =>
       [req.params.id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
+    await assertProjectAccess(result.rows[0], req.user);
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
+
 
 // GET /:id/overview — project + progress + all milestones, each with its tasks nested.
 // One combined payload for a GM/PM overview page instead of N+1 calls
 // (project detail -> milestone list -> per-milestone task list).
-router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
+router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res, next) => {
   try {
     const projectResult = await query(
       `SELECT p.projectid, p.createdby, p.name, p.description, p.clientname, p.status,
@@ -137,6 +164,7 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     );
     if (projectResult.rowCount === 0) return res.status(404).json({ error: "Not found" });
     const project = projectResult.rows[0];
+    await assertProjectAccess(project, req.user);
 
     const milestonesResult = await query(
       "SELECT * FROM milestones WHERE projectId = $1 ORDER BY dueDate ASC",
@@ -161,7 +189,7 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
 
     res.json({ ...project, milestones: milestonesWithTasks });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

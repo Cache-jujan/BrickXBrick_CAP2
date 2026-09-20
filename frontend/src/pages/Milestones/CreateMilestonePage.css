@@ -1,0 +1,24 @@
+.create-milestone {
+  max-width: var(--form-max);
+}
+
+.create-milestone-title {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-5);
+}
+
+.create-milestone-card form {
+  display: flex;
+  flex-direction: column;
+}
+
+.create-milestone-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.create-milestone-card .banner {
+  margin-bottom: var(--space-4);
+}
