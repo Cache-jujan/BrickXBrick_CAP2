@@ -3,6 +3,7 @@ import {
   Alert,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -15,12 +16,18 @@ import * as FileSystem from "expo-file-system/legacy";
 import { CaptureOptionCard } from "@/components/capture-option-card";
 import { FilePreview, type FileState } from "@/components/file-preview";
 import { OcrResultModal, type OcrResult } from "@/components/ocr-result-modal";
+import { TicketPickerModal, type SelectedTicket } from "@/components/ticket-picker-modal";
+import { submitExpense } from "@/lib/api";
 
 // EXPO_PUBLIC_ prefix is required for Expo to bundle an env var into the app —
 // anything without that prefix is invisible on device, only on your machine.
-import { API_URL } from "@/constants/api";
+import { API_URL, DEV_TOKEN } from "@/constants/api";
 console.log("API_URL:", API_URL);
 type Status = "idle" | "uploading" | "success" | "error";
+type SubmitStatus = "idle" | "submitting" | "success" | "error";
+
+const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
+type Category = (typeof CATEGORIES)[number];
 
 function formatBytes(bytes?: number) {
   if (!bytes) return "";
@@ -38,6 +45,15 @@ export default function CaptureScreen() {
   // Once true, the modal locks every field permanently for this receipt —
   // this is what enforces "you can only check the extraction once."
   const [confirmed, setConfirmed] = useState(false);
+  const [ticketPickerVisible, setTicketPickerVisible] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<SelectedTicket | null>(null);
+
+  // F6.7 — category and quantity aren't derivable from OCR, so they're
+  // collected here, after a ticket is linked and before the real submit.
+  const [category, setCategory] = useState<Category | null>(null);
+  const [quantity, setQuantity] = useState("");
+  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Everything below scales off the *available height*, not a device
   // breakpoint list, so it degrades gracefully on any small phone
@@ -110,6 +126,11 @@ export default function CaptureScreen() {
           uploadType: FileSystem.FileSystemUploadType.MULTIPART,
           fieldName: "file",
           mimeType: file.type === "image" ? "image/jpeg" : "application/pdf",
+          // TODO: replace with real Supabase session token once mobile auth
+          // (oauth/callback.tsx) is actually finished — this is a dev-only bypass.
+          headers: {
+            Authorization: `Bearer ${DEV_TOKEN}`,
+          },
         }
       );
 
@@ -119,9 +140,10 @@ export default function CaptureScreen() {
 
       const data = JSON.parse(uploadResult.body);
 
-      // Backend doesn't extract line items yet — default to an empty list
-      // so the modal's items UI has something safe to render either way.
-      setOcrResult({ ...data.parsed, items: data.parsed.items ?? [] });
+      // Backend doesn't extract line items reliably yet — default to an
+      // empty list so the modal's items UI has something safe to render.
+      setOcrResult({ ...data, items: data.lineItems ?? [] });
+      if (data.ocrError) Alert.alert("Heads up", data.ocrError);
       setResultVisible(true);
       setConfirmed(false);
       setStatus("success");
@@ -140,6 +162,59 @@ export default function CaptureScreen() {
     }
   }
 
+  // F6.7 — the real POST /api/expenses call. Runs after OCR confirm +
+  // ticket link + category/quantity are all in place.
+  async function handleSubmitExpense() {
+    if (!ocrResult || !selectedTicket || !category) return;
+
+    const qty = Number(quantity);
+    if (!quantity.trim() || !Number.isFinite(qty) || qty < 0) {
+      Alert.alert("Quantity required", "Enter a valid quantity (0 or more) before submitting.");
+      return;
+    }
+
+    if (!ocrResult.receiptImageURL) {
+      // Should not happen post-fix, but fail loudly rather than let the
+      // server's 400 be the first sign something's wrong.
+      Alert.alert("Missing receipt image", "No receipt image was found for this scan. Please rescan.");
+      return;
+    }
+
+    const amountNum =
+      typeof ocrResult.amount === "number" ? ocrResult.amount : Number(ocrResult.amount);
+    if (!Number.isFinite(amountNum)) {
+      Alert.alert("Amount required", "Enter a valid amount in the receipt details before submitting.");
+      return;
+    }
+
+    setSubmitStatus("submitting");
+    setSubmitError(null);
+
+    try {
+      await submitExpense({
+        ticketID: selectedTicket.ticketId,
+        vendorName: ocrResult.vendorName,
+        amount: amountNum,
+        receiptDate: ocrResult.receiptDate,
+        category,
+        receiptImageURL: ocrResult.receiptImageURL,
+        birNumber: ocrResult.birNumber,
+        tin: ocrResult.tin,
+        birPermitNumber: ocrResult.birPermitNumber,
+        lineItems: ocrResult.lineItems ?? [],
+        quantity: qty,
+      });
+
+      setSubmitStatus("success");
+      Alert.alert("Expense submitted", "Your expense was submitted successfully.");
+      handleClear();
+    } catch (err) {
+      console.error("Expense submit failed:", err);
+      setSubmitStatus("error");
+      setSubmitError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   function handleClear() {
     setFile(null);
     setStatus("idle");
@@ -147,7 +222,15 @@ export default function CaptureScreen() {
     setOcrResult(null);
     setResultVisible(false);
     setConfirmed(false);
+    setTicketPickerVisible(false);
+    setSelectedTicket(null);
+    setCategory(null);
+    setQuantity("");
+    setSubmitStatus("idle");
+    setSubmitError(null);
   }
+
+  const showExpenseCard = selectedTicket && ocrResult && submitStatus !== "success";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -207,7 +290,7 @@ export default function CaptureScreen() {
           <FilePreview file={file} />
         </View>
 
-        {/* SUBMIT */}
+        {/* SUBMIT (scan) */}
         {file && status !== "success" && (
           <TouchableOpacity
             style={[styles.submitButton, tight && styles.buttonTight]}
@@ -224,11 +307,68 @@ export default function CaptureScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ERROR */}
+        {/* ERROR (scan) */}
         {status === "error" && errorMessage && (
           <Text style={styles.errorText} numberOfLines={tight ? 2 : undefined}>
             {errorMessage}
           </Text>
+        )}
+
+        {/* F6.7 — category/quantity + final submit, shown once a ticket is linked */}
+        {showExpenseCard && (
+          <View style={styles.expenseCard}>
+            <Text style={styles.sectionTitle}>Finalize Expense</Text>
+            <Text style={styles.ticketSummary}>
+              {selectedTicket!.projectName} — {selectedTicket!.subject}
+            </Text>
+
+            <Text style={styles.fieldLabelSmall}>Category</Text>
+            <View style={styles.categoryRow}>
+              {CATEGORIES.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.categoryChip, category === c && styles.categoryChipActive]}
+                  onPress={() => setCategory(c)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      category === c && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {c}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.fieldLabelSmall}>Quantity</Text>
+            <TextInput
+              style={styles.quantityInput}
+              keyboardType="numeric"
+              value={quantity}
+              onChangeText={setQuantity}
+              placeholder="e.g. 1"
+              placeholderTextColor="#B7AF9C"
+            />
+
+            {submitStatus === "error" && submitError && (
+              <Text style={styles.errorText}>{submitError}</Text>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                (!category || submitStatus === "submitting") && styles.submitButtonDisabled,
+              ]}
+              onPress={handleSubmitExpense}
+              disabled={!category || submitStatus === "submitting"}
+            >
+              <Text style={styles.submitButtonText}>
+                {submitStatus === "submitting" ? "Submitting…" : "Submit Expense"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* CLEAR */}
@@ -251,11 +391,21 @@ export default function CaptureScreen() {
         onConfirm={(final) => {
           setOcrResult(final);
           setConfirmed(true);
-          // TODO: once there's a backend endpoint to persist corrected receipts,
-          // POST `final` to it here.
-          console.log("Confirmed receipt data:", final);
+          setTicketPickerVisible(true); // F6.6 comes right after confirm
         }}
         onClose={() => setResultVisible(false)}
+      />
+
+      <TicketPickerModal
+        visible={ticketPickerVisible}
+        onSelect={(ticket) => {
+          setSelectedTicket(ticket);
+          setTicketPickerVisible(false);
+          // Prefill quantity from OCR if the parser found line items;
+          // otherwise leave it blank for manual entry.
+          setQuantity(ocrResult?.quantity != null ? String(ocrResult.quantity) : "");
+        }}
+        onClose={() => setTicketPickerVisible(false)}
       />
     </SafeAreaView>
   );
@@ -268,6 +418,7 @@ const COLORS = {
   border: "#EDE6D9",
   muted: "#8A8272",
   danger: "#C1121F",
+  accent: "#2F6F4E",
 };
 
 const styles = StyleSheet.create({
@@ -325,6 +476,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
   buttonTight: {
     marginTop: 8,
     paddingVertical: 10,
@@ -358,5 +512,61 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 10,
     color: COLORS.muted,
+  },
+  expenseCard: {
+    marginTop: 14,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+  },
+  ticketSummary: {
+    fontSize: 12,
+    color: COLORS.muted,
+    marginBottom: 12,
+  },
+  fieldLabelSmall: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.muted,
+    marginBottom: 6,
+  },
+  categoryRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  categoryChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: "center",
+    backgroundColor: COLORS.bg,
+  },
+  categoryChipActive: {
+    backgroundColor: COLORS.ink,
+    borderColor: COLORS.ink,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.ink,
+  },
+  categoryChipTextActive: {
+    color: "#FFF",
+  },
+  quantityInput: {
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: COLORS.ink,
+    marginBottom: 12,
   },
 });

@@ -17,3 +17,9 @@ function getLocalApiUrl() {
 export const API_URL = __DEV__
   ? getLocalApiUrl()
   : "https://YOUR-RAILWAY-BACKEND-URL";
+
+export const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN ?? "";
+
+export function authHeaders() {
+  return { Authorization: `Bearer ${DEV_TOKEN}` };
+}
