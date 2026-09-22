@@ -98,6 +98,7 @@ export function CreateProjectPage() {
 
   return (
     <div className="create-project">
+      <Link to="/projects" className="form-back-link">Back to Projects</Link>
       <h1 className="create-project-title">Create New Project</h1>
 
       <Card className="create-project-card">
@@ -119,20 +120,33 @@ export function CreateProjectPage() {
             onChange={(e) => updateField("description", e.target.value)}
           />
 
-          <Field
-            label="Client Name"
-            required
-            placeholder="Enter client name"
-            value={form.clientName}
-            error={fieldErrors.clientName}
-            onChange={(e) => updateField("clientName", e.target.value)}
-          />
+          <div className="create-project-row">
+            <Field
+              label="Client Name"
+              required
+              placeholder="Enter client name"
+              value={form.clientName}
+              error={fieldErrors.clientName}
+              onChange={(e) => updateField("clientName", e.target.value)}
+            />
+            <Field
+              label="Target Budget in PHP"
+              required
+              type="number"
+              min="0"
+              step="1000"
+              placeholder="0"
+              value={form.budget}
+              error={fieldErrors.budget}
+              onChange={(e) => updateField("budget", e.target.value)}
+            />
+          </div>
 
           {managersError && <Banner tone="error" title={managersError} />}
 
           {!managersLoading && !managersError && managers.length === 0 && (
             <Banner tone="warning" title="No Project Managers available">
-              Create a Project Manager account first (System Administrator → User Accounts) before starting a new project.
+              Create a Project Manager account first (System Administrator, User Accounts) before starting a new project.
             </Banner>
           )}
 
@@ -155,19 +169,7 @@ export function CreateProjectPage() {
             ))}
           </Field>
 
-          <Field
-            label="Target Budget in PHP"
-            required
-            type="number"
-            min="0"
-            step="1000"
-            placeholder="0"
-            value={form.budget}
-            error={fieldErrors.budget}
-            onChange={(e) => updateField("budget", e.target.value)}
-          />
-
-          <div className="create-project-dates">
+          <div className="create-project-row">
             <Field
               label="Start Date"
               required

@@ -1,0 +1,32 @@
+.not-authorized {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-bg);
+}
+
+.not-authorized-card {
+  width: 100%;
+  max-width: 440px;
+  padding: var(--space-7) var(--space-6);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.not-authorized-code {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--color-brick);
+  margin-bottom: var(--space-2);
+}
+
+.not-authorized-body {
+  color: var(--color-ink-soft);
+  margin: var(--space-3) 0 var(--space-6);
+}

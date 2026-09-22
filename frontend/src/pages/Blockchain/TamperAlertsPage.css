@@ -1,0 +1,184 @@
+.tamper-page {
+  max-width: none;
+}
+
+.tamper-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.tamper-subtitle {
+  color: var(--color-ink-soft);
+  margin-top: var(--space-2);
+  max-width: 640px;
+}
+
+.tamper-count-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  background: var(--color-terracotta-tint);
+  color: var(--color-terracotta);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.tamper-toolbar {
+  display: flex;
+  margin-bottom: var(--space-4);
+}
+
+.tamper-search {
+  width: 100%;
+  max-width: 340px;
+  height: 42px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+}
+.tamper-search::placeholder {
+  color: var(--color-ink-faint);
+}
+.tamper-search:focus {
+  outline: none;
+  border-color: var(--color-brick);
+  box-shadow: 0 0 0 3px var(--color-brick-tint);
+}
+
+.tamper-table-card {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.tamper-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.tamper-table th,
+.tamper-table td {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.tamper-table th {
+  color: var(--color-ink-faint);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-surface-muted);
+}
+
+.tamper-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tamper-project-link {
+  color: var(--color-brick);
+  font-weight: 600;
+  text-decoration: none;
+}
+.tamper-project-link:hover {
+  text-decoration: underline;
+}
+
+.tamper-reason {
+  color: var(--color-ink-soft);
+  max-width: 320px;
+}
+
+.tamper-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.tamper-page-btn {
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tamper-page-btn:hover:not(:disabled) {
+  border-color: var(--color-brick);
+  color: var(--color-brick);
+}
+.tamper-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tamper-page-status {
+  font-size: var(--text-sm);
+  color: var(--color-ink-faint);
+}
+
+/* Confirmation dialog */
+.tamper-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(48, 47, 40, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: var(--space-5);
+}
+
+.tamper-modal {
+  width: 100%;
+  max-width: 440px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+  animation: tamper-modal-in 140ms ease;
+}
+
+@keyframes tamper-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tamper-modal-title {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-3);
+}
+
+.tamper-modal-body {
+  color: var(--color-ink-soft);
+  margin-bottom: var(--space-6);
+}
+
+.tamper-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tamper-modal {
+    animation: none;
+  }
+}

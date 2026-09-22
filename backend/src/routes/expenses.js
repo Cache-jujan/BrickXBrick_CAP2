@@ -1,4 +1,4 @@
-// expenses.js — F6 expense submission + ticket linking.
+// expenses.js — F6 expense submission + ticket linking, plus review access.
 // Table 35 (Expenses) already exists in 001_initial_schema.sql — no migration
 // needed. This route just exposes it.
 
@@ -16,6 +16,26 @@ router.use(requireAuth);
 // built yet, so this is enforced here until that constraint lands.
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 const VALID_BIR_STATUSES = ["Formal-Tax-Deductible", "Informal"];
+
+function httpError(status, message) {
+    const err = new Error(message);
+    err.status = status;
+    return err;
+}
+
+// General Manager may review any project's expenses. A Project Manager may
+// only review expenses on projects they are assigned to (same rule as
+// assertProjectAccess in projects.js).
+async function assertCanReviewProject(user, projectId) {
+    if (user.role === "General Manager") return;
+    const result = await query(
+        "SELECT projectManagerId FROM projects WHERE projectId = $1",
+        [projectId]
+    );
+    if (result.rowCount === 0 || result.rows[0].projectmanagerid !== user.id) {
+        throw httpError(403, "You may only review expenses on projects you manage");
+    }
+}
 
 // lineItems shape matches the offlineExpenseQueue SQLite definition
 // (Table 27): [{ description: string, amount: number }]
@@ -51,41 +71,27 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         } = req.body;
 
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
-            const err = new Error("vendorName, amount, and receiptDate are required");
-            err.status = 400;
-            throw err;
+            throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
         if (typeof amount !== "number" || amount < 0) {
-            const err = new Error("amount must be a non-negative number");
-            err.status = 400;
-            throw err;
+            throw httpError(400, "amount must be a non-negative number");
         }
         if (!category || !VALID_CATEGORIES.includes(category)) {
-            const err = new Error(`category must be one of: ${VALID_CATEGORIES.join(", ")}`);
-            err.status = 400;
-            throw err;
+            throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
         if (!birValidationStatus || !VALID_BIR_STATUSES.includes(birValidationStatus)) {
-            const err = new Error(`birValidationStatus must be one of: ${VALID_BIR_STATUSES.join(", ")}`);
-            err.status = 400;
-            throw err;
+            throw httpError(400, `birValidationStatus must be one of: ${VALID_BIR_STATUSES.join(", ")}`);
         }
         if (!receiptImageURL) {
-            const err = new Error("receiptImageURL is required");
-            err.status = 400;
-            throw err;
+            throw httpError(400, "receiptImageURL is required");
         }
         if (quantity === undefined || quantity === null || typeof quantity !== "number" || quantity < 0) {
-            const err = new Error("quantity is required and must be a non-negative number");
-            err.status = 400;
-            throw err;
+            throw httpError(400, "quantity is required and must be a non-negative number");
         }
         // lineItems is nullable at the DB level, but if it's present it must
         // be well-formed — a malformed array shouldn't silently write junk.
         if (lineItems !== undefined && lineItems !== null && !isValidLineItems(lineItems)) {
-            const err = new Error("lineItems must be an array of { description: string, amount: number }");
-            err.status = 400;
-            throw err;
+            throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
         }
 
         // projectID resolution: if a ticket is given, the ticket is the
@@ -100,30 +106,22 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 [ticketID]
             );
             if (ticketResult.rowCount === 0) {
-                const err = new Error(`Ticket ${ticketID} not found`);
-                err.status = 404;
-                throw err;
+                throw httpError(404, `Ticket ${ticketID} not found`);
             }
             const ticket = ticketResult.rows[0];
 
             if (ticket.assignedto !== req.user.id) {
-                const err = new Error("You may only submit an expense against a ticket assigned to you");
-                err.status = 403;
-                throw err;
+                throw httpError(403, "You may only submit an expense against a ticket assigned to you");
             }
             if (ticket.status !== "Resolved") {
-                const err = new Error("Ticket must be Resolved before an expense can be linked to it");
-                err.status = 409;
-                throw err;
+                throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
             }
 
             projectID = ticket.projectid;
         }
 
         if (!projectID) {
-            const err = new Error("projectID is required when no ticketID is provided");
-            err.status = 400;
-            throw err;
+            throw httpError(400, "projectID is required when no ticketID is provided");
         }
 
         const result = await query(
@@ -155,7 +153,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
 
         const isDup = await checkDuplicate(expense);
         if (isDup) {
-            
             await query(
                 `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
                  VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
@@ -195,28 +192,44 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET / — GM/PM view of all expenses, optional ?projectId= filter (used by ProjectDetailPage)
+// GET / — GM sees all expenses; a PM sees only expenses on projects they
+// manage. Optional ?projectId= filter (used by ProjectDetailPage).
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
-        const base = `SELECT e.*, u.name AS submittedbyname
-                      FROM Expenses e JOIN Users u ON u.userid = e.submittedBy`;
-        const result = projectId
-            ? await query(`${base} WHERE e.projectID = $1 ORDER BY e.submittedAt DESC`, [projectId])
-            : await query(`${base} ORDER BY e.submittedAt DESC`);
+        const conditions = [];
+        const params = [];
+
+        if (req.user.role === "Project Manager") {
+            params.push(req.user.id);
+            conditions.push(
+                `e.projectID IN (SELECT projectId FROM projects WHERE projectManagerId = $${params.length})`
+            );
+        }
+        if (projectId) {
+            params.push(projectId);
+            conditions.push(`e.projectID = $${params.length}`);
+        }
+
+        const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+        const result = await query(
+            `SELECT e.*, u.name AS submittedbyname
+               FROM Expenses e JOIN Users u ON u.userid = e.submittedBy
+               ${where}
+              ORDER BY e.submittedAt DESC`,
+            params
+        );
         res.json(result.rows);
     } catch (err) { next(err); }
 });
 
-// GET /:id — role-scoped: Purchaser sees only their own submissions,
-// GM/PM can see any expense (they need this for review/approval/reporting).
+// GET /:id — role-scoped: Purchaser sees only their own submissions, GM can
+// see any expense, a PM only expenses on projects they manage.
 router.get("/:id", async (req, res, next) => {
     try {
         const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (result.rowCount === 0) {
-            const err = new Error("Not found");
-            err.status = 404;
-            throw err;
+            throw httpError(404, "Not found");
         }
         const expense = result.rows[0];
 
@@ -224,9 +237,10 @@ router.get("/:id", async (req, res, next) => {
         const isReviewer = ["Project Manager", "General Manager"].includes(req.user.role);
 
         if (!isOwner && !isReviewer) {
-            const err = new Error("You do not have access to this expense record");
-            err.status = 403;
-            throw err;
+            throw httpError(403, "You do not have access to this expense record");
+        }
+        if (!isOwner && isReviewer) {
+            await assertCanReviewProject(req.user, expense.projectid);
         }
 
         res.json(expense);
@@ -235,23 +249,22 @@ router.get("/:id", async (req, res, next) => {
     }
 });
 
-// PATCH /:id/approve — PM/GM only. Marks Approved, then submits SHA-256
-// hash to the Geth PoA cluster and persists the confirmed tx to
-// BlockchainLogs. If nodes are insufficient, blockchainStatus stays
-// "Pending" so a scheduled retry (see server.js) can pick it up later.
+// PATCH /:id/approve — PM (own projects) or GM. Only a Pending expense can be
+// approved. Marks Approved, then submits the SHA-256 hash to the Geth PoA
+// cluster and persists the confirmed tx to BlockchainLogs. If nodes are
+// insufficient, blockchainStatus stays "Pending" so a scheduled retry (see
+// server.js) can pick it up later.
 router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (result.rowCount === 0) {
-            const err = new Error("Expense not found");
-            err.status = 404;
-            throw err;
+            throw httpError(404, "Expense not found");
         }
         const expense = result.rows[0];
-        if (expense.status === "Approved") {
-            const err = new Error("Expense is already approved");
-            err.status = 409;
-            throw err;
+        await assertCanReviewProject(req.user, expense.projectid);
+
+        if (expense.status !== "Pending") {
+            throw httpError(409, `Only a Pending expense can be approved (this one is ${expense.status})`);
         }
 
         await query(
@@ -288,18 +301,26 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
     }
 });
 
-// PATCH /:id/reject — PM/GM only. No blockchain write for rejected expenses.
+// PATCH /:id/reject — PM (own projects) or GM. Only a Pending expense can be
+// rejected: rejecting an Approved one would leave its on-chain record pointing
+// at an expense that is no longer approved. No blockchain write on reject.
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
+        const existing = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
+        if (existing.rowCount === 0) {
+            throw httpError(404, "Expense not found");
+        }
+        const expense = existing.rows[0];
+        await assertCanReviewProject(req.user, expense.projectid);
+
+        if (expense.status !== "Pending") {
+            throw httpError(409, `Only a Pending expense can be rejected (this one is ${expense.status})`);
+        }
+
         const result = await query(
             "UPDATE Expenses SET status = 'Rejected', approvedBy = $1 WHERE expenseID = $2 RETURNING *",
             [req.user.id, req.params.id]
         );
-        if (result.rowCount === 0) {
-            const err = new Error("Expense not found");
-            err.status = 404;
-            throw err;
-        }
         res.json(result.rows[0]);
     } catch (err) {
         next(err);

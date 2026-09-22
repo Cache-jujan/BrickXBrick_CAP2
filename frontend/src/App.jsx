@@ -11,20 +11,18 @@ import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
 import { CreateMilestonePage } from "./pages/Milestones/CreateMilestonePage";
 import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
+import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
-import { ForgotPasswordPage } from "./pages/Login/ForgotPasswordPage";
-import { ResetPasswordPage } from "./pages/Login/ResetPasswordPage";
 import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 
-// The backend's requireRole(...) on GET /api/projects still allows all four
-// roles (GM/PM/SM/Purchaser) — that's correct, since the mobile app (Site
-// Manager, Purchaser) hits the same endpoint. This WEB_BROADCAST_ROLES list
-// only controls which roles can reach the *web* /projects routes; per the
-// Process spec, the web dashboard itself is scoped to GM and PM.
+// Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
+// use the mobile app, which hits the same backend endpoint.
 const WEB_BROADCAST_ROLES = ["General Manager", "Project Manager"];
 
+// Password recovery is admin-only: there is no self-service forgot/reset
+// flow. A System Administrator sets a new password from User Accounts.
 export default function App() {
   return (
     <BrowserRouter>
@@ -32,8 +30,6 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route
             element={
@@ -42,14 +38,12 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            {/* One dashboard route per role, matching backend ROLE_DASHBOARDS */}
             <Route path="/dashboard/gm" element={<DashboardPage />} />
             <Route path="/dashboard/pm" element={<DashboardPage />} />
             <Route path="/dashboard/sm" element={<DashboardPage />} />
             <Route path="/dashboard/purchaser" element={<DashboardPage />} />
             <Route path="/dashboard/admin" element={<DashboardPage />} />
 
-            {/* Projects — web scope is GM/PM only; SM/Purchaser use the mobile app */}
             <Route
               path="/projects"
               element={
@@ -75,11 +69,8 @@ export default function App() {
               }
             />
 
-            {/* F3 — milestone/task creation is Project Manager-only (GM is
-                excluded here, unlike project creation which is GM-only).
-                RoleRoute only checks role; ownership of the specific
-                project is re-checked inside ProjectDetailPage's canManage
-                and enforced for real by the backend's getOwnedProject. */}
+            {/* F3: milestone/task creation is Project Manager only. Ownership of
+                the specific project is enforced by the backend's getOwnedProject. */}
             <Route
               path="/projects/:id/milestones/new"
               element={
@@ -97,7 +88,15 @@ export default function App() {
               }
             />
 
-            {/* Admin — System Administrator only, matches adminUsers.js router.use gate */}
+            <Route
+              path="/expenses"
+              element={
+                <RoleRoute allow={WEB_BROADCAST_ROLES}>
+                  <ExpensesPage />
+                </RoleRoute>
+              }
+            />
+
             <Route
               path="/admin/users"
               element={
@@ -107,7 +106,6 @@ export default function App() {
               }
             />
 
-             {/* F12 — blockchain audit verification, General Manager only */}
             <Route
               path="/blockchain/verify"
               element={
@@ -116,8 +114,6 @@ export default function App() {
                 </RoleRoute>
               }
             />
-
-            {/* F12 — open tamper alerts, GM + System Administrator per backend requireRole on /alerts */}
             <Route
               path="/blockchain/alerts"
               element={
@@ -136,8 +132,6 @@ export default function App() {
   );
 }
 
-// Sends "/" (and any unmatched path) to the right place: login if signed
-// out, or the role-appropriate dashboard if signed in.
 function RootRedirect() {
   const { status, user } = useAuth();
   if (status === "loading") return null;

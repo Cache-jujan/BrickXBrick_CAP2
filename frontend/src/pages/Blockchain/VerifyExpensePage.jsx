@@ -5,6 +5,7 @@ import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
+import "./VerifyExpensePage.css";
 
 export function VerifyExpensePage() {
   const [expenseId, setExpenseId] = useState("");
@@ -18,8 +19,7 @@ export function VerifyExpensePage() {
     setResult(null);
     setLoading(true);
     try {
-      const data = await verifyExpense(expenseId);
-      setResult(data);
+      setResult(await verifyExpense(expenseId.trim()));
     } catch (err) {
       setError(extractErrorMessage(err, "Verification failed."));
     } finally {
@@ -28,18 +28,21 @@ export function VerifyExpensePage() {
   }
 
   return (
-    <div style={{ maxWidth: 560 }}>
+    <div className="verify-page">
       <h1>Blockchain Audit Verification</h1>
-      <Card style={{ marginTop: 16 }}>
+      <p className="verify-subtitle">
+        Recomputes an expense's hash and compares it with the value recorded on the blockchain.
+      </p>
+      <Card className="verify-card">
         <form onSubmit={handleVerify}>
           <Field
             label="Expense ID"
             required
-            placeholder="Paste expenseID"
+            placeholder="Paste the expense ID"
             value={expenseId}
             onChange={(e) => setExpenseId(e.target.value)}
           />
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || !expenseId.trim()}>
             {loading ? "Verifying…" : "Verify Record"}
           </Button>
         </form>
@@ -47,13 +50,13 @@ export function VerifyExpensePage() {
         {error && <Banner tone="error" title={error} />}
 
         {result && (
-          <div style={{ marginTop: 16 }}>
+          <div className="verify-result">
             {result.verified ? (
-              <Banner tone="info" title="✅ Record Verified — No Tampering Detected">
+              <Banner tone="info" title="Record verified. No tampering detected.">
                 Tx Hash: {result.txHash} · Block #{result.blockNumber}
               </Banner>
             ) : (
-              <Banner tone="error" title="⚠️ Tamper Alert">
+              <Banner tone="error" title="Tamper alert">
                 {result.message}
               </Banner>
             )}

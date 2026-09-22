@@ -25,7 +25,7 @@ export function CreateTaskPage() {
 
   function validate() {
     const errors = {};
-    if (!form.taskName.trim()) errors.taskName = "Task name is required.";
+    if (!form.taskName.trim()) errors.taskName = "Task Name is required.";
     if (!form.dueDate) errors.dueDate = "Due date is required.";
     return errors;
   }
@@ -48,10 +48,6 @@ export function CreateTaskPage() {
       });
       navigate(`/projects/${projectId}`, { replace: true });
     } catch (err) {
-      // The "no Site Manager assigned" 400 is caught upstream on
-      // ProjectDetailPage (this link is hidden without one), but keep
-      // this as a fallback in case the project's SM was unassigned
-      // between page loads.
       setFormError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
     } finally {
       setSubmitting(false);
@@ -60,9 +56,10 @@ export function CreateTaskPage() {
 
   return (
     <div className="create-task">
+      <Link to={`/projects/${projectId}`} className="form-back-link">Back to project</Link>
       <h1 className="create-task-title">Add Task</h1>
       <p className="create-task-subtitle">
-        Auto-assigned to this project's Site Manager on creation.
+        Assigned automatically to this project's Site Manager.
       </p>
 
       <Card className="create-task-card">

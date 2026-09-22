@@ -1,17 +1,33 @@
 .projects-header {
   margin-bottom: var(--space-5);
+  align-items: flex-start;
 }
 
-.projects-filters {
+.projects-count {
+  color: var(--color-ink-faint);
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+}
+
+.projects-toolbar {
   display: flex;
-  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   margin-bottom: var(--space-5);
   border-bottom: 1px solid var(--color-border);
   padding-bottom: var(--space-4);
 }
 
+.projects-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .projects-filter {
-  height: 32px;
+  height: 34px;
   padding: 0 var(--space-4);
   border-radius: 999px;
   border: 1px solid var(--color-border-strong);
@@ -30,4 +46,23 @@
   background: var(--color-ink);
   border-color: var(--color-ink);
   color: #fff;
+}
+
+.projects-search {
+  width: 100%;
+  max-width: 300px;
+  height: 38px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+}
+.projects-search::placeholder {
+  color: var(--color-ink-faint);
+}
+.projects-search:focus {
+  outline: none;
+  border-color: var(--color-brick);
+  box-shadow: 0 0 0 3px var(--color-brick-tint);
 }

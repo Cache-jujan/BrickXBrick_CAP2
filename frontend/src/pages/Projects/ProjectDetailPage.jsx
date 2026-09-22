@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { getProjectOverview } from "../../api/projectsApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
@@ -31,6 +31,7 @@ export function ProjectDetailPage() {
   const [expensesError, setExpensesError] = useState("");
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
+  const [actionError, setActionError] = useState("");
 
   const [chainSummary, setChainSummary] = useState(null);
   const [chainError, setChainError] = useState("");
@@ -50,8 +51,7 @@ export function ProjectDetailPage() {
       .catch((err) => {
         if (cancelled) return;
         // assertProjectAccess in projects.js 403s a Project Manager who
-        // isn't this project's projectmanagerid — the plain project list
-        // still broadcasts to every PM, so this is a reachable, expected
+        // isn't this project's projectmanagerid — a reachable, expected
         // state rather than an actual error.
         if (err?.response?.status === 403) {
           setAccessDenied(true);
@@ -90,9 +90,14 @@ export function ProjectDetailPage() {
   }, [id]);
 
   async function handleAction(expenseId, action) {
-    await (action === "approve" ? approveExpense(expenseId) : rejectExpense(expenseId));
-    setExpenses(await listExpenses(id));
-    setChainSummary(await getProjectBlockchainSummary(id));
+    setActionError("");
+    try {
+      await (action === "approve" ? approveExpense(expenseId) : rejectExpense(expenseId));
+      setExpenses(await listExpenses(id));
+      setChainSummary(await getProjectBlockchainSummary(id));
+    } catch (err) {
+      setActionError(extractErrorMessage(err, `Couldn't ${action} this expense.`));
+    }
   }
 
   async function handleVerify(expenseId) {
@@ -126,25 +131,25 @@ export function ProjectDetailPage() {
   if (!project) return null;
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const budget = Number(project.budget || 0);
+  const budgetUsedPct = budget > 0 ? Math.min(100, Math.round((totalExpenses / budget) * 100)) : 0;
 
   // Only the owning Project Manager may add milestones/tasks — mirrors
-  // getOwnedProject's check in backend/src/routes/milestones.js. General
-  // Manager sees the same section, read-only.
+  // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id;
-  // POST /:id/tasks 400s if the project has no Site Manager assigned —
-  // gate the "+ Add Task" affordance on it instead of letting a PM hit
-  // that dead end on the create-task page.
   const hasSiteManager = Boolean(project.sitemanagerid);
 
   return (
     <div className="project-detail">
-      <Link to="/projects" className="project-detail-back">← Back to Projects</Link>
+      <Link to="/projects" className="project-detail-back">Back to Projects</Link>
 
       <div className="spread project-detail-header">
-        <h1>{project.name}</h1>
+        <div>
+          <h1>{project.name}</h1>
+          <p className="project-detail-client">{project.clientname}</p>
+        </div>
         <Badge status={project.status} />
       </div>
-      <p className="project-detail-client">{project.clientname}</p>
 
       {project.description && (
         <Card className="project-detail-description"><p>{project.description}</p></Card>
@@ -152,13 +157,13 @@ export function ProjectDetailPage() {
 
       <div className="project-detail-facts">
         <Fact label="Budget" value={PESO.format(project.budget)} />
+        <Fact label="Expenses Logged" value={PESO.format(totalExpenses)} note={`${budgetUsedPct}% of budget`} />
         <Fact label="Start Date" value={DATE.format(new Date(project.startdate))} />
         <Fact
           label="Expected End Date"
           value={project.enddate ? DATE.format(new Date(project.enddate)) : "Not set"}
         />
         <Fact label="Overall Progress" value={`${Number(project.progress || 0)}%`} />
-        <Fact label="Expenses Logged" value={PESO.format(totalExpenses)} />
       </div>
 
       <div className="project-detail-milestones">
@@ -166,7 +171,7 @@ export function ProjectDetailPage() {
           <h2>Milestones</h2>
           {canManage && (
             <Link to={`/projects/${project.projectid}/milestones/new`} className="btn btn-primary">
-              + Add Milestone
+              Add Milestone
             </Link>
           )}
         </div>
@@ -185,7 +190,7 @@ export function ProjectDetailPage() {
               : "The Project Manager hasn't added any milestones yet."}
           </Banner>
         ) : (
-          <div className="stack project-detail-milestone-list">
+          <div className="project-detail-milestone-grid">
             {project.milestones.map((milestone) => (
               <MilestoneCard
                 key={milestone.milestoneid}
@@ -199,11 +204,12 @@ export function ProjectDetailPage() {
         )}
       </div>
 
-      <div className="spread dashboard-section-head">
+      <div className="spread project-detail-section-head">
         <h2>Expenses</h2>
       </div>
 
       {expensesError && <Banner tone="error" title={expensesError} />}
+      {actionError && <Banner tone="error" title={actionError} />}
       {!expensesError && expensesLoading && <p className="dashboard-loading">Loading expenses…</p>}
       {!expensesError && !expensesLoading && expenses.length === 0 && (
         <Banner tone="empty" title="No expenses recorded yet">
@@ -212,89 +218,94 @@ export function ProjectDetailPage() {
       )}
       {!expensesError && !expensesLoading && expenses.length > 0 && (
         <Card className="users-table-card">
-          <table className="users-table">
-            <thead>
-              <tr><th>Vendor</th><th>Category</th><th>Amount</th><th>Date</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              {expenses.map((e) => {
-                const verifyResult = verifyResults[e.expenseid];
-                return (
-                  <>
-                    <tr
-                      key={e.expenseid}
-                      onClick={() => setOpenId(openId === e.expenseid ? null : e.expenseid)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <td>{e.vendorname}</td>
-                      <td>{e.category}</td>
-                      <td>{PESO.format(e.amount)}</td>
-                      <td>{DATE.format(new Date(e.receiptdate))}</td>
-                      <td><Badge status={e.status} /></td>
-                    </tr>
-                    {openId === e.expenseid && (
-                      <tr key={`${e.expenseid}-detail`}>
-                        <td colSpan={5}>
-                          <p><strong>Submitted by:</strong> {e.submittedbyname}</p>
-                          <p><strong>Quantity:</strong> {e.quantity}</p>
-                          <p><strong>TIN:</strong> {e.tin || "—"} · <strong>BIR Permit:</strong> {e.birpermitnumber || "—"}</p>
-                          {e.lineitems && (
-                            <ul>
-                              {JSON.parse(e.lineitems).map((li, i) => (
-                                <li key={i}>{li.description} — {PESO.format(li.amount)}</li>
-                              ))}
-                            </ul>
-                          )}
-                          {e.receiptimageurl && (
-                            <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
-                          )}
-
-                          {canReview && e.status === "Pending" && (
-                            <div style={{ marginTop: "0.5rem" }}>
-                              <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
-                              <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
-                            </div>
-                          )}
-
-                          {canVerify && e.status === "Approved" && (
-                            <div className="expense-blockchain-row">
-                              <span className={`chain-status chain-status-${(e.blockchainstatus || "none").toLowerCase()}`}>
-                                Blockchain: {e.blockchainstatus || "None"}
-                              </span>
-                              {e.blockchainstatus === "Confirmed" && (
-                                <Button
-                                  variant="secondary"
-                                  disabled={verifyingId === e.expenseid}
-                                  onClick={() => handleVerify(e.expenseid)}
-                                >
-                                  {verifyingId === e.expenseid ? "Verifying…" : "Verify on Blockchain"}
-                                </Button>
-                              )}
-                              {verifyResult && (
-                                verifyResult.verified ? (
-                                  <Banner tone="info" title="✅ Verified — matches blockchain record">
-                                    Tx: {verifyResult.txHash?.slice(0, 18)}… · Block #{verifyResult.blockNumber}
-                                  </Banner>
-                                ) : (
-                                  <Banner tone="error" title="⚠️ Tamper Alert">
-                                    {verifyResult.message}
-                                  </Banner>
-                                )
-                              )}
-                            </div>
-                          )}
-                        </td>
+          <div className="table-scroll">
+            <table className="users-table project-detail-table">
+              <thead>
+                <tr><th>Vendor</th><th>Category</th><th>Amount</th><th>Date</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {expenses.map((e) => {
+                  const verifyResult = verifyResults[e.expenseid];
+                  const isOpen = openId === e.expenseid;
+                  return (
+                    <Fragment key={e.expenseid}>
+                      <tr
+                        className={"project-detail-expense-row" + (isOpen ? " project-detail-expense-row-open" : "")}
+                        onClick={() => setOpenId(isOpen ? null : e.expenseid)}
+                      >
+                        <td>{e.vendorname}</td>
+                        <td>{e.category}</td>
+                        <td>{PESO.format(e.amount)}</td>
+                        <td>{DATE.format(new Date(e.receiptdate))}</td>
+                        <td><Badge status={e.status} /></td>
                       </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                      {isOpen && (
+                        <tr className="project-detail-expense-detail">
+                          <td colSpan={5}>
+                            <div className="expense-detail-grid">
+                              <p><strong>Submitted by:</strong> {e.submittedbyname}</p>
+                              <p><strong>Quantity:</strong> {e.quantity}</p>
+                              <p><strong>TIN:</strong> {e.tin || "—"}</p>
+                              <p><strong>BIR Permit:</strong> {e.birpermitnumber || "—"}</p>
+                            </div>
+                            {e.lineitems && (
+                              <ul className="expense-detail-items">
+                                {(typeof e.lineitems === "string" ? JSON.parse(e.lineitems) : e.lineitems).map((li, i) => (
+                                  <li key={i}>{li.description} — {PESO.format(li.amount)}</li>
+                                ))}
+                              </ul>
+                            )}
+                            {e.receiptimageurl && (
+                              <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
+                            )}
+
+                            {canReview && e.status === "Pending" && (
+                              <div className="expense-detail-actions">
+                                <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
+                                <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
+                              </div>
+                            )}
+
+                            {canVerify && e.status === "Approved" && (
+                              <div className="expense-blockchain-row">
+                                <span className={`chain-status chain-status-${(e.blockchainstatus || "none").toLowerCase()}`}>
+                                  Blockchain: {e.blockchainstatus || "None"}
+                                </span>
+                                {e.blockchainstatus === "Confirmed" && (
+                                  <Button
+                                    variant="secondary"
+                                    disabled={verifyingId === e.expenseid}
+                                    onClick={() => handleVerify(e.expenseid)}
+                                  >
+                                    {verifyingId === e.expenseid ? "Verifying…" : "Verify on Blockchain"}
+                                  </Button>
+                                )}
+                                {verifyResult && (
+                                  verifyResult.verified ? (
+                                    <Banner tone="info" title="Verified: matches blockchain record">
+                                      Tx: {verifyResult.txHash?.slice(0, 18)}… · Block #{verifyResult.blockNumber}
+                                    </Banner>
+                                  ) : (
+                                    <Banner tone="error" title="Tamper alert">
+                                      {verifyResult.message}
+                                    </Banner>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 
-      <div className="spread dashboard-section-head">
+      <div className="spread project-detail-section-head">
         <h2>Blockchain Audit Trail</h2>
       </div>
 
@@ -303,7 +314,7 @@ export function ProjectDetailPage() {
       {!chainError && !chainLoading && chainSummary && (
         <>
           {chainSummary.openAlerts.length > 0 && (
-            <Banner tone="error" title={`⚠️ ${chainSummary.openAlerts.length} unresolved tamper alert(s) on this project`}>
+            <Banner tone="error" title={`${chainSummary.openAlerts.length} unresolved tamper alert(s) on this project`}>
               At least one expense's on-chain hash no longer matches its database record. Contact your System Administrator.
             </Banner>
           )}
@@ -322,21 +333,23 @@ export function ProjectDetailPage() {
             </Banner>
           ) : (
             <Card className="users-table-card">
-              <table className="users-table">
-                <thead>
-                  <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
-                </thead>
-                <tbody>
-                  {chainSummary.logs.map((log) => (
-                    <tr key={log.txhash}>
-                      <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
-                      <td>{log.blocknumber}</td>
-                      <td>{log.validatornodecount}</td>
-                      <td>{DATETIME.format(new Date(log.timestamp))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-scroll">
+                <table className="users-table project-detail-table">
+                  <thead>
+                    <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
+                  </thead>
+                  <tbody>
+                    {chainSummary.logs.map((log) => (
+                      <tr key={log.txhash}>
+                        <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
+                        <td>{log.blocknumber}</td>
+                        <td>{log.validatornodecount}</td>
+                        <td>{DATETIME.format(new Date(log.timestamp))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
         </>
@@ -345,11 +358,12 @@ export function ProjectDetailPage() {
   );
 }
 
-function Fact({ label, value }) {
+function Fact({ label, value, note }) {
   return (
-    <div className="project-detail-fact">
+    <Card className="project-detail-fact">
       <p className="project-detail-fact-label">{label}</p>
       <p className="project-detail-fact-value">{value}</p>
-    </div>
+      {note && <p className="project-detail-fact-note">{note}</p>}
+    </Card>
   );
 }
