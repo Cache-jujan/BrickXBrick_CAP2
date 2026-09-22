@@ -6,16 +6,20 @@ const express = require("express");
 const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
+const { receiptImageExists } = require("../lib/receiptStorage");
+const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems } = require("../lib/receiptFields");
 const { checkDuplicate, checkVendor } = require("../lib/fraudScreening");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
 router.use(requireAuth);
 
-// Labor is intentionally excluded — schema comment notes the DB CHECK isn't
-// built yet, so this is enforced here until that constraint lands.
+// Labor is intentionally excluded — the DB CHECK isn't built yet, so this is
+// enforced here until that constraint lands.
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
-const VALID_BIR_STATUSES = ["Formal-Tax-Deductible", "Informal"];
+
+// Roles that may read any expense. Everyone else is scoped to their own.
+const EXPENSE_READ_ALL_ROLES = ["General Manager", "Project Manager", "System Administrator"];
 
 function httpError(status, message) {
     const err = new Error(message);
@@ -37,20 +41,6 @@ async function assertCanReviewProject(user, projectId) {
     }
 }
 
-// lineItems shape matches the offlineExpenseQueue SQLite definition
-// (Table 27): [{ description: string, amount: number }]
-function isValidLineItems(lineItems) {
-    if (!Array.isArray(lineItems)) return false;
-    return lineItems.every(
-        (item) =>
-            item &&
-            typeof item.description === "string" &&
-            item.description.trim().length > 0 &&
-            typeof item.amount === "number" &&
-            item.amount >= 0
-    );
-}
-
 // POST / — Purchaser submits an expense, optionally linked to a Resolved ticket.
 router.post("/", requireRole("Purchaser"), async (req, res, next) => {
     try {
@@ -61,7 +51,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             amount,
             receiptDate,
             category,
-            birValidationStatus,
             receiptImageURL,
             birNumber,
             tin,
@@ -70,39 +59,59 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             quantity,
         } = req.body;
 
+        // NOTE: birValidationStatus is deliberately NOT read from the body.
+        // It decides what lands in the BIR tax-deductible report (F11), so a
+        // client must not be able to declare its own receipt Formal. F7 is a
+        // system-automated classification — it's derived below.
+
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
             throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
-        if (typeof amount !== "number" || amount < 0) {
+        if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
             throw httpError(400, "amount must be a non-negative number");
         }
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
-        if (!birValidationStatus || !VALID_BIR_STATUSES.includes(birValidationStatus)) {
-            throw httpError(400, `birValidationStatus must be one of: ${VALID_BIR_STATUSES.join(", ")}`);
-        }
-        if (!receiptImageURL) {
-            throw httpError(400, "receiptImageURL is required");
-        }
         if (quantity === undefined || quantity === null || typeof quantity !== "number" || quantity < 0) {
             throw httpError(400, "quantity is required and must be a non-negative number");
         }
-        // lineItems is nullable at the DB level, but if it's present it must
-        // be well-formed — a malformed array shouldn't silently write junk.
-        if (lineItems !== undefined && lineItems !== null && !isValidLineItems(lineItems)) {
-            throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
+
+        // receiptimageurl is NOT NULL, so confirm this is a receipt THIS
+        // server stored via /receipts/scan. Without the check, any string
+        // satisfies the column and the audit trail points at nothing.
+        if (!receiptImageURL) {
+            throw httpError(400, "receiptImageURL is required");
+        }
+        if (!(await receiptImageExists(receiptImageURL))) {
+            throw httpError(400, "receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
         }
 
-        // projectID resolution: if a ticket is given, the ticket is the
+        // lineItems is nullable at the DB level, but a malformed array
+        // shouldn't silently write junk into the jsonb column.
+        let storedLineItems = null;
+        if (lineItems !== undefined && lineItems !== null) {
+            if (!Array.isArray(lineItems)) {
+                throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
+            }
+            const normalized = normalizeLineItems(lineItems);
+            if (normalized.length !== lineItems.length) {
+                throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
+            }
+            storedLineItems = normalized;
+        }
+
+        const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
+
+        // projectID resolution: when a ticket is given, the ticket is the
         // source of truth for which project this belongs to — not the
-        // client-supplied projectID. This is what stops a Ticket_Mismatch
-        // situation (Expenses.projectID disagreeing with the linked ticket).
+        // client-supplied projectID. This is what stops Expenses.projectID
+        // disagreeing with the linked ticket (F9 Layer 3).
         let projectID = bodyProjectID;
 
         if (ticketID) {
             const ticketResult = await query(
-                "SELECT ticketId, projectId, status, assignedTo FROM tickets WHERE ticketId = $1",
+                "SELECT ticketid, projectid, status, assignedto FROM tickets WHERE ticketid = $1",
                 [ticketID]
             );
             if (ticketResult.rowCount === 0) {
@@ -125,12 +134,12 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         }
 
         const result = await query(
-            `INSERT INTO Expenses
-               (projectID, submittedBy, ticketID, vendorName, amount, receiptDate,
-                category, birValidationStatus, receiptImageURL, birNumber, tin,
-                birPermitNumber, lineItems, quantity)
+            `INSERT INTO expenses
+               (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
+                category, birvalidationstatus, receiptimageurl, birnumber, tin,
+                birpermitnumber, lineitems, quantity)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-             RETURNING *`,
+             RETURNING ${EXPENSE_COLUMNS}`,
             [
                 projectID,
                 req.user.id,
@@ -144,7 +153,7 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 birNumber || null,
                 tin || null,
                 birPermitNumber || null,
-                lineItems ? JSON.stringify(lineItems) : null,
+                storedLineItems ? JSON.stringify(storedLineItems) : null,
                 quantity,
             ]
         );
@@ -179,11 +188,12 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET /mine — Purchaser's own submitted expenses.
+// GET /mine — the caller's own submitted expenses.
 router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const result = await query(
-            "SELECT * FROM Expenses WHERE submittedBy = $1 ORDER BY submittedAt DESC",
+            `SELECT ${EXPENSE_COLUMNS} FROM expenses
+             WHERE submittedby = $1 ORDER BY submittedat DESC`,
             [req.user.id]
         );
         res.json(result.rows);
@@ -225,9 +235,21 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
 
 // GET /:id — role-scoped: Purchaser sees only their own submissions, GM can
 // see any expense, a PM only expenses on projects they manage.
+// The base scope lives in the WHERE clause rather than a post-fetch check,
+// so a user with no plausible right to the row gets a plain 404 instead of
+// a 403 that confirms the row exists; the finer PM-project scoping still
+// needs assertCanReviewProject since it depends on a join we don't want to
+// bake into every call.
 router.get("/:id", async (req, res, next) => {
     try {
-        const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
+        const canReadAll = EXPENSE_READ_ALL_ROLES.includes(req.user.role);
+
+        const result = await query(
+            `SELECT ${EXPENSE_COLUMNS} FROM expenses
+             WHERE expenseid = $1 AND ($2::boolean OR submittedby = $3)`,
+            [req.params.id, canReadAll, req.user.id]
+        );
+
         if (result.rowCount === 0) {
             throw httpError(404, "Not found");
         }
