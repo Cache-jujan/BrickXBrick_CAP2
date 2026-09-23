@@ -81,24 +81,28 @@ export function OcrResultModal({ visible, result, locked, onConfirm, onClose }: 
   // Re-seed the editable copy whenever a fresh OCR result comes in.
   // We never mutate `result` directly — this local state is what the
   // user edits, and it's what gets handed back via onConfirm.
-  useEffect(() => {
-    if (!result) return;
-    setVendorName(result.vendorName ?? "");
-    setTin(result.tin ?? "");
-    setBirNumber(result.birNumber ?? "");
-    setAmount(result.amount != null ? String(result.amount) : "");
-    setReceiptDate(result.receiptDate ?? "");
-    setItems(
-      result.lineItems?.length
-        ? result.lineItems.map((li) => ({
-            id: makeId(),
-            name: li.description ?? "",
-            quantity: li.quantity != null ? String(li.quantity) : "",
-            price: li.amount != null ? String(li.amount) : "",
-          }))
-        : []
-    );
-  }, [result]);
+ useEffect(() => {
+  if (!result) return;
+  setVendorName(result.vendorName ?? "");
+  setTin(result.tin ?? "");
+  setBirNumber(result.birNumber ?? "");
+  setAmount(result.amount != null ? String(result.amount) : "");
+  setReceiptDate(result.receiptDate ?? "");
+
+  // Quantity is never one number for the whole receipt — it lives per
+  // line item. When OCR found nothing, seed one item from vendor+amount
+  // (qty 1, still editable) so the list is never empty.
+  setItems(
+    result.lineItems?.length
+      ? result.lineItems.map((li) => ({
+          id: makeId(),
+          name: li.description ?? "",
+          quantity: li.quantity != null ? String(li.quantity) : "1",
+          price: li.amount != null ? String(li.amount) : "",
+        }))
+      : [{ id: makeId(), name: result.vendorName ?? "", quantity: "1", price: result.amount != null ? String(result.amount) : "" }]
+  );
+}, [result]);
 
   function updateItem(id: string, patch: Partial<LineItem>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));

@@ -51,7 +51,6 @@ export default function CaptureScreen() {
   // F6.7 — category and quantity aren't derivable from OCR, so they're
   // collected here, after a ticket is linked and before the real submit.
   const [category, setCategory] = useState<Category | null>(null);
-  const [quantity, setQuantity] = useState("");
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -167,12 +166,6 @@ export default function CaptureScreen() {
   async function handleSubmitExpense() {
     if (!ocrResult || !selectedTicket || !category) return;
 
-    const qty = Number(quantity);
-    if (!quantity.trim() || !Number.isFinite(qty) || qty < 0) {
-      Alert.alert("Quantity required", "Enter a valid quantity (0 or more) before submitting.");
-      return;
-    }
-
     if (!ocrResult.receiptImageURL) {
       // Should not happen post-fix, but fail loudly rather than let the
       // server's 400 be the first sign something's wrong.
@@ -202,7 +195,7 @@ export default function CaptureScreen() {
         tin: ocrResult.tin,
         birPermitNumber: ocrResult.birPermitNumber,
         lineItems: ocrResult.lineItems ?? [],
-        quantity: qty,
+        quantity: (ocrResult.lineItems ?? []).reduce((s, i) => s + (i.quantity ?? 1), 0),
       });
 
       setSubmitStatus("success");
@@ -225,7 +218,6 @@ export default function CaptureScreen() {
     setTicketPickerVisible(false);
     setSelectedTicket(null);
     setCategory(null);
-    setQuantity("");
     setSubmitStatus("idle");
     setSubmitError(null);
   }
@@ -346,8 +338,6 @@ export default function CaptureScreen() {
             <TextInput
               style={styles.quantityInput}
               keyboardType="numeric"
-              value={quantity}
-              onChangeText={setQuantity}
               placeholder="e.g. 1"
               placeholderTextColor="#B7AF9C"
             />
@@ -403,8 +393,7 @@ export default function CaptureScreen() {
           setTicketPickerVisible(false);
           // Prefill quantity from OCR if the parser found line items;
           // otherwise leave it blank for manual entry.
-          setQuantity(ocrResult?.quantity != null ? String(ocrResult.quantity) : "");
-        }}
+              }}
         onClose={() => setTicketPickerVisible(false)}
       />
     </SafeAreaView>
