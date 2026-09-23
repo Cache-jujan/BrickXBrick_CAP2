@@ -14,34 +14,50 @@ export type Ticket = {
 export type Project = {
   projectid: string;
   name: string;
+  budget?: string;
 };
 
-export async function fetchAssignedTickets(): Promise<Ticket[]> {
+export async function fetchAllAssignedTickets(): Promise<Ticket[]> {
   const res = await fetch(`${API_URL}/api/tickets/assigned`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(`Failed to load tickets (${res.status})`);
-  const all: Ticket[] = await res.json();
-  // Server returns every ticket ever assigned to this Purchaser, including
-  // already-Resolved/Rejected ones (assignedTo is never cleared). Only
-  // open Material Request tickets are pickable for a new expense.
-  return all.filter(
-    (t) => t.status === "Acknowledged" && t.tickettype === "Material Request"
-  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to load tickets (${res.status})`);
+  }
+
+  return res.json();
 }
 
 export async function fetchActiveProjects(): Promise<Project[]> {
   const res = await fetch(`${API_URL}/api/projects?status=Active`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(`Failed to load projects (${res.status})`);
+
+  if (!res.ok) {
+    throw new Error(`Failed to load projects (${res.status})`);
+  }
+
   return res.json();
 }
 
-// Body shape matches expenses.js's POST / handler field-for-field.
-// ticketID is required for the F6.6 linked-expense flow; projectID is
-// intentionally omitted here — when ticketID is present the server derives
-// projectID from the ticket itself and ignores any client-supplied value.
+export async function resolveTicket(ticketId: string) {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/resolve`, {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      data.error || `Failed to resolve ticket (${res.status})`
+    );
+  }
+
+  return data;
+}
+
 export type ExpenseSubmission = {
   ticketID: string;
   vendorName: string | null;
@@ -52,8 +68,7 @@ export type ExpenseSubmission = {
   birNumber?: string | null;
   tin?: string | null;
   birPermitNumber?: string | null;
-  lineItems?: unknown[];
-  quantity: number;
+  lineItems: unknown[];
 };
 
 export async function submitExpense(body: ExpenseSubmission) {
@@ -69,8 +84,9 @@ export async function submitExpense(body: ExpenseSubmission) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    // expenses.js's error handler always sends { error: message }.
-    throw new Error(data.error || `Failed to submit expense (${res.status})`);
+    throw new Error(
+      data.error || `Failed to submit expense (${res.status})`
+    );
   }
 
   return data;

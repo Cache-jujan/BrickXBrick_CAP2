@@ -27,10 +27,8 @@ export default function TabLayout() {
           tabBarInactiveTintColor: INACTIVE_COLOR,
         }}
       >
-        <Tabs.Screen
-          name="index"
-          options={{ title: "Capture", tabBarIcon: ({ color, size }) => <IconSymbol name="camera.fill" size={size} color={color} /> }}
-        />
+        <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: ({ color, size }) => <IconSymbol name="house.fill" size={size} color={color} /> }} />
+        
         <Tabs.Screen
           name="history"
           options={{ title: "History", tabBarIcon: ({ color, size }) => <IconSymbol name="clock.arrow.circlepath" size={size} color={color} /> }}
