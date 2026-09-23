@@ -95,5 +95,16 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
- 
+
+router.post("/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "email is required" });
+
+  // Always return the same generic response — don't leak whether the email exists.
+  await supabaseAnon.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.FRONTEND_URL}/reset-password`,
+  });
+  res.json({ message: "If that email exists, a reset link has been sent." });
+});
+
 module.exports = router;

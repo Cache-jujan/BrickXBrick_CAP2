@@ -79,6 +79,6 @@ router.post("/scan", requireRole("Purchaser"), upload.single("file"), async (req
   } catch (err) {
     next(err);
   }
-});
+);
 
 module.exports = router;

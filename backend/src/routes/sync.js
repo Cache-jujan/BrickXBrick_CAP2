@@ -1,7 +1,9 @@
 const express = require("express");
 const { query } = require("../lib/db");
 
+const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
+router.use(requireAuth);   // add this line
 
 router.post("/", async (req, res) => {
   const { uuid, payload } = req.body;

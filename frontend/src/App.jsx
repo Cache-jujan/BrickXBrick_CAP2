@@ -9,8 +9,14 @@ import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { ProjectsListPage } from "./pages/Projects/ProjectsListPage";
 import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
+import { CreateMilestonePage } from "./pages/Milestones/CreateMilestonePage";
+import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
+import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
+import { ForgotPasswordPage } from "./pages/Login/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/Login/ResetPasswordPage";
+import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 
 // The backend's requireRole(...) on GET /api/projects still allows all four
 // roles (GM/PM/SM/Purchaser) — that's correct, since the mobile app (Site
@@ -26,6 +32,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route
             element={
@@ -67,12 +75,54 @@ export default function App() {
               }
             />
 
+            {/* F3 — milestone/task creation is Project Manager-only (GM is
+                excluded here, unlike project creation which is GM-only).
+                RoleRoute only checks role; ownership of the specific
+                project is re-checked inside ProjectDetailPage's canManage
+                and enforced for real by the backend's getOwnedProject. */}
+            <Route
+              path="/projects/:id/milestones/new"
+              element={
+                <RoleRoute allow={["Project Manager"]}>
+                  <CreateMilestonePage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="/projects/:id/milestones/:milestoneId/tasks/new"
+              element={
+                <RoleRoute allow={["Project Manager"]}>
+                  <CreateTaskPage />
+                </RoleRoute>
+              }
+            />
+
             {/* Admin — System Administrator only, matches adminUsers.js router.use gate */}
             <Route
               path="/admin/users"
               element={
                 <RoleRoute allow={["System Administrator"]}>
                   <UserManagementPage />
+                </RoleRoute>
+              }
+            />
+
+             {/* F12 — blockchain audit verification, General Manager only */}
+            <Route
+              path="/blockchain/verify"
+              element={
+                <RoleRoute allow={["General Manager"]}>
+                  <VerifyExpensePage />
+                </RoleRoute>
+              }
+            />
+
+            {/* F12 — open tamper alerts, GM + System Administrator per backend requireRole on /alerts */}
+            <Route
+              path="/blockchain/alerts"
+              element={
+                <RoleRoute allow={["General Manager", "System Administrator"]}>
+                  <TamperAlertsPage />
                 </RoleRoute>
               }
             />

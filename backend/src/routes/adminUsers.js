@@ -81,8 +81,8 @@ router.post("/:id/deactivate", async (req, res) => {
 // UNLOCK (admin early-unlock)
 router.post("/:id/unlock", async (req, res) => {
   const result = await query(
-    `UPDATE Users SET lockoutUntil = NULL WHERE userID = $1
-     RETURNING userID, lockoutUntil`,
+    `UPDATE Users SET lockoutUntil = NULL, failedloginattempts = 0 WHERE userID = $1
+     RETURNING userID, lockoutUntil, failedloginattempts`,
     [req.params.id]
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
