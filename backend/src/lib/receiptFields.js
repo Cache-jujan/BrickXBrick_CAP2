@@ -114,4 +114,14 @@ function classifyBir({ tin, birPermitNumber, birNumber }) {
   };
 }
 
-module.exports = { EXPENSE_COLUMNS, toExpenseDraft, classifyBir, normalizeLineItems };
+/**
+ * Same trust model as classifyBir: quantity is derived server-side from
+ * confirmed line items, never accepted as a raw client number. Each item's
+ * own quantity defaults to 1 when unset (matches the review screen's seed).
+ */
+function computeQuantityFromLineItems(lineItems) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return null;
+  return lineItems.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 1), 0);
+}
+
+module.exports = { EXPENSE_COLUMNS, toExpenseDraft, classifyBir, normalizeLineItems, computeQuantityFromLineItems };

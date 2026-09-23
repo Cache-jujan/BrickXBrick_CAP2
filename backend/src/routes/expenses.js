@@ -5,7 +5,7 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
-const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems } = require("../lib/receiptFields");
+const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { checkDuplicate, checkVendor } = require("../lib/fraudScreening");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
@@ -25,7 +25,7 @@ function badRequest(message) {
     return err;
 }
 
-// POST / — Purchaser submits an expense, optionally linked to a Resolved ticket.
+// POST / — Purchaser submits an expense, linked to a Resolved ticket.
 router.post("/", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const {
@@ -40,7 +40,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             tin,
             birPermitNumber,
             lineItems,
-            quantity,
         } = req.body;
 
         // NOTE: birValidationStatus is deliberately NOT read from the body.
@@ -57,9 +56,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw badRequest(`category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
-        if (quantity === undefined || quantity === null || typeof quantity !== "number" || quantity < 0) {
-            throw badRequest("quantity is required and must be a non-negative number");
-        }
 
         // receiptimageurl is NOT NULL, so confirm this is a receipt THIS
         // server stored via /receipts/scan. Without the check, any string
@@ -71,19 +67,18 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             throw badRequest("receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
         }
 
-        // lineItems is nullable at the DB level, but a malformed array
-        // shouldn't silently write junk into the jsonb column.
-        let storedLineItems = null;
-        if (lineItems !== undefined && lineItems !== null) {
-            if (!Array.isArray(lineItems)) {
-                throw badRequest("lineItems must be an array of { description: string, amount: number }");
-            }
-            const normalized = normalizeLineItems(lineItems);
-            if (normalized.length !== lineItems.length) {
-                throw badRequest("lineItems must be an array of { description: string, amount: number }");
-            }
-            storedLineItems = normalized;
+        // quantity is no longer client-supplied — it's derived from
+        // lineItems (same trust model as birValidationStatus below), so a
+        // submission with no usable line items is rejected outright rather
+        // than silently defaulting to 0/1.
+        if (!Array.isArray(lineItems) || lineItems.length === 0) {
+            throw badRequest("lineItems must include at least one item");
         }
+        const storedLineItems = normalizeLineItems(lineItems);
+        if (storedLineItems.length === 0) {
+            throw badRequest("lineItems must be an array of { description: string, amount: number }");
+        }
+        const quantity = computeQuantityFromLineItems(storedLineItems);
 
         const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
 
@@ -110,11 +105,15 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 err.status = 403;
                 throw err;
             }
-                if (!["Acknowledged", "Resolved"].includes(ticket.status)) {
-            const err = new Error("Ticket must be Acknowledged before an expense can be linked to it");
-            err.status = 409;
-            throw err;
-}
+            // Strict Resolved-only. The mobile app now calls
+            // PATCH /tickets/:id/resolve before hitting this endpoint
+            // (Link screen submit handler) — accepting Acknowledged here
+            // too would let a frontend regression skip that step silently.
+            if (ticket.status !== "Resolved") {
+                const err = new Error("Ticket must be Resolved before an expense can be linked to it");
+                err.status = 409;
+                throw err;
+            }
 
             projectID = ticket.projectid;
         }
@@ -143,7 +142,7 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 birNumber || null,
                 tin || null,
                 birPermitNumber || null,
-                storedLineItems ? JSON.stringify(storedLineItems) : null,
+                JSON.stringify(storedLineItems),
                 quantity,
             ]
         );
@@ -152,7 +151,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
 
         const isDup = await checkDuplicate(expense);
         if (isDup) {
-            
             await query(
                 `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
                  VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
@@ -193,10 +191,6 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET /:id — single expense, scoped by role.
-// The scope lives in the WHERE clause rather than a post-fetch check, so a
-// user with no right to the row gets a plain 404 instead of a 403 that
-// confirms the row exists.
 // GET / — GM/PM view of all expenses, optional ?projectId= filter (used by ProjectDetailPage)
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
