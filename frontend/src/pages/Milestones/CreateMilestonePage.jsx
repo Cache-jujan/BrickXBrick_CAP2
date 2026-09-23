@@ -25,7 +25,7 @@ export function CreateMilestonePage() {
 
   function validate() {
     const errors = {};
-    if (!form.name.trim()) errors.name = "Milestone name is required.";
+    if (!form.name.trim()) errors.name = "Milestone Name is required.";
     if (!form.dueDate) errors.dueDate = "Due date is required.";
     return errors;
   }
@@ -58,6 +58,7 @@ export function CreateMilestonePage() {
 
   return (
     <div className="create-milestone">
+      <Link to={`/projects/${projectId}`} className="form-back-link">Back to project</Link>
       <h1 className="create-milestone-title">Add Milestone</h1>
 
       <Card className="create-milestone-card">

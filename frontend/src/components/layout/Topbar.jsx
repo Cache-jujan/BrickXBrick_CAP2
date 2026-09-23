@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
 import {
@@ -11,8 +12,31 @@ import "./Topbar.css";
 
 const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
 
-export function Topbar() {
+// Purely cosmetic label map for the topbar title/breadcrumb — does not
+// affect routing. Falls back to a generic label for any unmatched or
+// dynamic (":id") route rather than showing nothing.
+const PAGE_LABELS = [
+  { test: (p) => p.startsWith("/dashboard"), label: "Dashboard", crumb: "Home" },
+  { test: (p) => p === "/projects", label: "Projects", crumb: "Projects" },
+  { test: (p) => p === "/projects/new", label: "Create Project", crumb: "Projects / New" },
+  { test: (p) => /^\/projects\/[^/]+$/.test(p), label: "Project Detail", crumb: "Projects / Detail" },
+  { test: (p) => p.includes("/milestones/new"), label: "Add Milestone", crumb: "Projects / Milestones / New" },
+  { test: (p) => p.includes("/tasks/new"), label: "Add Task", crumb: "Projects / Tasks / New" },
+  { test: (p) => p === "/expenses", label: "Expenses", crumb: "Finance" },
+  { test: (p) => p === "/admin/users", label: "User Accounts", crumb: "Administration" },
+  { test: (p) => p === "/blockchain/verify", label: "Verify Expense", crumb: "Blockchain Audit" },
+  { test: (p) => p === "/blockchain/alerts", label: "Tamper Alerts", crumb: "Blockchain Audit" },
+];
+
+function pageInfoFor(pathname) {
+  const match = PAGE_LABELS.find((entry) => entry.test(pathname));
+  return match || { label: "Brick x Brick", crumb: "" };
+}
+
+export function Topbar({ onMenuClick }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const { label, crumb } = pageInfoFor(location.pathname);
   const initial = user?.name?.trim()?.[0]?.toUpperCase() || "?";
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -43,7 +67,8 @@ export function Topbar() {
   }, []);
 
   // Poll unread count in the background so the badge stays current even
-  // without opening the dropdown.
+  // without opening the dropdown. Unchanged from the prior implementation —
+  // cancelled/cleared on unmount, so no leaked interval or stale-state write.
   useEffect(() => {
     let cancelled = false;
     function poll() {
@@ -88,6 +113,17 @@ export function Topbar() {
   return (
     <header className="topbar">
       <div className="topbar-inner">
+        <button type="button" className="topbar-menu-btn" onClick={onMenuClick} aria-label="Open navigation">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        <div className="topbar-titles">
+          <h1 className="topbar-page-title">{label}</h1>
+          {crumb && <p className="topbar-breadcrumb">{crumb}</p>}
+        </div>
+
         <span className="topbar-spacer" />
 
         <div className="topbar-actions">
@@ -148,6 +184,10 @@ export function Topbar() {
               aria-expanded={menuOpen}
             >
               <span className="topbar-avatar">{initial}</span>
+              <span className="topbar-user-text">
+                <span className="topbar-user-name">{user?.name}</span>
+                <span className="topbar-user-role">{user?.role}</span>
+              </span>
               <ChevronIcon open={menuOpen} />
             </button>
 

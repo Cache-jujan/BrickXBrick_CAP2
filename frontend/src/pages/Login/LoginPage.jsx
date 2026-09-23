@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ROLE_DASHBOARDS } from "../../context/AuthContext";
 import { extractErrorMessage } from "../../api/client";
@@ -8,11 +8,14 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import "./LoginPage.css";
 
+// Feature list mirrors what the backend actually supports today — RBAC
+// (F1), project/expense tracking (F2/F6), and the F12 blockchain audit
+// trail. Do not add claims for features that aren't implemented.
 const FEATURES = [
   {
     icon: <ShieldIcon />,
     title: "Blockchain-Secured Audit Trail",
-    body: "Every approved expense is recorded on a tamper-proof ledger.",
+    body: "Every approved expense is recorded on a tamper-evident ledger.",
   },
   {
     icon: <LayersIcon />,
@@ -21,11 +24,18 @@ const FEATURES = [
   },
   {
     icon: <ChartIcon />,
-    title: "Live Project Visibility",
-    body: "Budgets, status, and timelines, updated in real time.",
+    title: "Project Visibility",
+    body: "Budgets, status, and timelines in one place per project.",
   },
 ];
 
+// FUNCTION F1 — Login
+// STATUS: IMPLEMENTED
+// PURPOSE: authenticate against POST /api/auth/login (Supabase-backed) and
+// redirect to the role's dashboard.
+// NOTE: this system has no self-registration and no Google/OAuth login —
+// accounts are created by a System Administrator only (see adminUsers.js).
+// Do not add a "Continue with Google" or sign-up affordance here.
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -57,29 +67,29 @@ export function LoginPage() {
 
   return (
     <div className="login-screen">
-      {/* Left — brand panel over the real construction photo */}
+      {/* Left — brand panel over the construction photo */}
       <div className="login-panel">
         <div className="login-panel-scrim" />
         <div className="login-panel-content">
-          <div className="login-panel-top">
-            <div className="login-brand-row">
-              <img src="/images/logo.png" alt="" className="login-brand-mark" />
+          <div className="login-brand-row">
+            <span className="login-brand-mark" aria-hidden="true" />
+            <span className="login-brand-text">
               <span className="login-brand-name">
                 Brick <span className="login-brand-x">x</span> Brick
               </span>
-            </div>
+              <span className="login-brand-tag">Build Smarter. Safer. Together.</span>
+            </span>
           </div>
 
           <div className="login-panel-copy">
             <p className="login-eyebrow">Construction Management</p>
             <h1 className="login-headline">
-              Building Trust.
-              <br />
-              <span className="login-headline-accent">Securing Value.</span>
+              Smarter construction management for a
+              <span className="login-headline-accent"> stronger tomorrow.</span>
             </h1>
             <p className="login-panel-tagline">
-              Construction management with blockchain-secured financial
-              controls.
+              Manage your projects, track expenses, and secure your financial
+              records with blockchain-backed transparency.
             </p>
 
             <ul className="login-features">
@@ -97,20 +107,21 @@ export function LoginPage() {
 
           <div className="login-panel-footer">
             <div className="login-security-note">
-              <ShieldIcon small />
-              <span>Your data is protected with enterprise-grade security.</span>
+              <span>Records are secured with blockchain-backed verification.</span>
             </div>
-            <p className="login-copyright">© 2026 Brick x Brick. All rights reserved.</p>
+            <p className="login-copyright">&copy; 2026 Brick x Brick. All rights reserved.</p>
           </div>
         </div>
       </div>
 
-      {/* Right — the actual sign-in form */}
+      {/* Right — the sign-in form */}
       <div className="login-form-side">
+        <p className="login-contact-admin">
+          Need access or a password reset? <span className="login-contact-admin-link">Contact your System Administrator</span>
+        </p>
+
         <div className="login-card">
-          <div className="login-card-mark">
-            <img src="/images/logo.png" alt="Brick x Brick" className="login-card-logo" />
-          </div>
+          <div className="login-card-mark" aria-hidden="true" />
           <h2 className="login-title">Welcome back</h2>
           <p className="login-subtitle">Sign in to your dashboard</p>
 
@@ -156,17 +167,10 @@ export function LoginPage() {
               </button>
             </div>
 
-            <div className="login-form-row">
-              <span />
-              <Link to="/forgot-password" className="login-forgot">
-                Forgot Password?
-              </Link>
-            </div>
-
             <Button type="submit" disabled={submitting} className="login-submit">
               {submitting ? "Logging in…" : (
                 <>
-                  Log In <ArrowIcon />
+                  Sign In <ArrowIcon />
                 </>
               )}
             </Button>
@@ -174,6 +178,10 @@ export function LoginPage() {
             {error && <Banner tone="error" title={error} />}
           </form>
         </div>
+
+        <p className="login-form-side-note">
+          Your data is secured with blockchain-backed verification. Built for transparency.
+        </p>
       </div>
     </div>
   );

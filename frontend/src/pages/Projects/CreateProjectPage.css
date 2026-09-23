@@ -1,5 +1,16 @@
 .create-project {
-  max-width: var(--form-max);
+  max-width: 720px;
+}
+
+.form-back-link {
+  display: inline-block;
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  margin-bottom: var(--space-4);
+}
+.form-back-link:hover {
+  color: var(--color-ink);
 }
 
 .create-project-title {
@@ -12,10 +23,10 @@
   flex-direction: column;
 }
 
-.create-project-dates {
+.create-project-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
+  gap: 0 var(--space-4);
 }
 
 .create-project-actions {
@@ -27,4 +38,10 @@
 
 .create-project-card .banner {
   margin-bottom: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .create-project-row {
+    grid-template-columns: 1fr;
+  }
 }

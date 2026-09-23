@@ -1,4 +1,4 @@
-// adminUsers.js — the five F1 account actions. System Administrator only.
+// adminUsers.js — F1 account actions. System Administrator only.
 const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
@@ -12,6 +12,7 @@ const VALID_ROLES = [
   "General Manager", "Project Manager", "Site Manager",
   "Purchaser", "System Administrator"
 ];
+const MIN_PASSWORD_LENGTH = 8;
 
 // CREATE
 router.post("/", async (req, res) => {
@@ -57,6 +58,10 @@ router.patch("/:id", async (req, res) => {
   if (role && !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: "Invalid role" });
   }
+  // An administrator must not be able to lock themselves out of the system.
+  if (req.params.id === req.user.id && (role || status === "Inactive")) {
+    return res.status(400).json({ error: "You can't change your own role or deactivate your own account" });
+  }
   const result = await query(
     `UPDATE Users SET role = COALESCE($1, role), status = COALESCE($2, status)
      WHERE userID = $3
@@ -69,6 +74,9 @@ router.patch("/:id", async (req, res) => {
 
 // DEACTIVATE
 router.post("/:id/deactivate", async (req, res) => {
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ error: "You can't deactivate your own account" });
+  }
   const result = await query(
     `UPDATE Users SET status = 'Inactive' WHERE userID = $1
      RETURNING userID, status`,
@@ -87,6 +95,37 @@ router.post("/:id/unlock", async (req, res) => {
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
   res.json(result.rows[0]);
+});
+
+// RESET PASSWORD — the only password-change path. Sets a new Supabase Auth
+// password for the user and clears any login lockout so they can sign in
+// straight away. Requests never echo the password back.
+router.post("/:id/reset-password", async (req, res) => {
+  const { newPassword } = req.body;
+  if (typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `newPassword must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  }
+  try {
+    const lookup = await query(
+      "SELECT supabaseuserid FROM Users WHERE userID = $1",
+      [req.params.id]
+    );
+    if (lookup.rowCount === 0) return res.status(404).json({ error: "Not found" });
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(
+      lookup.rows[0].supabaseuserid,
+      { password: newPassword }
+    );
+    if (error) return res.status(400).json({ error: error.message });
+
+    await query(
+      "UPDATE Users SET lockoutUntil = NULL, failedloginattempts = 0 WHERE userID = $1",
+      [req.params.id]
+    );
+    res.json({ userID: req.params.id, status: "password_reset" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

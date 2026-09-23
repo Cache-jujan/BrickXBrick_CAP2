@@ -1,7 +1,7 @@
 import "./Banner.css";
 
 /**
- * tone: "error" | "empty" | "info"
+ * tone: "error" | "warning" | "empty" | "info"
  * Used for form-level errors, empty states, and inline notices.
  */
 export function Banner({ tone = "info", title, children }) {

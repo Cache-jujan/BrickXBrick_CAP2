@@ -20,6 +20,12 @@
   color: var(--color-danger);
 }
 
+.banner-warning {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
 .banner-empty {
   background: var(--color-surface-muted);
   border-color: var(--color-border);
@@ -30,6 +36,6 @@
 
 .banner-info {
   background: var(--color-blueprint-tint);
-  border-color: var(--color-blueprint);
-  color: var(--color-blueprint);
+  border-color: var(--color-border-strong);
+  color: var(--color-ink);
 }

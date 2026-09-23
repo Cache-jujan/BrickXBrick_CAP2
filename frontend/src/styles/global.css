@@ -53,11 +53,15 @@ textarea {
 }
 
 /* Layout helpers */
+
+/* Page content fills the space next to the sidebar and stays centered on
+   very wide screens. The old rule used margin-left only, so any width
+   beyond max-width piled up as blank space on the right. */
 .container {
+  width: 100%;
   max-width: var(--content-max);
-  margin: 0;
-  margin-left: var(--space-5);;
-  padding: 0 var(--space-8);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
 }
 
 .page {
@@ -75,6 +79,10 @@ textarea {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.app-content > main {
+  flex: 1;
 }
 
 .stack {
@@ -95,8 +103,77 @@ textarea {
 
 .grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--space-5);
+}
+
+/* Wide tables scroll inside their card instead of clipping columns. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(48, 47, 40, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: var(--space-5);
+}
+
+.modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+}
+
+.modal-title {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-3);
+}
+
+.modal-body {
+  color: var(--color-ink-soft);
+  margin-bottom: var(--space-4);
+}
+
+.modal .banner {
+  margin-bottom: var(--space-4);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* Drawer backdrop for the mobile navigation */
+.nav-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .container {
+    padding: 0 var(--space-4);
+  }
+  .page {
+    padding: var(--space-5) 0 var(--space-7);
+  }
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(48, 47, 40, 0.5);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

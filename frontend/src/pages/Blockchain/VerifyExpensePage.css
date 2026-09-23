@@ -1,0 +1,14 @@
+.verify-page {
+  max-width: 640px;
+}
+
+.verify-subtitle {
+  color: var(--color-ink-soft);
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+.verify-result,
+.verify-card .banner {
+  margin-top: var(--space-4);
+  word-break: break-all;
+}
