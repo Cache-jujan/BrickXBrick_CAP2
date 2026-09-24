@@ -6,8 +6,7 @@ export async function listUsers() {
   return data;
 }
 
-// POST /api/admin/users
-// payload: { name, email, role, tempPassword? }
+// POST /api/admin/users — payload: { name, email, role, tempPassword }
 export async function createUser(payload) {
   const { data } = await apiClient.post("/api/admin/users", payload);
   return data;
@@ -28,6 +27,13 @@ export async function deactivateUser(id) {
 // POST /api/admin/users/:id/unlock
 export async function unlockUser(id) {
   const { data } = await apiClient.post(`/api/admin/users/${id}/unlock`);
+  return data;
+}
+
+// POST /api/admin/users/:id/reset-password — payload: { newPassword }
+// The only way to change a password: there is no self-service reset.
+export async function resetUserPassword(id, newPassword) {
+  const { data } = await apiClient.post(`/api/admin/users/${id}/reset-password`, { newPassword });
   return data;
 }
 

@@ -1,5 +1,5 @@
 .project-detail {
-  max-width: 720px;
+  width: 100%;
 }
 
 .project-detail-back {
@@ -14,22 +14,28 @@
 }
 
 .project-detail-header {
-  margin-bottom: var(--space-1);
+  align-items: flex-start;
+  margin-bottom: var(--space-5);
 }
 
 .project-detail-client {
   color: var(--color-ink-soft);
-  margin-bottom: var(--space-5);
+  margin-top: var(--space-1);
 }
 
 .project-detail-description {
   margin-bottom: var(--space-5);
+  max-width: 80ch;
 }
 
 .project-detail-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.project-detail-fact {
+  padding: var(--space-4) var(--space-5);
 }
 
 .project-detail-fact-label {
@@ -43,12 +49,72 @@
   font-weight: 600;
 }
 
+.project-detail-fact-note {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+  margin-top: 2px;
+}
+
 .chain-summary-facts {
   margin-bottom: var(--space-5);
 }
 
+.project-detail-section-head {
+  margin: var(--space-7) 0 var(--space-4);
+}
+
+.project-detail-milestones .banner,
+.project-detail .banner {
+  margin-bottom: var(--space-4);
+}
+
+.project-detail-milestone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* Expense table */
+.project-detail-table {
+  min-width: 640px;
+}
+
+.project-detail-expense-row {
+  cursor: pointer;
+}
+.project-detail-expense-row:hover td,
+.project-detail-expense-row-open td {
+  background: var(--color-surface-muted);
+}
+
+.project-detail-expense-detail td {
+  background: var(--color-bg);
+  padding: var(--space-5);
+  height: auto;
+}
+
+.expense-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2) var(--space-5);
+  margin-bottom: var(--space-3);
+}
+
+.expense-detail-items {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  color: var(--color-ink-soft);
+}
+
+.expense-detail-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
 .expense-blockchain-row {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -63,33 +129,21 @@
 }
 
 .chain-status-confirmed {
-  background: rgba(34, 139, 34, 0.12);
-  color: #1e7a1e;
+  background: var(--color-status-active-bg);
+  color: var(--color-status-active);
 }
 
 .chain-status-pending {
-  background: rgba(217, 164, 6, 0.14);
-  color: #8a6d00;
+  background: var(--color-status-risk-bg);
+  color: var(--color-status-risk);
 }
 
 .chain-status-tamperdetected {
-  background: rgba(200, 30, 30, 0.12);
-  color: #b21212;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .chain-status-none {
   background: var(--color-surface-muted);
   color: var(--color-ink-faint);
-}
-
-.project-detail-section-head {
-  margin: var(--space-7) 0 var(--space-4);
-}
-
-.project-detail-milestones .banner {
-  margin-bottom: var(--space-4);
-}
-
-.project-detail-milestone-list {
-  gap: var(--space-4);
 }

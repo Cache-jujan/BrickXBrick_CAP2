@@ -1,56 +1,68 @@
 /*
-  Brick x Brick — design tokens
+  Brick x Brick — design tokens (v2, brand redesign)
   -------------------------------------------------------------
-  Palette pulled from the project's own title slide: a deep rust/oxide
-  orange as the dominant brand color, a warm cream for soft highlights,
-  and a dark maroon-brown for high-contrast text on cream. Neutral ink
-  and paper tones carry the actual UI surfaces so the orange stays a
-  genuine accent rather than fighting with body content.
+  Official palette:
+    Primary Orange   #EC7A1C  — primary actions, active nav, highlights
+    Dark Charcoal    #44443B  — text, sidebar, headings
+    Warm Off-White   #E6E4E0  — soft backgrounds, neutral surfaces
+    Muted Taupe      #9B806E  — secondary text, subtle accents
+    Deep Terracotta  #90462C  — secondary accents, selected states
+
+  Variable names are kept stable from the previous token set (--color-brick*,
+  --color-ink*, etc.) so existing components that already reference them
+  pick up the new brand palette without a rename pass across the codebase.
 */
 
 :root {
   /* Surfaces */
-  --color-bg: #f7f4ef;
+  --color-bg: #f6f4f1;
   --color-surface: #ffffff;
-  --color-surface-muted: #f1ece3;
-  --color-border: #e4ddd0;
-  --color-border-strong: #d1c7b4;
+  --color-surface-muted: #efece6;
+  --color-border: #dfdad0;
+  --color-border-strong: #c9c1b1;
 
   /* Text */
-  --color-ink: #241a12;
-  --color-ink-soft: #5c4f3f;
-  --color-ink-faint: #8f8271;
+  --color-ink: #302f28;
+  --color-ink-soft: #6b6355;
+  --color-ink-faint: #9b806e;
 
-  /* Brand — rust/oxide orange, the dominant accent */
-  --color-brick: #b34a1e;
-  --color-brick-dark: #8a3416;
-  --color-brick-darker: #6e2a12;
-  --color-brick-light: #d97b45;
-  --color-brick-tint: #fbe9dc;
+  /* Brand — Primary Orange, the dominant accent */
+  --color-brick: #ec7a1c;
+  --color-brick-dark: #c9631a;
+  --color-brick-darker: #90462c;
+  --color-brick-light: #f3985a;
+  --color-brick-tint: #fdece0;
 
-  /* Cream — soft highlight surface, echoes the title-slide pill */
-  --color-cream: #f6e6be;
-  --color-cream-ink: #3d1610;
+  /* Warm off-white — soft highlight surface */
+  --color-cream: #e6e4e0;
+  --color-cream-ink: #44443b;
 
-  /* Secondary accent — used sparingly for informational/neutral states */
-  --color-blueprint: #5c6b6a;
-  --color-blueprint-tint: #e8ebe9;
+  /* Secondary accent — deep terracotta, used for selected/secondary states */
+  --color-terracotta: #90462c;
+  --color-terracotta-tint: #f3e2da;
+
+  /* Kept for backward compatibility with existing components that
+     reference "blueprint" as the informational/secondary tone. */
+  --color-blueprint: #6b6355;
+  --color-blueprint-tint: #efece6;
 
   /* Status */
   --color-status-active: #2f6f4e;
   --color-status-active-bg: #e3efe7;
   --color-status-risk: #a5751f;
-  --color-status-risk-bg: #f5ecd9;
-  --color-status-overdue: #b34a1e;
-  --color-status-overdue-bg: #fbe9dc;
-  --color-status-inactive: #6b5f4d;
-  --color-status-inactive-bg: #ece6d8;
+  --color-status-risk-bg: #f7ecd9;
+  --color-status-overdue: #90462c;
+  --color-status-overdue-bg: #f3e2da;
+  --color-status-inactive: #756c5c;
+  --color-status-inactive-bg: #ece8e0;
 
   /* Feedback */
   --color-danger: #a23223;
   --color-danger-bg: #fbe4df;
   --color-success: #2f6f4e;
   --color-success-bg: #e3efe7;
+  --color-warning: #a5751f;
+  --color-warning-bg: #f7ecd9;
 
   /* Type */
   --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -73,20 +85,47 @@
   --space-8: 4rem;
 
   /* Shape */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
 
   /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(36, 26, 18, 0.06);
-  --shadow-md: 0 8px 20px -8px rgba(36, 26, 18, 0.14);
-  --shadow-lg: 0 16px 32px -12px rgba(36, 26, 18, 0.22);
+  --shadow-sm: 0 1px 2px rgba(48, 47, 40, 0.06);
+  --shadow-md: 0 10px 24px -10px rgba(48, 47, 40, 0.16);
+  --shadow-lg: 0 20px 40px -14px rgba(48, 47, 40, 0.26);
 
   /* Layout */
-  --content-max: 1320px;
+  --content-max: 1600px;
   --form-max: 600px;
+  --sidebar-width: 268px;
+  --sidebar-width-collapsed: 84px;
 
   /* Motion */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --duration: 150ms;
+  --duration: 160ms;
+}
+
+/* Placeholder / pending-feature treatment — shared across the app so a
+   "coming soon" panel always reads the same way instead of looking broken. */
+.pending-panel {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  color: var(--color-ink-soft);
+}
+
+.pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 22px;
+  padding: 0 var(--space-3);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-ink-soft);
 }

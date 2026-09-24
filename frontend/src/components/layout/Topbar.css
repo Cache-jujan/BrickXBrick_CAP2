@@ -1,7 +1,7 @@
 .topbar {
-  height: 68px;
+  height: 72px;
   flex-shrink: 0;
-  background: var(--color-bg);
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
@@ -15,6 +15,24 @@
   padding: 0 var(--space-6);
 }
 
+.topbar-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-page-title {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+.topbar-breadcrumb {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+
 .topbar-spacer {
   flex: 1;
 }
@@ -26,10 +44,10 @@
 }
 
 .topbar-icon-btn {
-  width: 38px;
-  height: 38px;
+  position: relative;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  border: none;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   display: flex;
@@ -37,10 +55,11 @@
   justify-content: center;
   color: var(--color-ink-soft);
   cursor: pointer;
-  transition: background-color var(--duration) var(--ease);
+  transition: background-color var(--duration) var(--ease), border-color var(--duration) var(--ease);
 }
 .topbar-icon-btn:hover {
   background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
 }
 
 .topbar-user {
@@ -50,32 +69,57 @@
 .topbar-user-trigger {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   background: none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
-  padding: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-md);
 }
 .topbar-user-trigger:hover {
   background: var(--color-surface-muted);
+  border-color: var(--color-border);
 }
 
 .topbar-avatar {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, var(--color-brick-light) 0%, var(--color-brick-dark) 100%);
+  background: linear-gradient(155deg, var(--color-brick-light) 0%, var(--color-brick) 55%, var(--color-terracotta) 100%);
   color: #fff;
   font-size: var(--text-sm);
   font-weight: 700;
+  flex-shrink: 0;
+}
+
+.topbar-user-text {
+  display: none;
+  flex-direction: column;
+  text-align: left;
+  line-height: 1.25;
+}
+.topbar-user-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.topbar-user-role {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+
+@media (min-width: 1100px) {
+  .topbar-user-text {
+    display: flex;
+  }
 }
 
 .topbar-user-trigger svg {
   color: var(--color-ink-faint);
+  flex-shrink: 0;
 }
 
 .topbar-menu {
@@ -147,7 +191,7 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--color-brick);
+  background: var(--color-terracotta);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -156,7 +200,7 @@
 }
 
 .topbar-notif-menu {
-  width: 340px;
+  width: 360px;
   max-height: 420px;
   overflow-y: auto;
   right: 0;
@@ -219,4 +263,34 @@
 .topbar-notif-time {
   font-size: var(--text-xs);
   color: var(--color-ink-faint);
+}
+
+.topbar-menu-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  margin-right: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .topbar-menu-btn {
+    display: flex;
+  }
+  .topbar-inner {
+    padding: 0 var(--space-4);
+  }
+  .topbar-notif-menu {
+    position: fixed;
+    top: 76px;
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+  }
 }

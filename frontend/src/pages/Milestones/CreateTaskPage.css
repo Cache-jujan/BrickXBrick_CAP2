@@ -2,6 +2,17 @@
   max-width: var(--form-max);
 }
 
+.form-back-link {
+  display: inline-block;
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  margin-bottom: var(--space-4);
+}
+.form-back-link:hover {
+  color: var(--color-ink);
+}
+
 .create-task-title {
   font-size: var(--text-lg);
   margin-bottom: var(--space-1);

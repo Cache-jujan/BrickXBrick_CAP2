@@ -1,4 +1,6 @@
-// expenses.js — F6 expense submission + ticket linking.
+// expenses.js — F6 expense submission + ticket linking, plus review access.
+// Table 35 (Expenses) already exists in 001_initial_schema.sql — no migration
+// needed. This route just exposes it.
 
 const express = require("express");
 const { query } = require("../lib/db");
@@ -19,9 +21,9 @@ const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 // Roles that may read any expense. Everyone else is scoped to their own.
 const EXPENSE_READ_ALL_ROLES = ["General Manager", "Project Manager", "System Administrator"];
 
-function badRequest(message) {
+function httpError(status, message) {
     const err = new Error(message);
-    err.status = 400;
+    err.status = status;
     return err;
 }
 
@@ -48,23 +50,23 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         // system-automated classification — it's derived below.
 
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
-            throw badRequest("vendorName, amount, and receiptDate are required");
+            throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
         if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
-            throw badRequest("amount must be a non-negative number");
+            throw httpError(400, "amount must be a non-negative number");
         }
         if (!category || !VALID_CATEGORIES.includes(category)) {
-            throw badRequest(`category must be one of: ${VALID_CATEGORIES.join(", ")}`);
+            throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
 
         // receiptimageurl is NOT NULL, so confirm this is a receipt THIS
         // server stored via /receipts/scan. Without the check, any string
         // satisfies the column and the audit trail points at nothing.
         if (!receiptImageURL) {
-            throw badRequest("receiptImageURL is required");
+            throw httpError(400, "receiptImageURL is required");
         }
         if (!(await receiptImageExists(receiptImageURL))) {
-            throw badRequest("receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
+            throw httpError(400, "receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
         }
 
         // quantity is no longer client-supplied — it's derived from
@@ -94,32 +96,26 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 [ticketID]
             );
             if (ticketResult.rowCount === 0) {
-                const err = new Error(`Ticket ${ticketID} not found`);
-                err.status = 404;
-                throw err;
+                throw httpError(404, `Ticket ${ticketID} not found`);
             }
             const ticket = ticketResult.rows[0];
 
             if (ticket.assignedto !== req.user.id) {
-                const err = new Error("You may only submit an expense against a ticket assigned to you");
-                err.status = 403;
-                throw err;
+                throw httpError(403, "You may only submit an expense against a ticket assigned to you");
             }
             // Strict Resolved-only. The mobile app now calls
             // PATCH /tickets/:id/resolve before hitting this endpoint
             // (Link screen submit handler) — accepting Acknowledged here
             // too would let a frontend regression skip that step silently.
             if (ticket.status !== "Resolved") {
-                const err = new Error("Ticket must be Resolved before an expense can be linked to it");
-                err.status = 409;
-                throw err;
+                throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
             }
 
             projectID = ticket.projectid;
         }
 
         if (!projectID) {
-            throw badRequest("projectID is required when no ticketID is provided");
+            throw httpError(400, "projectID is required when no ticketID is provided");
         }
 
         const result = await query(
@@ -195,17 +191,39 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
-        const base = `SELECT e.*, u.name AS submittedbyname
-                      FROM Expenses e JOIN Users u ON u.userid = e.submittedBy`;
-        const result = projectId
-            ? await query(`${base} WHERE e.projectID = $1 ORDER BY e.submittedAt DESC`, [projectId])
-            : await query(`${base} ORDER BY e.submittedAt DESC`);
+        const conditions = [];
+        const params = [];
+
+        if (req.user.role === "Project Manager") {
+            params.push(req.user.id);
+            conditions.push(
+                `e.projectID IN (SELECT projectId FROM projects WHERE projectManagerId = $${params.length})`
+            );
+        }
+        if (projectId) {
+            params.push(projectId);
+            conditions.push(`e.projectID = $${params.length}`);
+        }
+
+        const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+        const result = await query(
+            `SELECT e.*, u.name AS submittedbyname
+               FROM Expenses e JOIN Users u ON u.userid = e.submittedBy
+               ${where}
+              ORDER BY e.submittedAt DESC`,
+            params
+        );
         res.json(result.rows);
     } catch (err) { next(err); }
 });
 
-// GET /:id — role-scoped: Purchaser sees only their own submissions,
-// GM/PM can see any expense (they need this for review/approval/reporting).
+// GET /:id — role-scoped: Purchaser sees only their own submissions, GM can
+// see any expense, a PM only expenses on projects they manage.
+// The base scope lives in the WHERE clause rather than a post-fetch check,
+// so a user with no plausible right to the row gets a plain 404 instead of
+// a 403 that confirms the row exists; the finer PM-project scoping still
+// needs assertCanReviewProject since it depends on a join we don't want to
+// bake into every call.
 router.get("/:id", async (req, res, next) => {
     try {
         const canReadAll = EXPENSE_READ_ALL_ROLES.includes(req.user.role);
@@ -217,9 +235,7 @@ router.get("/:id", async (req, res, next) => {
         );
 
         if (result.rowCount === 0) {
-            const err = new Error("Not found");
-            err.status = 404;
-            throw err;
+            throw httpError(404, "Not found");
         }
         const expense = result.rows[0];
 
@@ -227,9 +243,10 @@ router.get("/:id", async (req, res, next) => {
         const isReviewer = ["Project Manager", "General Manager"].includes(req.user.role);
 
         if (!isOwner && !isReviewer) {
-            const err = new Error("You do not have access to this expense record");
-            err.status = 403;
-            throw err;
+            throw httpError(403, "You do not have access to this expense record");
+        }
+        if (!isOwner && isReviewer) {
+            await assertCanReviewProject(req.user, expense.projectid);
         }
 
         res.json(expense);
@@ -238,23 +255,22 @@ router.get("/:id", async (req, res, next) => {
     }
 });
 
-// PATCH /:id/approve — PM/GM only. Marks Approved, then submits SHA-256
-// hash to the Geth PoA cluster and persists the confirmed tx to
-// BlockchainLogs. If nodes are insufficient, blockchainStatus stays
-// "Pending" so a scheduled retry (see server.js) can pick it up later.
+// PATCH /:id/approve — PM (own projects) or GM. Only a Pending expense can be
+// approved. Marks Approved, then submits the SHA-256 hash to the Geth PoA
+// cluster and persists the confirmed tx to BlockchainLogs. If nodes are
+// insufficient, blockchainStatus stays "Pending" so a scheduled retry (see
+// server.js) can pick it up later.
 router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (result.rowCount === 0) {
-            const err = new Error("Expense not found");
-            err.status = 404;
-            throw err;
+            throw httpError(404, "Expense not found");
         }
         const expense = result.rows[0];
-        if (expense.status === "Approved") {
-            const err = new Error("Expense is already approved");
-            err.status = 409;
-            throw err;
+        await assertCanReviewProject(req.user, expense.projectid);
+
+        if (expense.status !== "Pending") {
+            throw httpError(409, `Only a Pending expense can be approved (this one is ${expense.status})`);
         }
 
         await query(
@@ -291,18 +307,26 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
     }
 });
 
-// PATCH /:id/reject — PM/GM only. No blockchain write for rejected expenses.
+// PATCH /:id/reject — PM (own projects) or GM. Only a Pending expense can be
+// rejected: rejecting an Approved one would leave its on-chain record pointing
+// at an expense that is no longer approved. No blockchain write on reject.
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
+        const existing = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
+        if (existing.rowCount === 0) {
+            throw httpError(404, "Expense not found");
+        }
+        const expense = existing.rows[0];
+        await assertCanReviewProject(req.user, expense.projectid);
+
+        if (expense.status !== "Pending") {
+            throw httpError(409, `Only a Pending expense can be rejected (this one is ${expense.status})`);
+        }
+
         const result = await query(
             "UPDATE Expenses SET status = 'Rejected', approvedBy = $1 WHERE expenseID = $2 RETURNING *",
             [req.user.id, req.params.id]
         );
-        if (result.rowCount === 0) {
-            const err = new Error("Expense not found");
-            err.status = 404;
-            throw err;
-        }
         res.json(result.rows[0]);
     } catch (err) {
         next(err);
