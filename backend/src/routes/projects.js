@@ -83,16 +83,30 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// LIST — broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter
+// LIST — broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter.
+// Site Managers are scoped to projects assigned to their account so project
+// pickers cannot expose unrelated projects and ticket creation cannot be
+// directed at a project they do not manage.
 router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
   const { status } = req.query;
   try {
-    const result = status
-      ? await query(
-          `SELECT ${PROJECT_COLUMNS} FROM projects WHERE status = $1 ORDER BY startdate DESC`,
-          [status]
-        )
-      : await query(`SELECT ${PROJECT_COLUMNS} FROM projects ORDER BY startdate DESC`);
+    const conditions = [];
+    const params = [];
+
+    if (status) {
+      params.push(status);
+      conditions.push(`status = $${params.length}`);
+    }
+    if (req.user.role === "Site Manager") {
+      params.push(req.user.id);
+      conditions.push(`siteManagerId = $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const result = await query(
+      `SELECT ${PROJECT_COLUMNS} FROM projects ${where} ORDER BY startdate DESC`,
+      params
+    );
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
