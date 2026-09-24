@@ -12,6 +12,15 @@ function ReceiptIcon() {
     </svg>
   );
 }
+
+function TicketIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5h16v14H4z" />
+      <path d="M8 9h8M8 13h5" />
+    </svg>
+  );
+}
 import "./Sidebar.css";
 
 // Inline for now — swap for a real icon from ./icons if one already fits
@@ -41,7 +50,10 @@ const NAV_BY_ROLE = {
     { to: "/projects", label: "Projects", icon: FolderIcon },
     { to: "/expenses", label: "Expenses", icon: ReceiptIcon },
   ],
-  "Site Manager": [{ to: "/dashboard/sm", label: "Dashboard", icon: GridIcon }],
+  "Site Manager": [
+    { to: "/dashboard/sm", label: "Dashboard", icon: GridIcon },
+    { to: "/tickets/new", label: "Create Ticket", icon: TicketIcon },
+  ],
   Purchaser: [{ to: "/dashboard/purchaser", label: "Dashboard", icon: GridIcon }],
   "System Administrator": [
     { to: "/dashboard/admin", label: "Dashboard", icon: GridIcon },

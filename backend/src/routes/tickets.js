@@ -33,7 +33,16 @@ async function logTransition(client, { ticketId, fromStatus, toStatus, changedBy
 // ticketType is a category label only; it does not determine a recipient.
 router.post("/", requireRole("Site Manager"), async (req, res, next) => {
     try {
-        const { projectID, ticketType, subject, description, photoURL } = req.body;
+        const {
+            projectID,
+            ticketType,
+            subject,
+            description,
+            photoURL,
+            materialType,
+            quantity,
+            vendorName,
+        } = req.body;
 
         if (!projectID || !ticketType || !subject) {
             const err = new Error("projectID, ticketType, and subject are required");
@@ -45,6 +54,25 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             const err = new Error(`ticketType must be one of: ${VALID_TICKET_TYPES.join(", ")}`);
             err.status = 400;
             throw err;
+        }
+
+        // Material Request and Work Item tickets carry the structured context
+        // consumed later by F9 ticket-receipt mismatch screening. Reports
+        // remain free-text tickets and do not require these fields.
+        if (ticketType === "Material Request" || ticketType === "Work Item") {
+            if (!materialType || quantity === undefined || quantity === null || !vendorName) {
+                const err = new Error(
+                    "Material Request tickets require materialType, quantity, and vendorName"
+                );
+                err.status = 400;
+                throw err;
+            }
+
+            if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0) {
+                const err = new Error("quantity must be a positive number");
+                err.status = 400;
+                throw err;
+            }
         }
 
         const projectResult = await query(
@@ -67,10 +95,21 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
         const ticket = await withTransaction(async (client) => {
             const insertResult = await client.query(
                 `INSERT INTO tickets
-                   (projectId, submittedBy, ticketType, subject, description, photoURL)
-                 VALUES ($1, $2, $3, $4, $5, $6)
+                   (projectId, submittedBy, ticketType, subject, description, photoURL,
+                    materialType, quantity, vendorName)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING *`,
-                [projectID, req.user.id, ticketType, subject, description || null, photoURL || null]
+                [
+                    projectID,
+                    req.user.id,
+                    ticketType,
+                    subject,
+                    description || null,
+                    photoURL || null,
+                    materialType || null,
+                    quantity ?? null,
+                    vendorName || null,
+                ]
             );
             const newTicket = insertResult.rows[0];
 
