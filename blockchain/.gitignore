@@ -1,14 +1,20 @@
-node_modules/ 
-.env 
-data/ 
-cluster/node1/geth/ 
-cluster/node2/geth/ 
-cluster/node3/geth/ 
-*.log
-.env
-cluster/node1/password.txt
-cluster/node2/password.txt
-cluster/node3/password.txt
+# Blockchain runtime data and secrets
+cluster/datadir-backup-*/
+cluster/node1/geth/
+cluster/node2/geth/
+cluster/node3/geth/
 cluster/node1/keystore/
 cluster/node2/keystore/
 cluster/node3/keystore/
+cluster/node1/password.txt
+cluster/node2/password.txt
+cluster/node3/password.txt
+
+# Geth runtime files
+cluster/node*/geth.ipc
+cluster/node*/geth/nodekey
+cluster/node*/static-nodes.json
+
+# Local environment files
+.env
+.env.*

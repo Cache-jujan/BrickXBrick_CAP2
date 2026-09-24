@@ -11,7 +11,13 @@ const router = express.Router();
 router.use(requireAuth);
 
 async function getTicket(ticketId) {
-    const result = await query('SELECT * FROM tickets WHERE ticketId = $1', [ticketId]);
+    const result = await query(
+        `SELECT t.*, p.name AS projectName, p.projectManagerId
+           FROM tickets t
+           JOIN projects p ON p.projectId = t.projectId
+          WHERE t.ticketId = $1`,
+        [ticketId]
+    );
     if (result.rowCount === 0) {
         const err = new Error(`Ticket ${ticketId} not found`);
         err.status = 404;
@@ -145,6 +151,40 @@ router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
+// GET /pending — pending tickets for projects owned by the calling PM.
+// The project scope is enforced in SQL so a PM cannot see another PM's queue.
+router.get("/pending", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const result = await query(
+            `SELECT t.*, p.name AS projectName, u.name AS submittedByName
+               FROM tickets t
+               JOIN projects p ON p.projectId = t.projectId
+               LEFT JOIN users u ON u.userId = t.submittedBy
+              WHERE p.projectManagerId = $1 AND t.status = 'Pending'
+              ORDER BY t.createdAt ASC`,
+            [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /purchasers — active Purchasers available to a PM for assignment.
+router.get("/purchasers", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const result = await query(
+            `SELECT userId, name, email
+               FROM users
+              WHERE role = 'Purchaser' AND status = 'Active'
+              ORDER BY name ASC`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // GET /submitted — tickets created by the calling user (Site Manager view).
 // No role gate: the WHERE filter already scopes results to the caller's own
 // tickets, so a PM/Purchaser hitting this just gets an empty list.
@@ -169,6 +209,12 @@ router.get("/submitted", async (req, res, next) => {
 router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+
+        if (ticket.projectmanagerid !== req.user.id) {
+            const err = new Error("You may only acknowledge tickets from projects assigned to you");
+            err.status = 403;
+            throw err;
+        }
 
         if (ticket.tickettype === "Report") {
             const err = new Error("Report tickets are resolved directly by the PM, not acknowledged — use /resolve instead");

@@ -17,6 +17,7 @@ import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
 import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 import { CreateTicketPage } from "./pages/Tickets/CreateTicketPage";
+import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
@@ -50,6 +51,15 @@ export default function App() {
               element={
                 <RoleRoute allow={["Site Manager"]}>
                   <CreateTicketPage />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/tickets/queue"
+              element={
+                <RoleRoute allow={["Project Manager"]}>
+                  <TicketQueuePage />
                 </RoleRoute>
               }
             />
