@@ -39,7 +39,7 @@ const upload = multer({
 // POST /scan — upload a receipt, get back an expense draft.
 // Purchaser is the primary actor for F6; add "General Manager",
 // "Project Manager" here if you want the documented backup submitters.
-router.post("/scan", requireRole("Purchaser"), upload.single("file"), async (req, res, next) => {
+router.post("/scan", requireRole("Purchaser", "General Manager", "Project Manager"), upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) {
       const err = new Error("No file uploaded — send one file under the form field name 'file'");
@@ -79,6 +79,6 @@ router.post("/scan", requireRole("Purchaser"), upload.single("file"), async (req
   } catch (err) {
     next(err);
   }
-);
+});
 
 module.exports = router;

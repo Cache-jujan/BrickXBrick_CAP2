@@ -326,21 +326,70 @@ function extractOrSi(text) {
 
 function extractLineItems(lines) {
   const items = [];
-  // qty  description...  price  amount   (price/amount: digits with optional , and .)
+  const usedIndices = new Set();
+
+  // Pattern A: qty  description  price  amount  (4 columns, strict — original pattern)
   const fourColPattern = /^(\d{1,5})\s+([A-Za-z][A-Za-z0-9 .\/"'-]{2,40}?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)$/;
 
-  for (const line of lines) {
-    const m = line.match(fourColPattern);
-    if (!m) continue;
-    const [, qty, description, price, amount] = m;
-    items.push({
-      description: description.trim(),
-      quantity: parseInt(qty, 10),
-      unitPrice: normalizeAmount(price),
-      amount: normalizeAmount(amount),
-      confidence: "low", // any regex-matched line item should still be eyeballed
-    });
-  }
+  // Pattern B: qty  description  amount  (3 columns — no separate unit price column)
+  const threeColPattern = /^(\d{1,5})\s+([A-Za-z][A-Za-z0-9 .\/"'-]{2,40}?)\s+([\d,]+\.\d{2})$/;
+
+  lines.forEach((line, idx) => {
+    if (usedIndices.has(idx)) return;
+
+    let m = line.match(fourColPattern);
+    if (m) {
+      const [, qty, description, price, amount] = m;
+      items.push({
+        description: description.trim(),
+        quantity: parseInt(qty, 10),
+        unitPrice: normalizeAmount(price),
+        amount: normalizeAmount(amount),
+        confidence: "medium",
+      });
+      usedIndices.add(idx);
+      return;
+    }
+
+    m = line.match(threeColPattern);
+    if (m) {
+      const [, qty, description, amount] = m;
+      items.push({
+        description: description.trim(),
+        quantity: parseInt(qty, 10),
+        unitPrice: null,
+        amount: normalizeAmount(amount),
+        confidence: "low",
+      });
+      usedIndices.add(idx);
+    }
+  });
+
+  // Fallback pass: bare "description  amount" lines (qty implied as 1) —
+  // catches receipts where OCR dropped the qty column entirely. Explicitly
+  // skips total/subtotal/tax/change/cash lines so we don't misread the
+  // receipt total as a line item.
+  const twoColPattern = /^([A-Za-z][A-Za-z0-9 .\/"'-]{2,40}?)\s+([\d,]+\.\d{2})$/;
+  const SKIP_LINE = /total|subtotal|vat|tax|change|cash|amount due/i;
+
+  lines.forEach((line, idx) => {
+    if (usedIndices.has(idx)) return;
+    if (looksLikeBoilerplate(line)) return;
+    if (SKIP_LINE.test(line)) return;
+
+    const m = line.match(twoColPattern);
+    if (m) {
+      const [, description, amount] = m;
+      items.push({
+        description: description.trim(),
+        quantity: 1,
+        unitPrice: null,
+        amount: normalizeAmount(amount),
+        confidence: "low",
+      });
+      usedIndices.add(idx);
+    }
+  });
 
   return items;
 }

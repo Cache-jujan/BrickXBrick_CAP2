@@ -7,7 +7,7 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
-const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems } = require("../lib/receiptFields");
+const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { checkDuplicate, checkVendor } = require("../lib/fraudScreening");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
@@ -27,21 +27,7 @@ function httpError(status, message) {
     return err;
 }
 
-// General Manager may review any project's expenses. A Project Manager may
-// only review expenses on projects they are assigned to (same rule as
-// assertProjectAccess in projects.js).
-async function assertCanReviewProject(user, projectId) {
-    if (user.role === "General Manager") return;
-    const result = await query(
-        "SELECT projectManagerId FROM projects WHERE projectId = $1",
-        [projectId]
-    );
-    if (result.rowCount === 0 || result.rows[0].projectmanagerid !== user.id) {
-        throw httpError(403, "You may only review expenses on projects you manage");
-    }
-}
-
-// POST / — Purchaser submits an expense, optionally linked to a Resolved ticket.
+// POST / — Purchaser submits an expense, linked to a Resolved ticket.
 router.post("/", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const {
@@ -56,7 +42,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             tin,
             birPermitNumber,
             lineItems,
-            quantity,
         } = req.body;
 
         // NOTE: birValidationStatus is deliberately NOT read from the body.
@@ -73,9 +58,6 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
-        if (quantity === undefined || quantity === null || typeof quantity !== "number" || quantity < 0) {
-            throw httpError(400, "quantity is required and must be a non-negative number");
-        }
 
         // receiptimageurl is NOT NULL, so confirm this is a receipt THIS
         // server stored via /receipts/scan. Without the check, any string
@@ -87,19 +69,18 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             throw httpError(400, "receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
         }
 
-        // lineItems is nullable at the DB level, but a malformed array
-        // shouldn't silently write junk into the jsonb column.
-        let storedLineItems = null;
-        if (lineItems !== undefined && lineItems !== null) {
-            if (!Array.isArray(lineItems)) {
-                throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
-            }
-            const normalized = normalizeLineItems(lineItems);
-            if (normalized.length !== lineItems.length) {
-                throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
-            }
-            storedLineItems = normalized;
+        // quantity is no longer client-supplied — it's derived from
+        // lineItems (same trust model as birValidationStatus below), so a
+        // submission with no usable line items is rejected outright rather
+        // than silently defaulting to 0/1.
+        if (!Array.isArray(lineItems) || lineItems.length === 0) {
+            throw badRequest("lineItems must include at least one item");
         }
+        const storedLineItems = normalizeLineItems(lineItems);
+        if (storedLineItems.length === 0) {
+            throw badRequest("lineItems must be an array of { description: string, amount: number }");
+        }
+        const quantity = computeQuantityFromLineItems(storedLineItems);
 
         const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
 
@@ -122,6 +103,10 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             if (ticket.assignedto !== req.user.id) {
                 throw httpError(403, "You may only submit an expense against a ticket assigned to you");
             }
+            // Strict Resolved-only. The mobile app now calls
+            // PATCH /tickets/:id/resolve before hitting this endpoint
+            // (Link screen submit handler) — accepting Acknowledged here
+            // too would let a frontend regression skip that step silently.
             if (ticket.status !== "Resolved") {
                 throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
             }
@@ -153,7 +138,7 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                 birNumber || null,
                 tin || null,
                 birPermitNumber || null,
-                storedLineItems ? JSON.stringify(storedLineItems) : null,
+                JSON.stringify(storedLineItems),
                 quantity,
             ]
         );
@@ -202,8 +187,7 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET / — GM sees all expenses; a PM sees only expenses on projects they
-// manage. Optional ?projectId= filter (used by ProjectDetailPage).
+// GET / — GM/PM view of all expenses, optional ?projectId= filter (used by ProjectDetailPage)
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
