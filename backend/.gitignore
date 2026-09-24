@@ -1,3 +1,4 @@
 ".env" 
 "keys/" 
 "keystore/" 
+backend/storage/receipts/*
