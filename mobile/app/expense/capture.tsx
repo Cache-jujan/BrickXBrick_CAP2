@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -24,7 +24,7 @@ export default function CaptureScreen() {
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!draft.ticket) { router.replace("/"); return null; }
+  if (!draft.ticket) return <Redirect href="/" />;
 
   async function handleCamera() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();

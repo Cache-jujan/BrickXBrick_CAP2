@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { Redirect, router} from "expo-router";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import type { LineItem } from "@/lib/expense-types";
@@ -34,7 +34,7 @@ export default function ReviewScreen() {
     );
   }, [result]);
 
-  if (!result) { router.replace("/"); return null; }
+  if (!result) return <Redirect href="/" />;
 
   function updateItem(id: string, patch: Partial<LineItem>) { setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it))); }
   function removeItem(id: string) { setItems((prev) => prev.filter((it) => it.id !== id)); }
