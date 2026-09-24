@@ -65,7 +65,8 @@ textarea {
 }
 
 .page {
-  padding: var(--space-6) 0 var(--space-8);
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-8);
 }
 
 .app-shell {
