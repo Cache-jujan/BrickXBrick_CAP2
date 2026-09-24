@@ -9,6 +9,10 @@ cluster/node3/keystore/
 cluster/node1/password.txt
 cluster/node2/password.txt
 cluster/node3/password.txt
+cluster/node1/genesis.json
+cluster/node2/genesis.json
+cluster/node3/genesis.json
+
 
 # Geth runtime files
 cluster/node*/geth.ipc
