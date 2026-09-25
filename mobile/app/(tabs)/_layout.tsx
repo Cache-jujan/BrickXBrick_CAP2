@@ -1,21 +1,26 @@
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs, router } from "expo-router";
 
 import { AppHeader } from "@/components/app-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { getSession, logout } from "@/lib/auth";
 
 const BG = "#F8F1E8";
 const ACTIVE_COLOR = "#1A1A1A";
 const INACTIVE_COLOR = "#A79E8C";
 
 export default function TabLayout() {
+  const session = getSession();
+  if (!session || session.user.role !== "Purchaser") return <Redirect href="/login" />;
+
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: BG }}>
         <AppHeader
           onLogout={() => {
-            console.log("Logout tapped — not wired up yet");
+            logout();
+            router.replace("/login");
           }}
         />
       </SafeAreaView>
