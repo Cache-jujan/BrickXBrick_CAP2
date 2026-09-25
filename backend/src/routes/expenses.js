@@ -27,6 +27,24 @@ function httpError(status, message) {
     return err;
 }
 
+// Shared helper: throws 403 unless caller is GM, or the PM who manages this project.
+async function assertCanReviewProject(user, projectId) {
+    if (user.role === "General Manager") return;
+
+    if (user.role === "Project Manager") {
+        const result = await query(
+            "SELECT projectManagerId FROM projects WHERE projectId = $1",
+            [projectId]
+        );
+        if (result.rowCount === 0) {
+            throw httpError(404, "Project not found");
+        }
+        if (result.rows[0].projectmanagerid === user.id) return;
+    }
+
+    throw httpError(403, "You do not have access to review expenses on this project");
+}
+
 // POST / — Purchaser submits an expense, linked to a Resolved ticket.
 router.post("/", requireRole("Purchaser"), async (req, res, next) => {
     try {
