@@ -1,4 +1,6 @@
-import { API_URL, authHeaders } from "../constants/api";
+import * as FileSystem from "expo-file-system/legacy";
+
+import { API_URL, authHeaders, getAuthToken } from "../constants/api";
 
 export type Ticket = {
   ticketid: string;
@@ -16,6 +18,65 @@ export type Project = {
   name: string;
   budget?: string;
 };
+
+export type AssignedTask = {
+  taskid: string;
+  milestoneid: string;
+  assignedto: string;
+  taskname: string;
+  duedate: string;
+  status: string;
+  completionpercentage: number | string;
+  photoevidenceurl?: string | null;
+};
+
+export async function fetchAssignedTasks(): Promise<AssignedTask[]> {
+  const res = await fetch(`${API_URL}/api/tasks/assigned`, {
+    headers: authHeaders(),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      data.error || `Failed to load assigned tasks (${res.status})`
+    );
+  }
+
+  return data;
+}
+
+export async function submitTaskProgress(
+  taskId: string,
+  photo: { uri: string; fileName?: string | null; mimeType?: string | null },
+  note: string,
+  clientSubmissionId: string
+) {
+  const uploadResult = await FileSystem.uploadAsync(
+    `${API_URL}/api/tasks/${taskId}/progress`,
+    photo.uri,
+    {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "photo",
+      mimeType: photo.mimeType || "image/jpeg",
+      parameters: {
+        clientSubmissionId,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      },
+      headers: {
+        Authorization: `Bearer ${getAuthToken()}`,
+      },
+    }
+  );
+
+  const data = JSON.parse(uploadResult.body || "{}");
+  if (uploadResult.status < 200 || uploadResult.status >= 300) {
+    throw new Error(data.error || `Failed to submit task progress (${uploadResult.status})`);
+  }
+
+  return data;
+}
 
 export async function fetchAllAssignedTickets(): Promise<Ticket[]> {
   const res = await fetch(`${API_URL}/api/tickets/assigned`, {
