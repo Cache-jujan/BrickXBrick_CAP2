@@ -8,7 +8,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
-const { checkDuplicate, checkVendor } = require("../lib/fraudScreening");
+const { checkDuplicate, checkVendor, checkTicketMismatch } = require("../lib/fraudScreening");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
@@ -74,11 +74,11 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         // submission with no usable line items is rejected outright rather
         // than silently defaulting to 0/1.
         if (!Array.isArray(lineItems) || lineItems.length === 0) {
-            throw badRequest("lineItems must include at least one item");
+            throw httpError(400, "lineItems must include at least one item");
         }
         const storedLineItems = normalizeLineItems(lineItems);
         if (storedLineItems.length === 0) {
-            throw badRequest("lineItems must be an array of { description: string, amount: number }");
+            throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
         }
         const quantity = computeQuantityFromLineItems(storedLineItems);
 
@@ -165,6 +165,15 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
                  VALUES ($1, 'system', 'Vendor_Validation', $2)`,
                 [expense.expenseid, reason]
             );
+        }
+
+        const isMismatch = await checkTicketMismatch(expense);
+        if (isMismatch) {
+        await query(
+            `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
+            VALUES ($1, $2, $3, 'system', 'Pending')`,
+            [expense.expenseID, 'Ticket_Mismatch', 'Expense does not match ticket material type, quantity, or vendor']
+        );
         }
 
         res.status(201).json(expense);
