@@ -226,6 +226,35 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
     } catch (err) { next(err); }
 });
 
+
+// GET /flagged — PM/GM queue of Pending expenses with unresolved fraud flags
+router.get("/flagged", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
+    try {
+        const conditions = ["e.status = 'Pending'", "ff.resolution = 'Pending'"];
+        const params = [];
+
+        if (req.user.role === "Project Manager") {
+            params.push(req.user.id);
+            conditions.push(`e.projectID IN (SELECT projectId FROM projects WHERE projectManagerId = $${params.length})`);
+        }
+
+        const result = await query(
+            `SELECT e.*, u.name AS submittedbyname,
+                    json_agg(json_build_object('flagType', ff.flagType, 'reason', ff.reason)) AS flags
+               FROM Expenses e
+               JOIN Users u ON u.userid = e.submittedBy
+               JOIN FraudFlags ff ON ff.expenseID = e.expenseID
+              WHERE ${conditions.join(" AND ")}
+              GROUP BY e.expenseID, u.name
+              ORDER BY e.submittedAt ASC`,
+            params
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // GET /:id — role-scoped: Purchaser sees only their own submissions, GM can
 // see any expense, a PM only expenses on projects they manage.
 // The base scope lives in the WHERE clause rather than a post-fetch check,
@@ -287,6 +316,11 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             [req.user.id, req.params.id]
         );
 
+        await query(
+            "UPDATE FraudFlags SET resolution = 'Approved', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
+            [req.user.id, req.params.id]
+         );
+
         const hash = canonicalizeExpense(expense);
 
         try {
@@ -336,10 +370,17 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
             "UPDATE Expenses SET status = 'Rejected', approvedBy = $1 WHERE expenseID = $2 RETURNING *",
             [req.user.id, req.params.id]
         );
+
+        await query(
+            "UPDATE FraudFlags SET resolution = 'Rejected', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
+            [req.user.id, req.params.id]
+        );
         res.json(result.rows[0]);
     } catch (err) {
         next(err);
     }
 });
+
+
 
 module.exports = router;
