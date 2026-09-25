@@ -3,10 +3,12 @@ services:
   node1:
     image: ethereum/client-go:v1.13.15
     container_name: bxb-clique-node1
+    restart: on-failure:5
     command:
       - --datadir=/data
       - --config=/data/config.toml
       - --networkid=31337
+      - --nat=extip:172.28.0.11
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
@@ -27,15 +29,18 @@ services:
     volumes:
       - ./node1:/data
     networks:
-      - clique-net
+      clique-net:
+        ipv4_address: 172.28.0.11
 
   node2:
     image: ethereum/client-go:v1.13.15
     container_name: bxb-clique-node2
+    restart: on-failure:5
     command:
       - --datadir=/data
       - --config=/data/config.toml
       - --networkid=31337
+      - --nat=extip:172.28.0.12
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
@@ -56,15 +61,18 @@ services:
     volumes:
       - ./node2:/data
     networks:
-      - clique-net
+      clique-net:
+        ipv4_address: 172.28.0.12
 
   node3:
     image: ethereum/client-go:v1.13.15
     container_name: bxb-clique-node3
+    restart: on-failure:5
     command:
       - --datadir=/data
       - --config=/data/config.toml
       - --networkid=31337
+      - --nat=extip:172.28.0.13
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
@@ -85,8 +93,12 @@ services:
     volumes:
       - ./node3:/data
     networks:
-      - clique-net
+      clique-net:
+        ipv4_address: 172.28.0.13
 
 networks:
   clique-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
