@@ -55,18 +55,20 @@ async function checkTicketMismatch(expense) {
   if (ticketResult.rows.length === 0) return false;
 
   const ticket = ticketResult.rows[0];
+  if (!ticket.materialtype) return false; // Report tickets: nothing to compare
 
-  // Report tickets are free-text, no procurement fields to compare against
-  if (!ticket.materialtype) return false;
+  const items = Array.isArray(expense.lineItems)
+    ? expense.lineItems.map((i) => i.description).join(" ")
+    : String(expense.lineItems || "");
+  const expenseText = `${expense.category || ""} ${items} ${expense.vendorName || ""}`.toLowerCase();
 
-  const expenseText = `${expense.category || ""} ${expense.lineItems || ""} ${expense.vendorName || ""}`.toLowerCase();
   const materialMismatch = !expenseText.includes(ticket.materialtype.toLowerCase());
   const quantityMismatch = ticket.quantity != null && expense.quantity != null
     && Number(expense.quantity) !== Number(ticket.quantity);
   const vendorMismatch = ticket.vendorname
     && expense.vendorName?.trim().toLowerCase() !== ticket.vendorname.trim().toLowerCase();
 
-  return materialMismatch || quantityMismatch || vendorMismatch;
+  return Boolean(materialMismatch || quantityMismatch || vendorMismatch);
 }
 
 module.exports = { checkDuplicate, checkVendor, checkTicketMismatch };
