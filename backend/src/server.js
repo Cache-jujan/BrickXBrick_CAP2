@@ -15,8 +15,8 @@ const syncRoutes = require("./routes/sync");
 const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
-const { canonicalizeExpense, submitHashWithTimeout, getOnChainHash } = require("./lib/blockchainService");const notificationRoutes = require("./routes/notifications");
-
+const { canonicalizeExpense, submitHashWithTimeout, getOnChainHash } = require("./lib/blockchainService");
+const notificationRoutes = require("./routes/notifications");
 
 const app = express();
 app.use(cors());
@@ -49,22 +49,31 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 // F12: automatically retry any expense stuck at blockchainStatus='Pending' every 60s.
+let retryRunning = false;
 async function retryPendingBlockchainWrites() {
-    const pending = await query("SELECT * FROM Expenses WHERE blockchainStatus = 'Pending' LIMIT 20");
-    for (const expense of pending.rows) {
-        try {
-            const hash = canonicalizeExpense(expense);
-            const { txHash, blockNumber, validatorNodeCount } = await submitHashWithTimeout(hash);
-            await query(
-                `INSERT INTO BlockchainLogs (expenseID, actorID, txHash, blockNumber, eventType, validatorNodeCount, consensusType)
-                 VALUES ($1, $2, $3, $4, 'ExpenseApproved', $5, 'Clique')`,
-                [expense.expenseid, expense.approvedby || expense.submittedby, txHash, blockNumber, validatorNodeCount]
-            );
-            await query("UPDATE Expenses SET blockchainStatus = 'Confirmed' WHERE expenseID = $1", [expense.expenseid]);
-            console.log(`Retry succeeded for expense ${expense.expenseid}`);
-        } catch (e) {
-            console.log(`Retry still failing for ${expense.expenseid}: ${e.message}`);
+    if (retryRunning) return;
+    retryRunning = true;
+    try {
+        const pending = await query("SELECT * FROM Expenses WHERE blockchainStatus = 'Pending' LIMIT 20");
+        for (const expense of pending.rows) {
+            try {
+                const hash = canonicalizeExpense(expense);
+                const { txHash, blockNumber, validatorNodeCount } = await submitHashWithTimeout(hash);
+                await query(
+                    `INSERT INTO BlockchainLogs (expenseID, actorID, txHash, blockNumber, eventType, validatorNodeCount, consensusType)
+                     VALUES ($1, $2, $3, $4, 'ExpenseApproved', $5, 'Clique')`,
+                    [expense.expenseid, expense.approvedby || expense.submittedby, txHash, blockNumber, validatorNodeCount]
+                );
+                await query("UPDATE Expenses SET blockchainStatus = 'Confirmed' WHERE expenseID = $1", [expense.expenseid]);
+                console.log(`Retry succeeded for expense ${expense.expenseid}`);
+            } catch (e) {
+                console.log(`Retry still failing for ${expense.expenseid}: ${e.message}`);
+            }
         }
+    } catch (e) {
+        console.error("Retry pass failed:", e.message);
+    } finally {
+        retryRunning = false;
     }
 }
 setInterval(retryPendingBlockchainWrites, 60_000);
@@ -74,82 +83,83 @@ setInterval(retryPendingBlockchainWrites, 60_000);
 // On a mismatch: log it permanently, flip the expense to TamperDetected
 // (which naturally excludes it from future scans), and notify every
 // active System Administrator and the project's GM.
+let scanRunning = false;
 async function scanForTampering() {
-    const confirmed = await query(
-        "SELECT * FROM Expenses WHERE blockchainStatus = 'Confirmed' LIMIT 50"
-    );
+    if (scanRunning) return;
+    scanRunning = true;
+    try {
+        const confirmed = await query(
+            "SELECT * FROM Expenses WHERE blockchainStatus = 'Confirmed' LIMIT 50"
+        );
 
-    for (const expense of confirmed.rows) {
-        try {
-            const logResult = await query(
-                "SELECT * FROM BlockchainLogs WHERE expenseID = $1 ORDER BY timestamp DESC LIMIT 1",
-                [expense.expenseid]
-            );
-            if (logResult.rowCount === 0) continue; // no chain record yet, skip
-
-            const log = logResult.rows[0];
-            const recomputedHash = canonicalizeExpense(expense);
-
-            let onChainHash;
-            let reason;
+        for (const expense of confirmed.rows) {
             try {
-                onChainHash = await getOnChainHash(log.txhash);
-            } catch (lookupErr) {
-                // Reorg dropped the tx, or the node lost it. This used to be
-                // swallowed silently by the outer catch, which meant this
-                // expense was never checked again on any future scan.
-                onChainHash = null;
-                reason = `on-chain transaction ${log.txhash} could not be found (${lookupErr.message})`;
-            }
-
-            if (onChainHash !== null && recomputedHash === onChainHash) continue; // still matches, nothing to do
-
-            reason = reason || "recomputed hash does not match the stored on-chain value";
-
-            // Mismatch (or missing tx) found — permanent log + status flip.
-            await query(
-                `INSERT INTO tamper_alerts (expenseID, recomputedHash, onChainHash)
-                 VALUES ($1, $2, $3)`,
-                [expense.expenseid, recomputedHash, onChainHash || "MISSING"]
-            );
-            await query(
-                "UPDATE Expenses SET blockchainStatus = 'TamperDetected' WHERE expenseID = $1",
-                [expense.expenseid]
-            );
-
-            const message = `Tamper detected: expense "${expense.vendorname}" (₱${expense.amount}) — ${reason}.`;
-
-            // Notify every active System Administrator.
-            const admins = await query(
-                "SELECT userid FROM users WHERE role = 'System Administrator' AND status = 'Active'"
-            );
-            for (const admin of admins.rows) {
-                await query(
-                    `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
-                     VALUES ($1, 'TamperAlert', 'Expense', $2, $3)`,
-                    [admin.userid, expense.expenseid, message]
+                const logResult = await query(
+                    "SELECT * FROM BlockchainLogs WHERE expenseID = $1 ORDER BY timestamp DESC LIMIT 1",
+                    [expense.expenseid]
                 );
-            }
+                if (logResult.rowCount === 0) continue; // no chain record yet, skip
 
-            // Also notify the project's GM directly — they're the one who
-            // reviews it from the ProjectDetailPage Blockchain Audit section.
-            const projectResult = await query(
-                "SELECT createdby FROM projects WHERE projectid = $1",
-                [expense.projectid]
-            );
-            if (projectResult.rowCount > 0) {
+                const log = logResult.rows[0];
+                const recomputedHash = canonicalizeExpense(expense);
+
+                let onChainHash;
+                let reason;
+                try {
+                    onChainHash = await getOnChainHash(log.txhash);
+                } catch (lookupErr) {
+                    onChainHash = null;
+                    reason = `on-chain transaction ${log.txhash} could not be found (${lookupErr.message})`;
+                }
+
+                if (onChainHash !== null && recomputedHash === onChainHash) continue; // still matches, nothing to do
+
+                reason = reason || "recomputed hash does not match the stored on-chain value";
+
                 await query(
-                    `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
-                     VALUES ($1, 'TamperAlert', 'Expense', $2, $3)`,
-                    [projectResult.rows[0].createdby, expense.expenseid, message]
+                    `INSERT INTO tamper_alerts (expenseID, recomputedHash, onChainHash)
+                     VALUES ($1, $2, $3)`,
+                    [expense.expenseid, recomputedHash, onChainHash || "MISSING"]
                 );
-            }
+                await query(
+                    "UPDATE Expenses SET blockchainStatus = 'TamperDetected' WHERE expenseID = $1",
+                    [expense.expenseid]
+                );
 
-            console.log(`TAMPER DETECTED on expense ${expense.expenseid} — ${reason}`);
-        } catch (e) {
-            // Genuinely unexpected failure (DB down, etc). Loud, not silent.
-            console.error(`Tamper scan crashed on expense ${expense.expenseid}:`, e);
+                const message = `Tamper detected: expense "${expense.vendorname}" (₱${expense.amount}) — ${reason}.`;
+
+                const admins = await query(
+                    "SELECT userid FROM users WHERE role = 'System Administrator' AND status = 'Active'"
+                );
+                for (const admin of admins.rows) {
+                    await query(
+                        `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                         VALUES ($1, 'TamperAlert', 'Expense', $2, $3)`,
+                        [admin.userid, expense.expenseid, message]
+                    );
+                }
+
+                const projectResult = await query(
+                    "SELECT createdby FROM projects WHERE projectid = $1",
+                    [expense.projectid]
+                );
+                if (projectResult.rowCount > 0) {
+                    await query(
+                        `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                         VALUES ($1, 'TamperAlert', 'Expense', $2, $3)`,
+                        [projectResult.rows[0].createdby, expense.expenseid, message]
+                    );
+                }
+
+                console.log(`TAMPER DETECTED on expense ${expense.expenseid} — ${reason}`);
+            } catch (e) {
+                console.error(`Tamper scan crashed on expense ${expense.expenseid}:`, e);
+            }
         }
+    } catch (e) {
+        console.error("Tamper scan pass failed:", e.message);
+    } finally {
+        scanRunning = false;
     }
 }
 setInterval(scanForTampering, 180_000); // every 3 minutes

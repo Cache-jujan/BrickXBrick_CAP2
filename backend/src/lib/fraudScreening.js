@@ -42,4 +42,31 @@ async function checkVendor(expense) {
     return false;
 }
 
-module.exports = { checkDuplicate, checkVendor };
+// Layer 3: compares expense against ticket's structured procurement fields
+// (materialType, quantity, vendorName) — added via F4 PR. Report tickets have
+// no procurement fields (free-text only), so they're skipped, not flagged.
+async function checkTicketMismatch(expense) {
+  if (!expense.ticketID) return false;
+
+  const ticketResult = await query(
+    "SELECT tickettype, materialtype, quantity, vendorname FROM Tickets WHERE ticketid = $1",
+    [expense.ticketID]
+  );
+  if (ticketResult.rows.length === 0) return false;
+
+  const ticket = ticketResult.rows[0];
+
+  // Report tickets are free-text, no procurement fields to compare against
+  if (!ticket.materialtype) return false;
+
+  const expenseText = `${expense.category || ""} ${expense.lineItems || ""} ${expense.vendorName || ""}`.toLowerCase();
+  const materialMismatch = !expenseText.includes(ticket.materialtype.toLowerCase());
+  const quantityMismatch = ticket.quantity != null && expense.quantity != null
+    && Number(expense.quantity) !== Number(ticket.quantity);
+  const vendorMismatch = ticket.vendorname
+    && expense.vendorName?.trim().toLowerCase() !== ticket.vendorname.trim().toLowerCase();
+
+  return materialMismatch || quantityMismatch || vendorMismatch;
+}
+
+module.exports = { checkDuplicate, checkVendor, checkTicketMismatch };

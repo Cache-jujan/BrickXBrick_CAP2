@@ -2,7 +2,7 @@ require("dotenv").config();
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { ethers } = require("ethers");
+const { Web3 } = require("web3");
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -40,13 +40,13 @@ async function main() {
 
   const recomputedHash = hashExpense(expense);
 
-  const provider = new ethers.JsonRpcProvider(process.env.GETH_RPC_URL);
-  const onChainTx = await provider.getTransaction(record.txHash);
-  if (!onChainTx) {
-    console.error("Could not find tx on-chain. Is the geth container still running with the same data volume?");
-    process.exit(1);
-  }
-  const onChainHash = onChainTx.data.replace(/^0x/, "");
+  const web3 = new Web3(process.env.GETH_RPC_URL);
+  const onChainTx = await web3.eth.getTransaction(record.txHash).catch(() => null);
+    if (!onChainTx) {
+      console.error("Could not find tx on-chain. Is the geth container still running with the same data volume?");
+      process.exit(1);
+    }
+  const onChainHash = onChainTx.input.replace(/^0x/, "");
 
   console.log("Expense (current):", expense);
   console.log("Recomputed SHA-256:", recomputedHash);

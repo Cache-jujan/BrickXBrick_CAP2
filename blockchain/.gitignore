@@ -22,3 +22,6 @@ cluster/node*/static-nodes.json
 # Local environment files
 .env
 .env.*
+
+# Datas
+data/

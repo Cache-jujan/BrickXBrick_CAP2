@@ -8,7 +8,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
-const { checkDuplicate, checkVendor } = require("../lib/fraudScreening");
+const { checkDuplicate, checkVendor, checkTicketMismatch } = require("../lib/fraudScreening");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
@@ -25,6 +25,22 @@ function httpError(status, message) {
     const err = new Error(message);
     err.status = status;
     return err;
+}
+
+// Shared PM/GM project-scoping check for expense approve/reject.
+async function assertCanReviewProject(user, projectId) {
+    if (user.role === "General Manager") return;
+
+    const result = await query(
+        "SELECT projectManagerId FROM projects WHERE projectId = $1",
+        [projectId]
+    );
+    if (result.rowCount === 0) {
+        throw httpError(404, `Project ${projectId} not found`);
+    }
+    if (result.rows[0].projectmanagerid !== user.id) {
+        throw httpError(403, "You may only review expenses on projects you manage");
+    }
 }
 
 // POST / — Purchaser submits an expense, linked to a Resolved ticket.
@@ -74,11 +90,11 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         // submission with no usable line items is rejected outright rather
         // than silently defaulting to 0/1.
         if (!Array.isArray(lineItems) || lineItems.length === 0) {
-            throw badRequest("lineItems must include at least one item");
+            throw httpError(400, "lineItems must include at least one item");
         }
         const storedLineItems = normalizeLineItems(lineItems);
         if (storedLineItems.length === 0) {
-            throw badRequest("lineItems must be an array of { description: string, amount: number }");
+            throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
         }
         const quantity = computeQuantityFromLineItems(storedLineItems);
 
@@ -167,6 +183,15 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             );
         }
 
+        const isMismatch = await checkTicketMismatch(expense);
+        if (isMismatch) {
+        await query(
+            `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
+            VALUES ($1, $2, $3, 'system', 'Pending')`,
+            [expense.expenseID, 'Ticket_Mismatch', 'Expense does not match ticket material type, quantity, or vendor']
+        );
+        }
+
         res.status(201).json(expense);
     } catch (err) {
         next(err);
@@ -180,6 +205,34 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
             `SELECT ${EXPENSE_COLUMNS} FROM expenses
              WHERE submittedby = $1 ORDER BY submittedat DESC`,
             [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /flagged — PM/GM queue of Pending expenses with unresolved fraud flags
+router.get("/flagged", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
+    try {
+        const conditions = ["e.status = 'Pending'", "ff.resolution = 'Pending'"];
+        const params = [];
+
+        if (req.user.role === "Project Manager") {
+            params.push(req.user.id);
+            conditions.push(`e.projectID IN (SELECT projectId FROM projects WHERE projectManagerId = $${params.length})`);
+        }
+
+        const result = await query(
+            `SELECT e.*, u.name AS submittedbyname,
+                    json_agg(json_build_object('flagType', ff.flagType, 'reason', ff.reason)) AS flags
+               FROM Expenses e
+               JOIN Users u ON u.userid = e.submittedBy
+               JOIN FraudFlags ff ON ff.expenseID = e.expenseID
+              WHERE ${conditions.join(" AND ")}
+              GROUP BY e.expenseID, u.name
+              ORDER BY e.submittedAt ASC`,
+            params
         );
         res.json(result.rows);
     } catch (err) {
@@ -216,6 +269,9 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
         res.json(result.rows);
     } catch (err) { next(err); }
 });
+
+
+
 
 // GET /:id — role-scoped: Purchaser sees only their own submissions, GM can
 // see any expense, a PM only expenses on projects they manage.
@@ -278,6 +334,11 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             [req.user.id, req.params.id]
         );
 
+        await query(
+            "UPDATE FraudFlags SET resolution = 'Approved', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
+            [req.user.id, req.params.id]
+         );
+
         const hash = canonicalizeExpense(expense);
 
         try {
@@ -312,6 +373,11 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
 // at an expense that is no longer approved. No blockchain write on reject.
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
+        const { reason } = req.body;
+        if (!reason || typeof reason !== "string") {
+            throw httpError(400, "reason is required");
+        }
+
         const existing = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (existing.rowCount === 0) {
             throw httpError(404, "Expense not found");
@@ -324,8 +390,47 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
         }
 
         const result = await query(
-            "UPDATE Expenses SET status = 'Rejected', approvedBy = $1 WHERE expenseID = $2 RETURNING *",
+            "UPDATE Expenses SET status = 'Rejected', approvedBy = $1, rejectionReason = $2 WHERE expenseID = $3 RETURNING *",
+            [req.user.id, reason, req.params.id]
+        );
+
+        await query(
+            "UPDATE FraudFlags SET resolution = 'Rejected', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
             [req.user.id, req.params.id]
+        );
+
+        await query(
+            `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+             VALUES ($1, 'ExpenseRejected', 'Expense', $2, $3)`,
+            [expense.submittedby, req.params.id, `Your expense was rejected: ${reason}`]
+        );
+
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PATCH /:id/resubmit — Purchaser edits and resubmits their own Rejected
+// expense. Resets to Pending and clears rejectionReason. Does NOT re-run
+// fraud checks (checkDuplicate/checkVendor/checkTicketMismatch).
+router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) => {
+    try {
+        const existing = await query(
+            "SELECT * FROM Expenses WHERE expenseID = $1 AND submittedBy = $2",
+            [req.params.id, req.user.id]
+        );
+        if (existing.rowCount === 0) {
+            throw httpError(404, "Expense not found");
+        }
+        if (existing.rows[0].status !== "Rejected") {
+            throw httpError(409, "Only a Rejected expense can be resubmitted");
+        }
+
+        const result = await query(
+            "UPDATE Expenses SET status = 'Pending', rejectionReason = NULL WHERE expenseID = $1 RETURNING *",
+            [req.params.id]
         );
         res.json(result.rows[0]);
     } catch (err) {
