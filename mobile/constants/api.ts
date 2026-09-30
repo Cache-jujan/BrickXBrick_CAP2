@@ -14,11 +14,11 @@ function getLocalApiUrl() {
   return `http://${host}:3000`;
 }
 
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim( );
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
 export const API_URL = configuredApiUrl || (__DEV__
   ? getLocalApiUrl()
-  : "https://YOUR-RAILWAY-BACKEND-URL" );
+  : "https://YOUR-RAILWAY-BACKEND-URL");
 
 // The token must come only from the current login session.
 // Do not use EXPO_PUBLIC_DEV_TOKEN here.
