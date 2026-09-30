@@ -15,14 +15,10 @@ function getLocalApiUrl() {
 }
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-
 export const API_URL = configuredApiUrl || (__DEV__
   ? getLocalApiUrl()
   : "https://YOUR-RAILWAY-BACKEND-URL");
-
-export const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN ?? "";
-let activeToken = DEV_TOKEN;
-
+let activeToken = "";
 export function setAuthToken(token: string) {
   activeToken = token;
 }
