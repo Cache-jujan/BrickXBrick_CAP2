@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getProjectOverview } from "../../api/projectsApi";
+import { getEligibleSiteManagers, getProjectOverview, updateProjectSiteManager } from "../../api/projectsApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
@@ -9,6 +9,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
+import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
 import "./ProjectDetailPage.css";
 
@@ -38,6 +39,9 @@ export function ProjectDetailPage() {
   const [chainLoading, setChainLoading] = useState(true);
   const [verifyResults, setVerifyResults] = useState({}); // { [expenseId]: result }
   const [verifyingId, setVerifyingId] = useState(null);
+  const [siteManagers, setSiteManagers] = useState([]);
+  const [siteManagersError, setSiteManagersError] = useState("");
+  const [siteManagerSaving, setSiteManagerSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +70,25 @@ export function ProjectDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  const canManageSiteManager = Boolean(
+    project && (
+      user.role === "General Manager" ||
+      (user.role === "Project Manager" && project.projectmanagerid === user.id)
+    )
+  );
+
+  useEffect(() => {
+    if (!canManageSiteManager) return undefined;
+    let cancelled = false;
+    setSiteManagersError("");
+    getEligibleSiteManagers()
+      .then((data) => { if (!cancelled) setSiteManagers(data); })
+      .catch((err) => {
+        if (!cancelled) setSiteManagersError(extractErrorMessage(err, "Couldn't load Site Managers."));
+      });
+    return () => { cancelled = true; };
+  }, [canManageSiteManager]);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,16 +141,40 @@ export function ProjectDetailPage() {
     }
   }
 
+  async function handleSiteManagerChange(event) {
+    const siteManagerId = event.target.value || null;
+    setSiteManagerSaving(true);
+    setSiteManagersError("");
+    try {
+      const updated = await updateProjectSiteManager(id, siteManagerId);
+      setProject((previous) => ({ ...previous, ...updated }));
+    } catch (err) {
+      setSiteManagersError(extractErrorMessage(err, "Couldn't update the Site Manager assignment."));
+    } finally {
+      setSiteManagerSaving(false);
+    }
+  }
+
   if (loading) return <p className="dashboard-loading">Loading project…</p>;
 
   if (accessDenied) {
     return (
-      <Banner tone="info" title="You don't manage this project">
-        Only this project's assigned Project Manager or a General Manager can view its details.
-      </Banner>
+      <div className="project-detail-terminal">
+        <Banner tone="info" title="You don't manage this project">
+          Only this project's assigned Project Manager or a General Manager can view its details.
+        </Banner>
+        <Link to="/projects" className="btn btn-secondary">Back to Projects</Link>
+      </div>
     );
   }
-  if (error) return <Banner tone="error" title={error} />;
+  if (error) {
+    return (
+      <div className="project-detail-terminal">
+        <Banner tone="error" title={error} />
+        <Link to="/projects" className="btn btn-secondary">Back to Projects</Link>
+      </div>
+    );
+  }
   if (!project) return null;
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -165,6 +212,38 @@ export function ProjectDetailPage() {
         />
         <Fact label="Overall Progress" value={`${Number(project.progress || 0)}%`} />
       </div>
+
+      <Card className="project-detail-assignment">
+        <div>
+          <p className="project-detail-fact-label">Current Site Manager</p>
+          <p className="project-detail-assignment-name">
+            {project.sitemanagername || "No Site Manager assigned"}
+          </p>
+          {project.sitemanageremail && (
+            <p className="project-detail-fact-note">{project.sitemanageremail}</p>
+          )}
+        </div>
+        {canManageSiteManager && (
+          <div className="project-detail-assignment-control">
+            <Field
+              label="Assign or replace Site Manager"
+              as="select"
+              value={project.sitemanagerid || ""}
+              disabled={siteManagerSaving || siteManagers.length === 0}
+              onChange={handleSiteManagerChange}
+            >
+              <option value="">No Site Manager</option>
+              {siteManagers.map((manager) => (
+                <option key={manager.userid} value={manager.userid}>
+                  {manager.name.trim()} ({manager.email})
+                </option>
+              ))}
+            </Field>
+            {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
+            {siteManagersError && <p className="field-error">{siteManagersError}</p>}
+          </div>
+        )}
+      </Card>
 
       <div className="project-detail-milestones">
         <div className="spread project-detail-section-head">

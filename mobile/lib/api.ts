@@ -35,6 +35,7 @@ export type AssignedTask = {
   status: string;
   completionpercentage: number | string;
   photoevidenceurl?: string | null;
+  pendingphotoevidenceurl?: string | null;
 };
 
 export async function fetchAssignedTasks(): Promise<AssignedTask[]> {
