@@ -1,4 +1,27 @@
-".env" 
-"keys/" 
-"keystore/" 
-backend/storage/receipts/*
+# Dependencies
+node_modules/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+keys/
+keystore/
+
+# Runtime and generated receipt storage
+storage/receipts/*
+!storage/receipts/.gitkeep
+
+# Logs and local runtime output
+*.log
+logs/
+
+# Test and coverage output
+coverage/
+.nyc_output/
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,24 @@
+{
+  "name": "brickxbrick-backend",
+  "version": "0.1.0",
+  "description": "Brick x Brick backend API (Node.js + Express)",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/fraudScreening.test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.0",
+    "@google-cloud/vision": "^6.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "jose": "^5.6.3",
+    "multer": "^2.3.0",
+    "pg": "^8.12.0",
+    "web3": "^4.16.0"
+  }
+}
