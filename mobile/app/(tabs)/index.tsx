@@ -18,13 +18,14 @@ import {
   type Project,
 } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { getSession } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
 
 type FilterKey = "All" | "Pending" | "Completed";
 
-// "Pending" here means actionable (Acknowledged, not yet expensed);
-// "Completed" means Resolved. No priority/due-date field exists on
-// Tickets yet, so those aren't shown.
+// Purchasers can act on Acknowledged tickets and see Resolved tickets as
+// completed. Site Managers see only their own Resolved Material Requests,
+// which are ready for expense capture. No priority/due-date field exists.
 function toBucket(
   status: string
 ): "Pending" | "Completed" | null {
@@ -35,12 +36,13 @@ function toBucket(
 
 export default function HomeScreen() {
   const { setTicket, reset } = useExpenseDraft();
+  const isSiteManager = getSession()?.user.role === "Site Manager";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [projectsById, setProjectsById] = useState<
     Record<string, Project>
   >({});
-  const [filter, setFilter] = useState<FilterKey>("Pending");
+  const [filter, setFilter] = useState<FilterKey>(isSiteManager ? "Completed" : "Pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +51,7 @@ export default function HomeScreen() {
 
     try {
       const [ticketList, projectList] = await Promise.all([
-        fetchAllAssignedTickets(),
+        fetchAllAssignedTickets(isSiteManager ? "Site Manager" : "Purchaser"),
         fetchActiveProjects(),
       ]);
 
@@ -70,7 +72,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSiteManager]);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,9 +80,9 @@ export default function HomeScreen() {
     }, [load])
   );
 
-  const actionable = tickets.filter(
-    (t) => toBucket(t.status) !== null
-  );
+  const actionable = tickets.filter((t) => isSiteManager
+    ? t.status === "Resolved" && t.tickettype === "Material Request"
+    : toBucket(t.status) !== null);
 
   const visible = actionable
     .filter(
@@ -114,7 +116,7 @@ export default function HomeScreen() {
       projectId: ticket.projectid,
       projectName: project?.name ?? "Unknown project",
       subject: ticket.subject,
-      budget: project?.budget,
+      budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
     });
 
     router.push("/expense/capture");
@@ -173,8 +175,9 @@ export default function HomeScreen() {
         }
         renderItem={({ item }) => {
           const project = projectsById[item.projectid];
-          const actionableNow =
-            toBucket(item.status) === "Pending";
+          const actionableNow = isSiteManager
+            ? item.status === "Resolved" && item.tickettype === "Material Request"
+            : item.status === "Acknowledged";
 
           const Card = (
             <View style={styles.card}>
@@ -183,10 +186,10 @@ export default function HomeScreen() {
                   {item.tickettype}
                 </Text>
 
-                {project?.budget && (
+                {item.approvedbudget != null && (
                   <Text style={styles.budgetPill}>
                     ₱
-                    {Number(project.budget).toLocaleString()}
+                    {Number(item.approvedbudget).toLocaleString()}
                   </Text>
                 )}
               </View>

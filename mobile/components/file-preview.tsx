@@ -3,8 +3,8 @@ import { Image, StyleSheet, Text, View } from "react-native";
 
 // Shared file-state shape — imported by index.tsx too, so it only lives here.
 export type FileState =
-  | { type: "image"; name: string; uri: string }
-  | { type: "pdf"; name: string; size: string; uri: string }
+  | { type: "image"; name: string; uri: string; mimeType?: string }
+  | { type: "pdf"; name: string; size: string; uri: string; mimeType?: string }
   | null;
 
 /**

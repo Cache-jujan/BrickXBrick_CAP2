@@ -8,12 +8,34 @@ const multer = require("multer");
 
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
+const { query } = require("../lib/db");
 const { extractTextFromImage } = require("../lib/visionClient");
 const { storeReceiptImage, isAllowedMime } = require("../lib/receiptStorage");
 const { parseReceiptText } = require("../lib/parser");
 const { toExpenseDraft, classifyBir } = require("../lib/receiptFields");
 
 const router = express.Router();
+
+async function findVendorMasterRecord(vendorName) {
+  if (!vendorName) return null;
+
+  const result = await query(
+    `SELECT vendorID AS "vendorID",
+            vendorName AS "vendorName",
+            tin,
+            birPermitType AS "birPermitType",
+            birPermitNumber AS "birPermitNumber"
+       FROM VendorMasterList
+      WHERE approvalStatus = 'Approved'
+        AND regexp_replace(lower(vendorName), '[^a-z0-9]+', '', 'g') =
+            regexp_replace(lower($1), '[^a-z0-9]+', '', 'g')
+      ORDER BY createdAt DESC
+      LIMIT 1`,
+    [vendorName]
+  );
+
+  return result.rows[0] || null;
+}
 
 // Every route here touches OCR quota and writes files to disk — none of it
 // should be reachable unauthenticated.
@@ -37,9 +59,9 @@ const upload = multer({
 });
 
 // POST /scan — upload a receipt, get back an expense draft.
-// Purchaser is the primary actor for F6; add "General Manager",
-// "Project Manager" here if you want the documented backup submitters.
-router.post("/scan", requireRole("Purchaser", "General Manager", "Project Manager"), upload.single("file"), async (req, res, next) => {
+// Purchaser is primary; Site Managers may capture only for their own resolved
+// Material Requests, while GM/PM may use the documented backup flow.
+router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager", "Project Manager"), upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) {
       const err = new Error("No file uploaded — send one file under the form field name 'file'");
@@ -65,6 +87,15 @@ router.post("/scan", requireRole("Purchaser", "General Manager", "Project Manage
 
     const parsed = parseReceiptText(rawText);
     const draft = toExpenseDraft(parsed);
+    const vendorMaster = await findVendorMasterRecord(draft.vendorName);
+    if (vendorMaster) {
+      // Vendor master values are the trusted vendor identity. OR/SI remains
+      // receipt-specific and is never copied from the master list.
+      draft.vendorName = vendorMaster.vendorName;
+      draft.tin = vendorMaster.tin || draft.tin;
+      draft.birPermitType = vendorMaster.birPermitType || draft.birPermitType;
+      draft.birPermitNumber = vendorMaster.birPermitNumber || draft.birPermitNumber;
+    }
     const { birValidationStatus, missingBirFields } = classifyBir(draft);
 
     res.json({
@@ -72,6 +103,7 @@ router.post("/scan", requireRole("Purchaser", "General Manager", "Project Manage
       receiptImageURL,
       birValidationStatus,
       missingBirFields,
+      vendorMasterMatch: vendorMaster,
       confidence: parsed.confidence,
       ocrError,
       rawText, // kept for debugging the parser against real receipts

@@ -124,14 +124,18 @@ export default function SiteManagerHomeScreen() {
           <Text style={styles.sectionTitle}>Quick actions</Text>
         </View>
         <View style={styles.actionGrid}>
+          <Pressable style={styles.actionCard} onPress={() => router.push("/ticket-request")}>
+            <Text style={styles.actionIcon}>＋</Text>
+            <Text style={styles.actionLabel}>Request ticket</Text>
+          </Pressable>
+          <Pressable style={styles.actionCard} onPress={() => router.push("/(tabs)")}>
+            <Text style={styles.actionIcon}>▣</Text>
+            <Text style={styles.actionLabel}>Submit receipt</Text>
+          </Pressable>
           <Pressable style={styles.actionCard} onPress={() => loadTasks(true)}>
             <Text style={styles.actionIcon}>↻</Text>
             <Text style={styles.actionLabel}>Refresh tasks</Text>
           </Pressable>
-          <View style={styles.actionCard}>
-            <Text style={styles.actionIcon}>↗</Text>
-            <Text style={styles.actionLabel}>My updates</Text>
-          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

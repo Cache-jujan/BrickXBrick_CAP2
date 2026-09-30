@@ -259,6 +259,11 @@ export function ExpensesPage() {
                                       {flags.map((f) => `${f.flagType}: ${f.reason}`).join(" · ")}
                                     </Banner>
                                   )}
+                                  {e.submittedby === user.id && user.role === "General Manager" && (
+                                    <Banner tone="warning" title="You are reviewing your own submission">
+                                      Your approval will be recorded under your account.
+                                    </Banner>
+                                  )}
                                   <div className="expenses-detail-grid">
                                     <p><strong>Submitted by:</strong> {e.submittedbyname}</p>
                                     <p><strong>Quantity:</strong> {e.quantity}</p>
@@ -289,9 +294,13 @@ export function ExpensesPage() {
                                   {e.status === "Pending" && (
                                     <div className="expenses-actions">
                                       {e.submittedby === user.id ? (
+                                        user.role === "General Manager" ? (
+                                          <Button onClick={() => openConfirm(e, "approve")}>Approve</Button>
+                                        ) : (
                                         <p className="expenses-subtitle">
                                           You submitted this expense, so someone else must review it.
                                         </p>
+                                        )
                                       ) : (
                                         <>
                                           <Button onClick={() => openConfirm(e, "approve")}>Approve</Button>

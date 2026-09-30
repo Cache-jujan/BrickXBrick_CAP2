@@ -7,6 +7,8 @@ export type Ticket = {
   projectid: string;
   submittedby: string;
   tickettype: string;
+  requestedbudget?: string | number | null;
+  approvedbudget?: string | number | null;
   subject: string;
   description: string | null;
   status: string;
@@ -17,6 +19,11 @@ export type Project = {
   projectid: string;
   name: string;
   budget?: string;
+};
+
+export type ApprovedVendor = {
+  vendorID: string;
+  vendorName: string;
 };
 
 export type AssignedTask = {
@@ -79,8 +86,9 @@ export async function submitTaskProgress(
   return data;
 }
 
-export async function fetchAllAssignedTickets(): Promise<Ticket[]> {
-  const res = await fetch(`${API_URL}/api/tickets/assigned`, {
+export async function fetchAllAssignedTickets(role: "Purchaser" | "Site Manager"): Promise<Ticket[]> {
+  const endpoint = role === "Site Manager" ? "/api/tickets/submitted" : "/api/tickets/assigned";
+  const res = await fetch(`${API_URL}${endpoint}`, {
     headers: authHeaders(),
   });
 
@@ -101,6 +109,46 @@ export async function fetchActiveProjects(): Promise<Project[]> {
   }
 
   return res.json();
+}
+
+export async function fetchApprovedVendors(): Promise<ApprovedVendor[]> {
+  const res = await fetch(`${API_URL}/api/tickets/vendors`, {
+    headers: authHeaders(),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to load approved vendors (${res.status})`);
+  }
+
+  return data;
+}
+
+export async function createTicket(body: {
+  projectID: string;
+  ticketType: "Material Request";
+  subject: string;
+  description?: string;
+  materialType: string;
+  quantity: number;
+  vendorName: string;
+  requestedBudget: number;
+}) {
+  const res = await fetch(`${API_URL}/api/tickets`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to create ticket (${res.status})`);
+  }
+
+  return data;
 }
 
 export async function resolveTicket(ticketId: string) {
