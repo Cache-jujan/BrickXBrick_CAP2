@@ -12,7 +12,7 @@ const INACTIVE_COLOR = "#A79E8C";
 
 export default function TabLayout() {
   const session = getSession();
-  if (!session || session.user.role !== "Purchaser") return <Redirect href="/login" />;
+  if (!session || !["Purchaser", "Site Manager"].includes(session.user.role)) return <Redirect href="/login" />;
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>

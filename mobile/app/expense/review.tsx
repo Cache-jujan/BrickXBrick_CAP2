@@ -15,6 +15,7 @@ export default function ReviewScreen() {
 
   const [vendorName, setVendorName] = useState("");
   const [tin, setTin] = useState("");
+  const [birPermitType, setBirPermitType] = useState("");
   const [birPermitNumber, setBirPermitNumber] = useState("");
   const [birNumber, setBirNumber] = useState("");
   const [amount, setAmount] = useState("");
@@ -25,6 +26,7 @@ export default function ReviewScreen() {
     if (!result) return;
     setVendorName(result.vendorName ?? "");
     setTin(result.tin ?? "");
+    setBirPermitType(result.birPermitType ?? "");
     setBirPermitNumber(result.birPermitNumber ?? "");
     setBirNumber(result.birNumber ?? "");
     setAmount(result.amount != null ? String(result.amount) : "");
@@ -45,7 +47,7 @@ export default function ReviewScreen() {
   function handleContinue() {
     if (items.every((it) => !it.name.trim())) return Alert.alert("Add at least one item", "Every expense needs at least one line item.");
     setOcrResult({
-      ...result, vendorName, tin, birPermitNumber, birNumber, amount: amount ? Number(amount) : null, receiptDate,
+      ...result, vendorName, tin, birPermitType, birPermitNumber, birNumber, amount: amount ? Number(amount) : null, receiptDate,
       lineItems: items.filter((it) => it.name.trim().length > 0).map((it) => ({ description: it.name.trim(), amount: Number(it.price) || 0, quantity: it.quantity ? Number(it.quantity) : 1, unitPrice: null })),
     });
     router.push("/expense/link");
@@ -59,7 +61,8 @@ export default function ReviewScreen() {
         <ScrollView style={{ flex: 1 }}>
           <Field label="Vendor" value={vendorName} onChangeText={setVendorName} />
           <Field label="TIN" value={tin} onChangeText={setTin} />
-          <Field label="BIR Permit #" value={birPermitNumber} onChangeText={setBirPermitNumber} />
+          <Field label="BIR authority type" value={birPermitType} onChangeText={setBirPermitType} />
+          <Field label="BIR Permit Number" value={birPermitNumber} onChangeText={setBirPermitNumber} />
           <Field label="OR/SI #" value={birNumber} onChangeText={setBirNumber} />
           <Field label="Total Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
           <Field label="Date" value={receiptDate} onChangeText={setReceiptDate} />

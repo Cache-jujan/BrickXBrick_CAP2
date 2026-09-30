@@ -48,6 +48,7 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             materialType,
             quantity,
             vendorName,
+            requestedBudget,
         } = req.body;
 
         if (!projectID || !ticketType || !subject) {
@@ -70,6 +71,12 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
                 const err = new Error(
                     "Material Request tickets require materialType, quantity, and vendorName"
                 );
+                err.status = 400;
+                throw err;
+            }
+
+            if (ticketType === "Material Request" && (typeof requestedBudget !== "number" || !Number.isFinite(requestedBudget) || requestedBudget < 0)) {
+                const err = new Error("Material Request tickets require a non-negative requestedBudget in PHP");
                 err.status = 400;
                 throw err;
             }
@@ -102,8 +109,8 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             const insertResult = await client.query(
                 `INSERT INTO tickets
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
-                    materialType, quantity, vendorName)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    materialType, quantity, vendorName, requestedBudget)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                  RETURNING *`,
                 [
                     projectID,
@@ -115,6 +122,7 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
                     materialType || null,
                     quantity ?? null,
                     vendorName || null,
+                    ticketType === "Material Request" ? requestedBudget : null,
                 ]
             );
             const newTicket = insertResult.rows[0];
@@ -136,6 +144,21 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
     }
 });
 
+// GET /vendors — approved vendors available for Site Manager procurement tickets.
+router.get("/vendors", requireRole("Site Manager"), async (req, res, next) => {
+    try {
+        const result = await query(
+            `SELECT vendorID AS "vendorID", vendorName AS "vendorName"
+               FROM VendorMasterList
+              WHERE approvalStatus = 'Approved'
+              ORDER BY vendorName ASC`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // GET /assigned — tickets currently routed to the calling Purchaser.
 // Pending tickets are naturally excluded: assignedTo is NULL until a PM
 // acknowledges and assigns a Purchaser.
@@ -144,6 +167,40 @@ router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
         const result = await query(
             "SELECT * FROM tickets WHERE assignedTo = $1 ORDER BY createdAt DESC",
             [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /expense-linkable — resolved procurement tickets for GM/PM expense entry.
+// PM results are restricted in SQL to projects managed by the calling PM.
+router.get("/expense-linkable", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const params = [];
+        let projectScope = "";
+        if (req.user.role === "Project Manager") {
+            params.push(req.user.id);
+            projectScope = "AND p.projectManagerId = $1";
+        }
+
+        const result = await query(
+            `SELECT t.ticketId AS "ticketID",
+                    t.projectId AS "projectID",
+                    p.name AS "projectName",
+                    t.subject,
+                    t.vendorName AS "vendorName",
+                    t.materialType AS "materialType",
+                    t.quantity,
+                    t.resolvedAt AS "resolvedAt"
+               FROM tickets t
+               JOIN projects p ON p.projectId = t.projectId
+              WHERE t.status = 'Resolved'
+                AND t.ticketType = 'Material Request'
+                ${projectScope}
+              ORDER BY t.resolvedAt DESC NULLS LAST, t.createdAt DESC`,
+            params
         );
         res.json(result.rows);
     } catch (err) {
@@ -163,34 +220,6 @@ router.get("/pending", requireRole("Project Manager"), async (req, res, next) =>
               WHERE p.projectManagerId = $1 AND t.status = 'Pending'
               ORDER BY t.createdAt ASC`,
             [req.user.id]
-        );
-        res.json(result.rows);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// GET /expense-lookup — tickets that can be linked by the web GM/PM submitter.
-// PM results are restricted in SQL to projects managed by that PM; a GM may
-// see resolved tickets across the organization. Only Resolved tickets are
-// returned because linking an unresolved procurement ticket would bypass the
-// ticket lifecycle.
-router.get("/expense-lookup", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
-    try {
-        const params = [];
-        const conditions = ["t.status = 'Resolved'"];
-        if (req.user.role === "Project Manager") {
-            params.push(req.user.id);
-            conditions.push(`p.projectManagerId = $${params.length}`);
-        }
-        const result = await query(
-            `SELECT t.ticketId, t.projectId, t.subject, t.ticketType, t.status,
-                    p.name AS projectName
-               FROM tickets t
-               JOIN projects p ON p.projectId = t.projectId
-              WHERE ${conditions.join(" AND ")}
-              ORDER BY t.createdAt DESC`,
-            params
         );
         res.json(result.rows);
     } catch (err) {
@@ -250,12 +279,22 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
             throw err;
         }
 
-        const { assignedTo } = req.body;
+        const { assignedTo, approvedBudget } = req.body;
 
         if (!assignedTo) {
             const err = new Error("assignedTo (a Purchaser's userId) is required to acknowledge a ticket");
             err.status = 400;
             throw err;
+        }
+
+        let approvedBudgetValue = null;
+        if (ticket.tickettype === "Material Request") {
+            if (typeof approvedBudget !== "number" || !Number.isFinite(approvedBudget) || approvedBudget < 0) {
+                const err = new Error("A non-negative approvedBudget in PHP is required for a Material Request");
+                err.status = 400;
+                throw err;
+            }
+            approvedBudgetValue = approvedBudget;
         }
 
         const assigneeResult = await query(
@@ -285,10 +324,10 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
             const updateResult = await client.query(
                 `UPDATE tickets
                     SET status = 'Acknowledged', assignedTo = $1, acknowledgedBy = $2,
-                        acknowledgedAt = NOW(), updatedAt = NOW()
-                  WHERE ticketId = $3 AND status = $4
+                        acknowledgedAt = NOW(), approvedBudget = $3, updatedAt = NOW()
+                  WHERE ticketId = $4 AND status = $5
                   RETURNING *`,
-                [assignedTo, req.user.id, req.params.id, ticket.status]
+                [assignedTo, req.user.id, approvedBudgetValue, req.params.id, ticket.status]
             );
 
             if (updateResult.rowCount === 0) {

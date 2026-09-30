@@ -18,10 +18,29 @@ function formatBytes(bytes?: number) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
 }
 
-function imageMimeType(mimeType: string | undefined, name: string, uri: string) {
-  if (mimeType) return mimeType;
-  const source = `${name} ${uri}`.toLowerCase();
-  return source.endsWith(".png") ? "image/png" : "image/jpeg";
+function imageFileFromAsset(asset: { fileName?: string | null; mimeType?: string | null; uri: string }) {
+  const inputMime = asset.mimeType?.toLowerCase();
+  const extension = asset.fileName?.split(".").pop()?.toLowerCase();
+  let mimeType: string | null = null;
+  if (inputMime === "image/png" || (!inputMime && extension === "png")) {
+    mimeType = "image/png";
+  } else if (
+    inputMime === "image/jpeg"
+    || inputMime === "image/jpg"
+    || (!inputMime && (extension === "jpg" || extension === "jpeg"))
+  ) {
+    mimeType = "image/jpeg";
+  } else if (!inputMime && !extension) {
+    mimeType = "image/jpeg";
+  }
+
+  if (!mimeType) return null;
+  return {
+    type: "image" as const,
+    name: asset.fileName ?? `photo.${mimeType === "image/png" ? "png" : "jpg"}`,
+    uri: asset.uri,
+    mimeType,
+  };
 }
 
 export default function CaptureScreen() {
@@ -37,23 +56,21 @@ export default function CaptureScreen() {
     if (!perm.granted) return Alert.alert("Camera access needed", "Enable it in Settings.");
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (!result.canceled) {
-      const a = result.assets[0];
-      const name = a.fileName ?? "photo.jpg";
-      setLocalFile({ type: "image", name, uri: a.uri, mimeType: imageMimeType(a.mimeType, name, a.uri) });
+      const selected = imageFileFromAsset(result.assets[0]);
+      if (!selected) return Alert.alert("Unsupported image", "Choose a JPG or PNG receipt.");
+      setLocalFile(selected);
     }
   }
-
   async function handleGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return Alert.alert("Photo access needed", "Enable it in Settings.");
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
     if (!result.canceled) {
-      const a = result.assets[0];
-      const name = a.fileName ?? "photo.jpg";
-      setLocalFile({ type: "image", name, uri: a.uri, mimeType: imageMimeType(a.mimeType, name, a.uri) });
+      const selected = imageFileFromAsset(result.assets[0]);
+      if (!selected) return Alert.alert("Unsupported image", "Choose a JPG or PNG receipt.");
+      setLocalFile(selected);
     }
   }
-
   async function handlePdf() {
     const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
     if (!result.canceled) {

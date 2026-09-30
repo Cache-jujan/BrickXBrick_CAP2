@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { getSession } from "@/lib/auth";
 import { resolveTicket, submitExpense } from "@/lib/api";
 import { COLORS } from "@/constants/expense-flow-colors";
 
@@ -39,12 +40,15 @@ export default function LinkScreen() {
 
     setSubmitting(true);
     try {
-      // 2) Resolve the ticket. "Already resolved" (retry / dropped response) is not a failure.
-      try {
-        await resolveTicket(ticket.ticketId);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!/cannot move ticket from resolved/i.test(msg)) throw err;
+      // 2) Purchasers resolve the ticket after capture. Site Managers arrive
+      // only through their own already-resolved Material Request tickets.
+      if (getSession()?.user.role !== "Site Manager") {
+        try {
+          await resolveTicket(ticket.ticketId);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!/cannot move ticket from resolved/i.test(msg)) throw err;
+        }
       }
 
       // 3) Submit the expense.
