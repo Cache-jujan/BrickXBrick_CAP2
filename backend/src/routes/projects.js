@@ -130,8 +130,8 @@ router.get("/eligible-managers", requireRole("General Manager"), async (req, res
   }
 });
 
-// GET /eligible-site-managers — GM only. 
-router.get("/eligible-site-managers", requireRole("General Manager"), async (req, res) => {
+// GET /eligible-site-managers — GM/PM. 
+router.get("/eligible-site-managers", requireRole("General Manager", "Project Manager"), async (req, res) => {
   try {
     const result = await query(
       `SELECT userID, name, email FROM users
@@ -141,6 +141,50 @@ router.get("/eligible-site-managers", requireRole("General Manager"), async (req
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /:id/site-manager — GM or the owning PM may assign, replace, or clear
+// the Site Manager. Only active Site Manager accounts are valid assignments.
+router.patch("/:id/site-manager", requireRole("General Manager", "Project Manager"), async (req, res) => {
+  const siteManagerId = req.body.siteManagerId || null;
+
+  try {
+    const projectResult = await query(
+      "SELECT projectid, projectmanagerid FROM projects WHERE projectid = $1",
+      [req.params.id]
+    );
+    if (projectResult.rowCount === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    await assertProjectAccess(projectResult.rows[0], req.user);
+
+    if (siteManagerId) {
+      const managerResult = await query(
+        "SELECT role, status FROM users WHERE userid = $1",
+        [siteManagerId]
+      );
+      if (managerResult.rowCount === 0 || managerResult.rows[0].role !== "Site Manager") {
+        return res.status(400).json({ error: "siteManagerId must reference a Site Manager" });
+      }
+      if (managerResult.rows[0].status !== "Active") {
+        return res.status(400).json({ error: "siteManagerId references a deactivated account" });
+      }
+    }
+
+    const result = await query(
+      `UPDATE projects
+          SET siteManagerId = $1
+        WHERE projectid = $2
+        RETURNING ${PROJECT_COLUMNS},
+          (SELECT name FROM users WHERE userid = projects.siteManagerId) AS siteManagerName,
+          (SELECT email FROM users WHERE userid = projects.siteManagerId) AS siteManagerEmail`,
+      [siteManagerId, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -159,11 +203,13 @@ router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res, ne
     const result = await query(
       `SELECT p.projectid, p.createdby, p.name, p.description, p.clientname, p.status,
               p.startdate, p.enddate, p.budget, p.projectmanagerid, p.sitemanagerid,
+              sm.name AS sitemanagername, sm.email AS sitemanageremail,
               ROUND(COALESCE(AVG(m.completionPercentage), 0), 2) AS progress
          FROM projects p
          LEFT JOIN milestones m ON m.projectId = p.projectId
+         LEFT JOIN users sm ON sm.userid = p.sitemanagerid
         WHERE p.projectid = $1
-        GROUP BY p.projectid`,
+        GROUP BY p.projectid, sm.name, sm.email`,
       [req.params.id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
@@ -183,11 +229,13 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     const projectResult = await query(
       `SELECT p.projectid, p.createdby, p.name, p.description, p.clientname, p.status,
               p.startdate, p.enddate, p.budget, p.projectmanagerid, p.sitemanagerid,
+              sm.name AS sitemanagername, sm.email AS sitemanageremail,
               ROUND(COALESCE(AVG(m.completionPercentage), 0), 2) AS progress
          FROM projects p
          LEFT JOIN milestones m ON m.projectId = p.projectId
+         LEFT JOIN users sm ON sm.userid = p.sitemanagerid
         WHERE p.projectid = $1
-        GROUP BY p.projectid`,
+        GROUP BY p.projectid, sm.name, sm.email`,
       [req.params.id]
     );
     if (projectResult.rowCount === 0) return res.status(404).json({ error: "Not found" });

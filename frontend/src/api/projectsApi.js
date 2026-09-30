@@ -37,8 +37,15 @@ export async function getEligibleManagers() {
   return data;
 }
 
-// GET /api/projects/eligible-site-managers — Active Site Managers only (GM only)
+// GET /api/projects/eligible-site-managers — Active Site Managers (GM/PM)
 export async function getEligibleSiteManagers() {
   const { data } = await apiClient.get("/api/projects/eligible-site-managers");
+  return data;
+}
+
+export async function updateProjectSiteManager(projectId, siteManagerId) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/site-manager`, {
+    siteManagerId: siteManagerId || null,
+  });
   return data;
 }
