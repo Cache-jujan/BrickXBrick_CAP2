@@ -130,6 +130,20 @@ router.get("/eligible-managers", requireRole("General Manager"), async (req, res
   }
 });
 
+// GET /eligible-site-managers — GM only. 
+router.get("/eligible-site-managers", requireRole("General Manager"), async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT userID, name, email FROM users
+       WHERE role = 'Site Manager' AND status = 'Active'
+       ORDER BY name ASC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Shared helper: throws 403 unless caller is GM, or the PM assigned to this project.
 async function assertProjectAccess(project, user) {
   if (user.role === "General Manager") return;

@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { createProject, getEligibleManagers } from "../../api/projectsApi";
+import {
+  createProject,
+  getEligibleManagers,
+  getEligibleSiteManagers,
+} from "../../api/projectsApi";
 import { extractErrorMessage } from "../../api/client";
 import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
@@ -16,6 +20,7 @@ const EMPTY_FORM = {
   startDate: "",
   endDate: "",
   projectManagerId: "",
+  siteManagerId: "",
 };
 
 export function CreateProjectPage() {
@@ -24,9 +29,14 @@ export function CreateProjectPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
   const [managers, setManagers] = useState([]);
   const [managersLoading, setManagersLoading] = useState(true);
   const [managersError, setManagersError] = useState("");
+
+  const [siteManagers, setSiteManagers] = useState([]);
+  const [siteManagersLoading, setSiteManagersLoading] = useState(true);
+  const [siteManagersError, setSiteManagersError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +49,23 @@ export function CreateProjectPage() {
       })
       .finally(() => {
         if (!cancelled) setManagersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getEligibleSiteManagers()
+      .then((data) => {
+        if (!cancelled) setSiteManagers(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setSiteManagersError(extractErrorMessage(err, "Couldn't load Site Managers."));
+      })
+      .finally(() => {
+        if (!cancelled) setSiteManagersLoading(false);
       });
     return () => {
       cancelled = true;
@@ -87,6 +114,7 @@ export function CreateProjectPage() {
         startDate: form.startDate,
         endDate: form.endDate || undefined,
         projectManagerId: form.projectManagerId,
+        siteManagerId: form.siteManagerId || undefined,
       });
       navigate(`/projects/${project.projectid}`, { replace: true });
     } catch (err) {
@@ -163,6 +191,25 @@ export function CreateProjectPage() {
               {managersLoading ? "Loading…" : "Select a Project Manager"}
             </option>
             {managers.map((m) => (
+              <option key={m.userid} value={m.userid}>
+                {m.name.trim()} ({m.email})
+              </option>
+            ))}
+          </Field>
+
+          {siteManagersError && <Banner tone="error" title={siteManagersError} />}
+
+          <Field
+            label="Site Manager (optional)"
+            as="select"
+            value={form.siteManagerId}
+            disabled={siteManagersLoading}
+            onChange={(e) => updateField("siteManagerId", e.target.value)}
+          >
+            <option value="">
+              {siteManagersLoading ? "Loading…" : "None yet (assign later)"}
+            </option>
+            {siteManagers.map((m) => (
               <option key={m.userid} value={m.userid}>
                 {m.name.trim()} ({m.email})
               </option>
