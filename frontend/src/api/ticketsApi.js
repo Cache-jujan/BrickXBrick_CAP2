@@ -10,6 +10,13 @@ export async function listPendingTickets() {
   return data;
 }
 
+// Resolved tickets available for a GM/PM expense submission. The backend
+// scopes PM results to projects they manage and GM results to all projects.
+export async function listExpenseTickets() {
+  const { data } = await apiClient.get("/api/tickets/expense-lookup");
+  return data;
+}
+
 export async function listPurchasers() {
   const { data } = await apiClient.get("/api/tickets/purchasers");
   return data;

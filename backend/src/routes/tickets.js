@@ -170,6 +170,34 @@ router.get("/pending", requireRole("Project Manager"), async (req, res, next) =>
     }
 });
 
+// GET /expense-lookup — tickets that can be linked by the web GM/PM submitter.
+// PM results are restricted in SQL to projects managed by that PM; a GM may
+// see resolved tickets across the organization. Only Resolved tickets are
+// returned because linking an unresolved procurement ticket would bypass the
+// ticket lifecycle.
+router.get("/expense-lookup", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const params = [];
+        const conditions = ["t.status = 'Resolved'"];
+        if (req.user.role === "Project Manager") {
+            params.push(req.user.id);
+            conditions.push(`p.projectManagerId = $${params.length}`);
+        }
+        const result = await query(
+            `SELECT t.ticketId, t.projectId, t.subject, t.ticketType, t.status,
+                    p.name AS projectName
+               FROM tickets t
+               JOIN projects p ON p.projectId = t.projectId
+              WHERE ${conditions.join(" AND ")}
+              ORDER BY t.createdAt DESC`,
+            params
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // GET /purchasers — active Purchasers available to a PM for assignment.
 router.get("/purchasers", requireRole("Project Manager"), async (req, res, next) => {
     try {

@@ -43,8 +43,9 @@ async function assertCanReviewProject(user, projectId) {
     }
 }
 
-// POST / — Purchaser submits an expense linked to a Resolved ticket.
-// GM/PM may also submit as backups, but project-only (no ticket link).
+// POST / — submits an expense linked to a Resolved ticket or project.
+// Purchasers may link only their assigned tickets; GM/PM may link a resolved
+// ticket in an authorized project (the web lookup applies the same scope).
 router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const {
@@ -96,11 +97,6 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
 
         const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
 
-        // Ticket linking is Purchaser-only: tickets are assigned to Purchasers.
-        if (ticketID && req.user.role !== "Purchaser") {
-            throw httpError(400, "Only Purchasers can link an expense to a ticket");
-        }
-
         // When a ticket is given, the ticket is the source of truth for the
         // project — not the client-supplied projectID (F9 Layer 3).
         let projectID = bodyProjectID;
@@ -115,7 +111,7 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
             }
             const ticket = ticketResult.rows[0];
 
-            if (ticket.assignedto !== req.user.id) {
+            if (req.user.role === "Purchaser" && ticket.assignedto !== req.user.id) {
                 throw httpError(403, "You may only submit an expense against a ticket assigned to you");
             }
             // Strict Resolved-only. The mobile app calls PATCH

@@ -18,6 +18,12 @@ function formatBytes(bytes?: number) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
 }
 
+function imageMimeType(mimeType: string | undefined, name: string, uri: string) {
+  if (mimeType) return mimeType;
+  const source = `${name} ${uri}`.toLowerCase();
+  return source.endsWith(".png") ? "image/png" : "image/jpeg";
+}
+
 export default function CaptureScreen() {
   const { draft, setFile, setOcrResult } = useExpenseDraft();
   const [file, setLocalFile] = useState<FileState>(null);
@@ -30,17 +36,30 @@ export default function CaptureScreen() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) return Alert.alert("Camera access needed", "Enable it in Settings.");
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) { const a = result.assets[0]; setLocalFile({ type: "image", name: a.fileName ?? "photo.jpg", uri: a.uri }); }
+    if (!result.canceled) {
+      const a = result.assets[0];
+      const name = a.fileName ?? "photo.jpg";
+      setLocalFile({ type: "image", name, uri: a.uri, mimeType: imageMimeType(a.mimeType, name, a.uri) });
+    }
   }
+
   async function handleGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return Alert.alert("Photo access needed", "Enable it in Settings.");
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
-    if (!result.canceled) { const a = result.assets[0]; setLocalFile({ type: "image", name: a.fileName ?? "photo.jpg", uri: a.uri }); }
+    if (!result.canceled) {
+      const a = result.assets[0];
+      const name = a.fileName ?? "photo.jpg";
+      setLocalFile({ type: "image", name, uri: a.uri, mimeType: imageMimeType(a.mimeType, name, a.uri) });
+    }
   }
+
   async function handlePdf() {
     const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
-    if (!result.canceled) { const a = result.assets[0]; setLocalFile({ type: "pdf", name: a.name, size: formatBytes(a.size), uri: a.uri }); }
+    if (!result.canceled) {
+      const a = result.assets[0];
+      setLocalFile({ type: "pdf", name: a.name, size: formatBytes(a.size), uri: a.uri, mimeType: a.mimeType ?? "application/pdf" });
+    }
   }
 
   async function handleSubmit() {
@@ -49,7 +68,7 @@ export default function CaptureScreen() {
     try {
       const uploadResult = await FileSystem.uploadAsync(`${API_URL}/api/receipts/scan`, file.uri, {
         httpMethod: "POST", uploadType: FileSystem.FileSystemUploadType.MULTIPART, fieldName: "file",
-        mimeType: file.type === "image" ? "image/jpeg" : "application/pdf",
+        mimeType: file.mimeType ?? (file.type === "image" ? "image/jpeg" : "application/pdf"),
         headers: authHeaders(),
       });
       if (uploadResult.status < 200 || uploadResult.status >= 300) throw new Error(`Server responded ${uploadResult.status}`);

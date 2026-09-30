@@ -1,0 +1,20 @@
+.submit-expense-page { max-width: 980px; margin: 0 auto; }
+.submit-expense-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin: 1rem 0 1.5rem; }
+.submit-expense-header h1 { margin: 0 0 .35rem; }
+.submit-expense-header p { margin: 0; color: var(--text-muted, #667085); }
+.submit-expense-role { border: 1px solid var(--border, #d0d5dd); border-radius: 999px; padding: .4rem .75rem; color: var(--text-muted, #667085); font-size: .8rem; white-space: nowrap; }
+.submit-expense-card { padding: 1.5rem; }
+.submit-expense-section { border-bottom: 1px solid var(--border, #eaecf0); padding: 0 0 1.5rem; margin-bottom: 1.5rem; }
+.submit-expense-section h2 { font-size: 1.05rem; margin: 0 0 1rem; }
+.submit-expense-section h3 { font-size: .95rem; margin: 0; }
+.submit-expense-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+.upload-box { display: flex; align-items: center; justify-content: center; min-height: 110px; border: 1.5px dashed #98a2b3; border-radius: 12px; padding: 1rem; text-align: center; color: #475467; cursor: pointer; background: #f8fafc; }
+.upload-box input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.submit-expense-help { color: #667085; font-size: .82rem; margin: .5rem 0 0; }
+.line-items-header { display: flex; justify-content: space-between; align-items: center; margin: 1.2rem 0 .65rem; }
+.text-button { background: none; border: 0; color: #175cd3; cursor: pointer; font-weight: 600; }
+.line-item { display: grid; grid-template-columns: 1fr 90px 130px auto; gap: .5rem; margin-bottom: .6rem; }
+.line-item input { min-width: 0; border: 1px solid #d0d5dd; border-radius: 8px; padding: .65rem .7rem; font: inherit; }
+.remove-item { border: 0; background: none; color: #b42318; cursor: pointer; padding: 0 .35rem; }
+.submit-expense-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+@media (max-width: 700px) { .submit-expense-grid { grid-template-columns: 1fr; } .line-item { grid-template-columns: 1fr 70px; } .line-item input:nth-child(3) { grid-column: 1; } .remove-item { grid-column: 2; grid-row: 2; } .submit-expense-header { flex-direction: column; } }
