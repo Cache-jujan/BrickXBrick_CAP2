@@ -15,7 +15,18 @@ router.use(requireAuth);
 router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
     try {
         const result = await query(
-            "SELECT * FROM tasks WHERE assignedTo = $1 ORDER BY dueDate ASC",
+            `SELECT t.*,
+                    pending.photoevidenceurl AS pendingphotoevidenceurl
+               FROM tasks t
+               LEFT JOIN LATERAL (
+                    SELECT photoevidenceurl
+                      FROM task_progress_log
+                     WHERE taskid = t.taskid AND reviewstatus = 'Pending Review'
+                     ORDER BY createdat DESC
+                     LIMIT 1
+               ) pending ON TRUE
+              WHERE t.assignedTo = $1
+              ORDER BY t.dueDate ASC`,
             [req.user.id]
         );
         res.json(result.rows);

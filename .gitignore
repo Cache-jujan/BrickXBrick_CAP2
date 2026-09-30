@@ -13,4 +13,4 @@ password.txt
 backend/keystore/
 .vscode/
 *.pc
-backend/storage/receipts
+backend/storage/receipts/
