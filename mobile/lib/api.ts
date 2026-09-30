@@ -126,13 +126,13 @@ export async function fetchApprovedVendors(): Promise<ApprovedVendor[]> {
 
 export async function createTicket(body: {
   projectID: string;
-  ticketType: "Material Request";
+  ticketType: "Material Request" | "Work Item" | "Report";
   subject: string;
   description?: string;
-  materialType: string;
-  quantity: number;
-  vendorName: string;
-  requestedBudget: number;
+  materialType?: string;
+  quantity?: number;
+  vendorName?: string;
+  requestedBudget?: number;
 }) {
   const res = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",
