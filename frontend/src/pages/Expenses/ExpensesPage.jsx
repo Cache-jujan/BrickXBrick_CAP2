@@ -1,6 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
+import {
+  listExpenses,
+  listFlaggedExpenses,
+  approveExpense,
+  rejectExpense,
+} from "../../api/expensesApi";
 import { listProjects } from "../../api/projectsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -8,20 +13,20 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
+import { Field } from "../../components/ui/Field";
 import "./ExpensesPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "numeric" });
-const STATUS_TABS = ["All", "Pending", "Approved", "Rejected"];
+const STATUS_TABS = ["All", "Pending", "Flagged", "Approved", "Rejected"];
 const PAGE_SIZE = 10;
 
-// Expense review queue for GM and PM.
-// NOTE: GET /api/expenses returns every project's expenses to any GM/PM,
-// and PATCH approve/reject has no project-ownership check. The list below
-// hides other PMs' projects in the UI only; the backend should enforce it.
+// Expense review queue for GM and PM. The backend scopes PM results to their
+// own projects; the client filter below is a second, cosmetic layer.
 export function ExpensesPage() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState([]);
+  const [flagged, setFlagged] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,6 +37,7 @@ export function ExpensesPage() {
   const [openId, setOpenId] = useState(null);
 
   const [confirm, setConfirm] = useState(null); // { expense, action }
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
@@ -40,9 +46,14 @@ export function ExpensesPage() {
     setLoading(true);
     setError("");
     try {
-      const [exp, proj] = await Promise.all([listExpenses(), listProjects()]);
+      const [exp, proj, flg] = await Promise.all([
+        listExpenses(),
+        listProjects(),
+        listFlaggedExpenses(),
+      ]);
       setExpenses(exp);
       setProjects(proj);
+      setFlagged(flg);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't load expenses."));
     } finally {
@@ -59,21 +70,34 @@ export function ExpensesPage() {
     [projects]
   );
 
+  // { [expenseid]: [{ flagType, reason }] }
+  const flagMap = useMemo(
+    () => Object.fromEntries(flagged.map((f) => [f.expenseid, f.flags])),
+    [flagged]
+  );
+
   const scoped = useMemo(() => {
     if (user.role !== "Project Manager") return expenses;
     return expenses.filter((e) => projectById[e.projectid]?.projectmanagerid === user.id);
   }, [expenses, projectById, user.role, user.id]);
 
   const counts = useMemo(() => {
-    const c = { All: scoped.length, Pending: 0, Approved: 0, Rejected: 0 };
-    scoped.forEach((e) => { if (c[e.status] != null) c[e.status] += 1; });
+    const c = { All: scoped.length, Pending: 0, Flagged: 0, Approved: 0, Rejected: 0 };
+    scoped.forEach((e) => {
+      if (c[e.status] != null) c[e.status] += 1;
+      if (flagMap[e.expenseid]) c.Flagged += 1;
+    });
     return c;
-  }, [scoped]);
+  }, [scoped, flagMap]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return scoped
-      .filter((e) => tab === "All" || e.status === tab)
+      .filter((e) => {
+        if (tab === "All") return true;
+        if (tab === "Flagged") return Boolean(flagMap[e.expenseid]);
+        return e.status === tab;
+      })
       .filter((e) => {
         if (!q) return true;
         return (
@@ -83,23 +107,40 @@ export function ExpensesPage() {
         );
       })
       .sort((a, b) => new Date(b.submittedat) - new Date(a.submittedat));
-  }, [scoped, tab, search, projectById]);
+  }, [scoped, tab, search, projectById, flagMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const filteredTotal = filtered.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
+  function openConfirm(expense, action) {
+    setActionError("");
+    setReason("");
+    setConfirm({ expense, action });
+  }
+
+  function closeConfirm() {
+    setConfirm(null);
+    setReason("");
+  }
+
   async function handleConfirm() {
     if (!confirm) return;
     setBusy(true);
     setActionError("");
     try {
-      const fn = confirm.action === "approve" ? approveExpense : rejectExpense;
-      const result = await fn(confirm.expense.expenseid);
+      let result;
+      if (confirm.action === "approve") {
+        result = await approveExpense(confirm.expense.expenseid);
+      } else {
+        result = await rejectExpense(confirm.expense.expenseid, reason.trim());
+      }
       setNotice(result?.warning || "");
-      setConfirm(null);
-      setExpenses(await listExpenses());
+      closeConfirm();
+      const [exp, flg] = await Promise.all([listExpenses(), listFlaggedExpenses()]);
+      setExpenses(exp);
+      setFlagged(flg);
     } catch (err) {
       setActionError(extractErrorMessage(err, `Couldn't ${confirm.action} this expense.`));
     } finally {
@@ -112,13 +153,20 @@ export function ExpensesPage() {
     setPage(1);
   }
 
+  const rejectNeedsReason = confirm?.action === "reject" && !reason.trim();
+
   return (
     <div className="expenses-page">
-      <div className="expenses-header">
-        <h1>Expenses</h1>
-        <p className="expenses-subtitle">
-          Review expenses submitted by Purchasers. Approving an expense records its hash on the blockchain.
-        </p>
+      <div className="expenses-header spread">
+        <div>
+          <h1>Expenses</h1>
+          <p className="expenses-subtitle">
+            Review submitted expenses. Approving an expense records its hash on the blockchain.
+          </p>
+        </div>
+        <Link to="/expenses/new" className="btn btn-primary">
+          Submit Expense
+        </Link>
       </div>
 
       {error && <Banner tone="error" title={error} />}
@@ -179,6 +227,7 @@ export function ExpensesPage() {
                       {rows.map((e) => {
                         const isOpen = openId === e.expenseid;
                         const project = projectById[e.projectid];
+                        const flags = flagMap[e.expenseid];
                         const items = e.lineitems
                           ? typeof e.lineitems === "string" ? JSON.parse(e.lineitems) : e.lineitems
                           : [];
@@ -193,11 +242,23 @@ export function ExpensesPage() {
                               <td>{e.category}</td>
                               <td>{PESO.format(e.amount)}</td>
                               <td>{DATE.format(new Date(e.receiptdate))}</td>
-                              <td><Badge status={e.status} /></td>
+                              <td>
+                                <Badge status={e.status} />
+                                {flags && (
+                                  <Badge status="At Risk">
+                                    {" "}⚠ {flags.length} flag{flags.length === 1 ? "" : "s"}
+                                  </Badge>
+                                )}
+                              </td>
                             </tr>
                             {isOpen && (
                               <tr className="expenses-detail">
                                 <td colSpan={6}>
+                                  {flags && (
+                                    <Banner tone="warning" title="Flagged for review">
+                                      {flags.map((f) => `${f.flagType}: ${f.reason}`).join(" · ")}
+                                    </Banner>
+                                  )}
                                   <div className="expenses-detail-grid">
                                     <p><strong>Submitted by:</strong> {e.submittedbyname}</p>
                                     <p><strong>Quantity:</strong> {e.quantity}</p>
@@ -207,6 +268,9 @@ export function ExpensesPage() {
                                     <p><strong>OR/SI number:</strong> {e.birnumber || "—"}</p>
                                     {e.status === "Approved" && (
                                       <p><strong>Blockchain:</strong> {e.blockchainstatus || "None"}</p>
+                                    )}
+                                    {e.status === "Rejected" && e.rejectionreason && (
+                                      <p><strong>Rejection reason:</strong> {e.rejectionreason}</p>
                                     )}
                                   </div>
                                   {items.length > 0 && (
@@ -224,8 +288,16 @@ export function ExpensesPage() {
                                   </div>
                                   {e.status === "Pending" && (
                                     <div className="expenses-actions">
-                                      <Button onClick={() => { setActionError(""); setConfirm({ expense: e, action: "approve" }); }}>Approve</Button>
-                                      <Button variant="danger" onClick={() => { setActionError(""); setConfirm({ expense: e, action: "reject" }); }}>Reject</Button>
+                                      {e.submittedby === user.id ? (
+                                        <p className="expenses-subtitle">
+                                          You submitted this expense, so someone else must review it.
+                                        </p>
+                                      ) : (
+                                        <>
+                                          <Button onClick={() => openConfirm(e, "approve")}>Approve</Button>
+                                          <Button variant="danger" onClick={() => openConfirm(e, "reject")}>Reject</Button>
+                                        </>
+                                      )}
                                     </div>
                                   )}
                                 </td>
@@ -257,7 +329,7 @@ export function ExpensesPage() {
       )}
 
       {confirm && (
-        <div className="modal-overlay" role="presentation" onClick={() => !busy && setConfirm(null)}>
+        <div className="modal-overlay" role="presentation" onClick={() => !busy && closeConfirm()}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="expense-confirm-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="expense-confirm-title" className="modal-title">
               {confirm.action === "approve" ? "Approve this expense?" : "Reject this expense?"}
@@ -266,12 +338,26 @@ export function ExpensesPage() {
               <strong>{confirm.expense.vendorname}</strong> · {PESO.format(confirm.expense.amount)}.{" "}
               {confirm.action === "approve"
                 ? "Its hash will be recorded on the blockchain and can't be undone."
-                : "The Purchaser will see it as rejected. No blockchain record is written."}
+                : "The submitter will see it as rejected. No blockchain record is written."}
             </p>
+            {confirm.action === "reject" && (
+              <Field
+                label="Reason for rejection"
+                required
+                as="textarea"
+                placeholder="Tell the submitter what needs to change"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            )}
             {actionError && <Banner tone="error" title={actionError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Button>
-              <Button variant={confirm.action === "approve" ? "primary" : "danger"} onClick={handleConfirm} disabled={busy}>
+              <Button variant="secondary" onClick={closeConfirm} disabled={busy}>Cancel</Button>
+              <Button
+                variant={confirm.action === "approve" ? "primary" : "danger"}
+                onClick={handleConfirm}
+                disabled={busy || rejectNeedsReason}
+              >
                 {busy ? "Saving…" : confirm.action === "approve" ? "Approve" : "Reject"}
               </Button>
             </div>

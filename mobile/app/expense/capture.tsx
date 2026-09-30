@@ -10,7 +10,7 @@ import { CaptureOptionCard } from "@/components/capture-option-card";
 import { FilePreview, type FileState } from "@/components/file-preview";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { COLORS } from "@/constants/expense-flow-colors";
-import { API_URL, DEV_TOKEN } from "@/constants/api";
+import { API_URL, authHeaders } from "@/constants/api";
 
 function formatBytes(bytes?: number) {
   if (!bytes) return "";
@@ -50,7 +50,7 @@ export default function CaptureScreen() {
       const uploadResult = await FileSystem.uploadAsync(`${API_URL}/api/receipts/scan`, file.uri, {
         httpMethod: "POST", uploadType: FileSystem.FileSystemUploadType.MULTIPART, fieldName: "file",
         mimeType: file.type === "image" ? "image/jpeg" : "application/pdf",
-        headers: { Authorization: `Bearer ${DEV_TOKEN}` },
+        headers: authHeaders(),
       });
       if (uploadResult.status < 200 || uploadResult.status >= 300) throw new Error(`Server responded ${uploadResult.status}`);
       const data = JSON.parse(uploadResult.body);

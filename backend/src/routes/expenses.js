@@ -27,7 +27,7 @@ function httpError(status, message) {
     return err;
 }
 
-// Shared PM/GM project-scoping check for expense approve/reject.
+// Shared PM/GM project-scoping check for expense submit/approve/reject.
 async function assertCanReviewProject(user, projectId) {
     if (user.role === "General Manager") return;
 
@@ -39,12 +39,13 @@ async function assertCanReviewProject(user, projectId) {
         throw httpError(404, `Project ${projectId} not found`);
     }
     if (result.rows[0].projectmanagerid !== user.id) {
-        throw httpError(403, "You may only review expenses on projects you manage");
+        throw httpError(403, "You may only act on expenses for projects you manage");
     }
 }
 
-// POST / — Purchaser submits an expense, linked to a Resolved ticket.
-router.post("/", requireRole("Purchaser"), async (req, res, next) => {
+// POST / — Purchaser submits an expense linked to a Resolved ticket.
+// GM/PM may also submit as backups, but project-only (no ticket link).
+router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const {
             ticketID,
@@ -62,8 +63,7 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
 
         // NOTE: birValidationStatus is deliberately NOT read from the body.
         // It decides what lands in the BIR tax-deductible report (F11), so a
-        // client must not be able to declare its own receipt Formal. F7 is a
-        // system-automated classification — it's derived below.
+        // client must not be able to declare its own receipt Formal.
 
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
             throw httpError(400, "vendorName, amount, and receiptDate are required");
@@ -76,8 +76,7 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
         }
 
         // receiptimageurl is NOT NULL, so confirm this is a receipt THIS
-        // server stored via /receipts/scan. Without the check, any string
-        // satisfies the column and the audit trail points at nothing.
+        // server stored via /receipts/scan.
         if (!receiptImageURL) {
             throw httpError(400, "receiptImageURL is required");
         }
@@ -85,10 +84,7 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             throw httpError(400, "receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
         }
 
-        // quantity is no longer client-supplied — it's derived from
-        // lineItems (same trust model as birValidationStatus below), so a
-        // submission with no usable line items is rejected outright rather
-        // than silently defaulting to 0/1.
+        // quantity is derived from lineItems, never client-supplied.
         if (!Array.isArray(lineItems) || lineItems.length === 0) {
             throw httpError(400, "lineItems must include at least one item");
         }
@@ -100,10 +96,13 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
 
         const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
 
-        // projectID resolution: when a ticket is given, the ticket is the
-        // source of truth for which project this belongs to — not the
-        // client-supplied projectID. This is what stops Expenses.projectID
-        // disagreeing with the linked ticket (F9 Layer 3).
+        // Ticket linking is Purchaser-only: tickets are assigned to Purchasers.
+        if (ticketID && req.user.role !== "Purchaser") {
+            throw httpError(400, "Only Purchasers can link an expense to a ticket");
+        }
+
+        // When a ticket is given, the ticket is the source of truth for the
+        // project — not the client-supplied projectID (F9 Layer 3).
         let projectID = bodyProjectID;
 
         if (ticketID) {
@@ -119,10 +118,8 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             if (ticket.assignedto !== req.user.id) {
                 throw httpError(403, "You may only submit an expense against a ticket assigned to you");
             }
-            // Strict Resolved-only. The mobile app now calls
-            // PATCH /tickets/:id/resolve before hitting this endpoint
-            // (Link screen submit handler) — accepting Acknowledged here
-            // too would let a frontend regression skip that step silently.
+            // Strict Resolved-only. The mobile app calls PATCH
+            // /tickets/:id/resolve before hitting this endpoint.
             if (ticket.status !== "Resolved") {
                 throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
             }
@@ -132,6 +129,10 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
 
         if (!projectID) {
             throw httpError(400, "projectID is required when no ticketID is provided");
+        }
+        // A PM can only file on projects they manage (GM: any project).
+        if (req.user.role !== "Purchaser") {
+            await assertCanReviewProject(req.user, projectID);
         }
 
         const result = await query(
@@ -159,18 +160,23 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             ]
         );
 
+        // `expense` is camelCase (EXPENSE_COLUMNS aliases). checkDuplicate and
+        // checkVendor read lowercase column names, so they need the raw row —
+        // otherwise they silently return false and never flag anything.
         const expense = result.rows[0];
+        const rawResult = await query("SELECT * FROM expenses WHERE expenseid = $1", [expense.expenseID]);
+        const raw = rawResult.rows[0];
 
-        const isDup = await checkDuplicate(expense);
+        const isDup = await checkDuplicate(raw);
         if (isDup) {
             await query(
                 `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
                  VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
-                [expense.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
+                [raw.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
             );
         }
 
-        const vendorIssue = await checkVendor(expense);
+        const vendorIssue = await checkVendor(raw);
         if (vendorIssue) {
             const reason = vendorIssue === "not_found"
                 ? "Vendor not found in VendorMasterList"
@@ -179,17 +185,18 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
             await query(
                 `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
                  VALUES ($1, 'system', 'Vendor_Validation', $2)`,
-                [expense.expenseid, reason]
+                [raw.expenseid, reason]
             );
         }
 
+        // checkTicketMismatch reads camelCase keys, so it gets `expense`.
         const isMismatch = await checkTicketMismatch(expense);
         if (isMismatch) {
-        await query(
-            `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
-            VALUES ($1, $2, $3, 'system', 'Pending')`,
-            [expense.expenseID, 'Ticket_Mismatch', 'Expense does not match ticket material type, quantity, or vendor']
-        );
+            await query(
+                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
+                 VALUES ($1, $2, $3, 'system', 'Pending')`,
+                [expense.expenseID, "Ticket_Mismatch", "Expense does not match ticket material type, quantity, or vendor"]
+            );
         }
 
         res.status(201).json(expense);
@@ -212,7 +219,8 @@ router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET /flagged — PM/GM queue of Pending expenses with unresolved fraud flags
+// GET /flagged — PM/GM queue of Pending expenses with unresolved fraud flags.
+// Must stay ABOVE "/:id" or Express treats "flagged" as an id.
 router.get("/flagged", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const conditions = ["e.status = 'Pending'", "ff.resolution = 'Pending'"];
@@ -240,7 +248,7 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
     }
 });
 
-// GET / — GM/PM view of all expenses, optional ?projectId= filter (used by ProjectDetailPage)
+// GET / — GM/PM view of all expenses, optional ?projectId= filter.
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
@@ -270,16 +278,8 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
     } catch (err) { next(err); }
 });
 
-
-
-
-// GET /:id — role-scoped: Purchaser sees only their own submissions, GM can
-// see any expense, a PM only expenses on projects they manage.
-// The base scope lives in the WHERE clause rather than a post-fetch check,
-// so a user with no plausible right to the row gets a plain 404 instead of
-// a 403 that confirms the row exists; the finer PM-project scoping still
-// needs assertCanReviewProject since it depends on a join we don't want to
-// bake into every call.
+// GET /:id — role-scoped: Purchaser sees only their own submissions, GM any,
+// PM only expenses on projects they manage.
 router.get("/:id", async (req, res, next) => {
     try {
         const canReadAll = EXPENSE_READ_ALL_ROLES.includes(req.user.role);
@@ -295,14 +295,14 @@ router.get("/:id", async (req, res, next) => {
         }
         const expense = result.rows[0];
 
-        const isOwner = expense.submittedby === req.user.id;
+        const isOwner = expense.submittedBy === req.user.id;
         const isReviewer = ["Project Manager", "General Manager"].includes(req.user.role);
 
         if (!isOwner && !isReviewer) {
             throw httpError(403, "You do not have access to this expense record");
         }
         if (!isOwner && isReviewer) {
-            await assertCanReviewProject(req.user, expense.projectid);
+            await assertCanReviewProject(req.user, expense.projectID);
         }
 
         res.json(expense);
@@ -329,6 +329,12 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             throw httpError(409, `Only a Pending expense can be approved (this one is ${expense.status})`);
         }
 
+        // Separation of duties: GM/PM can now submit expenses, so they must
+        // not be able to approve their own.
+        if (expense.submittedby === req.user.id) {
+            throw httpError(403, "You can't approve an expense you submitted");
+        }
+
         await query(
             "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2",
             [req.user.id, req.params.id]
@@ -337,7 +343,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
         await query(
             "UPDATE FraudFlags SET resolution = 'Approved', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
             [req.user.id, req.params.id]
-         );
+        );
 
         const hash = canonicalizeExpense(expense);
 
@@ -368,13 +374,12 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
     }
 });
 
-// PATCH /:id/reject — PM (own projects) or GM. Only a Pending expense can be
-// rejected: rejecting an Approved one would leave its on-chain record pointing
-// at an expense that is no longer approved. No blockchain write on reject.
+// PATCH /:id/reject — PM (own projects) or GM. Requires a `reason` in the body.
+// Only a Pending expense can be rejected. No blockchain write on reject.
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const { reason } = req.body;
-        if (!reason || typeof reason !== "string") {
+        if (!reason || typeof reason !== "string" || !reason.trim()) {
             throw httpError(400, "reason is required");
         }
 
@@ -391,7 +396,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
 
         const result = await query(
             "UPDATE Expenses SET status = 'Rejected', approvedBy = $1, rejectionReason = $2 WHERE expenseID = $3 RETURNING *",
-            [req.user.id, reason, req.params.id]
+            [req.user.id, reason.trim(), req.params.id]
         );
 
         await query(
@@ -402,9 +407,8 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
         await query(
             `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
              VALUES ($1, 'ExpenseRejected', 'Expense', $2, $3)`,
-            [expense.submittedby, req.params.id, `Your expense was rejected: ${reason}`]
+            [expense.submittedby, req.params.id, `Your expense was rejected: ${reason.trim()}`]
         );
-
 
         res.json(result.rows[0]);
     } catch (err) {
@@ -413,8 +417,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
 });
 
 // PATCH /:id/resubmit — Purchaser edits and resubmits their own Rejected
-// expense. Resets to Pending and clears rejectionReason. Does NOT re-run
-// fraud checks (checkDuplicate/checkVendor/checkTicketMismatch).
+// expense. Resets to Pending and clears rejectionReason.
 router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const existing = await query(
