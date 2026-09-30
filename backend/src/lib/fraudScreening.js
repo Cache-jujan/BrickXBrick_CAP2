@@ -1,74 +1,176 @@
-// fraudScreening.js — F9 Layer 1: BIR duplicate check.
-// Flags an expense whose TIN + BIR permit number + BIR/OR-SI number
+// F9: Multi-layer expense screening
 
-const { query } = require("./db");
+function createFraudScreening({ query } = {}) {
+  const runQuery = query || require("./db").query;
 
-async function checkDuplicate(expense) {
-    const { tin, birpermitnumber, birnumber, expenseid } = expense;
+  // Layer 1: BIR duplicate checking
+  async function checkDuplicate(expense) {
+    const {
+      tin,
+      birpermitnumber,
+      birnumber,
+      expenseid,
+    } = expense || {};
 
-    if (!tin || !birpermitnumber || !birnumber) return false;
+    // Informal receipts do not have enough BIR information to compare.
+    if (!tin || !birpermitnumber || !birnumber) {
+      return false;
+    }
 
-    const result = await query(
-        `SELECT expenseID FROM Expenses
-         WHERE tin = $1 AND birPermitNumber = $2 AND birNumber = $3
-         AND expenseID != $4`,
-        [tin, birpermitnumber, birnumber, expenseid]
+    // Find the current expense's split-receipt group, if any.
+    const ownAllocation = await runQuery(
+      `SELECT commonreceiptid
+         FROM receiptallocations
+        WHERE expenseid = $1`,
+      [expenseid]
     );
 
-    return result.rowCount > 0;
-}
+    const ownCommonReceiptId =
+      ownAllocation.rows[0]?.commonreceiptid ?? null;
 
-// Layer 2: vendor validation.
-// Flags an expense if its vendorName has no match in VendorMasterList
-// (case-insensitive, trimmed), or if the matched vendor's approvalStatus
-// is 'Flagged'.
-// NOTE: amount-deviation vs historicalAverage is a separate check, deferred —
-// scope not confirmed for F9, raise with team before building.
-async function checkVendor(expense) {
-    const { vendorname } = expense;
-
-    if (!vendorname) return false;
-
-    const result = await query(
-        `SELECT vendorID, approvalStatus FROM VendorMasterList
-         WHERE LOWER(TRIM(vendorName)) = LOWER(TRIM($1))`,
-        [vendorname]
+    // Only approved expenses count as duplicates.
+    const matches = await runQuery(
+      `SELECT e.expenseid, ra.commonreceiptid
+         FROM expenses e
+         LEFT JOIN receiptallocations ra
+           ON ra.expenseid = e.expenseid
+        WHERE e.status = 'Approved'
+          AND e.tin = $1
+          AND e.birpermitnumber = $2
+          AND e.birnumber = $3
+          AND e.expenseid <> $4`,
+      [tin, birpermitnumber, birnumber, expenseid]
     );
 
-    if (result.rowCount === 0) return "not_found";
+    if (matches.rowCount === 0) {
+      return false;
+    }
 
-    if (result.rows[0].approvalstatus === "Flagged") return "flagged";
+    // F8 exception:
+    // portions from the same receipt are not duplicates of each other.
+    if (ownCommonReceiptId) {
+      const sameSplitReceipt = matches.rows.every(
+        (match) =>
+          match.commonreceiptid === ownCommonReceiptId
+      );
+
+      if (sameSplitReceipt) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // Layer 2: Vendor Master List validation
+  async function checkVendor(expense) {
+    const vendorName =
+      expense?.vendorname ?? expense?.vendorName;
+
+    if (!vendorName) {
+      return false;
+    }
+
+    const result = await runQuery(
+      `SELECT vendorid, approvalstatus
+         FROM vendormasterlist
+        WHERE LOWER(TRIM(vendorname))
+            = LOWER(TRIM($1))`,
+      [vendorName]
+    );
+
+    if (result.rowCount === 0) {
+      return "not_found";
+    }
+
+    if (result.rows[0].approvalstatus === "Flagged") {
+      return "flagged";
+    }
 
     return false;
+  }
+
+  // Layer 3: Ticket/receipt mismatch validation
+  async function checkTicketMismatch(expense) {
+    const ticketId =
+      expense?.ticketid ?? expense?.ticketID;
+
+    if (!ticketId) {
+      return false;
+    }
+
+    const ticketResult = await runQuery(
+      `SELECT tickettype, materialtype, quantity, vendorname
+         FROM tickets
+        WHERE ticketid = $1`,
+      [ticketId]
+    );
+
+    if (ticketResult.rowCount === 0) {
+      return false;
+    }
+
+    const ticket = ticketResult.rows[0];
+
+    // Report tickets do not have structured procurement data.
+    if (!ticket.materialtype) {
+      return false;
+    }
+
+    const lineItems =
+      expense.lineitems ?? expense.lineItems;
+
+    const items = Array.isArray(lineItems)
+      ? lineItems
+          .map((item) => item.description || "")
+          .join(" ")
+      : String(lineItems || "");
+
+    const expenseText = `
+      ${expense.category || ""}
+      ${items}
+      ${expense.vendorname || expense.vendorName || ""}
+    `.toLowerCase();
+
+    const materialMismatch =
+      !expenseText.includes(
+        String(ticket.materialtype).toLowerCase()
+      );
+
+    const quantityMismatch =
+      ticket.quantity != null &&
+      expense.quantity != null &&
+      Number(ticket.quantity) !== Number(expense.quantity);
+
+    const vendorMismatch =
+      ticket.vendorname &&
+      String(
+        expense.vendorname || expense.vendorName || ""
+      ).trim().toLowerCase() !==
+        String(ticket.vendorname)
+          .trim()
+          .toLowerCase();
+
+    return Boolean(
+      materialMismatch ||
+      quantityMismatch ||
+      vendorMismatch
+    );
+  }
+
+  return {
+    checkDuplicate,
+    checkVendor,
+    checkTicketMismatch,
+  };
 }
 
-// Layer 3: compares expense against ticket's structured procurement fields
-// (materialType, quantity, vendorName) — added via F4 PR. Report tickets have
-// no procurement fields (free-text only), so they're skipped, not flagged.
-async function checkTicketMismatch(expense) {
-  if (!expense.ticketID) return false;
 
-  const ticketResult = await query(
-    "SELECT tickettype, materialtype, quantity, vendorname FROM Tickets WHERE ticketid = $1",
-    [expense.ticketID]
-  );
-  if (ticketResult.rows.length === 0) return false;
+const defaultScreening = createFraudScreening();
 
-  const ticket = ticketResult.rows[0];
-  if (!ticket.materialtype) return false; // Report tickets: nothing to compare
-
-  const items = Array.isArray(expense.lineItems)
-    ? expense.lineItems.map((i) => i.description).join(" ")
-    : String(expense.lineItems || "");
-  const expenseText = `${expense.category || ""} ${items} ${expense.vendorName || ""}`.toLowerCase();
-
-  const materialMismatch = !expenseText.includes(ticket.materialtype.toLowerCase());
-  const quantityMismatch = ticket.quantity != null && expense.quantity != null
-    && Number(expense.quantity) !== Number(ticket.quantity);
-  const vendorMismatch = ticket.vendorname
-    && expense.vendorName?.trim().toLowerCase() !== ticket.vendorname.trim().toLowerCase();
-
-  return Boolean(materialMismatch || quantityMismatch || vendorMismatch);
-}
-
-module.exports = { checkDuplicate, checkVendor, checkTicketMismatch };
+module.exports = {
+  createFraudScreening,
+  checkDuplicate: defaultScreening.checkDuplicate,
+  checkVendor: defaultScreening.checkVendor,
+  checkTicketMismatch: defaultScreening.checkTicketMismatch,
+};

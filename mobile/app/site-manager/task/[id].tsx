@@ -62,6 +62,8 @@ export default function SiteManagerTaskDetailScreen() {
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
+  const evidenceUrl = task?.pendingphotoevidenceurl || task?.photoevidenceurl;
+
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -174,6 +176,15 @@ export default function SiteManagerTaskDetailScreen() {
               <InfoRow label="Task ID" value={task.taskid} />
             </View>
 
+            {evidenceUrl && (
+              <View style={styles.evidenceCard}>
+                <Text style={styles.evidenceTitle}>
+                  {task.pendingphotoevidenceurl ? "Latest submitted evidence" : "Submitted evidence"}
+                </Text>
+                <Image source={{ uri: evidenceUrl }} style={styles.evidenceImage} />
+              </View>
+            )}
+
             {task.status !== "Completed" && (
               <View style={styles.submissionSection}>
                 <Text style={styles.sectionTitle}>Progress update</Text>
@@ -229,6 +240,9 @@ export default function SiteManagerTaskDetailScreen() {
                     <Text style={styles.successBody}>
                       Your Project Manager can now review this progress update.
                     </Text>
+                    <Pressable onPress={() => router.replace("/site-manager")} style={styles.successBackButton}>
+                      <Text style={styles.successBackText}>Back to my tasks</Text>
+                    </Pressable>
                   </View>
                 ) : (
                   <Pressable
@@ -281,6 +295,9 @@ const styles = StyleSheet.create({
   infoRow: { borderBottomColor: "#EEE7DE", borderBottomWidth: 1, paddingVertical: 15 },
   infoLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
   infoValue: { color: COLORS.heading, fontSize: 14, fontWeight: "700", marginTop: 5 },
+  evidenceCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 14, overflow: "hidden", padding: 12 },
+  evidenceTitle: { color: COLORS.heading, fontSize: 13, fontWeight: "800", marginBottom: 10 },
+  evidenceImage: { backgroundColor: "#EEE7DE", borderRadius: 10, height: 220, width: "100%" },
   submissionSection: { marginTop: 26 },
   sectionTitle: { color: COLORS.heading, fontSize: 18, fontWeight: "800" },
   sectionSubtitle: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
@@ -306,6 +323,8 @@ const styles = StyleSheet.create({
   successCard: { backgroundColor: COLORS.successBg, borderColor: "#B7E2C0", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 16 },
   successTitle: { color: "#166534", fontSize: 15, fontWeight: "800" },
   successBody: { color: "#287443", fontSize: 13, lineHeight: 19, marginTop: 6 },
+  successBackButton: { alignSelf: "flex-start", borderColor: "#287443", borderRadius: 10, borderWidth: 1, marginTop: 14, paddingHorizontal: 13, paddingVertical: 9 },
+  successBackText: { color: "#166534", fontSize: 12, fontWeight: "800" },
   centerState: { alignItems: "center", paddingVertical: 80 },
   stateBody: { color: COLORS.muted, fontSize: 13, marginTop: 10 },
   errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, padding: 16 },
