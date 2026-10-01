@@ -7,6 +7,7 @@ const { query } = require("./lib/db");
 
 const adminUsers = require("./routes/adminUsers");
 const authRoutes = require("./routes/auth");
+const allocationRoutes = require("./routes/allocations");
 const expenseRoutes = require("./routes/expenses");
 const milestoneRoutes = require("./routes/milestones");
 const projectRoutes = require("./routes/projects");
@@ -34,6 +35,7 @@ app.use("/api/milestones", milestoneRoutes);      // F3 milestones
 app.use("/api/tasks", taskRoutes);                // F3 tasks
 app.use("/api/tickets", ticketRoutes);            // F4 tickets
 app.use("/api/expenses", expenseRoutes);          // F6 expenses
+app.use("/api/allocations", allocationRoutes);     // F8 split receipt allocation
 app.use("/receipts/files", express.static(require("./lib/receiptStorage").STORAGE_DIR));
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
