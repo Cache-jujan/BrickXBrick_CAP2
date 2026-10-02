@@ -41,15 +41,6 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
             return res.json({ verified: true, txHash: log.txhash, blockNumber: log.blocknumber, timestamp: log.timestamp });
         }
 
-        if (onChainHash !== null && recomputedHash === onChainHash) {
-            return res.json({
-                verified: true,
-                txHash: log.txhash,
-                blockNumber: log.blocknumber,
-                timestamp: log.timestamp,
-            });
-        }
-
         // Tamper detected — log permanently, flag expense, notify SysAdmin/GM.
         const reason = onChainHash === null
             ? "on-chain transaction could not be found"
@@ -132,6 +123,28 @@ router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Admin
             throw err;
         }
         res.json(result.rows[0]);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/blockchain/summary — GM only. Aggregate across all projects.
+router.get("/summary", requireRole("General Manager"), async (req, res, next) => {
+    try {
+        const confirmed = await query(
+            "SELECT COUNT(*)::int AS count FROM Expenses WHERE blockchainStatus = 'Confirmed'"
+        );
+        const pending = await query(
+            "SELECT COUNT(*)::int AS count FROM Expenses WHERE blockchainStatus = 'Pending'"
+        );
+        const tampered = await query(
+            "SELECT COUNT(*)::int AS count FROM Expenses WHERE blockchainStatus = 'TamperDetected'"
+        );
+        res.json({
+            confirmedCount: confirmed.rows[0].count,
+            pendingCount: pending.rows[0].count,
+            tamperedCount: tampered.rows[0].count,
+        });
     } catch (err) {
         next(err);
     }
