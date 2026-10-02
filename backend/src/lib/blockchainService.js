@@ -54,9 +54,9 @@ async function submitHashWithTimeout(hash) {
 
 async function getOnChainHash(txHash) {
     const web3 = new Web3(RPC_URL);
-    const tx = await web3.eth.getTransaction(txHash);
-    if (!tx) throw new Error("Transaction not found on-chain");
-    return tx.input.replace(/^0x/, ""); 
+    const tx = await web3.eth.getTransaction(txHash); 
+    if (!tx) return null;
+    return tx.input.replace(/^0x/, "");
 }
 
 

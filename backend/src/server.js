@@ -104,17 +104,17 @@ async function scanForTampering() {
                 const recomputedHash = canonicalizeExpense(expense);
 
                 let onChainHash;
-                let reason;
                 try {
                     onChainHash = await getOnChainHash(log.txhash);
-                } catch (lookupErr) {
-                    onChainHash = null;
-                    reason = `on-chain transaction ${log.txhash} could not be found (${lookupErr.message})`;
+                } catch (netErr) {
+                    console.log(`Tamper scan skipped ${expense.expenseid}: chain unreachable`);
+                    continue; // node down is not tampering
                 }
+                const reason = onChainHash === null
+                    ? `on-chain transaction ${log.txhash} could not be found`
+                    : "recomputed hash does not match the stored on-chain value";
 
                 if (onChainHash !== null && recomputedHash === onChainHash) continue; // still matches, nothing to do
-
-                reason = reason || "recomputed hash does not match the stored on-chain value";
 
                 await query(
                     `INSERT INTO tamper_alerts (expenseID, recomputedHash, onChainHash)

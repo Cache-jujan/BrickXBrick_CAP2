@@ -3,6 +3,7 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { canonicalizeExpense, getOnChainHash } = require("../lib/blockchainService");
+const { raiseTamperAlert } = require("../lib/tamperAlerts");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -28,9 +29,19 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
         const log = logResult.rows[0];
 
         const recomputedHash = canonicalizeExpense(expense);
-        const onChainHash = await getOnChainHash(log.txhash);
 
-        if (recomputedHash === onChainHash) {
+        // UC-12-01 E3: node unreachable is NOT tampering — tell the GM to retry.
+        let onChainHash;
+        try {
+            onChainHash = await getOnChainHash(log.txhash);
+        } catch (e) {
+            return res.status(503).json({ error: "Blockchain nodes are unreachable. Try again later." });
+        }
+        if (onChainHash !== null && recomputedHash === onChainHash) {
+            return res.json({ verified: true, txHash: log.txhash, blockNumber: log.blocknumber, timestamp: log.timestamp });
+        }
+
+        if (onChainHash !== null && recomputedHash === onChainHash) {
             return res.json({
                 verified: true,
                 txHash: log.txhash,
@@ -39,18 +50,17 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
             });
         }
 
-        // Tamper detected — log permanently, flag SysAdmin.
-        await query(
-            `INSERT INTO tamper_alerts (expenseID, recomputedHash, onChainHash)
-             VALUES ($1, $2, $3)`,
-            [req.params.expenseId, recomputedHash, onChainHash]
-        );
-        await query("UPDATE Expenses SET blockchainStatus = 'TamperDetected' WHERE expenseID = $1", [req.params.expenseId]);
+        // Tamper detected — log permanently, flag expense, notify SysAdmin/GM.
+        const reason = onChainHash === null
+            ? "on-chain transaction could not be found"
+            : "recomputed hash does not match the stored on-chain value";
+
+        await raiseTamperAlert(expense, recomputedHash, onChainHash, reason);
 
         res.json({
             verified: false,
             recomputedHash,
-            onChainHash,
+            onChainHash: onChainHash || "MISSING",
             message: "TAMPER ALERT: record does not match blockchain. Logged and flagged for System Administrator.",
         });
     } catch (err) {
@@ -108,7 +118,6 @@ router.get("/project/:projectId", requireRole("General Manager", "Project Manage
     }
 });
 
-module.exports = router;
 // PATCH /api/blockchain/alerts/:id/resolve — GM/SysAdmin marks an alert as
 // investigated.
 router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
@@ -127,3 +136,5 @@ router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Admin
         next(err);
     }
 });
+
+module.exports = router;
