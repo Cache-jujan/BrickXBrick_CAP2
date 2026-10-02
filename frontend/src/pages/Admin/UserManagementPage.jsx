@@ -40,6 +40,7 @@ export function UserManagementPage() {
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [notice, setNotice] = useState("");
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
@@ -102,12 +103,14 @@ export function UserManagementPage() {
 
       {showForm && (
         <CreateUserForm
-          onCreated={() => {
+          onCreated={(email) => {
             setShowForm(false);
+            setNotice(`Invitation sent to ${email}.`);
             reload();
           }}
         />
       )}
+      {notice && <Banner tone="info" title={notice} />}
 
       <div className="users-toolbar">
         <input
@@ -243,10 +246,10 @@ function Modal({ title, children, onClose, labelId = "users-modal-title" }) {
   );
 }
 
+const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
+
 function CreateUserForm({ onCreated }) {
-  const [form, setForm] = useState(() => ({
-    name: "", email: "", role: VALID_ROLES[0], tempPassword: generatePassword(),
-  }));
+  const [form, setForm] = useState({ name: "", email: "", role: VALID_ROLES[0] });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -257,19 +260,14 @@ function CreateUserForm({ onCreated }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (form.tempPassword.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
+    const email = form.email.trim().toLowerCase();
+    if (!form.name.trim()) return setError("Full name is required.");
+    if (!GMAIL_RE.test(email)) return setError("Enter a valid Gmail address (name@gmail.com).");
+
     setSubmitting(true);
     try {
-      await createUser({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        role: form.role,
-        tempPassword: form.tempPassword,
-      });
-      onCreated();
+      await createUser({ name: form.name.trim(), email, role: form.role });
+      onCreated(email);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't create the account."));
     } finally {
@@ -282,26 +280,18 @@ function CreateUserForm({ onCreated }) {
       <form onSubmit={handleSubmit} noValidate>
         <div className="users-form-grid">
           <Field label="Full Name" required placeholder="e.g. Juan Dela Cruz" value={form.name} onChange={(e) => update("name", e.target.value)} />
-          <Field label="Email Address" required type="email" placeholder="name@company.com" value={form.email} onChange={(e) => update("email", e.target.value)} />
+          <Field label="Gmail Address" required type="email" placeholder="name@gmail.com" value={form.email} onChange={(e) => update("email", e.target.value)} />
           <label className="field">
             <span className="field-label">Role<span className="field-required"> *</span></span>
             <select className="field-control" value={form.role} onChange={(e) => update("role", e.target.value)}>
               {VALID_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
             </select>
           </label>
-          <div className="users-password-field">
-            <Field label="Initial Password" required value={form.tempPassword} onChange={(e) => update("tempPassword", e.target.value)} />
-            <button type="button" className="users-generate" onClick={() => update("tempPassword", generatePassword())}>
-              Generate
-            </button>
-          </div>
         </div>
-        <p className="users-form-hint">Copy the password before saving and share it with the user securely. It is not shown again.</p>
-
+        <p className="users-form-hint">An invitation email is sent to this Gmail. The user sets their own password from the link.</p>
         {error && <Banner tone="error" title={error} />}
-
         <div className="users-form-actions">
-          <Button type="submit" disabled={submitting}>{submitting ? "Creating…" : "Create Account"}</Button>
+          <Button type="submit" disabled={submitting}>{submitting ? "Sending invite…" : "Create & Send Invite"}</Button>
         </div>
       </form>
     </Card>

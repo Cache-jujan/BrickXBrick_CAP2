@@ -14,25 +14,28 @@ import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
-import { VerifyExpensePage } from "./pages/Blockchain/VerifyExpensePage";
 import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 import { CreateTicketPage } from "./pages/Tickets/CreateTicketPage";
 import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
 import { SubmitExpensePage } from "./pages/Expenses/SubmitExpensePage";
+import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
+import { SetPasswordPage } from "./pages/Auth/SetPasswordPage";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
 const WEB_BROADCAST_ROLES = ["General Manager", "Project Manager"];
 
-// Password recovery is admin-only: there is no self-service forgot/reset
-// flow. A System Administrator sets a new password from User Accounts.
+// Password recovery: users can self-serve via /forgot-password (Gmail link),
+// and a System Administrator can still set a password from User Accounts.
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/set-password" element={<SetPasswordPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
 
           <Route
@@ -144,14 +147,6 @@ export default function App() {
               }
             />
 
-            <Route
-              path="/blockchain/verify"
-              element={
-                <RoleRoute allow={["General Manager"]}>
-                  <VerifyExpensePage />
-                </RoleRoute>
-              }
-            />
             <Route
               path="/blockchain/alerts"
               element={

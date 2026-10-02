@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listProjects } from "../../api/projectsApi";
 import { listExpenses } from "../../api/expensesApi";
-import { listTamperAlerts } from "../../api/blockchainApi";
+import { listTamperAlerts, getBlockchainSummary } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
@@ -47,6 +47,8 @@ function ProjectsOverview({ role, name, userId }) {
   const [expensesError, setExpensesError] = useState("");
 
   const [alertCount, setAlertCount] = useState(null);
+  const [confirmedCount, setConfirmedCount] = useState(null);
+  const [tamperedCount, setTamperedCount] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +74,20 @@ function ProjectsOverview({ role, name, userId }) {
     listTamperAlerts()
       .then((data) => { if (!cancelled) setAlertCount(data.length); })
       .catch(() => { if (!cancelled) setAlertCount(null); });
+    return () => { cancelled = true; };
+  }, [canSeeAlerts]);
+
+  useEffect(() => {
+    if (!canSeeAlerts) return;
+    let cancelled = false;
+    getBlockchainSummary()
+      .then((data) => {
+        if (!cancelled) {
+          setConfirmedCount(data.confirmedCount);
+          setTamperedCount(data.tamperedCount);
+        }
+      })
+      .catch(() => { if (!cancelled) setConfirmedCount(null); });
     return () => { cancelled = true; };
   }, [canSeeAlerts]);
 
@@ -140,12 +156,19 @@ function ProjectsOverview({ role, name, userId }) {
           </div>
           {canSeeAlerts ? (
             <div className="chain-summary">
-              <div className="chain-summary-row chain-summary-row-pending">
+              <div className="chain-summary-row">
                 <div>
-                  <p className="chain-summary-label">Verified Records</p>
-                  <p className="chain-summary-note">Needs an aggregate endpoint — not shown yet.</p>
+                  <p className="chain-summary-label">Confirmed Records</p>
+                  <p className="chain-summary-note">Approved expenses recorded on the blockchain.</p>
                 </div>
-                <span className="pending-badge">Pending backend</span>
+                <span className="chain-summary-value">{confirmedCount == null ? "—" : confirmedCount}</span>
+              </div>
+              <div className="chain-summary-row">
+                <div>
+                  <p className="chain-summary-label">Tampered Records</p>
+                  <p className="chain-summary-note">Expenses flagged by the integrity scan.</p>
+                </div>
+                <span className="chain-summary-value">{tamperedCount == null ? "—" : tamperedCount}</span>
               </div>
               <div className={"chain-summary-row" + (alertCount > 0 ? " chain-summary-row-alert" : "")}>
                 <div>
@@ -158,6 +181,7 @@ function ProjectsOverview({ role, name, userId }) {
               </div>
               <Link to="/blockchain/alerts" className="chain-summary-link">View all tamper alerts →</Link>
             </div>
+            
           ) : (
             <div className="pending-panel">
               <p>Visible to General Manager accounts.</p>
