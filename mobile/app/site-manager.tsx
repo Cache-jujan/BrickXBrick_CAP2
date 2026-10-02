@@ -69,6 +69,36 @@ export default function SiteManagerHomeScreen() {
 
         <Text style={styles.subtitle}>Keep your site work moving and up to date.</Text>
 
+        <View style={styles.actionGrid}>
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => router.push("/ticket-request")}
+            accessibilityRole="button"
+            accessibilityLabel="Request ticket"
+          >
+            <Text style={styles.actionIcon}>＋</Text>
+            <Text style={styles.actionLabel}>Ticket</Text>
+          </Pressable>
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => router.push("/(tabs)")}
+            accessibilityRole="button"
+            accessibilityLabel="Submit receipt"
+          >
+            <Text style={styles.actionIcon}>▣</Text>
+            <Text style={styles.actionLabel}>Receipt</Text>
+          </Pressable>
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => loadTasks(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh tasks"
+          >
+            <Text style={styles.actionIcon}>↻</Text>
+            <Text style={styles.actionLabel}>Refresh</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.summaryCard}>
           <View>
             <Text style={styles.summaryLabel}>MY TASKS</Text>
@@ -120,19 +150,6 @@ export default function SiteManagerHomeScreen() {
           </View>
         )}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
-        </View>
-        <View style={styles.actionGrid}>
-          <Pressable style={styles.actionCard} onPress={() => loadTasks(true)}>
-            <Text style={styles.actionIcon}>↻</Text>
-            <Text style={styles.actionLabel}>Refresh tasks</Text>
-          </Pressable>
-          <View style={styles.actionCard}>
-            <Text style={styles.actionIcon}>↗</Text>
-            <Text style={styles.actionLabel}>My updates</Text>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -209,8 +226,8 @@ const styles = StyleSheet.create({
   errorBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
   retryButton: { alignSelf: "flex-start", backgroundColor: COLORS.primary, borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 9 },
   retryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
-  actionGrid: { flexDirection: "row", gap: 12 },
-  actionCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flex: 1, minHeight: 92, justifyContent: "center" },
+  actionGrid: { flexDirection: "row", gap: 10, marginTop: 18 },
+  actionCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flex: 1, minHeight: 78, justifyContent: "center" },
   actionIcon: { color: COLORS.primary, fontSize: 24, fontWeight: "700" },
   actionLabel: { color: COLORS.heading, fontSize: 13, fontWeight: "700", marginTop: 8 },
 });

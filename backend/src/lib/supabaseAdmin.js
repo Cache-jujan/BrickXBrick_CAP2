@@ -7,3 +7,4 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 module.exports = { supabaseAdmin };
+4

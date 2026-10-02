@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createTicket } from "../../api/ticketsApi";
+import { createTicket, listApprovedVendors } from "../../api/ticketsApi";
 import { listProjects } from "../../api/projectsApi";
 import { extractErrorMessage } from "../../api/client";
 import { Field } from "../../components/ui/Field";
@@ -17,6 +17,7 @@ const EMPTY_FORM = {
   materialType: "",
   quantity: "",
   vendorName: "",
+  requestedBudget: "",
 };
 
 export function CreateTicketPage() {
@@ -25,6 +26,9 @@ export function CreateTicketPage() {
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState("");
+  const [vendors, setVendors] = useState([]);
+  const [vendorsLoading, setVendorsLoading] = useState(true);
+  const [vendorsError, setVendorsError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +44,24 @@ export function CreateTicketPage() {
       })
       .finally(() => {
         if (!cancelled) setProjectsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    listApprovedVendors()
+      .then((data) => {
+        if (!cancelled) setVendors(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setVendorsError(extractErrorMessage(err, "Couldn't load approved vendors."));
+      })
+      .finally(() => {
+        if (!cancelled) setVendorsLoading(false);
       });
 
     return () => {
@@ -65,6 +87,9 @@ export function CreateTicketPage() {
         errors.quantity = "Enter a quantity greater than 0.";
       }
       if (!form.vendorName.trim()) errors.vendorName = "Vendor name is required.";
+    }
+    if (form.ticketType === "Material Request" && (form.requestedBudget === "" || !Number.isFinite(Number(form.requestedBudget)) || Number(form.requestedBudget) < 0)) {
+      errors.requestedBudget = "Enter a requested budget of 0 or more.";
     }
 
     return errors;
@@ -92,6 +117,7 @@ export function CreateTicketPage() {
               materialType: form.materialType.trim(),
               quantity: Number(form.quantity),
               vendorName: form.vendorName.trim(),
+              ...(form.ticketType === "Material Request" ? { requestedBudget: Number(form.requestedBudget) } : {}),
             }
           : {}),
       });
@@ -114,6 +140,7 @@ export function CreateTicketPage() {
       <Card className="create-ticket-card">
         <form onSubmit={handleSubmit} noValidate>
           {projectsError && <Banner tone="error" title={projectsError} />}
+          {vendorsError && <Banner tone="error" title={vendorsError} />}
 
           <Field
             label="Project"
@@ -188,12 +215,36 @@ export function CreateTicketPage() {
               </div>
               <Field
                 label="Preferred Vendor"
+                as="select"
                 required
-                placeholder="Enter vendor name"
                 value={form.vendorName}
                 error={fieldErrors.vendorName}
+                disabled={vendorsLoading || vendors.length === 0}
                 onChange={(e) => updateField("vendorName", e.target.value)}
-              />
+              >
+                <option value="">
+                  {vendorsLoading ? "Loading approved vendors…" : vendors.length ? "Select an approved vendor" : "No approved vendors available"}
+                </option>
+                {vendors.map((vendor) => (
+                  <option key={vendor.vendorID} value={vendor.vendorName}>{vendor.vendorName}</option>
+                ))}
+              </Field>
+              {!vendorsLoading && vendors.length === 0 && !vendorsError && (
+                <p role="status">No approved vendors are available. Ask a System Administrator to add one to the Vendor Master List.</p>
+              )}
+              {form.ticketType === "Material Request" && (
+                <Field
+                  label="Requested Budget (PHP)"
+                  required
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.requestedBudget}
+                  error={fieldErrors.requestedBudget}
+                  onChange={(e) => updateField("requestedBudget", e.target.value)}
+                />
+              )}
             </div>
           )}
 

@@ -1,16 +1,29 @@
+@'
+# Dependencies
 node_modules/
+
+# Environment files and secrets
 .env
-.env.local
-dist/
-build/
-*.log
-.DS_Store
-android/app/build/
-ios/build/
-geth-data/
+.env.*
+!.env.example
+keys/
 keystore/
-password.txt
-backend/keystore/
+
+# Runtime and generated receipt storage
+storage/receipts/*
+!storage/receipts/.gitkeep
+
+# Logs and local runtime output
+*.log
+logs/
+
+# Test and coverage output
+coverage/
+.nyc_output/
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
 .vscode/
-*.pc
-backend/storage/receipts/
+.idea/
+'@ | Set-Content backend/.gitignore
