@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { login } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
+
+const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -38,6 +41,19 @@ export default function LoginScreen() {
       setError(err instanceof Error ? err.message : "Unable to sign in right now.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!WEB_URL) {
+      setError("Password recovery isn't configured yet. Add EXPO_PUBLIC_WEB_URL to mobile/.env.");
+      return;
+    }
+
+    try {
+      await Linking.openURL(`${WEB_URL}/forgot-password`);
+    } catch {
+      setError("Unable to open the password recovery page right now.");
     }
   }
 
@@ -99,6 +115,14 @@ export default function LoginScreen() {
               />
             </View>
 
+            <Pressable
+              accessibilityRole="link"
+              onPress={handleForgotPassword}
+              style={styles.forgotPasswordButton}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </Pressable>
+
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Pressable
@@ -135,6 +159,8 @@ const styles = StyleSheet.create({
   labelRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 7 },
   label: { color: COLORS.heading, fontSize: 13, fontWeight: "700", marginBottom: 7 },
   showPassword: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
+  forgotPasswordButton: { alignSelf: "flex-end", marginBottom: 16, marginTop: -8 },
+  forgotPasswordText: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
   input: { backgroundColor: "#FFFCF8", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 15, paddingHorizontal: 14, paddingVertical: 13 },
   error: { color: "#B42318", fontSize: 13, lineHeight: 19, marginBottom: 14 },
   button: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 13, justifyContent: "center", minHeight: 50, paddingHorizontal: 18 },
