@@ -3,9 +3,9 @@ const { config } = require("process");
 
 // Paste the 3 addresses geth printed in Step 7, in any order — this script sorts them.
 const signers = [
-  "0xfCA42061f09eC014A93AF3Bb56188F522142604C",
-  "0x4Ab617F191dAfeeCfF74FDB38Ae520218fc5D01A",
-  "0xf202971A47269DE36B6Bd3fd48b4c1c6EB921D73"
+  "0xb591b59117b473dfb9dd679ab8d8f358bd973eb3",
+  "0x73e822e31429ee266477800406c9694d39ba242f",
+  "0xe5a488d38451276b0ab13350ce198a6a61d72443"
 ];
 
 // Clique requires signer addresses in extraData sorted ascending.

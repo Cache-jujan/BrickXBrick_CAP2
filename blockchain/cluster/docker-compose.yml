@@ -17,11 +17,11 @@ services:
       - --http.vhosts=*
       - --port=30303
       - --nodiscover
-      - --unlock=0xfCA42061f09eC014A93AF3Bb56188F522142604C
+      - --unlock=0xb591b59117b473dfb9dd679ab8d8f358bd973eb3
       - --password=/data/password.txt
       - --allow-insecure-unlock
       - --mine
-      - --miner.etherbase=0xfCA42061f09eC014A93AF3Bb56188F522142604C
+      - --miner.etherbase=0xb591b59117b473dfb9dd679ab8d8f358bd973eb3
       - --syncmode=full
       - --verbosity=3
     ports:
@@ -49,11 +49,11 @@ services:
       - --http.vhosts=*
       - --port=30303
       - --nodiscover
-      - --unlock=0x4Ab617F191dAfeeCfF74FDB38Ae520218fc5D01A
+      - --unlock=0x73e822e31429ee266477800406c9694d39ba242f
       - --password=/data/password.txt
       - --allow-insecure-unlock
       - --mine
-      - --miner.etherbase=0x4Ab617F191dAfeeCfF74FDB38Ae520218fc5D01A
+      - --miner.etherbase=0x73e822e31429ee266477800406c9694d39ba242f
       - --syncmode=full
       - --verbosity=3
     ports:
@@ -81,11 +81,11 @@ services:
       - --http.vhosts=*
       - --port=30303
       - --nodiscover
-      - --unlock=0xf202971A47269DE36B6Bd3fd48b4c1c6EB921D73
+      - --unlock=0xe5a488d38451276b0ab13350ce198a6a61d72443
       - --password=/data/password.txt
       - --allow-insecure-unlock
       - --mine
-      - --miner.etherbase=0xf202971A47269DE36B6Bd3fd48b4c1c6EB921D73
+      - --miner.etherbase=0xe5a488d38451276b0ab13350ce198a6a61d72443
       - --syncmode=full
       - --verbosity=3
     ports:
