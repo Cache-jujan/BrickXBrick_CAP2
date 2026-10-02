@@ -15,6 +15,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import "./ExpensesPage.css";
+import { verifyExpense } from "../../api/blockchainApi";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "numeric" });
@@ -41,6 +42,8 @@ export function ExpensesPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
+  const [verifyResults, setVerifyResults] = useState({});
+  const [verifyingId, setVerifyingId] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -123,6 +126,21 @@ export function ExpensesPage() {
   function closeConfirm() {
     setConfirm(null);
     setReason("");
+  }
+
+  async function handleVerify(expenseId) {
+    setVerifyingId(expenseId);
+    try {
+      const result = await verifyExpense(expenseId);
+      setVerifyResults((prev) => ({ ...prev, [expenseId]: result }));
+    } catch (err) {
+      setVerifyResults((prev) => ({
+        ...prev,
+        [expenseId]: { verified: false, message: extractErrorMessage(err, "Verification failed.") },
+      }));
+    } finally {
+      setVerifyingId(null);
+    }
   }
 
   async function handleConfirm() {
@@ -300,6 +318,35 @@ export function ExpensesPage() {
                                       )}
                                     </div>
                                   )}
+                                  
+                                  {user.role === "General Manager" && e.status === "Approved" && (
+  <div className="expenses-actions">
+    {e.blockchainstatus === "Confirmed" ? (
+      <Button
+        variant="secondary"
+        disabled={verifyingId === e.expenseid}
+        onClick={() => handleVerify(e.expenseid)}
+      >
+        {verifyingId === e.expenseid ? "Verifying…" : "Verify on Blockchain"}
+      </Button>
+    ) : (
+      <p className="expenses-subtitle">
+        Blockchain status: {e.blockchainstatus || "None"}. Verification is available once Confirmed.
+      </p>
+    )}
+    {verifyResults[e.expenseid] && (
+      verifyResults[e.expenseid].verified ? (
+        <Banner tone="info" title="Verified: matches blockchain record">
+          Tx: {verifyResults[e.expenseid].txHash?.slice(0, 18)}… · Block #{verifyResults[e.expenseid].blockNumber}
+        </Banner>
+      ) : (
+        <Banner tone="error" title="Tamper alert">
+          {verifyResults[e.expenseid].message}
+        </Banner>
+      )
+    )}
+  </div>
+)}
                                 </td>
                               </tr>
                             )}
