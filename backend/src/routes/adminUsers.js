@@ -4,6 +4,7 @@ const { query } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
+const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
 
 const router = express.Router();
 router.use(requireAuth, requireRole("System Administrator"));
@@ -16,29 +17,45 @@ const MIN_PASSWORD_LENGTH = 8;
 
 // CREATE
 router.post("/", async (req, res) => {
-  const { name, email, role, tempPassword } = req.body;
+  const { name, role } = req.body;
+  const email = (req.body.email || "").trim().toLowerCase();
+
   if (!name || !email || !role) {
     return res.status(400).json({ error: "name, email, role are required" });
   }
   if (!VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: "Invalid role" });
   }
+  if (!GMAIL_RE.test(email)) {
+    return res.status(400).json({ error: "A valid Gmail address (@gmail.com) is required" });
+  }
+
+  let authUserId;
   try {
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: tempPassword || Math.random().toString(36).slice(2) + "Aa1!",
-      email_confirm: true,
-      user_metadata: { role }
+    const dup = await query("SELECT 1 FROM Users WHERE email = $1", [email]);
+    if (dup.rowCount > 0) {
+      return res.status(400).json({ error: "That email already has an account" });
+    }
+
+    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      data: { role },
+      redirectTo: `${process.env.FRONTEND_URL}/set-password`,
     });
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      console.error("Invite failed:", error.status, error.message);
+      return res.status(400).json({ error: error.message });
+    }
+    authUserId = data.user.id;
+
     const result = await query(
       `INSERT INTO Users (name, email, supabaseUserId, role, status)
        VALUES ($1, $2, $3, $4, 'Active')
        RETURNING userID, name, email, role, status`,
-      [name, email, data.user.id, role]
+      [name, email, authUserId, role]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    if (authUserId) await supabaseAdmin.auth.admin.deleteUser(authUserId);
     res.status(500).json({ error: err.message });
   }
 });
