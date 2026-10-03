@@ -7,8 +7,8 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
-const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
-const { checkDuplicate, checkVendor, checkTicketMismatch } = require("../lib/fraudScreening");
+const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
+const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
@@ -107,7 +107,10 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         }
         const quantity = computeQuantityFromLineItems(storedLineItems);
 
-        const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
+        // Normalize BIR fields first so Layer 1's exact match can't be dodged
+        // by spacing or hyphens ("OR 4567" vs "OR-4567").
+        const bir = normalizeBirFields({ tin, birPermitNumber, birNumber });
+        const { birValidationStatus } = classifyBir(bir);
 
         // When a ticket is given, the ticket is the source of truth for the
         // project — not the client-supplied projectID (F9 Layer 3).
@@ -178,53 +181,20 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
                 category,
                 birValidationStatus,
                 receiptImageURL,
-                birNumber || null,
-                tin || null,
-                birPermitNumber || null,
+                bir.birNumber,
+                bir.tin,
+                bir.birPermitNumber,
                 JSON.stringify(storedLineItems),
                 quantity,
             ]
         );
 
-        // `expense` is camelCase (EXPENSE_COLUMNS aliases). checkDuplicate and
-        // checkVendor read lowercase column names, so they need the raw row —
-        // otherwise they silently return false and never flag anything.
         const expense = result.rows[0];
-        const rawResult = await query("SELECT * FROM expenses WHERE expenseid = $1", [expense.expenseID]);
-        const raw = rawResult.rows[0];
 
-        const isDup = await checkDuplicate(raw);
-        if (isDup) {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
-                 VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
-                [raw.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
-            );
-        }
-
-        const vendorIssue = await checkVendor(raw);
-        if (vendorIssue) {
-            const reason = vendorIssue === "not_found"
-                ? "Vendor not found in VendorMasterList"
-                : "Vendor found in VendorMasterList but approvalStatus = 'Flagged'";
-
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
-                 VALUES ($1, 'system', 'Vendor_Validation', $2)`,
-                [raw.expenseid, reason]
-            );
-        }
-
-        // checkTicketMismatch reads camelCase keys, so it gets `expense`.
-        const isMismatch = await checkTicketMismatch(expense);
-        if (isMismatch) {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
-                 VALUES ($1, $2, $3, 'system', 'Pending')`,
-                [expense.expenseID, "Ticket_Mismatch", "Expense does not match ticket material type, quantity, or vendor"]
-            );
-        }
-
+        // F9 Layers 1-3. No transaction here, so the row is already visible
+        // to screenExpense's queries.
+        await screenExpense(expense.expenseID);
+        
         res.status(201).json(expense);
     } catch (err) {
         next(err);
