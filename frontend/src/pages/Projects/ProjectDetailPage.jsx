@@ -338,11 +338,23 @@ export function ProjectDetailPage() {
                               <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
                             )}
 
+                            {e.submittedby === user.id && user.role === "General Manager" && (
+                              <Banner tone="warning" title="You are reviewing your own submission">
+                                Your approval will be recorded under your account.
+                              </Banner>
+                            )}
+
                             {canReview && e.status === "Pending" && (
-                              <div className="expense-detail-actions">
-                                <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
-                                <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
-                              </div>
+                              e.submittedby === user.id && user.role !== "General Manager" ? (
+                                <p>You submitted this expense, so someone else must review it.</p>
+                              ) : (
+                                <div className="expense-detail-actions">
+                                  <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
+                                  {!(e.submittedby === user.id && user.role === "General Manager") && (
+                                    <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
+                                  )}
+                                </div>
+                              )
                             )}
 
                             {canVerify && e.status === "Approved" && (

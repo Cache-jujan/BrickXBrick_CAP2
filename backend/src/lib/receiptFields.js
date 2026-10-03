@@ -88,6 +88,7 @@ function toExpenseDraft(parsed) {
     receiptDate: parsed.date,
     amount: Number.isFinite(amount) ? amount : null,
     tin: parsed.tin,
+    birPermitType: null,
     birPermitNumber: parsed.birPermitNumber,
     birNumber: parsed.orSiNumber, // <- the name bridge
     lineItems,
@@ -125,4 +126,27 @@ function computeQuantityFromLineItems(lineItems) {
   return lineItems.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 1), 0);
 }
 
-module.exports = { EXPENSE_COLUMNS, toExpenseDraft, classifyBir, normalizeLineItems, computeQuantityFromLineItems };
+/**
+ * F9 shared helper (F8 calls it too). Normalizes the three BIR fields BEFORE
+ * classifyBir and the INSERT, so Layer 1's exact-match duplicate check can't
+ * be dodged by typing "OR 4567" instead of "OR-4567".
+ *   - tin: digits only ("123-456-789-000" -> "123456789000")
+ *   - birPermitNumber, birNumber: uppercase, spaces and hyphens removed
+ *   - anything that ends up empty becomes null
+ */
+function normalizeBirFields({ tin, birPermitNumber, birNumber } = {}) {
+  const clean = (value, fn) => {
+    if (value === undefined || value === null) return null;
+    const out = fn(String(value));
+    return out.length > 0 ? out : null;
+  };
+  const code = (v) => v.toUpperCase().replace(/[\s-]+/g, "");
+
+  return {
+    tin: clean(tin, (v) => v.replace(/\D/g, "")),
+    birPermitNumber: clean(birPermitNumber, code),
+    birNumber: clean(birNumber, code),
+  };
+}
+
+module.exports = { EXPENSE_COLUMNS, toExpenseDraft, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems };

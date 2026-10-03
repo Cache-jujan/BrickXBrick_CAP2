@@ -7,8 +7,8 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
-const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
-const { checkDuplicate, checkVendor, checkTicketMismatch } = require("../lib/fraudScreening");
+const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
+const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
@@ -43,9 +43,22 @@ async function assertCanReviewProject(user, projectId) {
     }
 }
 
-// POST / — Purchaser submits an expense linked to a Resolved ticket.
-// GM/PM may also submit as backups, but project-only (no ticket link).
-router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"), async (req, res, next) => {
+async function assertSiteManagerProject(user, projectId) {
+    const result = await query(
+        "SELECT siteManagerId FROM projects WHERE projectId = $1",
+        [projectId]
+    );
+    if (result.rowCount === 0) {
+        throw httpError(404, `Project ${projectId} not found`);
+    }
+    if (result.rows[0].sitemanagerid !== user.id) {
+        throw httpError(403, "You may only submit expenses for tickets on projects assigned to you");
+    }
+}
+
+// POST / — Purchaser submits assigned resolved tickets; Site Manager submits
+// only their own resolved Material Requests; GM/PM use accessible resolved MR tickets.
+router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const {
             ticketID,
@@ -94,12 +107,10 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
         }
         const quantity = computeQuantityFromLineItems(storedLineItems);
 
-        const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
-
-        // Ticket linking is Purchaser-only: tickets are assigned to Purchasers.
-        if (ticketID && req.user.role !== "Purchaser") {
-            throw httpError(400, "Only Purchasers can link an expense to a ticket");
-        }
+        // Normalize BIR fields first so Layer 1's exact match can't be dodged
+        // by spacing or hyphens ("OR 4567" vs "OR-4567").
+        const bir = normalizeBirFields({ tin, birPermitNumber, birNumber });
+        const { birValidationStatus } = classifyBir(bir);
 
         // When a ticket is given, the ticket is the source of truth for the
         // project — not the client-supplied projectID (F9 Layer 3).
@@ -107,7 +118,7 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
 
         if (ticketID) {
             const ticketResult = await query(
-                "SELECT ticketid, projectid, status, assignedto FROM tickets WHERE ticketid = $1",
+                "SELECT ticketid, projectid, status, assignedto, submittedby, tickettype FROM tickets WHERE ticketid = $1",
                 [ticketID]
             );
             if (ticketResult.rowCount === 0) {
@@ -115,11 +126,23 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
             }
             const ticket = ticketResult.rows[0];
 
-            if (ticket.assignedto !== req.user.id) {
-                throw httpError(403, "You may only submit an expense against a ticket assigned to you");
+            if (req.user.role === "Purchaser") {
+                if (ticket.assignedto !== req.user.id) {
+                    throw httpError(403, "You may only submit an expense against a ticket assigned to you");
+                }
+            } else if (req.user.role === "Site Manager") {
+                if (ticket.submittedby !== req.user.id) {
+                    throw httpError(403, "You may only submit an expense against a ticket you created");
+                }
+                if (ticket.tickettype !== "Material Request") {
+                    throw httpError(400, "Site Manager expenses can only be linked to a Material Request ticket");
+                }
+            } else if (ticket.tickettype !== "Material Request") {
+                throw httpError(400, "GM/PM expenses can only be linked to a Material Request ticket");
             }
-            // Strict Resolved-only. The mobile app calls PATCH
-            // /tickets/:id/resolve before hitting this endpoint.
+
+            // Strict Resolved-only. Purchasers resolve their assigned tickets;
+            // GM/PM may link only after the assigned Purchaser has completed it.
             if (ticket.status !== "Resolved") {
                 throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
             }
@@ -127,11 +150,17 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
             projectID = ticket.projectid;
         }
 
+        if (req.user.role === "Site Manager" && !ticketID) {
+            throw httpError(400, "Site Managers must link expenses to their own resolved Material Request ticket");
+        }
         if (!projectID) {
             throw httpError(400, "projectID is required when no ticketID is provided");
         }
-        // A PM can only file on projects they manage (GM: any project).
-        if (req.user.role !== "Purchaser") {
+        // A PM is limited to managed projects; a GM can use any project;
+        // Site Managers must still be assigned to the ticket's project.
+        if (req.user.role === "Site Manager") {
+            await assertSiteManagerProject(req.user, projectID);
+        } else if (req.user.role !== "Purchaser") {
             await assertCanReviewProject(req.user, projectID);
         }
 
@@ -152,53 +181,20 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
                 category,
                 birValidationStatus,
                 receiptImageURL,
-                birNumber || null,
-                tin || null,
-                birPermitNumber || null,
+                bir.birNumber,
+                bir.tin,
+                bir.birPermitNumber,
                 JSON.stringify(storedLineItems),
                 quantity,
             ]
         );
 
-        // `expense` is camelCase (EXPENSE_COLUMNS aliases). checkDuplicate and
-        // checkVendor read lowercase column names, so they need the raw row —
-        // otherwise they silently return false and never flag anything.
         const expense = result.rows[0];
-        const rawResult = await query("SELECT * FROM expenses WHERE expenseid = $1", [expense.expenseID]);
-        const raw = rawResult.rows[0];
 
-        const isDup = await checkDuplicate(raw);
-        if (isDup) {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
-                 VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
-                [raw.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
-            );
-        }
-
-        const vendorIssue = await checkVendor(raw);
-        if (vendorIssue) {
-            const reason = vendorIssue === "not_found"
-                ? "Vendor not found in VendorMasterList"
-                : "Vendor found in VendorMasterList but approvalStatus = 'Flagged'";
-
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
-                 VALUES ($1, 'system', 'Vendor_Validation', $2)`,
-                [raw.expenseid, reason]
-            );
-        }
-
-        // checkTicketMismatch reads camelCase keys, so it gets `expense`.
-        const isMismatch = await checkTicketMismatch(expense);
-        if (isMismatch) {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
-                 VALUES ($1, $2, $3, 'system', 'Pending')`,
-                [expense.expenseID, "Ticket_Mismatch", "Expense does not match ticket material type, quantity, or vendor"]
-            );
-        }
-
+        // F9 Layers 1-3. No transaction here, so the row is already visible
+        // to screenExpense's queries.
+        await screenExpense(expense.expenseID);
+        
         res.status(201).json(expense);
     } catch (err) {
         next(err);
@@ -206,7 +202,7 @@ router.post("/", requireRole("Purchaser", "General Manager", "Project Manager"),
 });
 
 // GET /mine — the caller's own submitted expenses.
-router.get("/mine", requireRole("Purchaser"), async (req, res, next) => {
+router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const result = await query(
             `SELECT ${EXPENSE_COLUMNS} FROM expenses
@@ -329,9 +325,9 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             throw httpError(409, `Only a Pending expense can be approved (this one is ${expense.status})`);
         }
 
-        // Separation of duties: GM/PM can now submit expenses, so they must
-        // not be able to approve their own.
-        if (expense.submittedby === req.user.id) {
+        // General Managers may review their own submissions when needed;
+        // Project Managers remain subject to separation of duties.
+        if (expense.submittedby === req.user.id && req.user.role !== "General Manager") {
             throw httpError(403, "You can't approve an expense you submitted");
         }
 
@@ -392,6 +388,10 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
 
         if (expense.status !== "Pending") {
             throw httpError(409, `Only a Pending expense can be rejected (this one is ${expense.status})`);
+        }
+
+        if (expense.submittedby === req.user.id) {
+            throw httpError(403, "You can't reject an expense you submitted");
         }
 
         const result = await query(

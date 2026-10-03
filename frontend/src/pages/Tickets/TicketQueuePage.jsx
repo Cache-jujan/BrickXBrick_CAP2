@@ -13,6 +13,7 @@ export function TicketQueuePage() {
   const [tickets, setTickets] = useState([]);
   const [purchasers, setPurchasers] = useState([]);
   const [assignments, setAssignments] = useState({});
+  const [approvedBudgets, setApprovedBudgets] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submittingId, setSubmittingId] = useState(null);
@@ -36,6 +37,15 @@ export function TicketQueuePage() {
         }
         return next;
       });
+      setApprovedBudgets((current) => {
+        const next = { ...current };
+        for (const ticket of pending) {
+          if (next[ticket.ticketid] === undefined) {
+            next[ticket.ticketid] = ticket.requestedbudget == null ? "" : String(ticket.requestedbudget);
+          }
+        }
+        return next;
+      });
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't load the pending ticket queue."));
     } finally {
@@ -50,10 +60,16 @@ export function TicketQueuePage() {
   async function handleAcknowledge(ticket) {
     const assignedTo = assignments[ticket.ticketid];
     if (!assignedTo) return;
+    const budgetText = approvedBudgets[ticket.ticketid] ?? "";
+    const approvedBudget = ticket.tickettype === "Material Request" ? Number(budgetText) : undefined;
+    if (ticket.tickettype === "Material Request" && (budgetText === "" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
+      setError("Enter a confirmed budget of 0 or more before acknowledging this Material Request.");
+      return;
+    }
     setSubmittingId(ticket.ticketid);
     setError("");
     try {
-      await acknowledgeTicket(ticket.ticketid, assignedTo);
+      await acknowledgeTicket(ticket.ticketid, assignedTo, approvedBudget);
       setTickets((current) => current.filter((item) => item.ticketid !== ticket.ticketid));
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't acknowledge this ticket."));
@@ -67,7 +83,7 @@ export function TicketQueuePage() {
       <div className="ticket-queue-header">
         <div>
           <h1>Ticket Queue</h1>
-          <p className="ticket-queue-subtitle">Review pending requests and assign each one to a Purchaser.</p>
+          <p className="ticket-queue-subtitle">Review requests, confirm Material Request budgets, and assign each ticket to a Purchaser.</p>
         </div>
         <Button variant="secondary" type="button" onClick={loadQueue} disabled={loading}>Refresh</Button>
       </div>
@@ -95,6 +111,9 @@ export function TicketQueuePage() {
                   <span><strong>Material:</strong> {ticket.materialtype || "—"}</span>
                   <span><strong>Quantity:</strong> {ticket.quantity ?? "—"}</span>
                   <span><strong>Preferred vendor:</strong> {ticket.vendorname || "—"}</span>
+                  {ticket.tickettype === "Material Request" && (
+                    <span><strong>SM requested budget:</strong> {ticket.requestedbudget == null ? "Not provided" : `₱${Number(ticket.requestedbudget).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}</span>
+                  )}
                 </div>
               )}
               <div className="ticket-queue-action">
@@ -108,6 +127,20 @@ export function TicketQueuePage() {
                   <option value="">Select a Purchaser</option>
                   {purchasers.map((purchaser) => <option key={purchaser.userid} value={purchaser.userid}>{purchaser.name} ({purchaser.email})</option>)}
                 </select>
+                {ticket.tickettype === "Material Request" && (
+                  <label htmlFor={`budget-${ticket.ticketid}`}>
+                    PM-approved budget (PHP)
+                    <input
+                      id={`budget-${ticket.ticketid}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={approvedBudgets[ticket.ticketid] ?? ""}
+                      onChange={(event) => setApprovedBudgets((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
+                      disabled={submittingId === ticket.ticketid}
+                    />
+                  </label>
+                )}
                 <Button type="button" disabled={!assignments[ticket.ticketid] || submittingId === ticket.ticketid} onClick={() => handleAcknowledge(ticket)}>
                   {submittingId === ticket.ticketid ? "Assigning…" : "Acknowledge & Assign"}
                 </Button>

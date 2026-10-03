@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ROLE_DASHBOARDS } from "../../context/AuthContext";
 import { extractErrorMessage } from "../../api/client";
@@ -39,6 +39,8 @@ const FEATURES = [
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const successMessage = location.state?.successMessage;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -117,7 +119,7 @@ export function LoginPage() {
       {/* Right — the sign-in form */}
       <div className="login-form-side">
         <p className="login-contact-admin">
-          Need access or a password reset? <span className="login-contact-admin-link">Contact your System Administrator</span>
+          Accounts are created by your <span className="login-contact-admin-link">System Administrator</span>.
         </p>
 
         <div className="login-card">
@@ -126,13 +128,15 @@ export function LoginPage() {
           <p className="login-subtitle">Sign in to your dashboard</p>
 
           <form onSubmit={handleSubmit} noValidate className="login-form">
+            {successMessage && <Banner tone="info" title={successMessage} />}
+
             <div className="login-field-icon-wrap">
               <Field
                 label="Email Address"
                 type="email"
                 required
                 autoComplete="email"
-                placeholder="you@company.com"
+                placeholder="you@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="login-field-icon"
@@ -166,6 +170,10 @@ export function LoginPage() {
                 <EyeIcon open={showPassword} />
               </button>
             </div>
+
+            <p style={{ textAlign: "right", fontSize: "var(--text-sm)", margin: "0 0 var(--space-3)" }}>
+              <Link to="/forgot-password">Forgot password?</Link>
+            </p>
 
             <Button type="submit" disabled={submitting} className="login-submit">
               {submitting ? "Logging in…" : (

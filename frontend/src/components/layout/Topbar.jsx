@@ -24,7 +24,6 @@ const PAGE_LABELS = [
   { test: (p) => p.includes("/tasks/new"), label: "Add Task", crumb: "Projects / Tasks / New" },
   { test: (p) => p === "/expenses", label: "Expenses", crumb: "Finance" },
   { test: (p) => p === "/admin/users", label: "User Accounts", crumb: "Administration" },
-  { test: (p) => p === "/blockchain/verify", label: "Verify Expense", crumb: "Blockchain Audit" },
   { test: (p) => p === "/blockchain/alerts", label: "Tamper Alerts", crumb: "Blockchain Audit" },
 ];
 

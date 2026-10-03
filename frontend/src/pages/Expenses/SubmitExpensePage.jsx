@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import {Link, useNavigate, useSearchParams,} from "react-router-dom";
-import { listProjects } from "../../api/projectsApi";
-import { getExpense, resubmitExpense, scanReceipt, submitExpense } from "../../api/expensesApi";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { scanReceipt, submitExpense } from "../../api/expensesApi";
+import { listExpenseLinkableTickets } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
@@ -10,345 +10,391 @@ import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import "./SubmitExpensePage.css";
 
-const CATEGORIES = ["Materials", "Equipment", "Other"];
+const EMPTY_DRAFT = {
+  vendorName: "",
+  amount: "",
+  receiptDate: "",
+  category: "Materials",
+  tin: "",
+  birPermitType: "",
+  birPermitNumber: "",
+  birNumber: "",
+  receiptImageURL: "",
+  lineItems: [{ description: "", amount: "", quantity: "", unitPrice: "" }],
+};
 
-function makeLineItem(item = {}) {
-  const id = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+function toDateInput(value) {
+  if (!value) return "";
+  const text = String(value);
+  const isoDate = text.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  if (isoDate) return isoDate;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+}
+
+function draftFromScan(result) {
+  const extractedItems = Array.isArray(result.lineItems)
+    ? result.lineItems.map((item) => ({
+        description: item.description || "",
+        amount: item.amount == null ? "" : String(item.amount),
+        quantity: item.quantity == null ? "" : String(item.quantity),
+        unitPrice: item.unitPrice == null ? "" : String(item.unitPrice),
+      }))
+    : [];
+
   return {
-    id,
-    description: item.description || "",
-    amount: item.amount == null ? "" : String(item.amount),
-    quantity: item.quantity == null ? "1" : String(item.quantity),
+    vendorName: result.vendorName || "",
+    amount: result.amount == null ? "" : String(result.amount),
+    receiptDate: toDateInput(result.receiptDate),
+    category: "Materials",
+    tin: result.tin || "",
+    birPermitType: result.birPermitType || "",
+    birPermitNumber: result.birPermitNumber || "",
+    birNumber: result.birNumber || "",
+    receiptImageURL: result.receiptImageURL || "",
+    lineItems: extractedItems.length
+      ? extractedItems
+      : [{
+          description: "Receipt items — review",
+          amount: result.amount == null ? "" : String(result.amount),
+          quantity: "",
+          unitPrice: "",
+        }],
   };
 }
 
-function initialForm() {
-  return {
-    projectID: "",
-    vendorName: "",
-    amount: "",
-    receiptDate: "",
-    category: "Materials",
-    receiptImageURL: "",
-    birNumber: "",
-    tin: "",
-    birPermitNumber: "",
-    lineItems: [makeLineItem()],
-  };
+function isSupportedReceipt(file) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return ["image/jpeg", "image/jpg", "image/png", "application/pdf"].includes(file.type)
+    || ["jpg", "jpeg", "png", "pdf"].includes(extension);
 }
 
 export function SubmitExpensePage() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const resubmitId = searchParams.get("resubmit");
-  const [rejectionReason, setRejectionReason] = useState("");
   const { user } = useAuth();
-  const [form, setForm] = useState(initialForm);
-  const [projects, setProjects] = useState([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
-  const [projectsError, setProjectsError] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const cameraInput = useRef(null);
+  const imageInput = useRef(null);
+  const pdfInput = useRef(null);
+
+  const [tickets, setTickets] = useState([]);
+  const [selectedTicketId, setSelectedTicketId] = useState("");
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const [receiptName, setReceiptName] = useState("");
+  const [loadingTickets, setLoadingTickets] = useState(true);
   const [scanning, setScanning] = useState(false);
-  const [scanMessage, setScanMessage] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const [pageNotice, setPageNotice] = useState("");
+  const [ocrNotice, setOcrNotice] = useState("");
+
+  const selectedTicket = useMemo(
+    () => tickets.find((ticket) => ticket.ticketID === selectedTicketId) || null,
+    [tickets, selectedTicketId]
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    listProjects("Active")
-      .then((data) => {
-        if (!cancelled) setProjects(data);
-      })
-      .catch((err) => {
-        if (!cancelled) setProjectsError(extractErrorMessage(err, "Couldn't load active projects."));
-      })
-      .finally(() => {
-        if (!cancelled) setProjectsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    let active = true;
+    async function loadTickets() {
+      setLoadingTickets(true);
+      setPageError("");
+      try {
+        const rows = await listExpenseLinkableTickets();
+        if (active) setTickets(Array.isArray(rows) ? rows : []);
+      } catch (error) {
+        if (active) setPageError(extractErrorMessage(error, "Couldn't load resolved procurement tickets."));
+      } finally {
+        if (active) setLoadingTickets(false);
+      }
+    }
+    loadTickets();
+    return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    if (!resubmitId) return;
-
-    getExpense(resubmitId)
-      .then((expense) => {
-        setForm((previous) => ({
-          ...previous,
-          projectID: expense.projectID || "",
-          vendorName: expense.vendorName || "",
-          amount: expense.amount ?? "",
-          receiptDate: expense.receiptDate
-            ? String(expense.receiptDate).slice(0, 10)
-            : "",
-          category: expense.category || "",
-          tin: expense.tin || "",
-          birPermitNumber: expense.birPermitNumber || "",
-          birNumber: expense.birNumber || "",
-          receiptImageURL: expense.receiptImageURL || "",
-          lineItems: expense.lineItems || [makeLineItem()],
-        }));
-
-        setRejectionReason(expense.rejectionReason || "");
-      })
-      .catch((err) => {
-        setFormError(
-          extractErrorMessage(err, "Could not load the rejected expense.")
-        );
-      });
-  }, [resubmitId]);
-
-  const visibleProjects = useMemo(() => {
-    if (user?.role !== "Project Manager") return projects;
-    return projects.filter((project) => project.projectmanagerid === user.id);
-  }, [projects, user]);
-
-  function updateField(key, value) {
-    setForm((previous) => ({ ...previous, [key]: value }));
-    setFieldErrors((previous) => ({ ...previous, [key]: undefined }));
+  function setField(name, value) {
+    setDraft((current) => ({ ...current, [name]: value }));
   }
 
-  function updateLineItem(id, key, value) {
-    setForm((previous) => ({
-      ...previous,
-      lineItems: previous.lineItems.map((item) =>
-        item.id === id ? { ...item, [key]: value } : item
-      ),
-    }));
-    setFieldErrors((previous) => ({ ...previous, lineItems: undefined }));
-  }
+  async function handleReceiptPick(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
 
-  function addLineItem() {
-    setForm((previous) => ({
-      ...previous,
-      lineItems: [...previous.lineItems, makeLineItem()],
-    }));
-  }
+    setPageError("");
+    setPageNotice("");
+    setOcrNotice("");
+    setReceiptName("");
+    setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
+    if (!isSupportedReceipt(file)) {
+      setPageError("Choose a JPG, PNG, or PDF receipt. HEIC and other formats are not accepted yet.");
+      return;
+    }
 
-  function removeLineItem(id) {
-    setForm((previous) => ({
-      ...previous,
-      lineItems: previous.lineItems.filter((item) => item.id !== id),
-    }));
-  }
-
-  async function handleScan() {
-    if (!selectedFile) return;
+    setReceiptName(file.name);
     setScanning(true);
-    setScanMessage("");
-    setFormError("");
     try {
-      const result = await scanReceipt(selectedFile);
-      setForm((previous) => ({
-        ...previous,
-        vendorName: result.vendorName || previous.vendorName,
-        amount: result.amount == null ? previous.amount : String(result.amount),
-        receiptDate: result.receiptDate || previous.receiptDate,
-        receiptImageURL: result.receiptImageURL || previous.receiptImageURL,
-        birNumber: result.birNumber || previous.birNumber,
-        tin: result.tin || previous.tin,
-        birPermitNumber: result.birPermitNumber || previous.birPermitNumber,
-        lineItems: result.lineItems?.length
-          ? result.lineItems.map(makeLineItem)
-          : previous.lineItems,
-      }));
-      setScanMessage(
-        result.ocrError
-          ? result.ocrError
-          : "Receipt uploaded. Review the extracted details before submitting."
-      );
-    } catch (err) {
-      setFormError(extractErrorMessage(err, "Couldn't scan this receipt."));
+      const result = await scanReceipt(file);
+      setDraft(draftFromScan(result));
+      setOcrNotice(result.ocrError || "");
+      if (!result.ocrError && result.confidence === "low") {
+        setOcrNotice("OCR confidence is low. Check every extracted value before submitting.");
+      }
+    } catch (error) {
+      setPageError(extractErrorMessage(error, "Receipt upload failed. Please try again."));
     } finally {
       setScanning(false);
     }
   }
 
-  function validate() {
-    const errors = {};
-    if (!form.projectID) errors.projectID = "Select an active project.";
-    if (!form.vendorName.trim()) errors.vendorName = "Vendor name is required.";
-    if (form.amount === "" || !Number.isFinite(Number(form.amount)) || Number(form.amount) < 0) {
-      errors.amount = "Enter a valid amount of 0 or more.";
-    }
-    if (!form.receiptDate) errors.receiptDate = "Receipt date is required.";
-    if (!form.receiptImageURL) errors.receiptImageURL = "Upload and scan a receipt first.";
-    const usableItems = form.lineItems.filter((item) => item.description.trim());
-    if (usableItems.length === 0) {
-      errors.lineItems = "Add at least one line item.";
-    } else if (usableItems.some((item) => item.amount === "" || !Number.isFinite(Number(item.amount)) || Number(item.amount) < 0)) {
-      errors.lineItems = "Every line item needs a valid amount of 0 or more.";
-    }
-    return errors;
+  function handleTicketChange(ticketID) {
+    setSelectedTicketId(ticketID);
+    if (ticketID) setField("category", "Materials");
   }
+
+  function updateLineItem(index, name, value) {
+    setDraft((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [name]: value } : item
+      ),
+    }));
+  }
+
+  function addLineItem() {
+    setDraft((current) => ({
+      ...current,
+      lineItems: [...current.lineItems, { description: "", amount: "", quantity: "", unitPrice: "" }],
+    }));
+  }
+
+  function removeLineItem(index) {
+    setDraft((current) => ({
+      ...current,
+      lineItems: current.lineItems.length <= 1
+        ? current.lineItems
+        : current.lineItems.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  }
+
+  const validLineItems = draft.lineItems.filter((item) =>
+    item.description.trim()
+    && item.amount !== ""
+    && Number.isFinite(Number(item.amount))
+    && Number(item.amount) >= 0
+  );
+  const amountIsValid = draft.amount !== ""
+    && Number.isFinite(Number(draft.amount))
+    && Number(draft.amount) >= 0;
+  const canSubmit = Boolean(
+    selectedTicket
+      && draft.receiptImageURL
+      && draft.vendorName.trim()
+      && amountIsValid
+      && draft.receiptDate
+      && draft.category
+      && validLineItems.length > 0
+      && !loadingTickets
+      && !scanning
+      && !submitting
+  );
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setFormError("");
-    const errors = validate();
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
+    setPageError("");
+    setPageNotice("");
+    if (!selectedTicket || !draft.receiptImageURL || !canSubmit) {
+      setPageError("Choose a resolved procurement ticket, upload a receipt, and complete the required fields.");
       return;
     }
 
     setSubmitting(true);
-      try {
-        const payload = {
-          projectID: form.projectID,
-          vendorName: form.vendorName.trim(),
-          amount: Number(form.amount),
-          receiptDate: form.receiptDate,
-          category: form.category,
-          receiptImageURL: form.receiptImageURL,
-          birNumber: form.birNumber.trim() || undefined,
-          tin: form.tin.trim() || undefined,
-          birPermitNumber: form.birPermitNumber.trim() || undefined,
-          lineItems: form.lineItems
-            .filter((item) => item.description.trim())
-            .map((item) => ({
-              description: item.description.trim(),
-              amount: Number(item.amount),
-              quantity: item.quantity === "" ? 1 : Number(item.quantity),
-            })),
-        };
+    try {
+      const payload = {
+        ticketID: selectedTicket.ticketID,
+        projectID: selectedTicket.projectID,
+        vendorName: draft.vendorName.trim(),
+        amount: Number(draft.amount),
+        receiptDate: draft.receiptDate,
+        category: draft.category,
+        receiptImageURL: draft.receiptImageURL,
+        tin: draft.tin.trim() || null,
+        birPermitNumber: draft.birPermitNumber.trim() || null,
+        birNumber: draft.birNumber.trim() || null,
+        lineItems: validLineItems.map((item) => ({
+          description: item.description.trim(),
+          amount: Number(item.amount),
+          ...(item.quantity !== "" && Number.isFinite(Number(item.quantity))
+            ? { quantity: Number(item.quantity) }
+            : {}),
+          ...(item.unitPrice !== "" && Number.isFinite(Number(item.unitPrice))
+            ? { unitPrice: Number(item.unitPrice) }
+            : {}),
+        })),
+      };
+      const expense = await submitExpense(payload);
+      setPageNotice(`Expense submitted as Pending${expense.expenseID ? ` (${expense.expenseID})` : ""}.`);
+      setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
+      setSelectedTicketId("");
+      setReceiptName("");
+      setOcrNotice("");
+    } catch (error) {
+      setPageError(extractErrorMessage(error, "Expense submission failed. Please check the details and retry."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-        if (resubmitId) {
-          await resubmitExpense(resubmitId, payload);
-        } else {
-          await submitExpense(payload);
-        }
-
-        navigate("/expenses", { replace: true });
-      } catch (err) {
-        setFormError(extractErrorMessage(err, "Couldn't submit the expense. Please try again."));
-      } finally {
-        setSubmitting(false);
-      }
+  if (!user || !["General Manager", "Project Manager"].includes(user.role)) {
+    return <Banner tone="error" title="Not authorized">This submission page is for General Managers and Project Managers.</Banner>;
   }
 
   return (
-    <div className="submit-expense">
-      <Link to="/expenses" className="form-back-link">Back to Expenses</Link>
-      <div className="submit-expense-heading">
+    <div className="submit-expense-page">
+      <div className="submit-expense-header">
         <div>
-          <h1 className="submit-expense-title">{resubmitId ? "Correct Expense" : "Submit Expense"}</h1>
+          <Link className="submit-expense-back" to="/expenses">← Back to expenses</Link>
+          <h1>Submit Expense</h1>
           <p className="submit-expense-subtitle">
-            {resubmitId
-              ? "Correct the rejected receipt, then send it back to the PM review queue."
-              : "Upload a receipt, review the extracted details, and send the expense for review."}
+            Upload a receipt, verify its details, and link it to a resolved procurement ticket.
           </p>
         </div>
+        <span className="submit-expense-role">{user.role}</span>
       </div>
 
-      {resubmitId && rejectionReason && (
-        <Banner tone="error" title="PM rejection reason">
-          {rejectionReason}
-        </Banner>
-      )}
+      {pageError && <Banner tone="error" title="Could not continue">{pageError}</Banner>}
+      {pageNotice && <Banner tone="info" title="Submission saved">{pageNotice}</Banner>}
+      {ocrNotice && <Banner tone="warning" title="Review the receipt carefully">{ocrNotice}</Banner>}
 
-      <Card className="submit-expense-card">
-        <form onSubmit={handleSubmit} noValidate>
-          <section className="submit-expense-section">
-            <h2>Receipt</h2>
-            <p className="submit-expense-help">JPEG, PNG, or PDF up to 10 MB. Scanning stores the receipt and fills any fields the OCR service can read.</p>
-            <div className="receipt-upload-row">
-              <input
-                className="receipt-file-input"
-                type="file"
-                accept="image/jpeg,image/png,application/pdf"
-                onChange={(event) => {
-                  setSelectedFile(event.target.files?.[0] || null);
-                  setScanMessage("");
-                  setFieldErrors((previous) => ({ ...previous, receiptImageURL: undefined }));
-                }}
-              />
-              <Button type="button" variant="secondary" disabled={!selectedFile || scanning} onClick={handleScan}>
-                {scanning ? "Scanning…" : "Scan Receipt"}
-              </Button>
+      <form className="submit-expense-form" onSubmit={handleSubmit}>
+        <Card className="submit-expense-card">
+          <section className="submit-expense-section" aria-labelledby="receipt-source-heading">
+            <div className="submit-expense-section-heading">
+              <div>
+                <h2 id="receipt-source-heading">1. Add receipt</h2>
+                <p>Use a camera-capable mobile browser, choose an image, or upload a PDF (10 MB maximum).</p>
+              </div>
+              {receiptName && <span className="submit-expense-filename">{receiptName}</span>}
             </div>
-            {selectedFile && <p className="receipt-file-name">Selected: {selectedFile.name}</p>}
-            {scanMessage && <Banner tone="warning" title={scanMessage} />}
-            {fieldErrors.receiptImageURL && <p className="field-error">{fieldErrors.receiptImageURL}</p>}
-          </section>
 
-          <section className="submit-expense-section">
-            <h2>Expense details</h2>
+            <input ref={cameraInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" capture="environment" onChange={handleReceiptPick} />
+            <input ref={imageInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" onChange={handleReceiptPick} />
+            <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={handleReceiptPick} />
+
+            <div className="submit-expense-upload-actions">
+              <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>Capture with camera</Button>
+              <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>Choose image</Button>
+              <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>Choose PDF</Button>
+              {scanning && <span className="submit-expense-progress" role="status">Uploading and scanning…</span>}
+            </div>
+
+            {draft.receiptImageURL && (
+              <div className="submit-expense-receipt-preview">
+                {receiptName.toLowerCase().endsWith(".pdf") ? (
+                  <iframe
+                    className="submit-expense-pdf-preview"
+                    title="Uploaded receipt PDF preview"
+                    src={draft.receiptImageURL}
+                  />
+                ) : (
+                  <img
+                    className="submit-expense-image-preview"
+                    src={draft.receiptImageURL}
+                    alt="Uploaded receipt preview"
+                  />
+                )}
+                <a className="submit-expense-receipt-link" href={draft.receiptImageURL} target="_blank" rel="noreferrer">
+                  Open the uploaded receipt separately
+                </a>
+              </div>
+            )}
+          </section>
+        </Card>
+
+        <Card className="submit-expense-card">
+          <section className="submit-expense-section" aria-labelledby="ticket-heading">
+            <div className="submit-expense-section-heading">
+              <div>
+                <h2 id="ticket-heading">2. Link procurement ticket</h2>
+                <p>Only resolved Material Request tickets are listed. The server checks your project access again at submission.</p>
+              </div>
+            </div>
+
             <Field
-              label="Project"
               as="select"
+              label="Resolved procurement ticket"
               required
-              value={form.projectID}
-              error={fieldErrors.projectID}
-              disabled={projectsLoading || visibleProjects.length === 0}
-              onChange={(event) => updateField("projectID", event.target.value)}
+              value={selectedTicketId}
+              onChange={(event) => handleTicketChange(event.target.value)}
+              disabled={loadingTickets || tickets.length === 0}
             >
-              <option value="">{projectsLoading ? "Loading active projects…" : "Select an active project"}</option>
-              {visibleProjects.map((project) => (
-                <option key={project.projectid} value={project.projectid}>
-                  {project.name}{project.clientname ? ` — ${project.clientname}` : ""}
+              <option value="">{loadingTickets ? "Loading tickets…" : "Choose a ticket"}</option>
+              {tickets.map((ticket) => (
+                <option key={ticket.ticketID} value={ticket.ticketID}>
+                  {ticket.projectName} — {ticket.subject} ({ticket.vendorName || "vendor not specified"})
                 </option>
               ))}
             </Field>
-            {projectsError && <Banner tone="error" title={projectsError} />}
-            {!projectsLoading && !projectsError && visibleProjects.length === 0 && (
-              <Banner tone="warning" title="No active projects available">
-                You need an active project you can manage before submitting an expense.
-              </Banner>
+            {selectedTicket && (
+              <div className="submit-expense-ticket-context">
+                <strong>{selectedTicket.projectName}</strong>
+                <span>{selectedTicket.materialType || "Material Request"}</span>
+                {selectedTicket.quantity != null && <span>Requested quantity: {selectedTicket.quantity}</span>}
+              </div>
             )}
-
-            <div className="submit-expense-row">
-              <Field label="Vendor name" required placeholder="Enter vendor name" value={form.vendorName} error={fieldErrors.vendorName} onChange={(event) => updateField("vendorName", event.target.value)} />
-              <Field label="Amount (PHP)" required type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} error={fieldErrors.amount} onChange={(event) => updateField("amount", event.target.value)} />
-            </div>
-            <div className="submit-expense-row">
-              <Field label="Receipt date" required type="date" value={form.receiptDate} error={fieldErrors.receiptDate} onChange={(event) => updateField("receiptDate", event.target.value)} />
-              <Field label="Category" as="select" required value={form.category} onChange={(event) => updateField("category", event.target.value)}>
-                {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-              </Field>
-            </div>
+            {!loadingTickets && tickets.length === 0 && !pageError && (
+              <Banner tone="info" title="No resolved procurement tickets">A Purchaser must complete a Material Request before it can be linked here.</Banner>
+            )}
           </section>
+        </Card>
 
-          <section className="submit-expense-section">
+        <Card className="submit-expense-card">
+          <section className="submit-expense-section" aria-labelledby="review-heading">
             <div className="submit-expense-section-heading">
               <div>
-                <h2>Line items</h2>
-                <p className="submit-expense-help">Add at least one item. Quantity is used for ticket and fraud checks.</p>
+                <h2 id="review-heading">3. Review and correct extracted fields</h2>
+                <p>OCR is a draft only. Confirm every value against the receipt before submitting.</p>
               </div>
-              <Button type="button" variant="ghost" onClick={addLineItem}>+ Add item</Button>
             </div>
-            <div className="line-items-header"><span>Description</span><span>Amount (PHP)</span><span>Quantity</span><span /></div>
-            {form.lineItems.map((item) => (
-              <div className="line-item-row" key={item.id}>
-                <input aria-label="Line item description" className="field-control" placeholder="Item description" value={item.description} onChange={(event) => updateLineItem(item.id, "description", event.target.value)} />
-                <input aria-label="Line item amount" className="field-control" type="number" min="0" step="0.01" placeholder="0.00" value={item.amount} onChange={(event) => updateLineItem(item.id, "amount", event.target.value)} />
-                <input aria-label="Line item quantity" className="field-control" type="number" min="0" step="1" placeholder="1" value={item.quantity} onChange={(event) => updateLineItem(item.id, "quantity", event.target.value)} />
-                <button type="button" className="line-item-remove" aria-label="Remove line item" disabled={form.lineItems.length === 1} onClick={() => removeLineItem(item.id)}>Remove</button>
+
+            <div className="submit-expense-fields">
+              <Field label="Vendor / store name" required value={draft.vendorName} onChange={(event) => setField("vendorName", event.target.value)} />
+              <Field label="Receipt total (₱)" required type="number" min="0" step="0.01" value={draft.amount} onChange={(event) => setField("amount", event.target.value)} />
+              <Field label="Receipt date" required type="date" value={draft.receiptDate} onChange={(event) => setField("receiptDate", event.target.value)} />
+              <Field as="select" label="Expense category" required value={draft.category} onChange={(event) => setField("category", event.target.value)}>
+                <option value="Materials">Materials</option>
+                <option value="Equipment">Equipment</option>
+                <option value="Other">Other</option>
+              </Field>
+              <Field label="TIN" value={draft.tin} onChange={(event) => setField("tin", event.target.value)} />
+              <Field label="BIR authority type" value={draft.birPermitType} onChange={(event) => setField("birPermitType", event.target.value)} placeholder="Permit, PTU, or ATP" />
+              <Field label="BIR permit number" value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
+              <Field label="OR / SI number" value={draft.birNumber} onChange={(event) => setField("birNumber", event.target.value)} />
+            </div>
+
+            <div className="submit-expense-items-heading">
+              <div>
+                <h3>Receipt line items</h3>
+                <p>At least one line item with a description and amount is required.</p>
               </div>
-            ))}
-            {fieldErrors.lineItems && <p className="field-error">{fieldErrors.lineItems}</p>}
-          </section>
-
-          <section className="submit-expense-section">
-            <h2>Tax receipt details <span className="optional-label">optional</span></h2>
-            <div className="submit-expense-row">
-              <Field label="TIN" placeholder="Vendor TIN" value={form.tin} onChange={(event) => updateField("tin", event.target.value)} />
-              <Field label="BIR permit number" placeholder="BIR permit number" value={form.birPermitNumber} onChange={(event) => updateField("birPermitNumber", event.target.value)} />
+              <Button type="button" variant="secondary" onClick={addLineItem}>Add item</Button>
             </div>
-            <Field label="OR/SI number" placeholder="Official receipt or sales invoice number" value={form.birNumber} onChange={(event) => updateField("birNumber", event.target.value)} />
+            <div className="submit-expense-items">
+              {draft.lineItems.map((item, index) => (
+                <div className="submit-expense-item-row" key={`item-${index}`}>
+                  <Field label={`Item ${index + 1}`} required value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder="Description" />
+                  <Field label="Item amount (₱)" required type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
+                  <Field label="Quantity" type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
+                  <Field label="Unit price (₱)" type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
+                  <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={`Remove item ${index + 1}`}>Remove</Button>
+                </div>
+              ))}
+            </div>
           </section>
+        </Card>
 
-          {formError && <Banner tone="error" title={formError} />}
-          <div className="submit-expense-actions">
-            <Link to="/expenses" className="btn btn-secondary">Cancel</Link>
-            <Button type="submit" disabled={submitting || projectsLoading || visibleProjects.length === 0}>
-              {submitting ? "Submitting…" : "Submit Expense"}
-            </Button>
-          </div>
-        </form>
-      </Card>
+        <div className="submit-expense-footer">
+          <p>Submitting creates a Pending expense for review. Approval and blockchain recording are separate steps.</p>
+          <Button type="submit" disabled={!canSubmit}>{submitting ? "Submitting…" : "Submit expense"}</Button>
+        </div>
+      </form>
     </div>
   );
 }
