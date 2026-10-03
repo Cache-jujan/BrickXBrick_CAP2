@@ -8,6 +8,18 @@ export async function listExpenses(projectId) {
   return data;
 }
 
+// GET /api/expenses/mine — Purchaser's own submitted expenses.
+export async function listMyExpenses() {
+  const { data } = await apiClient.get("/api/expenses/mine");
+  return data;
+}
+
+// GET /api/expenses/:id — single expense detail.
+export async function getExpense(id) {
+  const { data } = await apiClient.get(`/api/expenses/${id}`);
+  return data;
+}
+
 export async function approveExpense(id) {
   const { data } = await apiClient.patch(`/api/expenses/${id}/approve`);
   return data;
@@ -16,6 +28,15 @@ export async function approveExpense(id) {
 // The backend returns 400 without a reason.
 export async function rejectExpense(id, reason) {
   const { data } = await apiClient.patch(`/api/expenses/${id}/reject`, { reason });
+  return data;
+}
+
+// PATCH /api/expenses/:id/resubmit — Purchaser resubmits a Rejected expense.
+export async function resubmitExpense(id, payload) {
+  const { data } = await apiClient.patch(
+    `/api/expenses/${id}/resubmit`,
+    payload
+  );
   return data;
 }
 

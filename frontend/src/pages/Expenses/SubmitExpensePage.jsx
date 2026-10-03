@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {Link, useNavigate, useSearchParams,} from "react-router-dom";
 import { listProjects } from "../../api/projectsApi";
-import { scanReceipt, submitExpense } from "../../api/expensesApi";
+import { getExpense, resubmitExpense, scanReceipt, submitExpense } from "../../api/expensesApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
@@ -39,6 +39,9 @@ function initialForm() {
 
 export function SubmitExpensePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resubmitId = searchParams.get("resubmit");
+  const [rejectionReason, setRejectionReason] = useState("");
   const { user } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [projects, setProjects] = useState([]);
@@ -67,6 +70,36 @@ export function SubmitExpensePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!resubmitId) return;
+
+    getExpense(resubmitId)
+      .then((expense) => {
+        setForm((previous) => ({
+          ...previous,
+          projectID: expense.projectID || "",
+          vendorName: expense.vendorName || "",
+          amount: expense.amount ?? "",
+          receiptDate: expense.receiptDate
+            ? String(expense.receiptDate).slice(0, 10)
+            : "",
+          category: expense.category || "",
+          tin: expense.tin || "",
+          birPermitNumber: expense.birPermitNumber || "",
+          birNumber: expense.birNumber || "",
+          receiptImageURL: expense.receiptImageURL || "",
+          lineItems: expense.lineItems || [makeLineItem()],
+        }));
+
+        setRejectionReason(expense.rejectionReason || "");
+      })
+      .catch((err) => {
+        setFormError(
+          extractErrorMessage(err, "Could not load the rejected expense.")
+        );
+      });
+  }, [resubmitId]);
 
   const visibleProjects = useMemo(() => {
     if (user?.role !== "Project Manager") return projects;
@@ -162,31 +195,38 @@ export function SubmitExpensePage() {
     }
 
     setSubmitting(true);
-    try {
-      await submitExpense({
-        projectID: form.projectID,
-        vendorName: form.vendorName.trim(),
-        amount: Number(form.amount),
-        receiptDate: form.receiptDate,
-        category: form.category,
-        receiptImageURL: form.receiptImageURL,
-        birNumber: form.birNumber.trim() || undefined,
-        tin: form.tin.trim() || undefined,
-        birPermitNumber: form.birPermitNumber.trim() || undefined,
-        lineItems: form.lineItems
-          .filter((item) => item.description.trim())
-          .map((item) => ({
-            description: item.description.trim(),
-            amount: Number(item.amount),
-            quantity: item.quantity === "" ? 1 : Number(item.quantity),
-          })),
-      });
-      navigate("/expenses", { replace: true });
-    } catch (err) {
-      setFormError(extractErrorMessage(err, "Couldn't submit the expense. Please try again."));
-    } finally {
-      setSubmitting(false);
-    }
+      try {
+        const payload = {
+          projectID: form.projectID,
+          vendorName: form.vendorName.trim(),
+          amount: Number(form.amount),
+          receiptDate: form.receiptDate,
+          category: form.category,
+          receiptImageURL: form.receiptImageURL,
+          birNumber: form.birNumber.trim() || undefined,
+          tin: form.tin.trim() || undefined,
+          birPermitNumber: form.birPermitNumber.trim() || undefined,
+          lineItems: form.lineItems
+            .filter((item) => item.description.trim())
+            .map((item) => ({
+              description: item.description.trim(),
+              amount: Number(item.amount),
+              quantity: item.quantity === "" ? 1 : Number(item.quantity),
+            })),
+        };
+
+        if (resubmitId) {
+          await resubmitExpense(resubmitId, payload);
+        } else {
+          await submitExpense(payload);
+        }
+
+        navigate("/expenses", { replace: true });
+      } catch (err) {
+        setFormError(extractErrorMessage(err, "Couldn't submit the expense. Please try again."));
+      } finally {
+        setSubmitting(false);
+      }
   }
 
   return (
@@ -194,10 +234,20 @@ export function SubmitExpensePage() {
       <Link to="/expenses" className="form-back-link">Back to Expenses</Link>
       <div className="submit-expense-heading">
         <div>
-          <h1 className="submit-expense-title">Submit Expense</h1>
-          <p className="submit-expense-subtitle">Upload a receipt, review the extracted details, and send the expense for review.</p>
+          <h1 className="submit-expense-title">{resubmitId ? "Correct Expense" : "Submit Expense"}</h1>
+          <p className="submit-expense-subtitle">
+            {resubmitId
+              ? "Correct the rejected receipt, then send it back to the PM review queue."
+              : "Upload a receipt, review the extracted details, and send the expense for review."}
+          </p>
         </div>
       </div>
+
+      {resubmitId && rejectionReason && (
+        <Banner tone="error" title="PM rejection reason">
+          {rejectionReason}
+        </Banner>
+      )}
 
       <Card className="submit-expense-card">
         <form onSubmit={handleSubmit} noValidate>

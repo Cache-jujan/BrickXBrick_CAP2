@@ -20,6 +20,8 @@ import { CreateTicketPage } from "./pages/Tickets/CreateTicketPage";
 import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
 import { SubmitExpensePage } from "./pages/Expenses/SubmitExpensePage";
+import { MyExpensesPage } from "./pages/Expenses/MyExpensesPage";
+
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
@@ -122,19 +124,33 @@ export default function App() {
             <Route
               path="/expenses"
               element={
-                <RoleRoute allow={WEB_BROADCAST_ROLES}>
-                  <ExpensesPage />
+                <RoleRoute
+                  allow={[
+                    "General Manager",
+                    "Project Manager",
+                    "Purchaser",
+                  ]}
+                >
+                  <ExpensesHome />
                 </RoleRoute>
               }
             />
+
             <Route
               path="/expenses/new"
               element={
-                <RoleRoute allow={WEB_BROADCAST_ROLES}>
+                <RoleRoute
+                  allow={[
+                    "General Manager",
+                    "Project Manager",
+                    "Purchaser",
+                  ]}
+                >
                   <SubmitExpensePage />
                 </RoleRoute>
               }
             />
+
             <Route
               path="/admin/users"
               element={
@@ -183,4 +199,12 @@ function RootRedirect() {
     "System Administrator": "/dashboard/admin",
   };
   return <Navigate to={dashboards[user.role] || "/login"} replace />;
+}
+
+function ExpensesHome() {
+  const { user } = useAuth();
+
+  return user?.role === "Purchaser"
+    ? <MyExpensesPage />
+    : <ExpensesPage />;
 }
