@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { listMyExpenses } from "../../api/expensesApi";
 import { extractErrorMessage } from "../../api/client";
 import { Badge } from "../../components/ui/Badge";
@@ -28,9 +27,7 @@ export function MyExpensesPage() {
     listMyExpenses()
       .then(setExpenses)
       .catch((err) =>
-        setError(
-          extractErrorMessage(err, "Could not load your expenses.")
-        )
+        setError(extractErrorMessage(err, "Could not load your expenses."))
       )
       .finally(() => setLoading(false));
   }, []);
@@ -39,29 +36,19 @@ export function MyExpensesPage() {
     <div className="my-expenses-page">
       <div className="my-expenses-heading">
         <div>
-          <p className="my-expenses-eyebrow">
-            PURCHASER WORKSPACE
-          </p>
-
+          <p className="my-expenses-eyebrow">PURCHASER WORKSPACE</p>
           <h1>My Expenses</h1>
-
           <p className="my-expenses-subtitle">
-            Track review decisions and correct rejected expenses
-            before sending them back to the PM queue.
+            Track PM review decisions on your submitted receipts. Rejected
+            expenses are corrected and resubmitted from the mobile app.
           </p>
         </div>
-
-        <Link to="/expenses/new" className="btn btn-primary">
-          Submit Expense
-        </Link>
       </div>
 
       {error && <Banner tone="error" title={error} />}
 
       {!error && loading && (
-        <p className="dashboard-loading">
-          Loading your expenses…
-        </p>
+        <p className="dashboard-loading">Loading your expenses...</p>
       )}
 
       {!error && !loading && expenses.length === 0 && (
@@ -80,7 +67,7 @@ export function MyExpensesPage() {
                   <th>Amount</th>
                   <th>Receipt date</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th>Next step</th>
                 </tr>
               </thead>
 
@@ -89,14 +76,11 @@ export function MyExpensesPage() {
                   <tr key={expense.expenseID}>
                     <td>
                       <strong>{expense.vendorName}</strong>
-
-                      {expense.status === "Rejected" &&
-                        expense.rejectionReason && (
-                          <p className="my-expenses-reason">
-                            <strong>PM note:</strong>{" "}
-                            {expense.rejectionReason}
-                          </p>
-                        )}
+                      {expense.status === "Rejected" && expense.rejectionReason && (
+                        <p className="my-expenses-reason">
+                          <strong>PM note:</strong> {expense.rejectionReason}
+                        </p>
+                      )}
                     </td>
 
                     <td>{PESO.format(expense.amount)}</td>
@@ -104,7 +88,7 @@ export function MyExpensesPage() {
                     <td>
                       {expense.receiptDate
                         ? DATE.format(new Date(expense.receiptDate))
-                        : "—"}
+                        : "-"}
                     </td>
 
                     <td>
@@ -113,14 +97,10 @@ export function MyExpensesPage() {
 
                     <td className="my-expenses-action-cell">
                       {expense.status === "Rejected" && (
-                        <Link
-                          className="btn btn-secondary btn-small"
-                          to={`/expenses/new?resubmit=${expense.expenseID}`}
-                        >
-                          Correct &amp; resubmit
-                        </Link>
+                        <span className="my-expenses-waiting">
+                          Correct and resubmit in the mobile app
+                        </span>
                       )}
-
                       {expense.status === "Pending" && (
                         <span className="my-expenses-waiting">
                           Waiting for PM review

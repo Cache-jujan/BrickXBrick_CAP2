@@ -141,13 +141,7 @@ export default function App() {
             <Route
               path="/expenses/new"
               element={
-                <RoleRoute
-                  allow={[
-                    "General Manager",
-                    "Project Manager",
-                    "Purchaser",
-                  ]}
-                >
+                <RoleRoute allow={WEB_BROADCAST_ROLES}>
                   <SubmitExpensePage />
                 </RoleRoute>
               }
