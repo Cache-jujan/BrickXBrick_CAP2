@@ -32,7 +32,7 @@ export function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [tab, setTab] = useState("Pending");
+  const [tab, setTab] = useState(user.role === "Project Manager" ? "Flagged" : "Pending");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState(null);
@@ -177,10 +177,16 @@ export function ExpensesPage() {
     <div className="expenses-page">
       <div className="expenses-header spread">
         <div>
-          <h1>Expenses</h1>
-          <p className="expenses-subtitle">
-            Review submitted expenses. Approving an expense records its hash on the blockchain.
-          </p>
+          <h1>
+            {user.role === "Project Manager"
+              ? "PM Fraud Review Queue"
+              : "Expenses"}
+          </h1>
+            <p className="expenses-subtitle">
+              {user.role === "Project Manager"
+                ? "Review F9 fraud flags, request corrections, or approve expenses for your projects."
+                : "Review submitted expenses. Approving an expense records its hash on the blockchain."}
+            </p>
         </div>
         <Link to="/expenses/new" className="btn btn-primary">
           Submit Expense

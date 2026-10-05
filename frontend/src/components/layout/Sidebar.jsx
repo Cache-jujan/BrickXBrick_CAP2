@@ -56,7 +56,19 @@ const NAV_BY_ROLE = {
     { to: "/dashboard/sm", label: "Dashboard", icon: GridIcon },
     { to: "/tickets/new", label: "Create Ticket", icon: TicketIcon },
   ],
-  Purchaser: [{ to: "/dashboard/purchaser", label: "Dashboard", icon: GridIcon }],
+  Purchaser: [
+  {
+    to: "/dashboard/purchaser",
+    label: "Dashboard",
+    icon: GridIcon,
+  },
+  {
+    to: "/expenses",
+    label: "My Expenses",
+    icon: ReceiptIcon,
+  },
+],
+
   "System Administrator": [
     { to: "/dashboard/admin", label: "Dashboard", icon: GridIcon },
     { to: "/admin/users", label: "User Accounts", icon: UsersIcon },
