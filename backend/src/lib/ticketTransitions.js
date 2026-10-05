@@ -26,4 +26,15 @@ function assertLegalTransition(currentStatus, targetStatus) {
     }
 }
 
-module.exports = { assertLegalTransition, ALLOWED_TRANSITIONS};
+// Writes one ticket_status_transitions row. Takes the transaction's client so
+// the log row commits or rolls back together with the status change.
+// Shared by routes/tickets.js and routes/allocations.js (F8).
+async function logTransition(client, { ticketId, fromStatus, toStatus, changedBy }) {
+    await client.query(
+        `INSERT INTO ticket_status_transitions (ticketId, fromStatus, toStatus, changedBy)
+         VALUES ($1, $2, $3, $4)`,
+        [ticketId, fromStatus, toStatus, changedBy]
+    );
+}
+
+module.exports = { assertLegalTransition, logTransition, ALLOWED_TRANSITIONS};

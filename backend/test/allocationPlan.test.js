@@ -162,3 +162,9 @@ test("over-budget portions produce a warning but do not block the plan", () => {
   assert.equal(result.portions[0].overBudget, true);
   assert.equal(result.portions[1].overBudget, false); // no budget given: not checked
 });
+
+test("default matcher is F9's matchesMaterial (no fake passed)", () => {
+  const result = planAllocation([cement(60, 16800), delivery], cementTickets());
+  assert.equal(result.ok, true);
+  assert.equal(result.portions.length, 3);
+});

@@ -7,13 +7,10 @@
 //
 // Units: centavos for money, hundredths for quantity (see allocationValidation.js).
 
-const { parseAllocationLines, httpError } = require("./allocationValidation");
+const { parseAllocationLines, httpError, formatMoney } = require("./allocationValidation");
 
-// Jan's shared matcher (F9). Required lazily so this file still loads, and its
-// tests still run with a fake matcher, before materialMatch.js is on develop.
-function defaultMatcher(description, materialType) {
-  return require("./materialMatch").matchesMaterial(description, materialType);
-}
+// One matching rule shared with F9 Layer 3 (Jan's helper). Tests inject a fake.
+const { matchesMaterial } = require("./materialMatch");
 
 // DECIMAL columns come back from node-postgres as strings ("20.00").
 // Number() first, then round to whole hundredths / centavos.
@@ -62,7 +59,7 @@ function proportionalCents(lineCents, pieceQtyH, lineQtyH) {
  *
  * Returns { ok, portions, uncovered, unmatched, allocatedCents, linesCents, warnings }
  */
-function planAllocation(lineItems, openTickets, options = {}, matches = defaultMatcher) {
+function planAllocation(lineItems, openTickets, options = {}, matches = matchesMaterial) {
   // Step 1. Validate lines and convert to centavos / hundredths.
   const lines = parseAllocationLines(lineItems);
   const excluded = new Set((options.excludeTicketIDs || []).map((id) => String(id).toLowerCase()));
@@ -260,4 +257,44 @@ function describePlanProblems(plan) {
   return problems;
 }
 
-module.exports = { planAllocation, describePlanProblems, compareTickets };
+// Plan -> API response: centavos become peso strings ("6100.00", the same
+// shape Postgres DECIMAL columns return) and hundredths become numbers.
+function presentPlan(plan) {
+  const peso = (cents) => (cents === null || cents === undefined ? null : formatMoney(cents));
+  const qty = (quantityH) => quantityH / 100;
+  const presentLine = (line) => ({
+    lineIndex: line.lineIndex,
+    description: line.description,
+    quantity: qty(line.quantityH),
+    amount: peso(line.amountCents),
+  });
+  return {
+    ok: plan.ok,
+    problems: describePlanProblems(plan),
+    portions: plan.portions.map((portion) => ({
+      ticketID: portion.ticketID,
+      projectID: portion.projectID,
+      projectName: portion.projectName,
+      materialType: portion.materialType,
+      quantity: qty(portion.quantityH),
+      amount: peso(portion.amountCents),
+      remainingAfter: qty(portion.remainingAfterH),
+      resolvesTicket: portion.resolvesTicket,
+      remainingBudget: peso(portion.remainingBudgetCents),
+      overBudget: portion.overBudget,
+      lines: portion.lines.map(presentLine),
+    })),
+    uncovered: plan.uncovered.map(presentLine),
+    unmatched: plan.unmatched.map(presentLine),
+    allocated: peso(plan.allocatedCents),
+    linesTotal: peso(plan.linesCents),
+    warnings: plan.warnings.map((warning) => ({
+      type: warning.type,
+      ticketID: warning.ticketID,
+      amount: peso(warning.amountCents),
+      remainingBudget: peso(warning.remainingBudgetCents),
+    })),
+  };
+}
+
+module.exports = { planAllocation, describePlanProblems, presentPlan, compareTickets };
