@@ -14,9 +14,12 @@ import { useFocusEffect } from "expo-router";
 import {
   fetchAllAssignedTickets,
   fetchActiveProjects,
+  fetchOpenRequests,
+  type OpenRequest,
   type Ticket,
   type Project,
 } from "@/lib/api";
+import { formatQty } from "@/lib/money";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
@@ -35,7 +38,7 @@ function toBucket(
 }
 
 export default function HomeScreen() {
-  const { setTicket, reset } = useExpenseDraft();
+  const { setTicket, reset, startSplit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -45,6 +48,7 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<FilterKey>(isSiteManager ? "Completed" : "Pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -63,6 +67,15 @@ export default function HomeScreen() {
 
       setProjectsById(byId);
       setTickets(ticketList);
+
+      // F8 To-buy list (Purchaser only). A failure here must not hide the tickets.
+      if (!isSiteManager) {
+        try {
+          setOpenRequests(await fetchOpenRequests());
+        } catch {
+          setOpenRequests([]);
+        }
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -105,6 +118,27 @@ export default function HomeScreen() {
       (t) => toBucket(t.status) === "Completed"
     ).length,
   };
+
+  // To-buy list: open requests grouped by material (lowercased, trimmed).
+  const toBuy = Object.values(
+    openRequests.reduce<Record<string, { material: string; total: number; requests: number; projects: string[] }>>(
+      (groups, request) => {
+        const key = request.materialType.trim().toLowerCase();
+        const group = groups[key] ?? { material: request.materialType.trim(), total: 0, requests: 0, projects: [] };
+        group.total += Number(request.remainingQuantity);
+        group.requests += 1;
+        if (!group.projects.includes(request.projectName)) group.projects.push(request.projectName);
+        groups[key] = group;
+        return groups;
+      },
+      {}
+    )
+  );
+
+  function startSplitReceipt() {
+    startSplit();
+    router.push("/expense/capture");
+  }
 
   function openTicket(ticket: Ticket) {
     reset();
@@ -160,6 +194,34 @@ export default function HomeScreen() {
         data={visible}
         keyExtractor={(t) => t.ticketid}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          isSiteManager ? null : (
+            <View style={styles.toBuyBox}>
+              <View style={styles.toBuyHeader}>
+                <Text style={styles.toBuyTitle}>To buy</Text>
+                <Pressable onPress={startSplitReceipt} style={styles.splitBtn}>
+                  <Text style={styles.splitBtnText}>Split Receipt</Text>
+                </Pressable>
+              </View>
+              {toBuy.length === 0 ? (
+                <Text style={styles.cardMeta}>No open requests right now.</Text>
+              ) : (
+                toBuy.map((group) => (
+                  <View key={group.material.toLowerCase()} style={styles.toBuyRow}>
+                    <Text style={styles.toBuyLine}>
+                      {group.material} · {formatQty(group.total)} · {group.requests} {group.requests === 1 ? "request" : "requests"}
+                    </Text>
+                    <View style={styles.projectTags}>
+                      {group.projects.map((name) => (
+                        <Text key={name} style={styles.projectTag}>{name}</Text>
+                      ))}
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )
+        }
         refreshControl={
           <RefreshControl
             refreshing={loading}
@@ -372,6 +434,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: COLORS.primary,
+  },
+
+  toBuyBox: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    marginBottom: 6,
+  },
+
+  toBuyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+
+  toBuyTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.heading,
+  },
+
+  splitBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+
+  splitBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+
+  toBuyRow: {
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+
+  toBuyLine: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.heading,
+  },
+
+  projectTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+
+  projectTag: {
+    fontSize: 10,
+    color: COLORS.muted,
+    backgroundColor: COLORS.bg,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
 
   completedBadge: {

@@ -201,3 +201,111 @@ export async function submitExpense(body: ExpenseSubmission) {
 
   return data;
 }
+
+// ---- F8 split receipt ------------------------------------------------------
+
+// Error that keeps the server's `details` (e.g. which lines aren't covered).
+export class ApiError extends Error {
+  status: number;
+  details: any;
+  constructor(message: string, status: number, details?: any) {
+    super(message);
+    this.status = status;
+    this.details = details;
+  }
+}
+
+async function readJson(res: Response, fallback: string) {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || `${fallback} (${res.status})`, res.status, data.details);
+  return data;
+}
+
+export type OpenRequest = {
+  ticketID: string;
+  projectID: string;
+  projectName: string;
+  subject: string;
+  materialType: string;
+  vendorName: string | null;
+  requestedQuantity: number;
+  remainingQuantity: number;
+  approvedBudget: number | null;
+  remainingBudget: number | null;
+  createdAt: string;
+};
+
+export type SplitLine = { description: string; quantity: number; amount: number };
+
+export type PlanLine = { lineIndex: number; description: string; quantity: number; amount: string };
+
+export type PlanPortion = {
+  ticketID: string;
+  projectID: string;
+  projectName: string;
+  materialType: string;
+  quantity: number;
+  amount: string;
+  remainingAfter: number;
+  resolvesTicket: boolean;
+  remainingBudget: string | null;
+  overBudget: boolean;
+  lines: PlanLine[];
+};
+
+export type AllocationPlan = {
+  ok: boolean;
+  problems: string[];
+  portions: PlanPortion[];
+  uncovered: PlanLine[];
+  unmatched: PlanLine[];
+  allocated: string;
+  linesTotal: string;
+  warnings: { type: string; ticketID: string; amount: string; remainingBudget: string }[];
+};
+
+export type PlanOptions = { excludeTicketIDs: string[]; feeTargets: Record<string, string> };
+
+export type AllocationSubmission = PlanOptions & {
+  receiptImageURL: string;
+  vendorName: string | null;
+  receiptDate: string | null;
+  category: "Materials" | "Equipment" | "Other";
+  tin?: string | null;
+  birPermitNumber?: string | null;
+  birNumber?: string | null;
+  receiptTotal: number;
+  lineItems: SplitLine[];
+};
+
+export type AllocationResult = {
+  commonReceiptID: string;
+  expenses: { expenseID: string; projectID: string; ticketID: string; amount: string; quantity: string }[];
+  resolvedTicketIDs: string[];
+  stillOpenTicketIDs: string[];
+  warnings: AllocationPlan["warnings"];
+  screening: Record<string, { flagTypes: string[] | null; error?: string }>;
+};
+
+export async function fetchOpenRequests(): Promise<OpenRequest[]> {
+  const res = await fetch(`${API_URL}/api/allocations/open-requests`, { headers: authHeaders() });
+  return readJson(res, "Failed to load open requests");
+}
+
+export async function previewAllocation(lineItems: SplitLine[], options: PlanOptions): Promise<AllocationPlan> {
+  const res = await fetch(`${API_URL}/api/allocations/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ lineItems, ...options }),
+  });
+  return readJson(res, "Failed to preview the split");
+}
+
+export async function submitAllocation(body: AllocationSubmission): Promise<AllocationResult> {
+  const res = await fetch(`${API_URL}/api/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  return readJson(res, "Failed to submit the split");
+}
