@@ -439,33 +439,36 @@ export function ProjectDetailPage() {
           </div>
         </div>
 
-          {chainSummary.logs.length === 0 ? (
-            <Banner tone="empty" title="No blockchain records yet">
-              Records appear here once an approved expense is confirmed on the blockchain.
-            </Banner>
-          ) : (
-            <Card className="users-table-card">
-              <div className="table-scroll">
-                <table className="users-table project-detail-table">
-                  <thead>
-                    <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
-                  </thead>
-                  <tbody>
-                    {chainSummary.logs.map((log) => (
-                      <tr key={log.txhash}>
-                        <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
-                        <td>{log.blocknumber}</td>
-                        <td>{log.validatornodecount}</td>
-                        <td>{DATETIME.format(new Date(log.timestamp))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+          {chainError && <Banner tone="error" title={chainError} />}
+          {!chainError && chainLoading && <p className="dashboard-loading">Loading blockchain audit data…</p>}
+          {!chainError && !chainLoading && chainSummary && (
+            chainSummary.logs.length === 0 ? (
+              <Banner tone="empty" title="No blockchain records yet">
+                Records appear here once an approved expense is confirmed on the blockchain.
+              </Banner>
+            ) : (
+              <Card className="users-table-card">
+                <div className="table-scroll">
+                  <table className="users-table project-detail-table">
+                    <thead>
+                      <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
+                    </thead>
+                    <tbody>
+                      {chainSummary.logs.map((log) => (
+                        <tr key={log.txhash}>
+                          <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
+                          <td>{log.blocknumber}</td>
+                          <td>{log.validatornodecount}</td>
+                          <td>{DATETIME.format(new Date(log.timestamp))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
           )}
-        </>
-      )}
+      </section>
       {rejecting && (
         <div className="modal-overlay" role="presentation" onClick={closeReject}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>
