@@ -9,12 +9,21 @@ const multer = require("multer");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { query } = require("../lib/db");
-const { extractTextFromImage } = require("../lib/visionClient");
+const { extractTextAndWords } = require("../lib/visionClient");
+const { lineItemsFromWords } = require("../lib/layoutLineItems");
 const { storeReceiptImage, isAllowedMime } = require("../lib/receiptStorage");
 const { parseReceiptText } = require("../lib/parser");
 const { toExpenseDraft, classifyBir, applyVendorMaster } = require("../lib/receiptFields");
 
 const router = express.Router();
+
+// Cross-check: line items that don't add up to the total need a human look.
+function lineItemsConfidence(draft) {
+  if (!draft.lineItems.length || draft.amount === null) return "low";
+  const cents = (n) => Math.round(Number(n) * 100);
+  const sum = draft.lineItems.reduce((s, item) => s + cents(item.amount), 0);
+  return sum === cents(draft.amount) ? "medium" : "low";
+}
 
 async function findVendorMasterRecord(vendorName) {
   if (!vendorName) return null;
@@ -75,9 +84,10 @@ router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager",
     const receiptImageURL = await storeReceiptImage(req.file.buffer, req.file.mimetype);
 
     let rawText = "";
+    let words = [];
     let ocrError = null;
     try {
-      rawText = await extractTextFromImage(req.file.buffer);
+      ({ text: rawText, words } = await extractTextAndWords(req.file.buffer));
     } catch (err) {
       // Vision being down shouldn't kill the submission path. Return an
       // empty draft plus the stored URL and let the user type the fields.
@@ -86,12 +96,24 @@ router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager",
     }
 
     const parsed = parseReceiptText(rawText);
+    // Line items from the table layout (word positions) beat the single-line
+    // regex on real receipts (scripts/ocr-eval). Falls back to the regex when
+    // no table header is found. OCR_LAYOUT_LINE_ITEMS=0 turns it off.
+    if (process.env.OCR_LAYOUT_LINE_ITEMS !== "0") {
+      try {
+        const fromLayout = lineItemsFromWords(words);
+        if (fromLayout) parsed.lineItems = fromLayout;
+      } catch (err) {
+        console.error("Layout line-item extraction failed; using text parser:", err);
+      }
+    }
     const ocrDraft = toExpenseDraft(parsed);
     const vendorMaster = await findVendorMasterRecord(ocrDraft.vendorName);
     // Vendor master values are the trusted vendor identity. OR/SI remains
     // receipt-specific and is never copied from the master list.
     const { draft, autoFilled, vendorConflicts } = applyVendorMaster(ocrDraft, vendorMaster);
     const { birValidationStatus, missingBirFields } = classifyBir(draft);
+    const confidence = { ...parsed.confidence, lineItems: lineItemsConfidence(draft) };
 
     res.json({
       ...draft,
@@ -101,7 +123,7 @@ router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager",
       vendorMasterMatch: vendorMaster,
       autoFilled,
       vendorConflicts,
-      confidence: parsed.confidence,
+      confidence,
       ocrError,
       // Raw OCR text is receipt data; only echo it when debugging the parser.
       ...(process.env.OCR_DEBUG_RAWTEXT === "1" ? { rawText } : {}),
