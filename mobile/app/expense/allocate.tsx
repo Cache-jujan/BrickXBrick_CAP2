@@ -17,6 +17,8 @@ import {
 } from "@/lib/api";
 import { formatPeso, formatQty } from "@/lib/money";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { FlowHeader } from "@/components/flow-header";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -158,9 +160,8 @@ export default function AllocateScreen() {
     const notScreened = screening.filter((s) => s.flagTypes === null).length;
     return (
       <SafeAreaView style={styles.safeArea}>
+        <FlowHeader title="Submitted for approval" caption="Split receipt" hideBack />
         <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.subtitle}>Split receipt</Text>
-          <Text style={styles.title}>Submitted for approval</Text>
           <Text style={styles.body}>{result.expenses.length} expenses were created from one receipt.</Text>
 
           <Text style={styles.sectionTitle}>Completed requests</Text>
@@ -197,9 +198,8 @@ export default function AllocateScreen() {
   // ---- Preview -------------------------------------------------------------
   return (
     <SafeAreaView style={styles.safeArea}>
+      <FlowHeader title="Allocate to requests" caption="Split receipt · Step 3 of 3" />
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.subtitle}>Split receipt · Step 3 of 3</Text>
-        <Text style={styles.title}>Allocate to Requests</Text>
 
         {loading && <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 12 }} />}
         {error && (
@@ -328,15 +328,14 @@ export default function AllocateScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <LoadingOverlay visible={submitting} message="Submitting split…" detail="Creating one expense per request." />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  container: { padding: 20, paddingBottom: 40 },
-  subtitle: { fontSize: 12, color: COLORS.muted },
-  title: { fontSize: 20, fontWeight: "800", color: COLORS.heading, marginBottom: 14 },
+  container: { paddingHorizontal: 16, paddingBottom: 40 },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: COLORS.heading, marginTop: 12, marginBottom: 8 },
   body: { fontSize: 13, color: COLORS.heading, marginBottom: 4 },
   muted: { fontSize: 12, color: COLORS.muted },
