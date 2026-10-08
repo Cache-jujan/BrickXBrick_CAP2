@@ -16,6 +16,7 @@ const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
 const { canonicalizeExpense, submitHashWithTimeout, getOnChainHash } = require("./lib/blockchainService");
+const { tamperMessage } = require("./lib/tamperAlerts");
 const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
 
@@ -128,7 +129,7 @@ async function scanForTampering() {
                     [expense.expenseid]
                 );
 
-                const message = `Tamper detected: expense "${expense.vendorname}" (₱${expense.amount}) — ${reason}.`;
+                const message = tamperMessage(expense, onChainHash);
 
                 const admins = await query(
                     "SELECT userid FROM users WHERE role = 'System Administrator' AND status = 'Active'"

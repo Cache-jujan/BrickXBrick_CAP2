@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { scanReceipt, submitExpense } from "../../api/expensesApi";
 import { listExpenseLinkableTickets } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
@@ -9,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import "./SubmitExpensePage.css";
+import { BackLink } from "../../components/ui/BackLink";
 
 const EMPTY_DRAFT = {
   vendorName: "",
@@ -250,7 +250,7 @@ export function SubmitExpensePage() {
     <div className="submit-expense-page">
       <div className="submit-expense-header">
         <div>
-          <Link className="submit-expense-back" to="/expenses">← Back to expenses</Link>
+          <BackLink to="/expenses">Back to expenses</BackLink>
           <h1>Submit Expense</h1>
           <p className="submit-expense-subtitle">
             Upload a receipt, verify its details, and link it to a resolved procurement ticket.
