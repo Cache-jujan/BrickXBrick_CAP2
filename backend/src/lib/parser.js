@@ -148,7 +148,8 @@ function hasIssuedContext(text, matchIndex) {
   return /issued/i.test(before);
 }
 
-function extractDate(text) {
+// `now` is injectable so tests don't depend on today's date.
+function extractDate(text, now = new Date()) {
   const monthNamePattern =
     /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\s*\.?\s*(\d{1,2}),?\s*(\d{2,4})/gi;
   const dayFirstPattern =
@@ -174,15 +175,34 @@ function extractDate(text) {
     });
   }
   for (const m of text.matchAll(numericPattern)) {
+    // Philippine receipts write M/D/Y. When the first number can't be a
+    // month (e.g. 25/8/26) read it as D/M/Y instead.
+    let [month, day] = [m[1], m[2]];
+    if (Number(month) > 12 && Number(day) <= 12) [month, day] = [day, month];
     candidates.push({
-      value: `${normalizeYear(m[3])}-${pad2(m[1])}-${pad2(m[2])}`,
+      value: `${normalizeYear(m[3])}-${pad2(month)}-${pad2(day)}`,
       issued: hasIssuedContext(text, m.index),
     });
   }
 
-  if (candidates.length === 0) return null;
-  const preferred = candidates.find((c) => !c.issued);
-  return (preferred || candidates[0]).value;
+  // Drop impossible dates (month 25, Feb 30), years before 2000 and dates
+  // more than a day in the future.
+  const latest = now.getTime() + 24 * 60 * 60 * 1000;
+  const valid = candidates.filter((c) => isRealDate(c.value) && c.value >= "2000-01-01" && Date.parse(`${c.value}T00:00:00Z`) <= latest);
+  if (valid.length === 0) return null;
+
+  // Printer accreditation and ATP "Date Issued" lines are always older than
+  // the sale, and photos often catch another pad's dates in the background.
+  // So among the non-"issued" dates, the most recent one is the sale date.
+  const pool = valid.filter((c) => !c.issued);
+  const ranked = (pool.length ? pool : valid).map((c) => c.value).sort();
+  return ranked[ranked.length - 1];
+}
+
+function isRealDate(iso) {
+  const [y, mo, d] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d;
 }
 
 // ---------------------------------------------------------------------
@@ -277,12 +297,21 @@ function extractTIN(text) {
 // mark it low confidence even on a "successful" match.
 
 function extractBirPermit(text) {
+  // Authority to Print (ATP) numbers: "Authority to Print No.: 080AU2023...",
+  // "BIR ATP OCN: 080AU...", or just "OCN: 080AU...". Preferred over a
+  // loose-leaf / PTU permit because VendorMasterList stores the ATP.
+  const atpPattern = /(?:authority\s*to\s*print\s*(?:no\.?)?|atp\s*(?:ocn|no\.?)?|ocn)\s*:?\s*(\d{3}\s?AU\s?\d{6,})/i;
+  const atp = text.match(atpPattern);
+  if (atp) {
+    return { value: atp[1].replace(/\s+/g, ""), type: "ATP", confidence: "medium" };
+  }
   const permitPattern = /(?:bir\s*permit\s*(?:no\.?)?|permit\s*(?:to\s*use\s*)?no\.?|ptu\s*no\.?)\s*:?\s*([A-Za-z0-9\-]{4,})/i;
   const match = text.match(permitPattern);
   if (match) {
-    return { value: match[1], confidence: "low" }; // always flag for human check
+    const type = /ptu|to\s*use/i.test(match[0]) ? "PTU" : "Permit";
+    return { value: match[1], type, confidence: "low" }; // always flag for human check
   }
-  return { value: null, confidence: "low" };
+  return { value: null, type: null, confidence: "low" };
 }
 
 // ---------------------------------------------------------------------
@@ -416,6 +445,7 @@ function parseReceiptText(rawText) {
     storeName: vendorName,
     tin: tin.value,
     birPermitNumber: birPermitNumber.value,
+    birPermitType: birPermitNumber.type,
     orSiNumber: orSiNumber.value,
     amount: totalAmount !== null ? String(totalAmount) : null,
     date: receiptDate,

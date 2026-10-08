@@ -1,0 +1,9 @@
+{
+  "_note": "Ground truth for the 6 saved receipts in receipt-img/. Only fields readable with certainty are listed; a field that is absent is not scored. null means the receipt has no such field (the parser should return null). Line items: count and sum of line amounts.",
+  "1": { "vendorName": "Padeena Enterprises", "tin": "180-400-144-00000", "birPermitNumber": "080AU20230000001328", "birNumber": "598127", "receiptDate": "2025-06-03" },
+  "2": { "vendorName": "Cebu Atlantic Hardware", "tin": "235-777-645-00000", "birPermitNumber": "080AU20250000013069", "birNumber": "096493", "receiptDate": "2026-07-15", "amount": 9987.00, "lineItemCount": 2, "lineItemSum": 9987.00 },
+  "3": { "tin": null, "birNumber": "44181", "receiptDate": "2026-06-05", "amount": 11700, "lineItemCount": 3, "lineItemSum": 11700 },
+  "4": { "vendorName": "Cebu Home and Builders Centre", "tin": "000-177-760-017", "receiptDate": "2026-07-01", "amount": 13837.00 },
+  "5": { "vendorName": "Krislee Enterprises", "tin": "135-507-978-00000", "birPermitNumber": "080AU20260000000567", "birNumber": "1171759", "receiptDate": "2026-08-25", "amount": 300, "lineItemCount": 1, "lineItemSum": 300 },
+  "6": { "vendorName": null, "tin": null, "receiptDate": "2026-07-24", "amount": 8950, "lineItemCount": 5, "lineItemSum": 8950 }
+}

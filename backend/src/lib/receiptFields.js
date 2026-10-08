@@ -88,7 +88,7 @@ function toExpenseDraft(parsed) {
     receiptDate: parsed.date,
     amount: Number.isFinite(amount) ? amount : null,
     tin: parsed.tin,
-    birPermitType: null,
+    birPermitType: parsed.birPermitType || null,
     birPermitNumber: parsed.birPermitNumber,
     birNumber: parsed.orSiNumber, // <- the name bridge
     lineItems,
