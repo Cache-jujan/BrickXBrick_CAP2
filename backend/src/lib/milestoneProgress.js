@@ -35,7 +35,7 @@ async function recalcMilestoneProgress(client, milestoneId) {
         : tasks.reduce((sum, t) => sum + Number(t.completionpercentage), 0) / tasks.length;
 
     const milestoneResult = await client.query(
-        "SELECT milestoneId, projectId, dueDate, status FROM milestones WHERE milestoneId = $1",
+        "SELECT milestoneId, projectId, name, dueDate, status FROM milestones WHERE milestoneId = $1",
         [milestoneId]
     );
     if (milestoneResult.rowCount === 0) {
@@ -77,7 +77,7 @@ async function recalcMilestoneProgress(client, milestoneId) {
                 [
                     project.projectmanagerid,
                     milestoneId,
-                    `Milestone on project "${project.name}" is now ${newStatus} — due ${new Date(milestone.duedate).toDateString()}.`,
+                    `Milestone "${milestone.name}" on project "${project.name}" is now ${newStatus} — due ${new Date(milestone.duedate).toDateString()}.`,
                 ]
             );
         }
@@ -86,4 +86,47 @@ async function recalcMilestoneProgress(client, milestoneId) {
     return { completionPercentage, status: newStatus };
 }
 
-module.exports = { recalcMilestoneProgress, deriveStatus };
+// Time-based variance detection (D-01, D-08): nothing re-derives status or
+// fires a task-level alert just because a due date passed — recalc only
+// ever runs from task-create or Acknowledge. Call this on a timer (see
+// server.js) to catch milestones/tasks that go stale with no activity.
+// Milestone-level: reuses recalcMilestoneProgress/deriveStatus as-is
+// (UC-03-01, "within 3 days of due and not 100%").
+// Task-level (UC-05-01): narrower on purpose — tasks are binary, so "behind
+// its target due date" just means overdue and not Completed. One alert per
+// task, guarded by tasks.scheduleVarianceAlertSent.
+async function sweepScheduleVariance(client) {
+    const milestones = await client.query(
+        "SELECT milestoneId FROM milestones WHERE status <> 'Completed'"
+    );
+    for (const m of milestones.rows) {
+        await recalcMilestoneProgress(client, m.milestoneid);
+    }
+
+    const overdueTasks = await client.query(
+        `SELECT t.taskId, t.taskName, t.dueDate, p.projectManagerId, p.name AS projectName
+           FROM tasks t
+           JOIN milestones m ON m.milestoneId = t.milestoneId
+           JOIN projects p ON p.projectId = m.projectId
+          WHERE t.status <> 'Completed'
+            AND t.scheduleVarianceAlertSent = FALSE
+            AND t.dueDate < CURRENT_DATE`
+    );
+    for (const t of overdueTasks.rows) {
+        await client.query(
+            `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+             VALUES ($1, 'ScheduleVarianceAlert', 'Task', $2, $3)`,
+            [
+                t.projectmanagerid,
+                t.taskid,
+                `Task "${t.taskname}" on project "${t.projectname}" is overdue — due ${new Date(t.duedate).toDateString()}.`,
+            ]
+        );
+        await client.query(
+            "UPDATE tasks SET scheduleVarianceAlertSent = TRUE WHERE taskId = $1",
+            [t.taskid]
+        );
+    }
+}
+
+module.exports = { recalcMilestoneProgress, deriveStatus, sweepScheduleVariance };

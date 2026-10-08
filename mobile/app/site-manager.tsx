@@ -157,6 +157,9 @@ export default function SiteManagerHomeScreen() {
 
 function TaskCard({ task }: { task: AssignedTask }) {
   const completed = task.status === "Completed";
+  // D-04: the SM previously had no way to see that a submission was
+  // flagged — a flag only lived in the log row, never surfaced here.
+  const flagged = task.latestreviewstatus === "Flagged";
   const dueDate = new Date(task.duedate);
   const formattedDueDate = Number.isNaN(dueDate.getTime())
     ? task.duedate
@@ -172,6 +175,14 @@ function TaskCard({ task }: { task: AssignedTask }) {
         <Text style={styles.taskDue}>Due {formattedDueDate}</Text>
       </View>
       <Text style={styles.taskName}>{task.taskname}</Text>
+      {task.projectname && (
+        <Text style={styles.taskProject}>{task.projectname} &middot; {task.milestonename}</Text>
+      )}
+      {flagged && (
+        <View style={styles.flagPill}>
+          <Text style={styles.flagPillText}>Flagged — resubmission needed</Text>
+        </View>
+      )}
       <View style={styles.taskBottomRow}>
         <Text style={styles.taskProgress}>{Number(task.completionpercentage || 0)}% complete</Text>
         <View style={[styles.statusPill, completed && styles.statusPillCompleted]}>
@@ -209,6 +220,9 @@ const styles = StyleSheet.create({
   taskStatus: { color: COLORS.primary, fontSize: 10, fontWeight: "800", letterSpacing: 1.1 },
   taskDue: { color: COLORS.muted, fontSize: 12 },
   taskName: { color: COLORS.heading, fontSize: 16, fontWeight: "800", lineHeight: 22, marginTop: 10 },
+  taskProject: { color: COLORS.muted, fontSize: 12, fontWeight: "600", marginTop: 4 },
+  flagPill: { alignSelf: "flex-start", backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 10, borderWidth: 1, marginTop: 10, paddingHorizontal: 10, paddingVertical: 5 },
+  flagPillText: { color: "#B42318", fontSize: 11, fontWeight: "800" },
   taskBottomRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
   taskProgress: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
   statusPill: { backgroundColor: "#FFF0E6", borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5 },

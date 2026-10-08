@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check src/server.js)",
+      "Bash(node --check src/routes/projects.js)",
+      "Bash(node --check src/routes/milestones.js)",
+      "Bash(node --check src/lib/milestoneProgress.js)",
+      "Bash(find mobile *)",
+      "Bash(find mobile/app -maxdepth 3 -type d)",
+      "Bash(node --check src/routes/tasks.js)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(node --check src/lib/reassignSiteManager.js)",
+      "Bash(node --check src/lib/photoValidation.js)",
+      "Bash(node --test test/photoValidation.test.js test/reassignSiteManager.test.js test/milestoneProgress.test.js)",
+      "Bash(node --test test)",
+      "Bash(node --test)",
+      "Bash(node --test \"test/*.test.js\")",
+      "Bash(psql --version)",
+      "Bash(node -e ' *)",
+      "Read(//tmp/**)",
+      "Bash(grep -v \"SECURITY\\\\|libpq\\\\|trace-warnings\\\\|next major\\\\|prepare\\\\|current behavior\\\\|compatibility\\\\|docs.postgresql\\\\|^$\")",
+      "Bash(curl -s -v http://localhost:3000/health)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Get-Process *)",
+      "Bash(PORT=3101 node src/server.js)",
+      "Bash(curl -s http://localhost:3101/health)"
+    ]
+  }
+}
