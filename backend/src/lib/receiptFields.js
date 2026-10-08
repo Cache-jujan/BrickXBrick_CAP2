@@ -149,4 +149,61 @@ function normalizeBirFields({ tin, birPermitNumber, birNumber } = {}) {
   };
 }
 
-module.exports = { EXPENSE_COLUMNS, toExpenseDraft, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems };
+// Vendor-identity fields the master list may supply. OR/SI (birNumber) is
+// deliberately absent: it belongs to one receipt, and copying it from the
+// master list would defeat the F9 Layer 1 duplicate check.
+const VENDOR_MASTER_FIELDS = ["tin", "birPermitType", "birPermitNumber"];
+
+function sameVendorValue(field, a, b) {
+  if (field === "tin") {
+    // Compare the 9-digit TIN proper. Branch codes are written as 000,
+    // 0000 or 00000 depending on the printer, which is not a real conflict.
+    const da = String(a).replace(/\D/g, "");
+    const db = String(b).replace(/\D/g, "");
+    if (da.length < 9 || db.length < 9) return da === db;
+    return da.slice(0, 9) === db.slice(0, 9);
+  }
+  const code = (v) => String(v).toUpperCase().replace(/[\s-]+/g, "");
+  return code(a) === code(b);
+}
+
+/**
+ * Merge a VendorMasterList row into an OCR draft. The master list is the
+ * trusted vendor identity, so its values win (existing policy). Returns
+ * what changed so the review screen can show it instead of silently
+ * overwriting what the user sees on the paper receipt:
+ *   autoFilled      — fields OCR left empty that the master list filled
+ *   vendorConflicts — fields where OCR read a different value; the master
+ *                     value is kept and the OCR reading is reported
+ * Pure: does not mutate the draft passed in.
+ */
+function applyVendorMaster(draft, vendorMaster) {
+  const out = { ...draft };
+  const autoFilled = [];
+  const vendorConflicts = [];
+  if (!vendorMaster) return { draft: out, autoFilled, vendorConflicts };
+
+  out.vendorName = vendorMaster.vendorName;
+  for (const field of VENDOR_MASTER_FIELDS) {
+    const masterValue = vendorMaster[field];
+    if (!masterValue) continue; // nothing on file; keep whatever OCR read
+    const ocrValue = draft[field];
+    if (!ocrValue) {
+      autoFilled.push(field);
+    } else if (!sameVendorValue(field, ocrValue, masterValue)) {
+      vendorConflicts.push({ field, ocrValue, masterValue });
+    }
+    out[field] = masterValue;
+  }
+  return { draft: out, autoFilled, vendorConflicts };
+}
+
+module.exports = {
+  EXPENSE_COLUMNS,
+  toExpenseDraft,
+  classifyBir,
+  normalizeBirFields,
+  normalizeLineItems,
+  computeQuantityFromLineItems,
+  applyVendorMaster,
+};

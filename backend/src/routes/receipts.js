@@ -12,7 +12,7 @@ const { query } = require("../lib/db");
 const { extractTextFromImage } = require("../lib/visionClient");
 const { storeReceiptImage, isAllowedMime } = require("../lib/receiptStorage");
 const { parseReceiptText } = require("../lib/parser");
-const { toExpenseDraft, classifyBir } = require("../lib/receiptFields");
+const { toExpenseDraft, classifyBir, applyVendorMaster } = require("../lib/receiptFields");
 
 const router = express.Router();
 
@@ -86,16 +86,11 @@ router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager",
     }
 
     const parsed = parseReceiptText(rawText);
-    const draft = toExpenseDraft(parsed);
-    const vendorMaster = await findVendorMasterRecord(draft.vendorName);
-    if (vendorMaster) {
-      // Vendor master values are the trusted vendor identity. OR/SI remains
-      // receipt-specific and is never copied from the master list.
-      draft.vendorName = vendorMaster.vendorName;
-      draft.tin = vendorMaster.tin || draft.tin;
-      draft.birPermitType = vendorMaster.birPermitType || draft.birPermitType;
-      draft.birPermitNumber = vendorMaster.birPermitNumber || draft.birPermitNumber;
-    }
+    const ocrDraft = toExpenseDraft(parsed);
+    const vendorMaster = await findVendorMasterRecord(ocrDraft.vendorName);
+    // Vendor master values are the trusted vendor identity. OR/SI remains
+    // receipt-specific and is never copied from the master list.
+    const { draft, autoFilled, vendorConflicts } = applyVendorMaster(ocrDraft, vendorMaster);
     const { birValidationStatus, missingBirFields } = classifyBir(draft);
 
     res.json({
@@ -104,9 +99,12 @@ router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager",
       birValidationStatus,
       missingBirFields,
       vendorMasterMatch: vendorMaster,
+      autoFilled,
+      vendorConflicts,
       confidence: parsed.confidence,
       ocrError,
-      rawText, // kept for debugging the parser against real receipts
+      // Raw OCR text is receipt data; only echo it when debugging the parser.
+      ...(process.env.OCR_DEBUG_RAWTEXT === "1" ? { rawText } : {}),
     });
   } catch (err) {
     next(err);
