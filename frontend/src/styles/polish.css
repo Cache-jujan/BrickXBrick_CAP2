@@ -1,0 +1,115 @@
+/*
+  App-wide refinements layered on top of the existing page styles.
+  Same palette and tokens — this only sharpens hierarchy, tables, links
+  and focus states so every page benefits without per-page rewrites.
+*/
+
+::selection {
+  background: var(--color-brick-tint);
+  color: var(--color-ink);
+}
+
+/* Content links: clearly clickable, consistent weight. Buttons rendered as
+   links (.btn, .back-link) opt out via their own rules. */
+a:not(.btn):not(.back-link) {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  font-weight: 600;
+}
+a:not(.btn):not(.back-link):hover {
+  color: var(--color-brick-darker);
+}
+
+/* Page titles: a little more presence and tighter tracking. */
+.page h1,
+main h1 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+main h2 {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+/* Cards: slightly crisper edge. */
+.card {
+  border-color: var(--color-border);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.05), 0 1px 1px rgba(48, 47, 40, 0.03);
+}
+
+/* Shared data tables (users-table is reused by Projects, Expenses, etc.) */
+.users-table th,
+.tamper-table th {
+  color: var(--color-ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  background: var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.users-table td,
+.tamper-table td {
+  color: var(--color-ink);
+}
+
+.users-table tbody tr,
+.tamper-table tbody tr {
+  transition: background-color var(--duration) var(--ease);
+}
+
+.users-table tbody tr:not([class*="detail"]):hover td,
+.tamper-table tbody tr:hover td {
+  background: #faf8f4;
+}
+
+/* Money columns line up when right-aligned digits are tabular. */
+.users-table td,
+.tamper-table td,
+.project-detail-fact-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Expanded detail rows read as a panel attached to their row. */
+.project-detail-expense-detail td,
+.expenses-detail td {
+  border-left: 3px solid var(--color-brick);
+  box-shadow: inset 0 6px 8px -8px rgba(48, 47, 40, 0.18);
+}
+
+.project-detail-expense-row-open td,
+.expenses-row-open td {
+  background: var(--color-brick-tint) !important;
+}
+
+/* Detail key/value pairs: label muted, value in ink. */
+.expense-detail-grid strong,
+.expenses-detail-grid strong {
+  color: var(--color-ink-soft);
+  font-weight: 600;
+}
+
+/* Pagination buttons across list pages share one look. */
+.expenses-page-btn,
+.tamper-page-btn {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Inputs: search fields get the same focus ring as form fields. */
+input[type="search"]:focus-visible {
+  outline: none;
+}
+
+/* Table headers use sentence case everywhere (some pages had all caps). */
+.tamper-table th {
+  text-transform: none;
+  font-size: var(--text-xs);
+}
+
+.tamper-table td:nth-child(5) {
+  white-space: nowrap;
+}

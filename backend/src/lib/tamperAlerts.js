@@ -1,5 +1,24 @@
 const { query } = require("./db");
 
+const PESO = new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
+// Notification text shown to General Managers and System Administrators.
+// Written for non-technical readers; the technical detail (hashes, tx id)
+// stays in tamper_alerts and the server log.
+function tamperMessage(expense, onChainHash) {
+    const amount = Number(expense.amount);
+    const money = Number.isFinite(amount) ? PESO.format(amount) : `₱${expense.amount}`;
+    if (onChainHash === null || onChainHash === undefined || onChainHash === "MISSING") {
+        return `We couldn't find the tamper-proof copy of "${expense.vendorname}" (${money}). Please contact your System Administrator.`;
+    }
+    return `"${expense.vendorname}" (${money}) was changed after it was approved. Its details no longer match the approved record.`;
+}
+
 async function raiseTamperAlert(expense, recomputedHash, onChainHash, reason) {
     // One open alert per expense, so repeated Verify clicks don't pile up rows.
     const open = await query(
@@ -18,7 +37,8 @@ async function raiseTamperAlert(expense, recomputedHash, onChainHash, reason) {
         [expense.expenseid]
     );
 
-    const message = `Tamper detected: expense "${expense.vendorname}" (₱${expense.amount}) — ${reason}.`;
+    const message = tamperMessage(expense, onChainHash);
+    console.log(`TAMPER DETECTED on expense ${expense.expenseid} — ${reason}`);
     try {
         const admins = await query(
             "SELECT userid FROM users WHERE role = 'System Administrator' AND status = 'Active'"
@@ -46,4 +66,4 @@ async function raiseTamperAlert(expense, recomputedHash, onChainHash, reason) {
     return { created: true };
 }
 
-module.exports = { raiseTamperAlert };
+module.exports = { raiseTamperAlert, tamperMessage };

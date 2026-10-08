@@ -11,6 +11,10 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
+import { BackLink } from "../../components/ui/BackLink";
+import { ChainStatus } from "../../components/blockchain/ChainStatus";
+import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
+import { ShieldCheckIcon } from "../../components/ui/icons";
 import "./ProjectDetailPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
@@ -172,7 +176,7 @@ export function ProjectDetailPage() {
     } catch (err) {
       setVerifyResults((prev) => ({
         ...prev,
-        [expenseId]: { verified: false, message: extractErrorMessage(err, "Verification failed.") },
+        [expenseId]: { verified: false, error: extractErrorMessage(err, "Verification failed.") },
       }));
     } finally {
       setVerifyingId(null);
@@ -201,7 +205,7 @@ export function ProjectDetailPage() {
         <Banner tone="info" title="You don't manage this project">
           Only this project's assigned Project Manager or a General Manager can view its details.
         </Banner>
-        <Link to="/projects" className="btn btn-secondary">Back to Projects</Link>
+        <BackLink to="/projects">Back to Projects</BackLink>
       </div>
     );
   }
@@ -209,7 +213,7 @@ export function ProjectDetailPage() {
     return (
       <div className="project-detail-terminal">
         <Banner tone="error" title={error} />
-        <Link to="/projects" className="btn btn-secondary">Back to Projects</Link>
+        <BackLink to="/projects">Back to Projects</BackLink>
       </div>
     );
   }
@@ -226,7 +230,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="project-detail">
-      <Link to="/projects" className="project-detail-back">Back to Projects</Link>
+      <BackLink to="/projects">Back to Projects</BackLink>
 
       <div className="spread project-detail-header">
         <div>
@@ -354,7 +358,14 @@ export function ProjectDetailPage() {
                         <td>{e.category}</td>
                         <td>{PESO.format(e.amount)}</td>
                         <td>{DATE.format(new Date(e.receiptdate))}</td>
-                        <td><Badge status={e.status} /></td>
+                        <td>
+                          <span className="project-detail-badges">
+                            <Badge status={e.status} />
+                            {e.status === "Approved" && e.blockchainstatus === "TamperDetected" && (
+                              <Badge status="Overdue">Changed after approval</Badge>
+                            )}
+                          </span>
+                        </td>
                       </tr>
                       {isOpen && (
                         <tr className="project-detail-expense-detail">
@@ -395,32 +406,14 @@ export function ProjectDetailPage() {
                               )
                             )}
 
-                            {canVerify && e.status === "Approved" && (
-                              <div className="expense-blockchain-row">
-                                <span className={`chain-status chain-status-${(e.blockchainstatus || "none").toLowerCase()}`}>
-                                  Blockchain: {e.blockchainstatus || "None"}
-                                </span>
-                                {e.blockchainstatus === "Confirmed" && (
-                                  <Button
-                                    variant="secondary"
-                                    disabled={verifyingId === e.expenseid}
-                                    onClick={() => handleVerify(e.expenseid)}
-                                  >
-                                    {verifyingId === e.expenseid ? "Verifying…" : "Verify on Blockchain"}
-                                  </Button>
-                                )}
-                                {verifyResult && (
-                                  verifyResult.verified ? (
-                                    <Banner tone="info" title="Verified: matches blockchain record">
-                                      Tx: {verifyResult.txHash?.slice(0, 18)}… · Block #{verifyResult.blockNumber}
-                                    </Banner>
-                                  ) : (
-                                    <Banner tone="error" title="Tamper alert">
-                                      {verifyResult.message}
-                                    </Banner>
-                                  )
-                                )}
-                              </div>
+                            {canReview && e.status === "Approved" && (
+                              <ExpenseProtection
+                                status={e.blockchainstatus}
+                                canCheck={canVerify}
+                                checking={verifyingId === e.expenseid}
+                                result={verifyResult}
+                                onCheck={() => handleVerify(e.expenseid)}
+                              />
                             )}
                           </td>
                         </tr>
@@ -434,27 +427,17 @@ export function ProjectDetailPage() {
         </Card>
       )}
 
-      <div className="spread project-detail-section-head">
-        <h2>Blockchain Audit Trail</h2>
-      </div>
-
-      {chainError && <Banner tone="error" title={chainError} />}
-      {!chainError && chainLoading && <p className="dashboard-loading">Loading blockchain audit data…</p>}
-      {!chainError && !chainLoading && chainSummary && (
-        <>
-          {chainSummary.openAlerts.length > 0 && (
-            <Banner tone="error" title={`${chainSummary.openAlerts.length} unresolved tamper alert(s) on this project`}>
-              At least one expense's on-chain hash no longer matches its database record. Contact your System Administrator.
-            </Banner>
-          )}
-
-          <div className="project-detail-facts chain-summary-facts">
-            <Fact label="Confirmed on Blockchain" value={chainSummary.confirmedCount} />
-            <Fact
-              label="Last Recorded"
-              value={chainSummary.lastCheckedAt ? DATETIME.format(new Date(chainSummary.lastCheckedAt)) : "No records yet"}
-            />
+      <section className="record-protection" aria-labelledby="record-protection-title">
+        <div className="record-protection-head">
+          <span className="record-protection-seal" aria-hidden="true"><ShieldCheckIcon size={22} /></span>
+          <div>
+            <h2 id="record-protection-title">Record Protection</h2>
+            <p className="record-protection-intro">
+              When an expense is approved, a tamper-proof copy is saved on three separate servers.
+              If anyone edits the expense afterwards, the system notices and raises an alert.
+            </p>
           </div>
+        </div>
 
           {chainSummary.logs.length === 0 ? (
             <Banner tone="empty" title="No blockchain records yet">

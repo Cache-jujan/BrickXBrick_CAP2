@@ -1,0 +1,49 @@
+.chain-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.chain-pill-secured {
+  background: var(--color-success-bg);
+  border-color: color-mix(in srgb, var(--color-success) 28%, transparent);
+  color: var(--color-success);
+}
+
+.chain-pill-pending {
+  background: var(--color-warning-bg);
+  border-color: color-mix(in srgb, var(--color-warning) 28%, transparent);
+  color: #85601a;
+}
+
+.chain-pill-changed {
+  background: var(--color-danger-bg);
+  border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+  color: var(--color-danger);
+}
+
+.chain-pill-none {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-ink-soft);
+}
+
+.chain-status-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.chain-status-description {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  max-width: 60ch;
+}

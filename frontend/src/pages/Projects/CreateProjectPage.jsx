@@ -11,6 +11,7 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import "./CreateProjectPage.css";
+import { BackLink } from "../../components/ui/BackLink";
 
 const EMPTY_FORM = {
   name: "",
@@ -126,7 +127,7 @@ export function CreateProjectPage() {
 
   return (
     <div className="create-project">
-      <Link to="/projects" className="form-back-link">Back to Projects</Link>
+      <BackLink to="/projects">Back to Projects</BackLink>
       <h1 className="create-project-title">Create New Project</h1>
 
       <Card className="create-project-card">

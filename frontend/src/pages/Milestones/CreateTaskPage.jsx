@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import "./CreateTaskPage.css";
+import { BackLink } from "../../components/ui/BackLink";
 
 const EMPTY_FORM = { taskName: "", dueDate: "" };
 
@@ -56,7 +57,7 @@ export function CreateTaskPage() {
 
   return (
     <div className="create-task">
-      <Link to={`/projects/${projectId}`} className="form-back-link">Back to project</Link>
+      <BackLink to={`/projects/${projectId}`}>Back to project</BackLink>
       <h1 className="create-task-title">Add Task</h1>
       <p className="create-task-subtitle">
         Assigned automatically to this project's Site Manager.

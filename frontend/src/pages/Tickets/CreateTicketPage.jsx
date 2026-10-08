@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import "./CreateTicketPage.css";
+import { BackLink } from "../../components/ui/BackLink";
 
 const EMPTY_FORM = {
   projectID: "",
@@ -134,7 +135,7 @@ export function CreateTicketPage() {
 
   return (
     <div className="create-ticket">
-      <Link to="/dashboard/sm" className="form-back-link">Back to Dashboard</Link>
+      <BackLink to="/dashboard/sm">Back to Dashboard</BackLink>
       <h1 className="create-ticket-title">Create Ticket</h1>
 
       <Card className="create-ticket-card">

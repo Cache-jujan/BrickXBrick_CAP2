@@ -5,9 +5,9 @@ import { extractErrorMessage } from "../../api/client";
 import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
+import { PESO_EXACT, tamperReason } from "../../utils/plainLanguage";
 import "./TamperAlertsPage.css";
 
-const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
 
 const PAGE_SIZE = 8;
@@ -42,12 +42,6 @@ export function TamperAlertsPage() {
       .finally(() => setLoading(false));
   }
 
-  function reasonFor(alert) {
-    if (!alert.onchainhash || alert.onchainhash === "MISSING") {
-      return "On-chain transaction record could not be found (likely a chain reorg dropped it)";
-    }
-    return "Recomputed hash does not match the stored on-chain value";
-  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -89,13 +83,13 @@ export function TamperAlertsPage() {
         <div>
           <h1>Tamper Alerts</h1>
           <p className="tamper-subtitle">
-            Open blockchain tamper alerts across all projects. Investigate the flagged expense,
-            then mark it investigated once resolved — the expense itself stays permanently
-            marked <strong>TamperDetected</strong>, since the event genuinely happened.
+            These approved expenses were edited after approval, so they no longer match their
+            tamper-proof copy. Check each one with the person responsible, then mark it as reviewed.
+            The expense keeps its "Changed after approval" label as a permanent record.
           </p>
         </div>
         {!loading && !error && alerts.length > 0 && (
-          <span className="tamper-count-pill">{alerts.length} open</span>
+          <span className="tamper-count-pill">{alerts.length} to review</span>
         )}
       </div>
 
@@ -105,8 +99,8 @@ export function TamperAlertsPage() {
       {!error && loading && <p className="dashboard-loading">Loading alerts…</p>}
 
       {!error && !loading && alerts.length === 0 && (
-        <Banner tone="empty" title="No open tamper alerts">
-          Every flagged expense has been investigated and resolved.
+        <Banner tone="empty" title="Nothing to review">
+          No approved expense has been changed since it was approved.
         </Banner>
       )}
 
@@ -116,7 +110,7 @@ export function TamperAlertsPage() {
             <input
               type="search"
               className="tamper-search"
-              placeholder="Search by vendor or project…"
+              placeholder="Search by vendor or project"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
             />
@@ -134,8 +128,8 @@ export function TamperAlertsPage() {
                     <th>Project</th>
                     <th>Vendor</th>
                     <th>Amount</th>
-                    <th>Reason</th>
-                    <th>Detected</th>
+                    <th>What happened</th>
+                    <th>Found on</th>
                     <th aria-label="Actions" />
                   </tr>
                 </thead>
@@ -152,16 +146,17 @@ export function TamperAlertsPage() {
                         )}
                       </td>
                       <td>{alert.vendorname}</td>
-                      <td>{PESO.format(alert.amount)}</td>
-                      <td className="tamper-reason">{reasonFor(alert)}</td>
+                      <td>{PESO_EXACT.format(alert.amount)}</td>
+                      <td className="tamper-reason">{tamperReason(alert)}</td>
                       <td>{DATETIME.format(new Date(alert.detectedat))}</td>
                       <td>
                         <Button
                           variant="secondary"
+                          className="btn-sm"
                           disabled={resolvingId === alert.alertid}
                           onClick={() => setConfirmTarget(alert)}
                         >
-                          Mark Investigated
+                          Mark as reviewed
                         </Button>
                       </td>
                     </tr>
@@ -206,19 +201,18 @@ export function TamperAlertsPage() {
             aria-labelledby="tamper-modal-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="tamper-modal-title" className="tamper-modal-title">Mark this alert investigated?</h2>
+            <h2 id="tamper-modal-title" className="tamper-modal-title">Mark this alert as reviewed?</h2>
             <p className="tamper-modal-body">
-              This confirms that <strong>{confirmTarget.vendorname}</strong>
-              {confirmTarget.projectname ? ` (${confirmTarget.projectname})` : ""} has been reviewed.
-              The alert will drop off this list, but the underlying expense keeps its
-              permanent <strong>TamperDetected</strong> status.
+              This confirms you've looked into <strong>{confirmTarget.vendorname}</strong>
+              {confirmTarget.projectname ? ` (${confirmTarget.projectname})` : ""}. The alert leaves this
+              list, but the expense keeps its "Changed after approval" label permanently.
             </p>
             <div className="tamper-modal-actions">
               <Button variant="secondary" onClick={() => setConfirmTarget(null)} disabled={resolvingId === confirmTarget.alertid}>
                 Cancel
               </Button>
               <Button onClick={handleConfirmResolve} disabled={resolvingId === confirmTarget.alertid}>
-                {resolvingId === confirmTarget.alertid ? "Resolving…" : "Confirm"}
+                {resolvingId === confirmTarget.alertid ? "Saving…" : "Mark as reviewed"}
               </Button>
             </div>
           </div>
