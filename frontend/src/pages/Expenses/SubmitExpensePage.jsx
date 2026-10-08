@@ -174,12 +174,14 @@ export function SubmitExpensePage() {
     }));
   }
 
-  const validLineItems = draft.lineItems.filter((item) =>
-    item.description.trim()
-    && item.amount !== ""
-    && Number.isFinite(Number(item.amount))
-    && Number(item.amount) >= 0
+  // Every line needs a quantity (0 for delivery, VAT, fees). A missing
+  // quantity used to count as 1 on the server, which made Layer 3 flag fees.
+  const isNonNegativeNumber = (value) => value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
+  const namedLineItems = draft.lineItems.filter((item) => item.description.trim());
+  const validLineItems = namedLineItems.filter((item) =>
+    isNonNegativeNumber(item.amount) && isNonNegativeNumber(item.quantity)
   );
+  const allLinesValid = namedLineItems.length > 0 && validLineItems.length === namedLineItems.length;
   const amountIsValid = draft.amount !== ""
     && Number.isFinite(Number(draft.amount))
     && Number(draft.amount) >= 0;
@@ -190,7 +192,7 @@ export function SubmitExpensePage() {
       && amountIsValid
       && draft.receiptDate
       && draft.category
-      && validLineItems.length > 0
+      && allLinesValid
       && !loadingTickets
       && !scanning
       && !submitting
@@ -221,9 +223,7 @@ export function SubmitExpensePage() {
         lineItems: validLineItems.map((item) => ({
           description: item.description.trim(),
           amount: Number(item.amount),
-          ...(item.quantity !== "" && Number.isFinite(Number(item.quantity))
-            ? { quantity: Number(item.quantity) }
-            : {}),
+          quantity: Number(item.quantity),
           ...(item.unitPrice !== "" && Number.isFinite(Number(item.unitPrice))
             ? { unitPrice: Number(item.unitPrice) }
             : {}),
@@ -381,7 +381,7 @@ export function SubmitExpensePage() {
                 <div className="submit-expense-item-row" key={`item-${index}`}>
                   <Field label={`Item ${index + 1}`} required value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder="Description" />
                   <Field label="Item amount (₱)" required type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
-                  <Field label="Quantity" type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
+                  <Field label="Quantity (0 for delivery, VAT, fees)" required type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
                   <Field label="Unit price (₱)" type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
                   <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={`Remove item ${index + 1}`}>Remove</Button>
                 </div>

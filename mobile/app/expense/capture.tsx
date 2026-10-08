@@ -49,7 +49,9 @@ export default function CaptureScreen() {
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!draft.ticket) return <Redirect href="/" />;
+  const isSplit = draft.mode === "split";
+  // Single mode needs a ticket; split mode has none (the server picks the requests).
+  if (!draft.ticket && !isSplit) return <Redirect href="/" />;
 
   async function handleCamera() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -105,7 +107,7 @@ export default function CaptureScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.subtitle}>{draft.ticket.subject} · Step 1 of 2</Text>
+        <Text style={styles.subtitle}>{isSplit ? "Split receipt · Step 1 of 3" : `${draft.ticket?.subject ?? ""} · Step 1 of 2`}</Text>
         <Text style={styles.title}>Receipt Capture</Text>
         <View style={styles.optionRow}>
           <CaptureOptionCard title="Take Photo" icon="camera.fill" tint={COLORS.primary} iconBackground="#FDECE1" onPress={handleCamera} compact />
