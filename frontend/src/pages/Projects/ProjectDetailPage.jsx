@@ -33,6 +33,11 @@ export function ProjectDetailPage() {
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
   const [actionError, setActionError] = useState("");
+  // Reject needs a reason (the API returns 400 without one), so it goes
+  // through a small modal: { expense } while open.
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
 
   const [chainSummary, setChainSummary] = useState(null);
   const [chainError, setChainError] = useState("");
@@ -112,14 +117,47 @@ export function ProjectDetailPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  async function handleAction(expenseId, action) {
+  async function refreshAfterReview() {
+    setExpenses(await listExpenses(id));
+    setChainSummary(await getProjectBlockchainSummary(id));
+  }
+
+  async function handleApprove(expenseId) {
     setActionError("");
     try {
-      await (action === "approve" ? approveExpense(expenseId) : rejectExpense(expenseId));
-      setExpenses(await listExpenses(id));
-      setChainSummary(await getProjectBlockchainSummary(id));
+      await approveExpense(expenseId);
+      await refreshAfterReview();
     } catch (err) {
-      setActionError(extractErrorMessage(err, `Couldn't ${action} this expense.`));
+      setActionError(extractErrorMessage(err, "Couldn't approve this expense."));
+    }
+  }
+
+  function openReject(expense) {
+    setActionError("");
+    setRejectReason("");
+    setRejecting(expense);
+  }
+
+  function closeReject() {
+    if (rejectBusy) return;
+    setRejecting(null);
+    setRejectReason("");
+    setActionError("");
+  }
+
+  async function handleReject() {
+    if (!rejecting || !rejectReason.trim() || rejectBusy) return;
+    setRejectBusy(true);
+    setActionError("");
+    try {
+      await rejectExpense(rejecting.expenseid, rejectReason.trim());
+      setRejecting(null);
+      setRejectReason("");
+      await refreshAfterReview();
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't reject this expense."));
+    } finally {
+      setRejectBusy(false);
     }
   }
 
@@ -288,7 +326,7 @@ export function ProjectDetailPage() {
       </div>
 
       {expensesError && <Banner tone="error" title={expensesError} />}
-      {actionError && <Banner tone="error" title={actionError} />}
+      {actionError && !rejecting && <Banner tone="error" title={actionError} />}
       {!expensesError && expensesLoading && <p className="dashboard-loading">Loading expenses…</p>}
       {!expensesError && !expensesLoading && expenses.length === 0 && (
         <Banner tone="empty" title="No expenses recorded yet">
@@ -349,9 +387,9 @@ export function ProjectDetailPage() {
                                 <p>You submitted this expense, so someone else must review it.</p>
                               ) : (
                                 <div className="expense-detail-actions">
-                                  <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
+                                  <Button onClick={() => handleApprove(e.expenseid)}>Approve</Button>
                                   {!(e.submittedby === user.id && user.role === "General Manager") && (
-                                    <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
+                                    <Button variant="danger" onClick={() => openReject(e)}>Reject</Button>
                                   )}
                                 </div>
                               )
@@ -444,6 +482,31 @@ export function ProjectDetailPage() {
             </Card>
           )}
         </>
+      )}
+      {rejecting && (
+        <div className="modal-overlay" role="presentation" onClick={closeReject}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="project-reject-title" className="modal-title">Reject this expense?</h2>
+            <p className="modal-body">
+              <strong>{rejecting.vendorname}</strong> · {PESO.format(rejecting.amount)}. The submitter will see it as rejected. No blockchain record is written.
+            </p>
+            <Field
+              label="Reason for rejection"
+              required
+              as="textarea"
+              placeholder="Tell the submitter what needs to change"
+              value={rejectReason}
+              onChange={(ev) => setRejectReason(ev.target.value)}
+            />
+            {actionError && <Banner tone="error" title={actionError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeReject} disabled={rejectBusy}>Cancel</Button>
+              <Button variant="danger" onClick={handleReject} disabled={rejectBusy || !rejectReason.trim()}>
+                {rejectBusy ? "Saving…" : "Reject"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
