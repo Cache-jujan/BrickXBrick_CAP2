@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import "./CreateMilestonePage.css";
+import { BackLink } from "../../components/ui/BackLink";
 
 const EMPTY_FORM = { name: "", dueDate: "" };
 
@@ -58,7 +59,7 @@ export function CreateMilestonePage() {
 
   return (
     <div className="create-milestone">
-      <Link to={`/projects/${projectId}`} className="form-back-link">Back to project</Link>
+      <BackLink to={`/projects/${projectId}`}>Back to project</BackLink>
       <h1 className="create-milestone-title">Add Milestone</h1>
 
       <Card className="create-milestone-card">

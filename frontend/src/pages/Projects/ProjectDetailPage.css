@@ -10,17 +10,6 @@
   margin-top: var(--space-2);
 }
 
-.project-detail-back {
-  display: inline-block;
-  font-size: var(--text-sm);
-  color: var(--color-ink-soft);
-  text-decoration: none;
-  margin-bottom: var(--space-5);
-}
-.project-detail-back:hover {
-  color: var(--color-ink);
-}
-
 .project-detail-header {
   align-items: flex-start;
   margin-bottom: var(--space-5);
@@ -91,9 +80,6 @@
   margin-top: var(--space-1);
 }
 
-.chain-summary-facts {
-  margin-bottom: var(--space-5);
-}
 
 .project-detail-section-head {
   margin: var(--space-7) 0 var(--space-4);
@@ -149,41 +135,6 @@
   margin-top: var(--space-4);
 }
 
-.expense-blockchain-row {
-  margin-top: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  align-items: flex-start;
-}
-
-.chain-status {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-}
-
-.chain-status-confirmed {
-  background: var(--color-status-active-bg);
-  color: var(--color-status-active);
-}
-
-.chain-status-pending {
-  background: var(--color-status-risk-bg);
-  color: var(--color-status-risk);
-}
-
-.chain-status-tamperdetected {
-  background: var(--color-danger-bg);
-  color: var(--color-danger);
-}
-
-.chain-status-none {
-  background: var(--color-surface-muted);
-  color: var(--color-ink-faint);
-}
-
 @media (max-width: 640px) {
   .project-detail-assignment {
     flex-direction: column;
@@ -192,4 +143,97 @@
   .project-detail-assignment-control {
     width: 100%;
   }
+}
+
+/* Record Protection (F12) — the project's tamper-proof record section.
+   The seal is the one distinctive element; everything else stays quiet. */
+.record-protection {
+  margin-top: var(--space-7);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface) 60%, var(--color-bg) 100%);
+  border: 1px solid var(--color-border);
+}
+
+.record-protection-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.record-protection-seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: var(--color-brick-darker);
+  background: var(--color-brick-tint);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-brick) 35%, transparent),
+    0 0 0 4px var(--color-surface), 0 0 0 5px color-mix(in srgb, var(--color-brick) 25%, transparent);
+}
+
+.record-protection-intro {
+  color: var(--color-ink-soft);
+  margin-top: var(--space-1);
+  max-width: 70ch;
+}
+
+.record-protection-facts {
+  margin-bottom: var(--space-5);
+}
+
+.record-protection-tech {
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.record-protection-tech > summary {
+  cursor: pointer;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  list-style-position: inside;
+}
+
+.record-protection-tech > summary:hover {
+  color: var(--color-ink);
+}
+
+.record-protection-tech[open] > summary {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.record-protection-tech-note {
+  padding: var(--space-3) var(--space-4) 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.record-protection-tech-table {
+  margin-top: var(--space-3);
+}
+
+.record-protection-tech-table code {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+
+@media (max-width: 640px) {
+  .record-protection {
+    padding: var(--space-5) var(--space-4);
+  }
+}
+
+.project-detail-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }

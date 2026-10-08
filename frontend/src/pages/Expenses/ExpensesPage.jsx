@@ -14,6 +14,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
+import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
+import { flagLabel } from "../../utils/plainLanguage";
 import "./ExpensesPage.css";
 import { verifyExpense } from "../../api/blockchainApi";
 
@@ -136,7 +138,7 @@ export function ExpensesPage() {
     } catch (err) {
       setVerifyResults((prev) => ({
         ...prev,
-        [expenseId]: { verified: false, message: extractErrorMessage(err, "Verification failed.") },
+        [expenseId]: { verified: false, error: extractErrorMessage(err, "Verification failed.") },
       }));
     } finally {
       setVerifyingId(null);
@@ -185,7 +187,7 @@ export function ExpensesPage() {
             <p className="expenses-subtitle">
               {user.role === "Project Manager"
                 ? "Review F9 fraud flags, request corrections, or approve expenses for your projects."
-                : "Review submitted expenses. Approving an expense records its hash on the blockchain."}
+                : "Review submitted expenses. Approving one saves a tamper-proof copy, so any later edit gets caught."}
             </p>
         </div>
         <Link to="/expenses/new" className="btn btn-primary">
@@ -194,7 +196,12 @@ export function ExpensesPage() {
       </div>
 
       {error && <Banner tone="error" title={error} />}
-      {notice && <Banner tone="warning" title="Approved, blockchain record deferred">{notice}</Banner>}
+      {notice && (
+        <Banner tone="warning" title="Approved. The tamper-proof copy will be saved shortly">
+          The record servers are busy or offline right now. The system will keep trying automatically,
+          so there's nothing you need to do.
+        </Banner>
+      )}
       {actionError && !confirm && <Banner tone="error" title={actionError} />}
 
       {!error && (
@@ -267,12 +274,17 @@ export function ExpensesPage() {
                               <td>{PESO.format(e.amount)}</td>
                               <td>{DATE.format(new Date(e.receiptdate))}</td>
                               <td>
-                                <Badge status={e.status} />
-                                {flags && (
-                                  <Badge status="At Risk">
-                                    {" "}⚠ {flags.length} flag{flags.length === 1 ? "" : "s"}
-                                  </Badge>
-                                )}
+                                <span className="expenses-badges">
+                                  <Badge status={e.status} />
+                                  {flags && (
+                                    <Badge status="At Risk">
+                                      {flags.length} flag{flags.length === 1 ? "" : "s"} to review
+                                    </Badge>
+                                  )}
+                                  {e.status === "Approved" && e.blockchainstatus === "TamperDetected" && (
+                                    <Badge status="Overdue">Changed after approval</Badge>
+                                  )}
+                                </span>
                               </td>
                             </tr>
                             {isOpen && (
@@ -280,7 +292,13 @@ export function ExpensesPage() {
                                 <td colSpan={6}>
                                   {flags && (
                                     <Banner tone="warning" title="Flagged for review">
-                                      {flags.map((f) => `${f.flagType}: ${f.reason}`).join(" · ")}
+                                      <ul className="expenses-flag-list">
+                                        {flags.map((f, i) => (
+                                          <li key={i}>
+                                            <strong>{flagLabel(f.flagType)}.</strong> {f.reason}
+                                          </li>
+                                        ))}
+                                      </ul>
                                     </Banner>
                                   )}
                                   {e.submittedby === user.id && user.role === "General Manager" && (
@@ -295,9 +313,6 @@ export function ExpensesPage() {
                                     <p><strong>TIN:</strong> {e.tin || "—"}</p>
                                     <p><strong>BIR permit:</strong> {e.birpermitnumber || "—"}</p>
                                     <p><strong>OR/SI number:</strong> {e.birnumber || "—"}</p>
-                                    {e.status === "Approved" && (
-                                      <p><strong>Blockchain:</strong> {e.blockchainstatus || "None"}</p>
-                                    )}
                                     {e.status === "Rejected" && e.rejectionreason && (
                                       <p><strong>Rejection reason:</strong> {e.rejectionreason}</p>
                                     )}
@@ -334,34 +349,15 @@ export function ExpensesPage() {
                                     </div>
                                   )}
                                   
-                                  {user.role === "General Manager" && e.status === "Approved" && (
-  <div className="expenses-actions">
-    {e.blockchainstatus === "Confirmed" ? (
-      <Button
-        variant="secondary"
-        disabled={verifyingId === e.expenseid}
-        onClick={() => handleVerify(e.expenseid)}
-      >
-        {verifyingId === e.expenseid ? "Verifying…" : "Verify on Blockchain"}
-      </Button>
-    ) : (
-      <p className="expenses-subtitle">
-        Blockchain status: {e.blockchainstatus || "None"}. Verification is available once Confirmed.
-      </p>
-    )}
-    {verifyResults[e.expenseid] && (
-      verifyResults[e.expenseid].verified ? (
-        <Banner tone="info" title="Verified: matches blockchain record">
-          Tx: {verifyResults[e.expenseid].txHash?.slice(0, 18)}… · Block #{verifyResults[e.expenseid].blockNumber}
-        </Banner>
-      ) : (
-        <Banner tone="error" title="Tamper alert">
-          {verifyResults[e.expenseid].message}
-        </Banner>
-      )
-    )}
-  </div>
-)}
+                                  {e.status === "Approved" && (
+                                    <ExpenseProtection
+                                      status={e.blockchainstatus}
+                                      canCheck={user.role === "General Manager"}
+                                      checking={verifyingId === e.expenseid}
+                                      result={verifyResults[e.expenseid]}
+                                      onCheck={() => handleVerify(e.expenseid)}
+                                    />
+                                  )}
                                 </td>
                               </tr>
                             )}
@@ -399,8 +395,8 @@ export function ExpensesPage() {
             <p className="modal-body">
               <strong>{confirm.expense.vendorname}</strong> · {PESO.format(confirm.expense.amount)}.{" "}
               {confirm.action === "approve"
-                ? "Its hash will be recorded on the blockchain and can't be undone."
-                : "The submitter will see it as rejected. No blockchain record is written."}
+                ? "A tamper-proof copy of this expense will be saved. Approval can't be undone."
+                : "The submitter will see it as rejected, along with your reason."}
             </p>
             {confirm.action === "reject" && (
               <Field

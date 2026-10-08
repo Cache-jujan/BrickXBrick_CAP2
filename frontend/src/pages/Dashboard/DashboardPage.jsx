@@ -152,34 +152,34 @@ function ProjectsOverview({ role, name, userId }) {
 
         <Card className="dashboard-panel">
           <div className="spread dashboard-panel-head">
-            <h2>Blockchain Audit Summary</h2>
+            <h2>Record Protection</h2>
           </div>
           {canSeeAlerts ? (
             <div className="chain-summary">
               <div className="chain-summary-row">
                 <div>
-                  <p className="chain-summary-label">Confirmed Records</p>
-                  <p className="chain-summary-note">Approved expenses recorded on the blockchain.</p>
+                  <p className="chain-summary-label">Secured expenses</p>
+                  <p className="chain-summary-note">Approved expenses with a tamper-proof copy saved.</p>
                 </div>
                 <span className="chain-summary-value">{confirmedCount == null ? "—" : confirmedCount}</span>
               </div>
               <div className="chain-summary-row">
                 <div>
-                  <p className="chain-summary-label">Tampered Records</p>
-                  <p className="chain-summary-note">Expenses flagged by the integrity scan.</p>
+                  <p className="chain-summary-label">Changed after approval</p>
+                  <p className="chain-summary-note">Expenses that no longer match what was approved.</p>
                 </div>
                 <span className="chain-summary-value">{tamperedCount == null ? "—" : tamperedCount}</span>
               </div>
               <div className={"chain-summary-row" + (alertCount > 0 ? " chain-summary-row-alert" : "")}>
                 <div>
-                  <p className="chain-summary-label">Open Tamper Alerts</p>
+                  <p className="chain-summary-label">Alerts to review</p>
                   <p className="chain-summary-note">
-                    {alertCount == null ? "Loading…" : alertCount === 0 ? "None open right now." : "Requires review and resolution."}
+                    {alertCount == null ? "Loading…" : alertCount === 0 ? "Nothing to review right now." : "Check these with the people responsible."}
                   </p>
                 </div>
                 <span className="chain-summary-value">{alertCount == null ? "—" : alertCount}</span>
               </div>
-              <Link to="/blockchain/alerts" className="chain-summary-link">View all tamper alerts →</Link>
+              <Link to="/blockchain/alerts" className="chain-summary-link">Review tamper alerts</Link>
             </div>
             
           ) : (

@@ -13,8 +13,19 @@
   transition: background-color var(--duration) var(--ease),
     border-color var(--duration) var(--ease),
     box-shadow var(--duration) var(--ease),
-    opacity var(--duration) var(--ease);
+    opacity var(--duration) var(--ease),
+    transform var(--duration) var(--ease);
   white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-surface), 0 0 0 5px var(--color-brick);
 }
 
 .btn:disabled {
@@ -35,10 +46,12 @@
   background: var(--color-surface);
   color: var(--color-ink);
   border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-sm);
 }
 .btn-secondary:hover:not(:disabled) {
-  background: var(--color-surface-muted);
+  background: var(--color-brick-tint);
   border-color: var(--color-brick);
+  color: var(--color-brick-darker);
 }
 
 .btn-ghost {
@@ -58,4 +71,10 @@
 .btn-danger:hover:not(:disabled) {
   background: var(--color-danger);
   color: #fff;
+}
+
+/* Compact size for buttons inside table rows and detail panels. */
+.btn-sm {
+  height: 36px;
+  padding: 0 var(--space-4);
 }
