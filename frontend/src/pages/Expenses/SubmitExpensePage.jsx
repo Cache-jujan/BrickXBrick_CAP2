@@ -8,6 +8,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import "./SubmitExpensePage.css";
 
 const EMPTY_DRAFT = {
@@ -85,6 +86,9 @@ export function SubmitExpensePage() {
   const [pageError, setPageError] = useState("");
   const [pageNotice, setPageNotice] = useState("");
   const [ocrNotice, setOcrNotice] = useState("");
+  // State updates are async, so a fast double-click can run handleSubmit
+  // twice before `submitting` re-renders. The ref blocks the second call.
+  const busyRef = useRef(false);
 
   const selectedTicket = useMemo(
     () => tickets.find((ticket) => ticket.ticketID === selectedTicketId) || null,
@@ -123,12 +127,14 @@ export function SubmitExpensePage() {
     setOcrNotice("");
     setReceiptName("");
     setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
+    if (busyRef.current) return;
     if (!isSupportedReceipt(file)) {
       setPageError("Choose a JPG, PNG, or PDF receipt. HEIC and other formats are not accepted yet.");
       return;
     }
 
     setReceiptName(file.name);
+    busyRef.current = true;
     setScanning(true);
     try {
       const result = await scanReceipt(file);
@@ -140,6 +146,7 @@ export function SubmitExpensePage() {
     } catch (error) {
       setPageError(extractErrorMessage(error, "Receipt upload failed. Please try again."));
     } finally {
+      busyRef.current = false;
       setScanning(false);
     }
   }
@@ -200,6 +207,7 @@ export function SubmitExpensePage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (busyRef.current) return;
     setPageError("");
     setPageNotice("");
     if (!selectedTicket || !draft.receiptImageURL || !canSubmit) {
@@ -207,6 +215,7 @@ export function SubmitExpensePage() {
       return;
     }
 
+    busyRef.current = true;
     setSubmitting(true);
     try {
       const payload = {
@@ -236,8 +245,10 @@ export function SubmitExpensePage() {
       setReceiptName("");
       setOcrNotice("");
     } catch (error) {
+      // Keep the draft so the user can fix the problem and retry.
       setPageError(extractErrorMessage(error, "Expense submission failed. Please check the details and retry."));
     } finally {
+      busyRef.current = false;
       setSubmitting(false);
     }
   }
@@ -248,6 +259,11 @@ export function SubmitExpensePage() {
 
   return (
     <div className="submit-expense-page">
+      <LoadingOverlay
+        open={scanning || submitting}
+        message={scanning ? "Reading receipt…" : "Submitting expense…"}
+        detail={scanning ? "Uploading and running OCR. This can take a few seconds." : "Please don't close this page."}
+      />
       <div className="submit-expense-header">
         <div>
           <Link className="submit-expense-back" to="/expenses">← Back to expenses</Link>
