@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 
@@ -7,6 +7,9 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { resolveTicket, submitExpense } from "@/lib/api";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { FlowHeader } from "@/components/flow-header";
+import { LoadingOverlay } from "@/components/loading-overlay";
+import { formatPeso } from "@/lib/money";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 
@@ -16,13 +19,15 @@ export default function LinkScreen() {
   const [category, setCategory] = useState<(typeof CATEGORIES)[number] | null>(draft.category as any);
   const [notes, setNotes] = useState(draft.notes);
   const [submitting, setSubmitting] = useState(false);
+  // setState is async; the ref stops a fast double tap from submitting twice.
+  const busyRef = useRef(false);
 
   // All hooks are above this line. Direct deep link / hot reload with an empty draft lands here.
   if (!ticket || !ocrResult) return <Redirect href="/" />;
 
   // Arrow function declared AFTER the guard, so ticket/ocrResult stay narrowed inside it.
   const handleSubmit = async () => {
-    if (submitting) return; // double-tap guard
+    if (busyRef.current) return; // double-tap guard
     if (!category) return Alert.alert("Category required", "Pick a category before submitting.");
 
     // 1) Validate everything BEFORE touching the ticket, so a bad draft can't leave it Resolved.
@@ -38,6 +43,7 @@ export default function LinkScreen() {
       return Alert.alert("No line items", "Add at least one item on the Review screen.");
     }
 
+    busyRef.current = true;
     setSubmitting(true);
     try {
       // 2) Purchasers resolve the ticket after capture. Site Managers arrive
@@ -71,55 +77,66 @@ export default function LinkScreen() {
     } catch (err) {
       Alert.alert("Submission failed", err instanceof Error ? err.message : String(err));
     } finally {
+      busyRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const total = (ocrResult.lineItems ?? []).reduce((s, i) => s + (i.amount || 0), 0);
-  
+  const itemCount = (ocrResult.lineItems ?? []).length;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.subtitle}>Verify ticket & allocation</Text>
-        <Text style={styles.title}>Link Expense</Text>
+      <FlowHeader title="Link & submit" caption="Step 3 of 3" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <View style={styles.ticketCard}>
+            <Text style={styles.ticketBadge}>✓ Linked to this request</Text>
+            <Text style={styles.ticketSubject}>{ticket.subject}</Text>
+            <Text style={styles.ticketMeta}>{ticket.projectName}</Text>
+            {ticket.budget && <Text style={styles.ticketBudget}>Approved budget {formatPeso(ticket.budget)}</Text>}
+          </View>
 
-        <View style={styles.ticketCard}>
-          <Text style={styles.ticketBadge}>✓ Auto-linked</Text>
-          <Text style={styles.ticketSubject}>{ticket.subject}</Text>
-          <Text style={styles.ticketMeta}>{ticket.projectName}</Text>
-          {ticket.budget && <Text style={styles.ticketBudget}>Budget ₱{Number(ticket.budget).toLocaleString()}</Text>}
+          <View style={styles.receiptCard}>
+            <Text style={styles.receiptVendor} numberOfLines={1}>{ocrResult.vendorName || "Vendor"}</Text>
+            <Text style={styles.ticketMeta}>{ocrResult.receiptDate} · {itemCount} item{itemCount === 1 ? "" : "s"}</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>Category</Text>
+          <View style={styles.categoryGrid}>
+            {CATEGORIES.map((c) => (
+              <Pressable key={c} style={[styles.categoryChip, category === c && styles.categoryChipActive]} onPress={() => { setCategory(c); setDraftCategory(c); }}>
+                <Text style={[styles.categoryChipText, category === c && styles.categoryChipTextActive]}>{c}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.fieldLabel}>Notes (optional)</Text>
+          <TextInput style={styles.notesInput} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder="Add delivery details, invoice note, or field comments..." placeholderTextColor={COLORS.muted} />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Receipt total</Text>
+            <Text style={styles.summaryAmount}>{formatPeso(ocrResult.amount)}</Text>
+          </View>
+          <Pressable style={[styles.submitButton, (!category || submitting) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={submitting} accessibilityRole="button">
+            <Text style={styles.submitButtonText}>{category ? "Submit for approval" : "Pick a category"}</Text>
+          </Pressable>
         </View>
+      </KeyboardAvoidingView>
 
-        <Text style={styles.fieldLabel}>Category</Text>
-        <View style={styles.categoryGrid}>
-          {CATEGORIES.map((c) => (
-            <TouchableOpacity key={c} style={[styles.categoryChip, category === c && styles.categoryChipActive]} onPress={() => { setCategory(c); setDraftCategory(c); }}>
-              <Text style={[styles.categoryChipText, category === c && styles.categoryChipTextActive]}>{c}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.fieldLabel}>Notes (optional)</Text>
-        <TextInput style={styles.notesInput} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder="Add delivery details, invoice note, or field comments..." />
-
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>{(ocrResult.lineItems ?? []).length} item(s)</Text>
-          <Text style={styles.summaryAmount}>₱{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-        </View>
-
-        <TouchableOpacity style={[styles.submitButton, submitting && { opacity: 0.6 }]} onPress={handleSubmit} disabled={submitting}>
-          <Text style={styles.submitButtonText}>{submitting ? "Submitting…" : "Submit Expense for Approval"}</Text>
-        </TouchableOpacity>
-      </View>
+      <LoadingOverlay visible={submitting} message="Submitting expense…" detail="Running the screening checks." />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  container: { flex: 1, padding: 20 },
-  subtitle: { fontSize: 12, color: COLORS.muted },
-  title: { fontSize: 20, fontWeight: "800", color: COLORS.heading, marginBottom: 14 },
+  flex: { flex: 1 },
+  container: { paddingHorizontal: 16, paddingBottom: 24 },
+  receiptCard: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 16 },
+  receiptVendor: { fontSize: 15, fontWeight: "700", color: COLORS.heading },
+  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   ticketCard: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.primary, padding: 14, marginBottom: 16 },
   ticketBadge: { fontSize: 11, fontWeight: "700", color: COLORS.success, marginBottom: 4 },
   ticketSubject: { fontSize: 15, fontWeight: "700", color: COLORS.heading },

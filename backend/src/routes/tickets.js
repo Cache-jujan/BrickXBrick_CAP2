@@ -4,7 +4,7 @@ const express = require("express");
 const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
-const { assertLegalTransition } = require("../lib/ticketTransitions");
+const { assertLegalTransition, logTransition } = require("../lib/ticketTransitions");
 const { VALID_TICKET_TYPES } = require("../lib/ticketRouting");
 
 const router = express.Router();
@@ -24,15 +24,6 @@ async function getTicket(ticketId) {
         throw err;
     }
     return result.rows[0];
-}
-
-// Small shared helper so every handler logs the same shape of row.
-async function logTransition(client, { ticketId, fromStatus, toStatus, changedBy }) {
-    await client.query(
-        `INSERT INTO ticket_status_transitions (ticketId, fromStatus, toStatus, changedBy)
-         VALUES ($1, $2, $3, $4)`,
-        [ticketId, fromStatus, toStatus, changedBy]
-    );
 }
 
 // POST / — Site Manager creates a ticket on their own assigned project.

@@ -24,7 +24,7 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
             [req.params.expenseId]
         );
         if (logResult.rowCount === 0) {
-            return res.status(404).json({ error: "No blockchain record exists for this expense yet" });
+            return res.status(404).json({ error: "This expense hasn't been secured yet, so there's nothing to check against." });
         }
         const log = logResult.rows[0];
 
@@ -35,7 +35,9 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
         try {
             onChainHash = await getOnChainHash(log.txhash);
         } catch (e) {
-            return res.status(503).json({ error: "Blockchain nodes are unreachable. Try again later." });
+            return res.status(503).json({
+                error: "We can't run the check right now because the verification servers didn't respond. Your records are safe. Try again in a few minutes.",
+            });
         }
         if (onChainHash !== null && recomputedHash === onChainHash) {
             return res.json({ verified: true, txHash: log.txhash, blockNumber: log.blocknumber, timestamp: log.timestamp });
@@ -52,7 +54,7 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
             verified: false,
             recomputedHash,
             onChainHash: onChainHash || "MISSING",
-            message: "TAMPER ALERT: record does not match blockchain. Logged and flagged for System Administrator.",
+            message: "This expense was changed after approval. It has been logged and your System Administrator has been notified.",
         });
     } catch (err) {
         next(err);
@@ -82,7 +84,8 @@ router.get("/alerts", requireRole("General Manager", "System Administrator"), as
 router.get("/project/:projectId", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const logsResult = await query(
-            `SELECT bl.txhash, bl.blocknumber, bl.timestamp, bl.expenseid, bl.validatornodecount
+            `SELECT bl.txhash, bl.blocknumber, bl.timestamp, bl.expenseid, bl.validatornodecount,
+                    e.vendorname, e.amount, e.blockchainstatus
                FROM BlockchainLogs bl
                JOIN Expenses e ON e.expenseid = bl.expenseid
               WHERE e.projectid = $1

@@ -8,6 +8,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "../../api/notificationsApi";
+import { humanizeNotification } from "../../utils/plainLanguage";
 import "./Topbar.css";
 
 const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
@@ -24,7 +25,7 @@ const PAGE_LABELS = [
   { test: (p) => p.includes("/tasks/new"), label: "Add Task", crumb: "Projects / Tasks / New" },
   { test: (p) => p === "/expenses", label: "Expenses", crumb: "Finance" },
   { test: (p) => p === "/admin/users", label: "User Accounts", crumb: "Administration" },
-  { test: (p) => p === "/blockchain/alerts", label: "Tamper Alerts", crumb: "Blockchain Audit" },
+  { test: (p) => p === "/blockchain/alerts", label: "Tamper Alerts", crumb: "Record Protection" },
 ];
 
 function pageInfoFor(pathname) {
@@ -162,7 +163,7 @@ export function Topbar({ onMenuClick }) {
                         className={"topbar-notif-item" + (n.isread ? "" : " topbar-notif-item-unread")}
                         onClick={() => !n.isread && handleMarkRead(n.notificationid)}
                       >
-                        <p className="topbar-notif-message">{n.message}</p>
+                        <p className="topbar-notif-message">{humanizeNotification(n.message)}</p>
                         <p className="topbar-notif-time">
                           {new Date(n.createdat).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })}
                         </p>

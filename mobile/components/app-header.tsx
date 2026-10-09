@@ -7,39 +7,25 @@ const COLORS = {
   bg: "#F8F1E8",
   ink: "#1A1A1A",
   border: "#EDE6D9",
-  danger: "#C1121F",
 };
 
-type Props = {
-  onLogout?: () => void;
-};
-
-export function AppHeader({ onLogout }: Props) {
+// Brand on the left, gear on the right. Logout lives only in Settings so it
+// can't be tapped by accident from the home screen.
+export function AppHeader() {
   return (
     <View style={styles.bar}>
-      <Pressable
-        style={styles.side}
-        onPress={() => router.replace("/")}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Go to Home"
-      >
-        <IconSymbol name="house.fill" size={18} color={COLORS.ink} />
-        <Text style={styles.sideLabel}>Home</Text>
-      </Pressable>
-
       <Text style={styles.brand} numberOfLines={1}>
         BrickXBrick
       </Text>
 
       <Pressable
-        style={styles.side}
-        onPress={onLogout}
-        hitSlop={8}
+        style={styles.gear}
+        onPress={() => router.push("/settings")}
+        hitSlop={10}
         accessibilityRole="button"
-        accessibilityLabel="Log out"
+        accessibilityLabel="Open settings"
       >
-        <Text style={[styles.sideLabel, styles.logoutLabel]}>Logout</Text>
+        <IconSymbol name="gearshape.fill" size={22} color={COLORS.ink} />
       </Pressable>
     </View>
   );
@@ -56,24 +42,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  side: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minWidth: 70,
-  },
-  sideLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.ink,
-  },
-  logoutLabel: {
-    color: COLORS.danger,
-    textAlign: "right",
-  },
   brand: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "800",
     color: COLORS.ink,
+  },
+  gear: {
+    padding: 4,
   },
 });

@@ -7,8 +7,8 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
-const { EXPENSE_COLUMNS, classifyBir, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
-const { checkDuplicate, checkVendor, checkTicketMismatch } = require("../lib/fraudScreening");
+const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
+const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
@@ -107,7 +107,10 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         }
         const quantity = computeQuantityFromLineItems(storedLineItems);
 
-        const { birValidationStatus } = classifyBir({ tin, birPermitNumber, birNumber });
+        // Normalize BIR fields first so Layer 1's exact match can't be dodged
+        // by spacing or hyphens ("OR 4567" vs "OR-4567").
+        const bir = normalizeBirFields({ tin, birPermitNumber, birNumber });
+        const { birValidationStatus } = classifyBir(bir);
 
         // When a ticket is given, the ticket is the source of truth for the
         // project — not the client-supplied projectID (F9 Layer 3).
@@ -178,53 +181,20 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
                 category,
                 birValidationStatus,
                 receiptImageURL,
-                birNumber || null,
-                tin || null,
-                birPermitNumber || null,
+                bir.birNumber,
+                bir.tin,
+                bir.birPermitNumber,
                 JSON.stringify(storedLineItems),
                 quantity,
             ]
         );
 
-        // `expense` is camelCase (EXPENSE_COLUMNS aliases). checkDuplicate and
-        // checkVendor read lowercase column names, so they need the raw row —
-        // otherwise they silently return false and never flag anything.
         const expense = result.rows[0];
-        const rawResult = await query("SELECT * FROM expenses WHERE expenseid = $1", [expense.expenseID]);
-        const raw = rawResult.rows[0];
 
-        const isDup = await checkDuplicate(raw);
-        if (isDup) {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
-                 VALUES ($1, 'system', 'BIR_Duplicate', $2)`,
-                [raw.expenseid, "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense"]
-            );
-        }
-
-        const vendorIssue = await checkVendor(raw);
-        if (vendorIssue) {
-            const reason = vendorIssue === "not_found"
-                ? "Vendor not found in VendorMasterList"
-                : "Vendor found in VendorMasterList but approvalStatus = 'Flagged'";
-
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flaggedBy, flagType, reason)
-                 VALUES ($1, 'system', 'Vendor_Validation', $2)`,
-                [raw.expenseid, reason]
-            );
-        }
-
-        // checkTicketMismatch reads camelCase keys, so it gets `expense`.
-        const isMismatch = await checkTicketMismatch(expense);
-        if (isMismatch) {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
-                 VALUES ($1, $2, $3, 'system', 'Pending')`,
-                [expense.expenseID, "Ticket_Mismatch", "Expense does not match ticket material type, quantity, or vendor"]
-            );
-        }
-
+        // F9 Layers 1-3. No transaction here, so the row is already visible
+        // to screenExpense's queries.
+        await screenExpense(expense.expenseID);
+        
         res.status(201).json(expense);
     } catch (err) {
         next(err);
@@ -450,6 +420,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
 // expense. Resets to Pending and clears rejectionReason.
 router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) => {
     try {
+        // Only the Purchaser who submitted it, and only a Rejected one.
         const existing = await query(
             "SELECT * FROM Expenses WHERE expenseID = $1 AND submittedBy = $2",
             [req.params.id, req.user.id]
@@ -461,11 +432,79 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             throw httpError(409, "Only a Rejected expense can be resubmitted");
         }
 
+        const {
+            vendorName,
+            amount,
+            receiptDate,
+            category,
+            birNumber,
+            tin,
+            birPermitNumber,
+            lineItems,
+        } = req.body;
+
+        // Same validation as a new submission. birValidationStatus and
+        // quantity are derived server-side, never taken from the client.
+        if (!vendorName || amount === undefined || amount === null || !receiptDate) {
+            throw httpError(400, "vendorName, amount, and receiptDate are required");
+        }
+        if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
+            throw httpError(400, "amount must be a non-negative number");
+        }
+        if (!category || !VALID_CATEGORIES.includes(category)) {
+            throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
+        }
+        if (!Array.isArray(lineItems) || lineItems.length === 0) {
+            throw httpError(400, "lineItems must include at least one item");
+        }
+        const storedLineItems = normalizeLineItems(lineItems);
+        if (storedLineItems.length === 0) {
+            throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
+        }
+        const quantity = computeQuantityFromLineItems(storedLineItems);
+
+        // Normalize BIR fields so Layer 1's exact match can't be dodged.
+        const bir = normalizeBirFields({ tin, birPermitNumber, birNumber });
+        const { birValidationStatus } = classifyBir(bir);
+
+        // The receipt image, ticket link and project are NOT changed on a
+        // resubmit — only the correctable fields. The receipt already exists.
         const result = await query(
-            "UPDATE Expenses SET status = 'Pending', rejectionReason = NULL WHERE expenseID = $1 RETURNING *",
+            `UPDATE expenses
+                SET vendorname = $1, amount = $2, receiptdate = $3, category = $4,
+                    birvalidationstatus = $5, birnumber = $6, tin = $7,
+                    birpermitnumber = $8, lineitems = $9, quantity = $10,
+                    status = 'Pending', rejectionreason = NULL, approvedby = NULL
+              WHERE expenseid = $11
+              RETURNING ${EXPENSE_COLUMNS}`,
+            [
+                vendorName,
+                amount,
+                receiptDate,
+                category,
+                birValidationStatus,
+                bir.birNumber,
+                bir.tin,
+                bir.birPermitNumber,
+                JSON.stringify(storedLineItems),
+                quantity,
+                req.params.id,
+            ]
+        );
+
+        const expense = result.rows[0];
+
+        // Clear the old screening flags before re-screening, so a corrected
+        // expense doesn't keep stale "duplicate"/"unknown vendor" flags.
+        await query(
+            "DELETE FROM FraudFlags WHERE expenseID = $1 AND flaggedBy = 'system'",
             [req.params.id]
         );
-        res.json(result.rows[0]);
+
+        // Re-run F9 Layers 1-3 on the corrected data.
+        await screenExpense(expense.expenseID);
+
+        res.json(expense);
     } catch (err) {
         next(err);
     }

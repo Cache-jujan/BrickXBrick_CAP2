@@ -13,7 +13,8 @@ import { Redirect, router, useFocusEffect } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import { fetchAssignedTasks, type AssignedTask } from "@/lib/api";
-import { getSession, logout } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
+import { IconSymbol } from "@/components/ui/icon-symbol";
 
 export default function SiteManagerHomeScreen() {
   const session = getSession();
@@ -62,8 +63,14 @@ export default function SiteManagerHomeScreen() {
             <Text style={styles.eyebrow}>SITE MANAGER</Text>
             <Text style={styles.title}>Good morning, {firstName}.</Text>
           </View>
-          <Pressable onPress={() => { logout(); router.replace("/login"); }} style={styles.logoutButton}>
-            <Text style={styles.logoutText}>Log out</Text>
+          <Pressable
+            onPress={() => router.push("/settings")}
+            style={styles.settingsButton}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+          >
+            <IconSymbol name="gearshape.fill" size={22} color={COLORS.heading} />
           </Pressable>
         </View>
 
@@ -202,8 +209,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 },
   title: { color: "#1A1A1A", fontSize: 25, fontWeight: "800", letterSpacing: -0.4, maxWidth: 250 },
   subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10 },
-  logoutButton: { borderColor: "#D8CDBD", borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
-  logoutText: { color: COLORS.heading, fontSize: 12, fontWeight: "700" },
+  settingsButton: { borderColor: "#D8CDBD", borderRadius: 10, borderWidth: 1, padding: 7 },
   summaryCard: { backgroundColor: "#1A1A1A", borderRadius: 18, flexDirection: "row", justifyContent: "space-between", marginTop: 24, minHeight: 160, overflow: "hidden", padding: 20 },
   summaryLabel: { color: "#D8C7AA", fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
   summaryTitle: { color: "#FFFFFF", fontSize: 21, fontWeight: "800", lineHeight: 27, marginTop: 12, maxWidth: 230 },

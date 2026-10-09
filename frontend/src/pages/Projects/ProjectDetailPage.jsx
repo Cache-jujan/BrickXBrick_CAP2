@@ -11,6 +11,10 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
+import { BackLink } from "../../components/ui/BackLink";
+import { ChainStatus } from "../../components/blockchain/ChainStatus";
+import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
+import { ShieldCheckIcon } from "../../components/ui/icons";
 import "./ProjectDetailPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
@@ -33,6 +37,11 @@ export function ProjectDetailPage() {
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
   const [actionError, setActionError] = useState("");
+  // Reject needs a reason (the API returns 400 without one), so it goes
+  // through a small modal: { expense } while open.
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
 
   const [chainSummary, setChainSummary] = useState(null);
   const [chainError, setChainError] = useState("");
@@ -112,14 +121,47 @@ export function ProjectDetailPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  async function handleAction(expenseId, action) {
+  async function refreshAfterReview() {
+    setExpenses(await listExpenses(id));
+    setChainSummary(await getProjectBlockchainSummary(id));
+  }
+
+  async function handleApprove(expenseId) {
     setActionError("");
     try {
-      await (action === "approve" ? approveExpense(expenseId) : rejectExpense(expenseId));
-      setExpenses(await listExpenses(id));
-      setChainSummary(await getProjectBlockchainSummary(id));
+      await approveExpense(expenseId);
+      await refreshAfterReview();
     } catch (err) {
-      setActionError(extractErrorMessage(err, `Couldn't ${action} this expense.`));
+      setActionError(extractErrorMessage(err, "Couldn't approve this expense."));
+    }
+  }
+
+  function openReject(expense) {
+    setActionError("");
+    setRejectReason("");
+    setRejecting(expense);
+  }
+
+  function closeReject() {
+    if (rejectBusy) return;
+    setRejecting(null);
+    setRejectReason("");
+    setActionError("");
+  }
+
+  async function handleReject() {
+    if (!rejecting || !rejectReason.trim() || rejectBusy) return;
+    setRejectBusy(true);
+    setActionError("");
+    try {
+      await rejectExpense(rejecting.expenseid, rejectReason.trim());
+      setRejecting(null);
+      setRejectReason("");
+      await refreshAfterReview();
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't reject this expense."));
+    } finally {
+      setRejectBusy(false);
     }
   }
 
@@ -134,7 +176,7 @@ export function ProjectDetailPage() {
     } catch (err) {
       setVerifyResults((prev) => ({
         ...prev,
-        [expenseId]: { verified: false, message: extractErrorMessage(err, "Verification failed.") },
+        [expenseId]: { verified: false, error: extractErrorMessage(err, "Verification failed.") },
       }));
     } finally {
       setVerifyingId(null);
@@ -163,7 +205,7 @@ export function ProjectDetailPage() {
         <Banner tone="info" title="You don't manage this project">
           Only this project's assigned Project Manager or a General Manager can view its details.
         </Banner>
-        <Link to="/projects" className="btn btn-secondary">Back to Projects</Link>
+        <BackLink to="/projects">Back to Projects</BackLink>
       </div>
     );
   }
@@ -171,7 +213,7 @@ export function ProjectDetailPage() {
     return (
       <div className="project-detail-terminal">
         <Banner tone="error" title={error} />
-        <Link to="/projects" className="btn btn-secondary">Back to Projects</Link>
+        <BackLink to="/projects">Back to Projects</BackLink>
       </div>
     );
   }
@@ -188,7 +230,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="project-detail">
-      <Link to="/projects" className="project-detail-back">Back to Projects</Link>
+      <BackLink to="/projects">Back to Projects</BackLink>
 
       <div className="spread project-detail-header">
         <div>
@@ -288,7 +330,7 @@ export function ProjectDetailPage() {
       </div>
 
       {expensesError && <Banner tone="error" title={expensesError} />}
-      {actionError && <Banner tone="error" title={actionError} />}
+      {actionError && !rejecting && <Banner tone="error" title={actionError} />}
       {!expensesError && expensesLoading && <p className="dashboard-loading">Loading expenses…</p>}
       {!expensesError && !expensesLoading && expenses.length === 0 && (
         <Banner tone="empty" title="No expenses recorded yet">
@@ -316,7 +358,14 @@ export function ProjectDetailPage() {
                         <td>{e.category}</td>
                         <td>{PESO.format(e.amount)}</td>
                         <td>{DATE.format(new Date(e.receiptdate))}</td>
-                        <td><Badge status={e.status} /></td>
+                        <td>
+                          <span className="project-detail-badges">
+                            <Badge status={e.status} />
+                            {e.status === "Approved" && e.blockchainstatus === "TamperDetected" && (
+                              <Badge status="Overdue">Changed after approval</Badge>
+                            )}
+                          </span>
+                        </td>
                       </tr>
                       {isOpen && (
                         <tr className="project-detail-expense-detail">
@@ -349,40 +398,22 @@ export function ProjectDetailPage() {
                                 <p>You submitted this expense, so someone else must review it.</p>
                               ) : (
                                 <div className="expense-detail-actions">
-                                  <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
+                                  <Button onClick={() => handleApprove(e.expenseid)}>Approve</Button>
                                   {!(e.submittedby === user.id && user.role === "General Manager") && (
-                                    <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
+                                    <Button variant="danger" onClick={() => openReject(e)}>Reject</Button>
                                   )}
                                 </div>
                               )
                             )}
 
-                            {canVerify && e.status === "Approved" && (
-                              <div className="expense-blockchain-row">
-                                <span className={`chain-status chain-status-${(e.blockchainstatus || "none").toLowerCase()}`}>
-                                  Blockchain: {e.blockchainstatus || "None"}
-                                </span>
-                                {e.blockchainstatus === "Confirmed" && (
-                                  <Button
-                                    variant="secondary"
-                                    disabled={verifyingId === e.expenseid}
-                                    onClick={() => handleVerify(e.expenseid)}
-                                  >
-                                    {verifyingId === e.expenseid ? "Verifying…" : "Verify on Blockchain"}
-                                  </Button>
-                                )}
-                                {verifyResult && (
-                                  verifyResult.verified ? (
-                                    <Banner tone="info" title="Verified: matches blockchain record">
-                                      Tx: {verifyResult.txHash?.slice(0, 18)}… · Block #{verifyResult.blockNumber}
-                                    </Banner>
-                                  ) : (
-                                    <Banner tone="error" title="Tamper alert">
-                                      {verifyResult.message}
-                                    </Banner>
-                                  )
-                                )}
-                              </div>
+                            {canReview && e.status === "Approved" && (
+                              <ExpenseProtection
+                                status={e.blockchainstatus}
+                                canCheck={canVerify}
+                                checking={verifyingId === e.expenseid}
+                                result={verifyResult}
+                                onCheck={() => handleVerify(e.expenseid)}
+                              />
                             )}
                           </td>
                         </tr>
@@ -396,54 +427,72 @@ export function ProjectDetailPage() {
         </Card>
       )}
 
-      <div className="spread project-detail-section-head">
-        <h2>Blockchain Audit Trail</h2>
-      </div>
-
-      {chainError && <Banner tone="error" title={chainError} />}
-      {!chainError && chainLoading && <p className="dashboard-loading">Loading blockchain audit data…</p>}
-      {!chainError && !chainLoading && chainSummary && (
-        <>
-          {chainSummary.openAlerts.length > 0 && (
-            <Banner tone="error" title={`${chainSummary.openAlerts.length} unresolved tamper alert(s) on this project`}>
-              At least one expense's on-chain hash no longer matches its database record. Contact your System Administrator.
-            </Banner>
-          )}
-
-          <div className="project-detail-facts chain-summary-facts">
-            <Fact label="Confirmed on Blockchain" value={chainSummary.confirmedCount} />
-            <Fact
-              label="Last Recorded"
-              value={chainSummary.lastCheckedAt ? DATETIME.format(new Date(chainSummary.lastCheckedAt)) : "No records yet"}
-            />
+      <section className="record-protection" aria-labelledby="record-protection-title">
+        <div className="record-protection-head">
+          <span className="record-protection-seal" aria-hidden="true"><ShieldCheckIcon size={22} /></span>
+          <div>
+            <h2 id="record-protection-title">Record Protection</h2>
+            <p className="record-protection-intro">
+              When an expense is approved, a tamper-proof copy is saved on three separate servers.
+              If anyone edits the expense afterwards, the system notices and raises an alert.
+            </p>
           </div>
+        </div>
 
-          {chainSummary.logs.length === 0 ? (
-            <Banner tone="empty" title="No blockchain records yet">
-              Records appear here once an approved expense is confirmed on the blockchain.
-            </Banner>
-          ) : (
-            <Card className="users-table-card">
-              <div className="table-scroll">
-                <table className="users-table project-detail-table">
-                  <thead>
-                    <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
-                  </thead>
-                  <tbody>
-                    {chainSummary.logs.map((log) => (
-                      <tr key={log.txhash}>
-                        <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
-                        <td>{log.blocknumber}</td>
-                        <td>{log.validatornodecount}</td>
-                        <td>{DATETIME.format(new Date(log.timestamp))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+          {chainError && <Banner tone="error" title={chainError} />}
+          {!chainError && chainLoading && <p className="dashboard-loading">Loading blockchain audit data…</p>}
+          {!chainError && !chainLoading && chainSummary && (
+            chainSummary.logs.length === 0 ? (
+              <Banner tone="empty" title="No blockchain records yet">
+                Records appear here once an approved expense is confirmed on the blockchain.
+              </Banner>
+            ) : (
+              <Card className="users-table-card">
+                <div className="table-scroll">
+                  <table className="users-table project-detail-table">
+                    <thead>
+                      <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
+                    </thead>
+                    <tbody>
+                      {chainSummary.logs.map((log) => (
+                        <tr key={log.txhash}>
+                          <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
+                          <td>{log.blocknumber}</td>
+                          <td>{log.validatornodecount}</td>
+                          <td>{DATETIME.format(new Date(log.timestamp))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
           )}
-        </>
+      </section>
+      {rejecting && (
+        <div className="modal-overlay" role="presentation" onClick={closeReject}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="project-reject-title" className="modal-title">Reject this expense?</h2>
+            <p className="modal-body">
+              <strong>{rejecting.vendorname}</strong> · {PESO.format(rejecting.amount)}. The submitter will see it as rejected. No blockchain record is written.
+            </p>
+            <Field
+              label="Reason for rejection"
+              required
+              as="textarea"
+              placeholder="Tell the submitter what needs to change"
+              value={rejectReason}
+              onChange={(ev) => setRejectReason(ev.target.value)}
+            />
+            {actionError && <Banner tone="error" title={actionError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeReject} disabled={rejectBusy}>Cancel</Button>
+              <Button variant="danger" onClick={handleReject} disabled={rejectBusy || !rejectReason.trim()}>
+                {rejectBusy ? "Saving…" : "Reject"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

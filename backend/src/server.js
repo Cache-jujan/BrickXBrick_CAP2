@@ -17,7 +17,9 @@ const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
 const { canonicalizeExpense, submitHashWithTimeout, getOnChainHash } = require("./lib/blockchainService");
+const { tamperMessage } = require("./lib/tamperAlerts");
 const notificationRoutes = require("./routes/notifications");
+const allocationRoutes = require("./routes/allocations");
 
 const app = express();
 app.use(cors());
@@ -35,6 +37,7 @@ app.use("/api/milestones", milestoneRoutes);      // F3 milestones
 app.use("/api/tasks", taskRoutes);                // F3 tasks
 app.use("/api/tickets", ticketRoutes);            // F4 tickets
 app.use("/api/expenses", expenseRoutes);          // F6 expenses
+app.use("/api/allocations", allocationRoutes);     // F8 split receipt allocation
 app.use("/receipts/files", express.static(require("./lib/receiptStorage").STORAGE_DIR));
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
@@ -148,7 +151,7 @@ async function scanForTampering() {
                     [expense.expenseid]
                 );
 
-                const message = `Tamper detected: expense "${expense.vendorname}" (₱${expense.amount}) — ${reason}.`;
+                const message = tamperMessage(expense, onChainHash);
 
                 const admins = await query(
                     "SELECT userid FROM users WHERE role = 'System Administrator' AND status = 'Active'"

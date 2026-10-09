@@ -1,41 +1,100 @@
 .banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
   border-radius: var(--radius-md);
   padding: var(--space-4) var(--space-5);
   border: 1px solid transparent;
+  border-left-width: 4px;
+}
+
+.banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.banner-content {
+  min-width: 0;
+  flex: 1;
 }
 
 .banner-title {
-  font-weight: 600;
+  font-weight: 650;
   font-size: var(--text-sm);
+  line-height: 1.45;
 }
 
 .banner-body {
   font-size: var(--text-sm);
+  line-height: 1.55;
   margin-top: var(--space-1);
+  color: var(--color-ink);
+}
+
+.banner-action {
+  margin-top: var(--space-3);
 }
 
 .banner-error {
   background: var(--color-danger-bg);
-  border-color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border-left-color: var(--color-danger);
+}
+.banner-error .banner-icon,
+.banner-error .banner-title {
   color: var(--color-danger);
 }
 
 .banner-warning {
   background: var(--color-warning-bg);
-  border-color: var(--color-warning);
-  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-left-color: var(--color-warning);
+}
+.banner-warning .banner-icon,
+.banner-warning .banner-title {
+  color: #85601a;
 }
 
-.banner-empty {
-  background: var(--color-surface-muted);
+.banner-success {
+  background: var(--color-success-bg);
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  border-left-color: var(--color-success);
+}
+.banner-success .banner-icon,
+.banner-success .banner-title {
+  color: var(--color-success);
+}
+
+.banner-info {
+  background: var(--color-surface);
   border-color: var(--color-border);
+  border-left-color: var(--color-ink-faint);
+}
+.banner-info .banner-icon {
+  color: var(--color-ink-faint);
+}
+.banner-info .banner-title {
+  color: var(--color-ink);
+}
+
+/* Empty states: centred, no icon, dashed outline so it reads as
+   "nothing here yet" rather than a message about a problem. */
+.banner-empty {
+  display: block;
+  background: var(--color-surface-muted);
+  border: 1px dashed var(--color-border-strong);
   color: var(--color-ink-soft);
   text-align: center;
   padding: var(--space-7) var(--space-5);
 }
-
-.banner-info {
-  background: var(--color-blueprint-tint);
-  border-color: var(--color-border-strong);
+.banner-empty .banner-title {
   color: var(--color-ink);
+  font-size: var(--text-base);
+}
+.banner-empty .banner-body {
+  color: var(--color-ink-soft);
+  max-width: 52ch;
+  margin-left: auto;
+  margin-right: auto;
 }
