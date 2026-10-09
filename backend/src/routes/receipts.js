@@ -87,7 +87,9 @@ router.post("/scan", requireRole("Purchaser", "Site Manager", "General Manager",
     let words = [];
     let ocrError = null;
     try {
-      ({ text: rawText, words } = await extractTextAndWords(req.file.buffer));
+      // mimetype picks the endpoint: images -> images:annotate,
+      // PDF -> files:annotate (F6.3).
+      ({ text: rawText, words } = await extractTextAndWords(req.file.buffer, req.file.mimetype));
     } catch (err) {
       // Vision being down shouldn't kill the submission path. Return an
       // empty draft plus the stored URL and let the user type the fields.
