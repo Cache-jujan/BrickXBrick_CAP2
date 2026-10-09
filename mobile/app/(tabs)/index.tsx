@@ -157,9 +157,11 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    // The tab layout's header already sits under the status bar, so only
+    // the bottom inset applies here.
+    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
       <View style={styles.header}>
-        <Text style={styles.brand}>Brick x Brick</Text>
+        <Text style={styles.brand}>{isSiteManager ? "Ready for expense capture" : "Requests"}</Text>
       </View>
 
       <View style={styles.filterRow}>
@@ -312,8 +314,8 @@ const styles = StyleSheet.create({
 
   header: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
 
   brand: {

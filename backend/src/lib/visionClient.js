@@ -53,4 +53,20 @@ async function extractTextFromImage(buffer) {
   return result.fullTextAnnotation ? result.fullTextAnnotation.text : "";
 }
 
-module.exports = { getVisionClient, extractTextFromImage };
+/**
+ * Same OCR call, but also returns the word boxes (textAnnotations[1..]) that
+ * the layout line-item extractor needs. textAnnotations[0] is the whole-page
+ * blob and is skipped. Same shape as scripts/dump-vision-layout.js.
+ */
+async function extractTextAndWords(buffer) {
+  const vision = getVisionClient();
+  const [result] = await vision.documentTextDetection({ image: { content: buffer } });
+  const text = result.fullTextAnnotation ? result.fullTextAnnotation.text : "";
+  const words = (result.textAnnotations || []).slice(1).map((w) => ({
+    text: w.description,
+    vertices: (w.boundingPoly && w.boundingPoly.vertices) || [],
+  }));
+  return { text, words };
+}
+
+module.exports = { getVisionClient, extractTextFromImage, extractTextAndWords };

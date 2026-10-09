@@ -37,6 +37,11 @@ export function ProjectDetailPage() {
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
   const [actionError, setActionError] = useState("");
+  // Reject needs a reason (the API returns 400 without one), so it goes
+  // through a small modal: { expense } while open.
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
 
   const [chainSummary, setChainSummary] = useState(null);
   const [chainError, setChainError] = useState("");
@@ -116,14 +121,47 @@ export function ProjectDetailPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  async function handleAction(expenseId, action) {
+  async function refreshAfterReview() {
+    setExpenses(await listExpenses(id));
+    setChainSummary(await getProjectBlockchainSummary(id));
+  }
+
+  async function handleApprove(expenseId) {
     setActionError("");
     try {
-      await (action === "approve" ? approveExpense(expenseId) : rejectExpense(expenseId));
-      setExpenses(await listExpenses(id));
-      setChainSummary(await getProjectBlockchainSummary(id));
+      await approveExpense(expenseId);
+      await refreshAfterReview();
     } catch (err) {
-      setActionError(extractErrorMessage(err, `Couldn't ${action} this expense.`));
+      setActionError(extractErrorMessage(err, "Couldn't approve this expense."));
+    }
+  }
+
+  function openReject(expense) {
+    setActionError("");
+    setRejectReason("");
+    setRejecting(expense);
+  }
+
+  function closeReject() {
+    if (rejectBusy) return;
+    setRejecting(null);
+    setRejectReason("");
+    setActionError("");
+  }
+
+  async function handleReject() {
+    if (!rejecting || !rejectReason.trim() || rejectBusy) return;
+    setRejectBusy(true);
+    setActionError("");
+    try {
+      await rejectExpense(rejecting.expenseid, rejectReason.trim());
+      setRejecting(null);
+      setRejectReason("");
+      await refreshAfterReview();
+    } catch (err) {
+      setActionError(extractErrorMessage(err, "Couldn't reject this expense."));
+    } finally {
+      setRejectBusy(false);
     }
   }
 
@@ -292,7 +330,7 @@ export function ProjectDetailPage() {
       </div>
 
       {expensesError && <Banner tone="error" title={expensesError} />}
-      {actionError && <Banner tone="error" title={actionError} />}
+      {actionError && !rejecting && <Banner tone="error" title={actionError} />}
       {!expensesError && expensesLoading && <p className="dashboard-loading">Loading expenses…</p>}
       {!expensesError && !expensesLoading && expenses.length === 0 && (
         <Banner tone="empty" title="No expenses recorded yet">
@@ -360,9 +398,9 @@ export function ProjectDetailPage() {
                                 <p>You submitted this expense, so someone else must review it.</p>
                               ) : (
                                 <div className="expense-detail-actions">
-                                  <Button onClick={() => handleAction(e.expenseid, "approve")}>Approve</Button>
+                                  <Button onClick={() => handleApprove(e.expenseid)}>Approve</Button>
                                   {!(e.submittedby === user.id && user.role === "General Manager") && (
-                                    <Button variant="danger" onClick={() => handleAction(e.expenseid, "reject")}>Reject</Button>
+                                    <Button variant="danger" onClick={() => openReject(e)}>Reject</Button>
                                   )}
                                 </div>
                               )
@@ -401,96 +439,61 @@ export function ProjectDetailPage() {
           </div>
         </div>
 
-        {chainError && <Banner tone="error" title={chainError} />}
-        {!chainError && chainLoading && <p className="dashboard-loading">Loading record protection…</p>}
-        {!chainError && !chainLoading && chainSummary && (
-          <>
-            {chainSummary.openAlerts.length > 0 && (
-              <Banner
-                tone="error"
-                title={
-                  chainSummary.openAlerts.length === 1
-                    ? "1 expense was changed after it was approved"
-                    : `${chainSummary.openAlerts.length} expenses were changed after they were approved`
-                }
-              >
-                {chainSummary.openAlerts.length === 1
-                  ? "Its details no longer match what was approved. Review it under Tamper Alerts or contact your System Administrator."
-                  : "Their details no longer match what was approved. Review them under Tamper Alerts or contact your System Administrator."}
-              </Banner>
-            )}
-
-            <div className="project-detail-facts record-protection-facts">
-              <Fact
-                label="Secured, unchanged"
-                value={chainSummary.logs.filter((log) => (log.blockchainstatus || "Confirmed") === "Confirmed").length}
-              />
-              <Fact
-                label="Changed after approval"
-                value={chainSummary.openAlerts.length}
-                note={chainSummary.openAlerts.length === 0 ? "Nothing to review" : "Needs review"}
-              />
-              <Fact
-                label="Last secured"
-                value={chainSummary.lastCheckedAt ? DATETIME.format(new Date(chainSummary.lastCheckedAt)) : "Not yet"}
-              />
-            </div>
-
-            {chainSummary.logs.length === 0 ? (
-              <Banner tone="empty" title="No secured expenses yet">
-                Approved expenses for this project will be listed here once their tamper-proof copy is saved.
+          {chainError && <Banner tone="error" title={chainError} />}
+          {!chainError && chainLoading && <p className="dashboard-loading">Loading blockchain audit data…</p>}
+          {!chainError && !chainLoading && chainSummary && (
+            chainSummary.logs.length === 0 ? (
+              <Banner tone="empty" title="No blockchain records yet">
+                Records appear here once an approved expense is confirmed on the blockchain.
               </Banner>
             ) : (
-              <>
-                <Card className="users-table-card">
-                  <div className="table-scroll">
-                    <table className="users-table project-detail-table">
-                      <thead>
-                        <tr><th>Expense</th><th>Amount</th><th>Secured on</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
-                        {chainSummary.logs.map((log) => (
-                          <tr key={log.txhash}>
-                            <td>{log.vendorname || "Approved expense"}</td>
-                            <td>{log.amount != null ? PESO.format(log.amount) : "—"}</td>
-                            <td>{DATETIME.format(new Date(log.timestamp))}</td>
-                            <td><ChainStatus status={log.blockchainstatus || "Confirmed"} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-
-                <details className="record-protection-tech">
-                  <summary>Technical details</summary>
-                  <p className="record-protection-tech-note">
-                    For System Administrators and auditors. Each expense's fingerprint is stored in a
-                    blockchain transaction confirmed by the validator servers.
-                  </p>
-                  <div className="table-scroll">
-                    <table className="users-table record-protection-tech-table">
-                      <thead>
-                        <tr><th>Expense</th><th>Transaction</th><th>Block</th><th>Validators</th></tr>
-                      </thead>
-                      <tbody>
-                        {chainSummary.logs.map((log) => (
-                          <tr key={log.txhash}>
-                            <td>{log.vendorname || "—"}</td>
-                            <td><code title={log.txhash}>{log.txhash.slice(0, 10)}…{log.txhash.slice(-6)}</code></td>
-                            <td>#{log.blocknumber}</td>
-                            <td>{log.validatornodecount} of 3</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-              </>
-            )}
-          </>
-        )}
+              <Card className="users-table-card">
+                <div className="table-scroll">
+                  <table className="users-table project-detail-table">
+                    <thead>
+                      <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
+                    </thead>
+                    <tbody>
+                      {chainSummary.logs.map((log) => (
+                        <tr key={log.txhash}>
+                          <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
+                          <td>{log.blocknumber}</td>
+                          <td>{log.validatornodecount}</td>
+                          <td>{DATETIME.format(new Date(log.timestamp))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
+          )}
       </section>
+      {rejecting && (
+        <div className="modal-overlay" role="presentation" onClick={closeReject}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="project-reject-title" className="modal-title">Reject this expense?</h2>
+            <p className="modal-body">
+              <strong>{rejecting.vendorname}</strong> · {PESO.format(rejecting.amount)}. The submitter will see it as rejected. No blockchain record is written.
+            </p>
+            <Field
+              label="Reason for rejection"
+              required
+              as="textarea"
+              placeholder="Tell the submitter what needs to change"
+              value={rejectReason}
+              onChange={(ev) => setRejectReason(ev.target.value)}
+            />
+            {actionError && <Banner tone="error" title={actionError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeReject} disabled={rejectBusy}>Cancel</Button>
+              <Button variant="danger" onClick={handleReject} disabled={rejectBusy || !rejectReason.trim()}>
+                {rejectBusy ? "Saving…" : "Reject"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

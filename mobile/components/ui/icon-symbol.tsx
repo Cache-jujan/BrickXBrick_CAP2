@@ -27,6 +27,11 @@ const MAPPING = {
   "paperplane.fill": "send",
   "chevron.left.forwardslash.chevron.right": "code",
   "chevron.right": "chevron-right",
+  "chevron.left": "chevron-left",
+  "arrow.triangle.2.circlepath": "autorenew",
+  "exclamationmark.triangle.fill": "warning",
+  "checkmark.seal.fill": "verified",
+  "person.crop.circle": "account-circle",
 } satisfies IconMapping;
 
 type IconSymbolName = keyof typeof MAPPING;

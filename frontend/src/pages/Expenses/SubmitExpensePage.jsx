@@ -7,6 +7,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import "./SubmitExpensePage.css";
 import { BackLink } from "../../components/ui/BackLink";
 
@@ -22,6 +23,8 @@ const EMPTY_DRAFT = {
   receiptImageURL: "",
   lineItems: [{ description: "", amount: "", quantity: "", unitPrice: "" }],
 };
+
+const VENDOR_FIELD_LABELS = { tin: "TIN", birPermitType: "BIR authority type", birPermitNumber: "BIR permit number" };
 
 function toDateInput(value) {
   if (!value) return "";
@@ -85,6 +88,11 @@ export function SubmitExpensePage() {
   const [pageError, setPageError] = useState("");
   const [pageNotice, setPageNotice] = useState("");
   const [ocrNotice, setOcrNotice] = useState("");
+  // From the vendor master list: fields it filled, and OCR readings it overrode.
+  const [vendorInfo, setVendorInfo] = useState({ autoFilled: [], conflicts: [] });
+  // State updates are async, so a fast double-click can run handleSubmit
+  // twice before `submitting` re-renders. The ref blocks the second call.
+  const busyRef = useRef(false);
 
   const selectedTicket = useMemo(
     () => tickets.find((ticket) => ticket.ticketID === selectedTicketId) || null,
@@ -116,12 +124,13 @@ export function SubmitExpensePage() {
   async function handleReceiptPick(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!file || busyRef.current) return;
 
     setPageError("");
     setPageNotice("");
     setOcrNotice("");
     setReceiptName("");
+    setVendorInfo({ autoFilled: [], conflicts: [] });
     setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
     if (!isSupportedReceipt(file)) {
       setPageError("Choose a JPG, PNG, or PDF receipt. HEIC and other formats are not accepted yet.");
@@ -129,10 +138,15 @@ export function SubmitExpensePage() {
     }
 
     setReceiptName(file.name);
+    busyRef.current = true;
     setScanning(true);
     try {
       const result = await scanReceipt(file);
       setDraft(draftFromScan(result));
+      setVendorInfo({
+        autoFilled: Array.isArray(result.autoFilled) ? result.autoFilled : [],
+        conflicts: Array.isArray(result.vendorConflicts) ? result.vendorConflicts : [],
+      });
       setOcrNotice(result.ocrError || "");
       if (!result.ocrError && result.confidence === "low") {
         setOcrNotice("OCR confidence is low. Check every extracted value before submitting.");
@@ -140,6 +154,7 @@ export function SubmitExpensePage() {
     } catch (error) {
       setPageError(extractErrorMessage(error, "Receipt upload failed. Please try again."));
     } finally {
+      busyRef.current = false;
       setScanning(false);
     }
   }
@@ -200,6 +215,7 @@ export function SubmitExpensePage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (busyRef.current) return;
     setPageError("");
     setPageNotice("");
     if (!selectedTicket || !draft.receiptImageURL || !canSubmit) {
@@ -207,6 +223,7 @@ export function SubmitExpensePage() {
       return;
     }
 
+    busyRef.current = true;
     setSubmitting(true);
     try {
       const payload = {
@@ -235,12 +252,18 @@ export function SubmitExpensePage() {
       setSelectedTicketId("");
       setReceiptName("");
       setOcrNotice("");
+      setVendorInfo({ autoFilled: [], conflicts: [] });
     } catch (error) {
+      // Keep the draft so the user can fix the problem and retry.
       setPageError(extractErrorMessage(error, "Expense submission failed. Please check the details and retry."));
     } finally {
+      busyRef.current = false;
       setSubmitting(false);
     }
   }
+
+  const vendorLabel = (label, field) =>
+    vendorInfo.autoFilled.includes(field) ? `${label} (from vendor list)` : label;
 
   if (!user || !["General Manager", "Project Manager"].includes(user.role)) {
     return <Banner tone="error" title="Not authorized">This submission page is for General Managers and Project Managers.</Banner>;
@@ -248,6 +271,11 @@ export function SubmitExpensePage() {
 
   return (
     <div className="submit-expense-page">
+      <LoadingOverlay
+        open={scanning || submitting}
+        message={scanning ? "Reading receipt…" : "Submitting expense…"}
+        detail={scanning ? "Uploading and running OCR. This can take a few seconds." : "Please don't close this page."}
+      />
       <div className="submit-expense-header">
         <div>
           <BackLink to="/expenses">Back to expenses</BackLink>
@@ -262,6 +290,12 @@ export function SubmitExpensePage() {
       {pageError && <Banner tone="error" title="Could not continue">{pageError}</Banner>}
       {pageNotice && <Banner tone="info" title="Submission saved">{pageNotice}</Banner>}
       {ocrNotice && <Banner tone="warning" title="Review the receipt carefully">{ocrNotice}</Banner>}
+      {vendorInfo.conflicts.length > 0 && (
+        <Banner tone="warning" title="Receipt differs from the vendor list">
+          {vendorInfo.conflicts.map((c) => `${VENDOR_FIELD_LABELS[c.field] || c.field}: receipt reads ${c.ocrValue}, vendor list has ${c.masterValue}`).join(" · ")}.
+          {" "}The vendor list value was used. Check the paper receipt.
+        </Banner>
+      )}
 
       <form className="submit-expense-form" onSubmit={handleSubmit}>
         <Card className="submit-expense-card">
@@ -363,9 +397,9 @@ export function SubmitExpensePage() {
                 <option value="Equipment">Equipment</option>
                 <option value="Other">Other</option>
               </Field>
-              <Field label="TIN" value={draft.tin} onChange={(event) => setField("tin", event.target.value)} />
-              <Field label="BIR authority type" value={draft.birPermitType} onChange={(event) => setField("birPermitType", event.target.value)} placeholder="Permit, PTU, or ATP" />
-              <Field label="BIR permit number" value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
+              <Field label={vendorLabel("TIN", "tin")} value={draft.tin} onChange={(event) => setField("tin", event.target.value)} />
+              <Field label={vendorLabel("BIR authority type", "birPermitType")} value={draft.birPermitType} onChange={(event) => setField("birPermitType", event.target.value)} placeholder="Permit, PTU, or ATP" />
+              <Field label={vendorLabel("BIR permit number", "birPermitNumber")} value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
               <Field label="OR / SI number" value={draft.birNumber} onChange={(event) => setField("birNumber", event.target.value)} />
             </div>
 
