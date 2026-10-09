@@ -87,7 +87,9 @@ export function ProgressReviewPage() {
                       <span>Submitted {DATE.format(new Date(submission.createdat))}</span>
                     </div>
                     <h2>{submission.taskname}</h2>
-                    <p className="progress-review-context">Milestone: {submission.milestoneid}</p>
+                    <p className="progress-review-context">
+                      {submission.projectname} &middot; {submission.milestonename}
+                    </p>
                   </div>
                 </div>
 

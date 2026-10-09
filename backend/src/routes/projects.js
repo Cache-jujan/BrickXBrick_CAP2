@@ -1,6 +1,7 @@
 // projects.js — F2: Project Initialization
 const express = require("express");
-const { query } = require("../lib/db");
+const { query, withTransaction } = require("../lib/db");
+const { reassignSiteManager } = require("../lib/reassignSiteManager");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 
@@ -146,6 +147,19 @@ router.get("/eligible-site-managers", requireRole("General Manager", "Project Ma
 
 // PATCH /:id/site-manager — GM or the owning PM may assign, replace, or clear
 // the Site Manager. Only active Site Manager accounts are valid assignments.
+//
+// D-02: tasks.assignedTo is copied at task-create time and was never moved
+// when the project's SM changed, so the old SM kept backend access to open
+// tasks and the new SM got 403 on them. Reassignment now moves every open
+// (non-Completed) task under this project's milestones to the new SM in the
+// same transaction as the project update. Completed tasks keep their
+// original assignee — the work and photo evidence really are theirs, and
+// the PM review route doesn't key off current assignment anyway.
+//
+// tasks.assignedTo is NOT NULL, so clearing the SM (siteManagerId: null)
+// while open tasks exist would silently leave them with the outgoing SM —
+// that's rejected with 409 instead. Clearing is only allowed once no open
+// tasks remain.
 router.patch("/:id/site-manager", requireRole("General Manager", "Project Manager"), async (req, res) => {
   const siteManagerId = req.body.siteManagerId || null;
 
@@ -173,16 +187,22 @@ router.patch("/:id/site-manager", requireRole("General Manager", "Project Manage
       }
     }
 
-    const result = await query(
-      `UPDATE projects
-          SET siteManagerId = $1
-        WHERE projectid = $2
-        RETURNING ${PROJECT_COLUMNS},
-          (SELECT name FROM users WHERE userid = projects.siteManagerId) AS siteManagerName,
-          (SELECT email FROM users WHERE userid = projects.siteManagerId) AS siteManagerEmail`,
-      [siteManagerId, req.params.id]
-    );
-    res.json(result.rows[0]);
+    const result = await withTransaction(async (client) => {
+      await reassignSiteManager(client, { projectId: req.params.id, siteManagerId });
+
+      const updateResult = await client.query(
+        `UPDATE projects
+            SET siteManagerId = $1
+          WHERE projectid = $2
+          RETURNING ${PROJECT_COLUMNS},
+            (SELECT name FROM users WHERE userid = projects.siteManagerId) AS siteManagerName,
+            (SELECT email FROM users WHERE userid = projects.siteManagerId) AS siteManagerEmail`,
+        [siteManagerId, req.params.id]
+      );
+      return updateResult.rows[0];
+    });
+
+    res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

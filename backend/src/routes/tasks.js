@@ -7,17 +7,30 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 const { uploadBuffer } = require("../lib/r2");
+const { hasValidMagicBytes } = require("../lib/photoValidation");
 
 const router = express.Router();
 router.use(requireAuth);
 
 // GET /assigned — tasks assigned to the calling Site Manager.
+// D-14: previously task columns only — an SM with tasks on several projects
+// couldn't tell them apart. Now joins milestone/project names.
+// D-04: previously only surfaced a photo URL for a still-Pending submission
+// — a Flagged submission was invisible here, so the SM never knew to
+// resubmit. Now surfaces the latest submission's status/reason regardless
+// of outcome (Pending Review, Flagged, Acknowledged, or Superseded).
 router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
     try {
         const result = await query(
             `SELECT t.*,
-                    pending.photoevidenceurl AS pendingphotoevidenceurl
+                    m.name AS milestonename,
+                    p.name AS projectname,
+                    pending.photoevidenceurl AS pendingphotoevidenceurl,
+                    latest.reviewstatus AS latestreviewstatus,
+                    latest.reviewreason AS latestreviewreason
                FROM tasks t
+               JOIN milestones m ON m.milestoneId = t.milestoneId
+               JOIN projects p ON p.projectId = m.projectId
                LEFT JOIN LATERAL (
                     SELECT photoevidenceurl
                       FROM task_progress_log
@@ -25,6 +38,13 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                      ORDER BY createdat DESC
                      LIMIT 1
                ) pending ON TRUE
+               LEFT JOIN LATERAL (
+                    SELECT reviewstatus, reviewreason
+                      FROM task_progress_log
+                     WHERE taskid = t.taskid
+                     ORDER BY createdat DESC
+                     LIMIT 1
+               ) latest ON TRUE
               WHERE t.assignedTo = $1
               ORDER BY t.dueDate ASC`,
             [req.user.id]
@@ -109,6 +129,11 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
             err.status = 400;
             throw err;
         }
+        if (!hasValidMagicBytes(req.file.buffer, req.file.mimetype)) {
+            const err = new Error("photo content does not match a valid JPEG or PNG file");
+            err.status = 400;
+            throw err;
+        }
 
         const task = await getTaskForSubmission(req.params.id);
 
@@ -117,21 +142,32 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
             err.status = 403;
             throw err;
         }
-        if (task.status === "Completed") {
-            const err = new Error("This task is already completed and cannot be resubmitted");
-            err.status = 409;
-            throw err;
-        }
 
-        // Idempotency check BEFORE the R2 upload — a replayed sync call
-        // should not re-upload a duplicate photo, it should just hand back
-        // whatever already landed from the first attempt.
+        // D-05/D-15: the idempotency lookup used to run on clientSubmissionId
+        // alone, so a different user's clientSubmissionId (sent deliberately
+        // or copy-pasted) returned THEIR row, and it ran after the Completed
+        // check, so a replay of an already-acknowledged submission 409'd
+        // instead of returning the original row. Scope the match to this
+        // task + this submitter, run it before the Completed check, and
+        // before the R2 upload — a replayed sync call should never re-upload.
         const existing = await query(
             "SELECT * FROM task_progress_log WHERE clientSubmissionId = $1",
             [clientSubmissionId]
         );
         if (existing.rowCount > 0) {
-            return res.status(200).json(existing.rows[0]);
+            const existingLog = existing.rows[0];
+            if (existingLog.taskid === req.params.id && existingLog.submittedby === req.user.id) {
+                return res.status(200).json(existingLog);
+            }
+            const err = new Error("clientSubmissionId is already in use by a different task or submitter");
+            err.status = 409;
+            throw err;
+        }
+
+        if (task.status === "Completed") {
+            const err = new Error("This task is already completed and cannot be resubmitted");
+            err.status = 409;
+            throw err;
         }
 
         const photoEvidenceURL = await uploadBuffer(req.file.buffer, {
@@ -140,6 +176,13 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
         });
 
         const logEntry = await withTransaction(async (client) => {
+            // D-06: lock the task row so two concurrent submits serialize
+            // instead of both reading "no pending row yet" and both
+            // superseding + inserting. task_progress_log_one_pending_per_task
+            // (migration 021) is the DB-level backstop if they somehow race
+            // past this anyway.
+            await client.query("SELECT taskId FROM tasks WHERE taskId = $1 FOR UPDATE", [req.params.id]);
+
             // Supersede any prior pending entry rather than blocking —
             // resubmission mid-review is allowed, not queued.
             await client.query(
@@ -161,6 +204,9 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
 
         res.status(201).json(logEntry);
     } catch (err) {
+        if (err.code === "23505") {
+            return res.status(409).json({ error: "A submission is already pending review for this task" });
+        }
         next(err);
     }
 });
@@ -170,8 +216,11 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
 router.get("/progress-log", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const status = req.query.status || "Pending Review";
+        // D-13: previously selected only t.milestoneId — the review card
+        // showed a raw UUID with no project, so the PM couldn't tell which
+        // project/milestone a submission belonged to without a lookup.
         const result = await query(
-            `SELECT l.*, t.taskName, t.milestoneId
+            `SELECT l.*, t.taskName, t.milestoneId, m.name AS milestoneName, p.name AS projectName
                FROM task_progress_log l
                JOIN tasks t ON t.taskId = l.taskId
                JOIN milestones m ON m.milestoneId = t.milestoneId
@@ -211,15 +260,37 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
             err.status = 403;
             throw err;
         }
-        if (log.reviewstatus !== "Pending Review") {
-            const err = new Error(`This submission was already reviewed (status: ${log.reviewstatus})`);
-            err.status = 409;
-            throw err;
-        }
 
+        // D-06: the old check-then-act (read reviewStatus, then UPDATE)
+        // let concurrent Acknowledge + Flag both pass the read and both
+        // succeed, leaving the log Flagged while the task flipped to
+        // Completed. Claim the row atomically — only the request that
+        // actually flips Pending Review -> something else proceeds; the
+        // other gets 0 rows back and 409s.
         const result = await withTransaction(async (client) => {
-            let task = null;
+            const claim = await client.query(
+                `UPDATE task_progress_log
+                    SET reviewStatus = $1::varchar,
+                        reviewedBy = $2,
+                        reviewedAt = NOW(),
+                        reviewReason = $3
+                  WHERE logId = $4 AND reviewStatus = 'Pending Review'
+                  RETURNING *`,
+                [
+                    decision === "Acknowledge" ? "Acknowledged" : "Flagged",
+                    req.user.id,
+                    decision === "Flag" ? reason : null,
+                    req.params.logId,
+                ]
+            );
+            if (claim.rowCount === 0) {
+                const err = new Error("This submission was already reviewed");
+                err.status = 409;
+                throw err;
+            }
+            const updatedLog = claim.rows[0];
 
+            let task;
             if (decision === "Acknowledge") {
                 // updatedBy reflects the SM who did the work, not the PM
                 // reviewing it — reviewedBy on the log row already tracks
@@ -233,32 +304,17 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
                             lastUpdatedAt = NOW()
                       WHERE taskId = $3
                       RETURNING *`,
-                    [log.photoevidenceurl, log.submittedby, log.taskid]
+                    [updatedLog.photoevidenceurl, updatedLog.submittedby, updatedLog.taskid]
                 );
                 task = taskUpdate.rows[0];
 
-                await client.query(
-                    `UPDATE task_progress_log
-                        SET reviewStatus = 'Acknowledged'::varchar, reviewedBy = $1, reviewedAt = NOW()
-                      WHERE logId = $2`,
-                    [req.user.id, req.params.logId]
-                );
-
                 await recalcMilestoneProgress(client, log.milestoneid);
             } else {
-                await client.query(
-                    `UPDATE task_progress_log
-                        SET reviewStatus = 'Flagged'::varchar, reviewedBy = $1, reviewedAt = NOW(), reviewReason = $2
-                      WHERE logId = $3`,
-                    [req.user.id, reason, req.params.logId]
-                );
-
-                const taskResult = await client.query("SELECT * FROM tasks WHERE taskId = $1", [log.taskid]);
+                const taskResult = await client.query("SELECT * FROM tasks WHERE taskId = $1", [updatedLog.taskid]);
                 task = taskResult.rows[0];
             }
 
-            const logResult = await client.query("SELECT * FROM task_progress_log WHERE logId = $1", [req.params.logId]);
-            return { log: logResult.rows[0], task };
+            return { log: updatedLog, task };
         });
 
         res.json(result);

@@ -63,6 +63,9 @@ export default function SiteManagerTaskDetailScreen() {
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
   const evidenceUrl = task?.pendingphotoevidenceurl || task?.photoevidenceurl;
+  // D-04: flag only ever lived on the log row — the SM had no way to see
+  // that a submission was flagged, let alone why, short of asking the PM.
+  const flagged = task?.latestreviewstatus === "Flagged";
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -171,10 +174,18 @@ export default function SiteManagerTaskDetailScreen() {
             </View>
 
             <View style={styles.infoCard}>
+              {task.projectname && <InfoRow label="Project" value={task.projectname} />}
+              {task.milestonename && <InfoRow label="Milestone" value={task.milestonename} />}
               <InfoRow label="Due date" value={formatDate(task.duedate)} />
               <InfoRow label="Task status" value={task.status} />
-              <InfoRow label="Task ID" value={task.taskid} />
             </View>
+
+            {flagged && (
+              <View style={styles.flagCard}>
+                <Text style={styles.flagTitle}>Flagged — resubmission needed</Text>
+                {task.latestreviewreason && <Text style={styles.flagBody}>{task.latestreviewreason}</Text>}
+              </View>
+            )}
 
             {evidenceUrl && (
               <View style={styles.evidenceCard}>
@@ -295,6 +306,9 @@ const styles = StyleSheet.create({
   infoRow: { borderBottomColor: "#EEE7DE", borderBottomWidth: 1, paddingVertical: 15 },
   infoLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
   infoValue: { color: COLORS.heading, fontSize: 14, fontWeight: "700", marginTop: 5 },
+  flagCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 16 },
+  flagTitle: { color: "#B42318", fontSize: 14, fontWeight: "800" },
+  flagBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
   evidenceCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 14, overflow: "hidden", padding: 12 },
   evidenceTitle: { color: COLORS.heading, fontSize: 13, fontWeight: "800", marginBottom: 10 },
   evidenceImage: { backgroundColor: "#EEE7DE", borderRadius: 10, height: 220, width: "100%" },

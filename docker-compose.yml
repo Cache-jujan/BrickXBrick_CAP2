@@ -7,10 +7,10 @@ services:
       POSTGRES_USER: brickuser
       POSTGRES_PASSWORD: brickpass
       POSTGRES_DB: brickxbrick
-    ports:
+    ports: 
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./infra/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./infra/db/migrations:/docker-entrypoint-initdb.d:ro
 volumes:
   pgdata:

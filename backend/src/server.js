@@ -3,7 +3,8 @@ const express = require("express");
 const cors = require("cors");
 
 const { requireAuth } = require("./middleware/auth");
-const { query } = require("./lib/db");
+const { query, withTransaction } = require("./lib/db");
+const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
 const adminUsers = require("./routes/adminUsers");
 const authRoutes = require("./routes/auth");
@@ -44,8 +45,29 @@ app.use("/api/blockchain", blockchainRoutes);     // F12 audit trail
 
 app.use("/api/notifications", notificationRoutes); // notifications
 
+// D-09: malformed input (bad UUID, bad date) was never validated before
+// hitting Postgres, so it bubbled up here as a raw driver error — 500s with
+// text like `invalid input syntax for type uuid: "abc"`, leaking schema
+// details and failing checks that expected a clean 400. Map the common
+// input-shaped SQLSTATE codes to 400 and stop echoing unmapped DB errors.
+const PG_INPUT_ERROR_CODES = new Set([
+  "22P02", // invalid_text_representation (bad UUID, bad int, ...)
+  "22007", // invalid_datetime_format
+  "22008", // datetime_field_overflow
+  "22001", // string_data_right_truncation
+]);
+
 // --- Error handler (must stay last, after all routes) ---
 app.use((err, req, res, next) => {
+  if (!err.status && err.code) {
+    if (PG_INPUT_ERROR_CODES.has(err.code)) {
+      return res.status(400).json({ error: "Invalid input value" });
+    }
+    // Any other raw Postgres error reaching here is a bug, not a bad
+    // request — don't leak schema/column details in the response body.
+    console.error("Unhandled DB error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
   res.status(err.status || 500).json({ error: err.message, details: err.details });
 });
 
@@ -166,6 +188,25 @@ async function scanForTampering() {
     }
 }
 setInterval(scanForTampering, 180_000); // every 3 minutes
+
+// F3/F5: schedule variance is otherwise only recomputed on task-create or
+// PM Acknowledge, so a milestone/task that goes stale with no activity
+// never flips to At Risk/Overdue (D-01) and an overdue task under an
+// on-track milestone never alerts (D-08). Sweep on a timer, same pattern
+// as the tamper scan above.
+let varianceSweepRunning = false;
+async function runScheduleVarianceSweep() {
+    if (varianceSweepRunning) return;
+    varianceSweepRunning = true;
+    try {
+        await withTransaction((client) => sweepScheduleVariance(client));
+    } catch (e) {
+        console.error("Schedule variance sweep failed:", e.message);
+    } finally {
+        varianceSweepRunning = false;
+    }
+}
+setInterval(runScheduleVarianceSweep, 120_000); // every 2 minutes
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend listening on port ${PORT}`);

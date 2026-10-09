@@ -29,6 +29,8 @@ export type ApprovedVendor = {
 export type AssignedTask = {
   taskid: string;
   milestoneid: string;
+  milestonename?: string;
+  projectname?: string;
   assignedto: string;
   taskname: string;
   duedate: string;
@@ -36,6 +38,8 @@ export type AssignedTask = {
   completionpercentage: number | string;
   photoevidenceurl?: string | null;
   pendingphotoevidenceurl?: string | null;
+  latestreviewstatus?: string | null;
+  latestreviewreason?: string | null;
 };
 
 export async function fetchAssignedTasks(): Promise<AssignedTask[]> {
