@@ -411,3 +411,81 @@
     border-top: 1px solid var(--color-border);
   }
 }
+
+/* --- Bill of Materials summary ------------------------------------------ */
+
+.pd-bom {
+  margin-bottom: var(--space-6);
+}
+
+.pd-bom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+}
+
+.pd-bom-empty p {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.pd-bom-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.pd-bom-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin: 0;
+}
+
+.pd-bom-figures dt {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+
+.pd-bom-figures dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  text-align: left !important;
+}
+
+.pd-bom-total {
+  color: var(--color-ink);
+}
+
+.pd-checklist {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.pd-checklist li {
+  padding: var(--space-1) 0;
+}
+
+.pd-check-done {
+  color: var(--color-success);
+}
+
+.pd-check-missing {
+  color: var(--color-ink-soft);
+}
+
+.pd-check-missing span {
+  color: var(--color-danger);
+  font-weight: 700;
+}
