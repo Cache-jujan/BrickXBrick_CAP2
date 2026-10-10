@@ -87,8 +87,18 @@ function validateProjectDates({ startDate, constructionStartDate, endDate }) {
   return errors;
 }
 
+// "Mandaue", "Mandaue City", "City of Mandaue" and "Municipality of
+// Consolacion" all compare equal, so the GM doesn't trip the warning just by
+// typing the name differently.
 function normalizeMunicipality(value) {
-  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^(city|municipality) of /, "")
+    .replace(/ (city|municipality)$/, "")
+    .trim();
 }
 
 function parseServiceArea(settingValue) {
@@ -308,6 +318,7 @@ module.exports = {
   httpError,
   isIsoDate,
   validateProjectDates,
+  normalizeMunicipality,
   parseServiceArea,
   isWithinServiceArea,
   buildProjectWarnings,

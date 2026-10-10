@@ -95,7 +95,7 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
   const outsideServiceArea = Boolean(
     options &&
       form.municipality.trim() &&
-      !options.serviceAreaMunicipalities.includes(form.municipality.trim().toLowerCase().replace(/\s+/g, " "))
+      !options.serviceAreaMunicipalities.includes(normalizeMunicipality(form.municipality))
   );
 
   function validate() {
@@ -314,6 +314,18 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
       </div>
     </form>
   );
+}
+
+// Mirrors normalizeMunicipality in backend/src/lib/projectRules.js.
+function normalizeMunicipality(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^(city|municipality) of /, "")
+    .replace(/ (city|municipality)$/, "")
+    .trim();
 }
 
 function capitalize(s) {

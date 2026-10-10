@@ -4,7 +4,7 @@
 }
 
 .manager-picker-busy {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  margin: 0 0 var(--space-4);
   font-size: var(--text-sm);
   color: var(--color-ink-soft);
 }
@@ -14,11 +14,17 @@
   color: var(--color-ink-faint);
 }
 
-.manager-picker-busy ul {
+.manager-picker-list,
+.manager-picker-list ul {
   margin: var(--space-2) 0 0 var(--space-4);
   padding: 0;
 }
 
-.manager-picker-busy li {
+.manager-picker-list li {
   margin-bottom: var(--space-1);
+}
+
+.manager-picker-count,
+.manager-picker-meta {
+  color: var(--color-ink-faint);
 }
