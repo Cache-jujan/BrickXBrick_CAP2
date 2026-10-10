@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getEligibleSiteManagers, getProjectOverview, updateProjectSiteManager } from "../../api/projectsApi";
+import {
+  activateProject,
+  cancelProject,
+  completeProject,
+  getEligibleSiteManagers,
+  getProjectOverview,
+  updateProjectSiteManager,
+} from "../../api/projectsApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
@@ -11,8 +18,8 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
+import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
-import { ChainStatus } from "../../components/blockchain/ChainStatus";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { ShieldCheckIcon } from "../../components/ui/icons";
 import "./ProjectDetailPage.css";
@@ -20,6 +27,11 @@ import "./ProjectDetailPage.css";
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "long", day: "numeric" });
 const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const CLOSED_STATUSES = ["Completed", "Cancelled", "Archived"];
+
+function formatDate(value) {
+  return value ? DATE.format(new Date(value)) : "Not set";
+}
 
 export function ProjectDetailPage() {
   const { id } = useParams();
@@ -51,6 +63,11 @@ export function ProjectDetailPage() {
   const [siteManagers, setSiteManagers] = useState([]);
   const [siteManagersError, setSiteManagersError] = useState("");
   const [siteManagerSaving, setSiteManagerSaving] = useState(false);
+  // GM lifecycle actions: { kind: "activate" | "cancel" | "complete" } while a dialog is open.
+  const [statusDialog, setStatusDialog] = useState(null);
+  const [statusInput, setStatusInput] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +97,11 @@ export function ProjectDetailPage() {
     };
   }, [id]);
 
+  const isGM = user.role === "General Manager";
+  const isClosed = Boolean(project && CLOSED_STATUSES.includes(project.status));
   const canManageSiteManager = Boolean(
-    project && (
-      user.role === "General Manager" ||
+    project && !isClosed && (
+      isGM ||
       (user.role === "Project Manager" && project.projectmanagerid === user.id)
     )
   );
@@ -91,13 +110,13 @@ export function ProjectDetailPage() {
     if (!canManageSiteManager) return undefined;
     let cancelled = false;
     setSiteManagersError("");
-    getEligibleSiteManagers()
+    getEligibleSiteManagers(id)
       .then((data) => { if (!cancelled) setSiteManagers(data); })
       .catch((err) => {
         if (!cancelled) setSiteManagersError(extractErrorMessage(err, "Couldn't load Site Managers."));
       });
     return () => { cancelled = true; };
-  }, [canManageSiteManager]);
+  }, [canManageSiteManager, id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,17 +202,47 @@ export function ProjectDetailPage() {
     }
   }
 
-  async function handleSiteManagerChange(event) {
-    const siteManagerId = event.target.value || null;
+  async function handleSiteManagerChange(value) {
+    const siteManagerId = value || null;
     setSiteManagerSaving(true);
     setSiteManagersError("");
     try {
       const updated = await updateProjectSiteManager(id, siteManagerId);
       setProject((previous) => ({ ...previous, ...updated }));
+      setSiteManagers(await getEligibleSiteManagers(id));
     } catch (err) {
       setSiteManagersError(extractErrorMessage(err, "Couldn't update the Site Manager assignment."));
     } finally {
       setSiteManagerSaving(false);
+    }
+  }
+
+  function openStatusDialog(kind) {
+    setStatusError("");
+    setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
+    setStatusDialog({ kind });
+  }
+
+  function closeStatusDialog() {
+    if (statusBusy) return;
+    setStatusDialog(null);
+    setStatusError("");
+  }
+
+  async function handleStatusAction() {
+    if (!statusDialog || statusBusy) return;
+    setStatusBusy(true);
+    setStatusError("");
+    try {
+      if (statusDialog.kind === "activate") await activateProject(id);
+      if (statusDialog.kind === "cancel") await cancelProject(id, statusInput.trim());
+      if (statusDialog.kind === "complete") await completeProject(id, statusInput);
+      setProject(await getProjectOverview(id));
+      setStatusDialog(null);
+    } catch (err) {
+      setStatusError(extractErrorMessage(err, "Couldn't update the project status."));
+    } finally {
+      setStatusBusy(false);
     }
   }
 
@@ -225,7 +274,7 @@ export function ProjectDetailPage() {
 
   // Only the owning Project Manager may add milestones/tasks — mirrors
   // getOwnedProject's check in backend/src/routes/milestones.js.
-  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id;
+  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   const hasSiteManager = Boolean(project.sitemanagerid);
 
   return (
@@ -237,8 +286,38 @@ export function ProjectDetailPage() {
           <h1>{project.name}</h1>
           <p className="project-detail-client">{project.clientname}</p>
         </div>
-        <Badge status={project.status} />
+        <div className="project-detail-header-actions">
+          <Badge status={project.status} />
+          {isGM && !isClosed && (
+            <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">Edit Details</Link>
+          )}
+          {isGM && project.status === "Draft" && (
+            <Button onClick={() => openStatusDialog("activate")}>Activate Project</Button>
+          )}
+          {isGM && project.status === "Active" && (
+            <Button onClick={() => openStatusDialog("complete")}>Mark as Completed</Button>
+          )}
+          {isGM && !isClosed && (
+            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>Cancel Project</Button>
+          )}
+        </div>
       </div>
+
+      {project.status === "Draft" && (
+        <Banner tone="info" title="Draft: planning and procurement stage">
+          The Project Manager can already plan milestones and tasks. Material requests and purchases start
+          once a General Manager activates the project{hasSiteManager ? "." : " (a Site Manager must be assigned first)."}
+        </Banner>
+      )}
+      {project.status === "Cancelled" && (
+        <Banner tone="warning" title="This project was cancelled">
+          {project.cancellationreason}
+          {project.cancelledat ? ` (${DATETIME.format(new Date(project.cancelledat))})` : ""}
+        </Banner>
+      )}
+      {(project.warnings || []).map((w) => (
+        <Banner key={w.code} tone="warning" title={w.message} />
+      ))}
 
       {project.description && (
         <Card className="project-detail-description"><p>{project.description}</p></Card>
@@ -247,11 +326,19 @@ export function ProjectDetailPage() {
       <div className="project-detail-facts">
         <Fact label="Budget" value={PESO.format(project.budget)} />
         <Fact label="Expenses Logged" value={PESO.format(totalExpenses)} note={`${budgetUsedPct}% of budget`} />
-        <Fact label="Start Date" value={DATE.format(new Date(project.startdate))} />
+        <Fact label="Target Date of Development" value={formatDate(project.startdate)} note="Planning and procurement" />
+        <Fact label="Target Date of Construction" value={formatDate(project.constructionstartdate)} />
+        <Fact label="Target Date of Completion" value={formatDate(project.enddate)} />
+        {project.actualcompletiondate && (
+          <Fact label="Actual Completion / Turnover" value={formatDate(project.actualcompletiondate)} />
+        )}
+        <Fact label="Project Type" value={project.projecttype || "Not set"} />
         <Fact
-          label="Expected End Date"
-          value={project.enddate ? DATE.format(new Date(project.enddate)) : "Not set"}
+          label="Location"
+          value={project.municipality || "Not set"}
+          note={[project.siteaddress, project.province].filter(Boolean).join(", ") || undefined}
         />
+        <Fact label="Project Manager" value={project.projectmanagername || "Not assigned"} />
         <Fact label="Overall Progress" value={`${Number(project.progress || 0)}%`} />
       </div>
 
@@ -267,20 +354,16 @@ export function ProjectDetailPage() {
         </div>
         {canManageSiteManager && (
           <div className="project-detail-assignment-control">
-            <Field
+            <ManagerPicker
               label="Assign or replace Site Manager"
-              as="select"
+              managers={siteManagers}
+              loading={false}
               value={project.sitemanagerid || ""}
+              currentId={project.sitemanagerid}
+              emptyOptionLabel="No Site Manager"
               disabled={siteManagerSaving || siteManagers.length === 0}
               onChange={handleSiteManagerChange}
-            >
-              <option value="">No Site Manager</option>
-              {siteManagers.map((manager) => (
-                <option key={manager.userid} value={manager.userid}>
-                  {manager.name.trim()} ({manager.email})
-                </option>
-              ))}
-            </Field>
+            />
             {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
             {siteManagersError && <p className="field-error">{siteManagersError}</p>}
           </div>
@@ -469,6 +552,58 @@ export function ProjectDetailPage() {
             )
           )}
       </section>
+      {statusDialog && (
+        <div className="modal-overlay" role="presentation" onClick={closeStatusDialog}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-status-title" onClick={(ev) => ev.stopPropagation()}>
+            {statusDialog.kind === "activate" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">Activate this project?</h2>
+                <p className="modal-body">
+                  The Project Manager, Site Manager and Purchaser will be notified, and material requests and
+                  purchases can begin.
+                </p>
+              </>
+            )}
+            {statusDialog.kind === "complete" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">Mark this project as completed?</h2>
+                <Field
+                  label="Actual completion / turnover date"
+                  required
+                  type="date"
+                  value={statusInput}
+                  onChange={(ev) => setStatusInput(ev.target.value)}
+                />
+              </>
+            )}
+            {statusDialog.kind === "cancel" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">Cancel this project?</h2>
+                <p className="modal-body">Use this when the project didn't push through. It can't be reopened.</p>
+                <Field
+                  label="Reason"
+                  required
+                  as="textarea"
+                  placeholder="e.g. Client did not push through"
+                  value={statusInput}
+                  onChange={(ev) => setStatusInput(ev.target.value)}
+                />
+              </>
+            )}
+            {statusError && <Banner tone="error" title={statusError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeStatusDialog} disabled={statusBusy}>Back</Button>
+              <Button
+                variant={statusDialog.kind === "cancel" ? "danger" : "primary"}
+                onClick={handleStatusAction}
+                disabled={statusBusy || (statusDialog.kind !== "activate" && !statusInput.trim())}
+              >
+                {statusBusy ? "Saving…" : statusDialog.kind === "activate" ? "Activate" : statusDialog.kind === "complete" ? "Mark Completed" : "Cancel Project"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {rejecting && (
         <div className="modal-overlay" role="presentation" onClick={closeReject}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>

@@ -8,6 +8,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
+const { assertProjectActive } = require("../lib/projectRules");
 const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
 
@@ -156,6 +157,8 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         if (!projectID) {
             throw httpError(400, "projectID is required when no ticketID is provided");
         }
+        // Purchases are recorded only against an Active project.
+        await assertProjectActive(query, projectID, "Recording an expense");
         // A PM is limited to managed projects; a GM can use any project;
         // Site Managers must still be assigned to the ticket's project.
         if (req.user.role === "Site Manager") {

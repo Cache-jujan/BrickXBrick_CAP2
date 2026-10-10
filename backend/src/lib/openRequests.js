@@ -48,6 +48,7 @@ function buildOpenRequestsQuery(user) {
      WHERE ${scope.clause}
        AND t.tickettype = 'Material Request'
        AND t.status = 'Acknowledged'
+       AND p.status = 'Active'
        AND t.materialtype IS NOT NULL
        AND t.quantity IS NOT NULL
      GROUP BY t.ticketid, p.name
