@@ -105,11 +105,15 @@ function validateProjectBody(body, existing = null) {
   return merged;
 }
 
-// DATE columns come back as JS Dates at UTC midnight (see db.js).
+// node-postgres returns a DATE as a JS Date at *local* midnight of the
+// server. toISOString() would convert that to UTC, which on a Philippine
+// server (UTC+8) is the previous day — so read the local calendar fields.
 function toIso(value) {
   if (!value) return null;
   if (typeof value === "string") return value.slice(0, 10);
-  return new Date(value).toISOString().slice(0, 10);
+  const d = new Date(value);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 async function getProjectRow(target, projectId, { lock = false } = {}) {
@@ -205,16 +209,24 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
 
     if (status) {
       params.push(status);
-      conditions.push(`status = $${params.length}`);
+      conditions.push(`p.status = $${params.length}`);
     }
     if (req.user.role === "Site Manager") {
       params.push(req.user.id);
-      conditions.push(`siteManagerId = $${params.length}`);
+      conditions.push(`p.siteManagerId = $${params.length}`);
     }
 
+    // Manager names are joined in so list pages can show who runs each
+    // project without one extra request per row.
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await query(
-      `SELECT ${PROJECT_COLUMNS} FROM projects ${where} ORDER BY startdate DESC`,
+      `SELECT ${DETAIL_COLUMNS},
+              pm.name AS projectmanagername, sm.name AS sitemanagername
+         FROM projects p
+         LEFT JOIN users pm ON pm.userid = p.projectmanagerid
+         LEFT JOIN users sm ON sm.userid = p.sitemanagerid
+         ${where}
+        ORDER BY p.startdate DESC`,
       params
     );
     res.json(result.rows);
@@ -585,3 +597,4 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
 
 module.exports = router;
 module.exports.validateProjectBody = validateProjectBody;
+module.exports.toIso = toIso;

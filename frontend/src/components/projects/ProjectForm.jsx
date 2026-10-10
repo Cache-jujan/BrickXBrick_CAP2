@@ -23,9 +23,16 @@ export const EMPTY_PROJECT_FORM = {
   siteManagerId: "",
 };
 
-// DATE columns arrive as ISO timestamps; <input type="date"> wants YYYY-MM-DD.
+// DATE columns arrive as timestamps of local midnight on the server
+// (e.g. "2026-08-02T16:00:00.000Z" for Aug 3 in Manila). Slicing the string
+// would give the previous day, so read the calendar date in local time.
 function toDateInput(value) {
-  return value ? String(value).slice(0, 10) : "";
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 // Maps a project row from the API to form state (used by Edit Project).
@@ -210,7 +217,7 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
         ))}
       </Field>
 
-      <p className="create-project-section">Site location</p>
+      <p className="create-project-section">Site</p>
       <div className="create-project-row">
         <Field
           label="Municipality / City"
@@ -271,7 +278,7 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
         Development covers planning, permits and procurement. The project stays in Draft until it is activated.
       </p>
 
-      <p className="create-project-section">Assignment</p>
+      <p className="create-project-section">Team</p>
       {listError && <Banner tone="error" title={listError} />}
       {!loadingLists && !listError && availablePMs.length === 0 && (
         <Banner tone="warning" title="No Project Manager is available">
