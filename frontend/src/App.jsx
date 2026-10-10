@@ -10,6 +10,7 @@ import { ProjectsListPage } from "./pages/Projects/ProjectsListPage";
 import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
 import { EditProjectPage } from "./pages/Projects/EditProjectPage";
+import { BomPage } from "./pages/Projects/BomPage";
 import { CreateMilestonePage } from "./pages/Milestones/CreateMilestonePage";
 import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
@@ -101,6 +102,15 @@ export default function App() {
               element={
                 <RoleRoute allow={["General Manager"]}>
                   <EditProjectPage />
+                </RoleRoute>
+              }
+            />
+            {/* F2: Bill of Materials. GM imports, edits and approves; the owning PM reads it. */}
+            <Route
+              path="/projects/:id/bom"
+              element={
+                <RoleRoute allow={["General Manager", "Project Manager"]}>
+                  <BomPage />
                 </RoleRoute>
               }
             />

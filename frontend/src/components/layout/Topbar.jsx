@@ -23,6 +23,7 @@ const PAGE_LABELS = [
   { test: (p) => p === "/projects", trail: ["Projects"] },
   { test: (p) => p === "/projects/new", trail: ["Projects", "New project"] },
   { test: (p) => /^\/projects\/[^/]+\/edit$/.test(p), trail: ["Projects", "Edit project"] },
+  { test: (p) => /^\/projects\/[^/]+\/bom$/.test(p), trail: ["Projects", "Bill of Materials"] },
   { test: (p) => /^\/projects\/[^/]+$/.test(p), trail: ["Projects", "Project"] },
   { test: (p) => p.includes("/milestones/new"), trail: ["Projects", "New milestone"] },
   { test: (p) => p.includes("/tasks/new"), trail: ["Projects", "New task"] },
