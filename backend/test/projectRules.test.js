@@ -66,6 +66,14 @@ test("service area: match ignores case and extra spaces", () => {
   assert.equal(isWithinServiceArea("Mandaue City", area), false);
 });
 
+test("service area: City/Municipality prefixes and suffixes are ignored", () => {
+  const area = parseServiceArea("Consolacion, Mandaue");
+  for (const name of ["Mandaue City", "City of Mandaue", "mandaue", "Municipality of Consolacion", "Consolacion."]) {
+    assert.equal(isWithinServiceArea(name, area), true, name);
+  }
+  assert.equal(isWithinServiceArea("Lapu-Lapu City", area), false);
+});
+
 test("warnings: outside the service area produces a warning, inside does not", () => {
   const settings = { ...DEFAULT_SETTINGS, serviceAreaMunicipalities: ["consolacion"] };
   assert.deepEqual(buildProjectWarnings({ municipality: "Consolacion" }, settings), []);
