@@ -249,3 +249,165 @@
 .project-detail .banner {
   margin-bottom: var(--space-4);
 }
+
+/* --- Header ------------------------------------------------------------- */
+
+.pd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0 var(--space-4);
+}
+
+.pd-header-text {
+  min-width: 0;
+}
+
+.pd-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.pd-meta {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.pd-description {
+  max-width: 80ch;
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink-soft);
+}
+
+/* --- Summary: one surface, three labelled groups ------------------------ */
+
+.pd-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pd-group {
+  padding: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.pd-group + .pd-group {
+  border-left: 1px solid var(--color-border);
+}
+
+.pd-group-title {
+  font-size: var(--text-xs) !important;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  margin-bottom: var(--space-2);
+}
+
+.pd-group dl {
+  margin: 0;
+}
+
+.pd-group dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 6px 0;
+  font-size: var(--text-sm);
+}
+
+.pd-group dt {
+  color: var(--color-ink-soft);
+  flex-shrink: 0;
+}
+
+.pd-group dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  color: var(--color-ink);
+  min-width: 0;
+}
+
+.num-left {
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-dd-note {
+  font-weight: 400;
+  color: var(--color-ink-faint);
+  margin-left: var(--space-1);
+}
+
+/* --- Team --------------------------------------------------------------- */
+
+.pd-team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pd-person {
+  padding: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.pd-person + .pd-person {
+  border-left: 1px solid var(--color-border);
+}
+
+.pd-person-role {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+
+.pd-person-name {
+  margin-top: 2px;
+  font-weight: 650;
+}
+
+.pd-person-email {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.pd-person-control {
+  margin-top: var(--space-3);
+  max-width: 420px;
+}
+
+/* Sections below use the shared .section-head; drop the old card spacing. */
+.project-detail-milestones {
+  margin-top: 0;
+}
+
+.record-protection {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  .pd-summary,
+  .pd-team-grid {
+    grid-template-columns: 1fr;
+  }
+  .pd-group + .pd-group,
+  .pd-person + .pd-person {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}

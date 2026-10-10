@@ -1,58 +1,50 @@
-.projects-header {
-  margin-bottom: var(--space-5);
-  align-items: flex-start;
-}
-
-.projects-count {
-  color: var(--color-ink-faint);
-  font-size: var(--text-sm);
-  margin-top: var(--space-1);
-}
-
 .projects-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-4);
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: var(--space-4);
 }
 
-.projects-filters {
+/* Same underline tabs as the Expenses page, so filters look the same
+   everywhere. */
+.projects-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-5);
 }
 
-.projects-filter {
-  height: 34px;
-  padding: 0 var(--space-4);
-  border-radius: 999px;
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface);
+.projects-tab {
+  padding: var(--space-3) 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   color: var(--color-ink-soft);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
-
-.projects-filter:hover {
-  border-color: var(--color-ink);
+.projects-tab:hover {
+  color: var(--color-ink);
 }
-
-.projects-filter-active {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
-  color: #fff;
+.projects-tab-active {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-brick);
+}
+.projects-tab:focus-visible {
+  outline: 2px solid var(--color-brick);
+  outline-offset: 2px;
 }
 
 .projects-search {
   width: 100%;
   max-width: 300px;
-  height: 38px;
-  padding: 0 var(--space-4);
+  height: 36px;
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-3);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -65,4 +57,55 @@
   outline: none;
   border-color: var(--color-brick);
   box-shadow: 0 0 0 3px var(--color-brick-tint);
+}
+
+.projects-table-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.projects-table {
+  min-width: 900px;
+}
+
+.projects-table td {
+  height: auto;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.projects-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.projects-row {
+  cursor: pointer;
+}
+
+.projects-name {
+  display: block;
+  color: var(--color-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.projects-name:hover {
+  text-decoration: underline;
+}
+
+.projects-client {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+
+.projects-dates {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .projects-search {
+    max-width: none;
+  }
 }

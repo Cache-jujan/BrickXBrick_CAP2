@@ -165,8 +165,11 @@ textarea {
   .container {
     padding: 0 var(--space-4);
   }
+  /* Only vertical padding here: .page sits on the same element as
+     .container, so a "padding" shorthand would wipe the side gutters. */
   .page {
-    padding: var(--space-5) 0 var(--space-7);
+    padding-top: var(--space-5);
+    padding-bottom: var(--space-7);
   }
   .nav-backdrop {
     display: block;

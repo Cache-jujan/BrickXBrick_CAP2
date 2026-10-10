@@ -207,3 +207,16 @@ test("assertManagerAvailable: an SM with 2 open sites can take a third", async (
   });
   await assertManagerAvailable(client, { userId: "sm-1", role: "Site Manager", settings });
 });
+
+// Regression: DATE values arrive as local-midnight JS Dates. On a server at
+// UTC+8, toISOString() would shift them to the previous day and a PATCH that
+// didn't touch the dates would silently move them back one day.
+test("toIso keeps the calendar date of a local-midnight Date", () => {
+  process.env.SUPABASE_JWKS_URL ||= "https://example.invalid/jwks";
+  process.env.SUPABASE_URL ||= "https://example.invalid";
+  const { toIso } = require("../src/routes/projects");
+  assert.equal(toIso(new Date(2026, 7, 3)), "2026-08-03");
+  assert.equal(toIso(new Date(2027, 2, 31)), "2027-03-31");
+  assert.equal(toIso("2026-08-03"), "2026-08-03");
+  assert.equal(toIso(null), null);
+});
