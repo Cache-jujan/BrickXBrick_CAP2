@@ -20,25 +20,85 @@ a:not(.btn):not(.back-link):hover {
   color: var(--color-brick-darker);
 }
 
-/* Page titles: a little more presence and tighter tracking. */
+/* Type scale. The top bar already says where you are, so page titles are
+   sized as working headings, not hero text: 22px page title, 17px section
+   heading, 14px body. */
 .page h1,
 main h1 {
-  font-size: var(--text-xl);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-main h2 {
   font-size: var(--text-lg);
   font-weight: 650;
   letter-spacing: -0.015em;
+  line-height: 1.25;
 }
 
-/* Cards: slightly crisper edge. */
+main h2 {
+  font-size: var(--text-md);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Shared page header: title (+ one line of context) on the left, the
+   page's main action on the right. */
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.page-header-text {
+  min-width: 0;
+}
+
+.page-header-sub {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  max-width: 70ch;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Section heading inside a page (not a card title). */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-3);
+}
+
+.section-head h2 {
+  font-size: var(--text-md);
+}
+
+.section-head-note {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+/* Numbers in tables: right-aligned, tabular. */
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--color-ink-soft);
+}
+
+/* Cards: a hairline border is enough; no floating shadow. */
 .card {
   border-color: var(--color-border);
-  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.05), 0 1px 1px rgba(48, 47, 40, 0.03);
+  box-shadow: none;
 }
 
 /* Shared data tables (users-table is reused by Projects, Expenses, etc.) */
@@ -96,7 +156,7 @@ main h2 {
 /* Pagination buttons across list pages share one look. */
 .expenses-page-btn,
 .tamper-page-btn {
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 /* Inputs: search fields get the same focus ring as form fields. */
@@ -112,4 +172,15 @@ input[type="search"]:focus-visible {
 
 .tamper-table td:nth-child(5) {
   white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+  .page-header {
+    align-items: flex-start;
+  }
 }

@@ -11,6 +11,7 @@ const authRoutes = require("./routes/auth");
 const expenseRoutes = require("./routes/expenses");
 const milestoneRoutes = require("./routes/milestones");
 const projectRoutes = require("./routes/projects");
+const bomRoutes = require("./routes/bom");
 const receiptRoutes = require("./routes/receipts");
 const syncRoutes = require("./routes/sync");
 const taskRoutes = require("./routes/tasks");
@@ -32,6 +33,7 @@ app.get("/api/me", requireAuth, (req, res) => res.json({ user: req.user }));
 // --- Routes ---
 app.use("/api/auth", authRoutes);                 // login / session
 app.use("/api/admin/users", adminUsers);          // F1 account management
+app.use("/api/projects/:projectId/bom", bomRoutes); // F2 bill of materials
 app.use("/api/projects", projectRoutes);          // F2 projects
 app.use("/api/milestones", milestoneRoutes);      // F3 milestones
 app.use("/api/tasks", taskRoutes);                // F3 tasks

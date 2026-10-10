@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: 44px;
-  padding: 0 var(--space-5);
+  height: 40px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   font-size: var(--text-sm);
@@ -34,24 +34,21 @@
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--color-brick-light) 0%, var(--color-brick) 60%, var(--color-brick-dark) 100%);
+  background: var(--color-brick);
   color: #fff;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 4px 10px -4px rgba(138, 52, 22, 0.55);
 }
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, var(--color-brick) 0%, var(--color-brick-dark) 60%, var(--color-brick-darker) 100%);
+  background: var(--color-brick-dark);
 }
 
 .btn-secondary {
   background: var(--color-surface);
   color: var(--color-ink);
   border-color: var(--color-border-strong);
-  box-shadow: var(--shadow-sm);
 }
 .btn-secondary:hover:not(:disabled) {
-  background: var(--color-brick-tint);
-  border-color: var(--color-brick);
-  color: var(--color-brick-darker);
+  background: var(--color-surface-muted);
+  border-color: var(--color-ink-faint);
 }
 
 .btn-ghost {
@@ -64,9 +61,9 @@
 }
 
 .btn-danger {
-  background: var(--color-danger-bg);
+  background: var(--color-surface);
   color: var(--color-danger);
-  border-color: var(--color-danger);
+  border-color: var(--color-border-strong);
 }
 .btn-danger:hover:not(:disabled) {
   background: var(--color-danger);
@@ -75,6 +72,6 @@
 
 /* Compact size for buttons inside table rows and detail panels. */
 .btn-sm {
-  height: 36px;
-  padding: 0 var(--space-4);
+  height: 32px;
+  padding: 0 var(--space-3);
 }
