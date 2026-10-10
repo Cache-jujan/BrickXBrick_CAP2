@@ -14,6 +14,7 @@ const STATUS_TONE = {
   Rejected: "overdue",
   Inactive: "inactive",
   Archived: "inactive",
+  Cancelled: "inactive",
 };
 
 export function Badge({ status, children }) {

@@ -237,3 +237,15 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+.project-detail-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.project-detail .banner {
+  margin-bottom: var(--space-4);
+}
