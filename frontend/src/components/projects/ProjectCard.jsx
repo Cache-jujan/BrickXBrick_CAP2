@@ -27,7 +27,17 @@ export function ProjectCard({ project }) {
         <div className="project-card-meta">
           <span>{PESO.format(project.budget)}</span>
           <span aria-hidden="true">·</span>
-          <span>Starts {DATE.format(new Date(project.startdate))}</span>
+          <span>
+            {project.constructionstartdate
+              ? `Construction ${DATE.format(new Date(project.constructionstartdate))}`
+              : `Development ${DATE.format(new Date(project.startdate))}`}
+          </span>
+          {project.municipality && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{project.municipality}</span>
+            </>
+          )}
         </div>
       </Link>
     </Card>

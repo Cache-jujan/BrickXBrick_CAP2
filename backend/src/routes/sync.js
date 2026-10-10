@@ -110,6 +110,14 @@ async function syncExpense(user, uuid, data) {
   if (!projectID) {
     throw new SyncReject("MISSING_PROJECT", "projectID is required when no ticketID is provided");
   }
+  const projectStatus = await query("SELECT status FROM projects WHERE projectid = $1", [projectID]);
+  if (projectStatus.rowCount === 0) {
+    throw new SyncReject("PROJECT_NOT_FOUND", `Project ${projectID} not found`);
+  }
+  if (projectStatus.rows[0].status !== "Active") {
+    // Server wins: the project closed (or never opened) while this was queued.
+    throw new SyncReject("PROJECT_NOT_ACTIVE", `This project is ${projectStatus.rows[0].status}; expenses can only be recorded on an Active project`);
+  }
 
   // Insert the expense and record the idempotency key in ONE transaction, so a
   // crash can't leave an expense without its synced_actions marker (or vice
