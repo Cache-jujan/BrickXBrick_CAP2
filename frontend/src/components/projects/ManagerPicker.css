@@ -1,0 +1,30 @@
+.manager-picker {
+  display: flex;
+  flex-direction: column;
+}
+
+.manager-picker-busy {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.manager-picker-busy summary {
+  cursor: pointer;
+  color: var(--color-ink-faint);
+}
+
+.manager-picker-list,
+.manager-picker-list ul {
+  margin: var(--space-2) 0 0 var(--space-4);
+  padding: 0;
+}
+
+.manager-picker-list li {
+  margin-bottom: var(--space-1);
+}
+
+.manager-picker-count,
+.manager-picker-meta {
+  color: var(--color-ink-faint);
+}

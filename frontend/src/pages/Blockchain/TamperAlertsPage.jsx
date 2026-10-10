@@ -2,22 +2,32 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { listTamperAlerts, resolveTamperAlert } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
+import { Badge } from "../../components/ui/Badge";
+import { Field } from "../../components/ui/Field";
 import { PESO_EXACT, tamperReason } from "../../utils/plainLanguage";
 import "./TamperAlertsPage.css";
 
 const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
-
 const PAGE_SIZE = 8;
+const TABS = [
+  { value: "open", label: "To review" },
+  { value: "reviewed", label: "Reviewed" },
+];
 
 // FUNCTION F12 — Blockchain Tamper Alerts (GM / System Administrator)
-// STATUS: IMPLEMENTED — reads GET /api/blockchain/alerts (open alerts only,
-// per its own WHERE resolvedAt IS NULL filter) and writes via
-// PATCH /api/blockchain/alerts/:id/resolve. Search/pagination below are
-// client-side only — the backend has no query params for this endpoint yet.
+// Reads GET /api/blockchain/alerts?status=open|reviewed and writes via
+// PATCH /api/blockchain/alerts/:id/resolve { note }.
+// Reviewing an alert never hides it: it moves to "Reviewed" with who, when
+// and why, and the expense keeps its "Changed after approval" status until
+// its data matches the approved copy again. Whoever approved the expense
+// can't review its alert. The server re-creates an alert if it is deleted.
 export function TamperAlertsPage() {
+  const { user } = useAuth();
+  const [tab, setTab] = useState("open");
   const [alerts, setAlerts] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -26,22 +36,20 @@ export function TamperAlertsPage() {
   const [page, setPage] = useState(1);
 
   const [confirmTarget, setConfirmTarget] = useState(null); // the alert object, or null
-  const [resolvingId, setResolvingId] = useState(null);
+  const [note, setNote] = useState("");
+  const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState("");
 
   useEffect(() => {
-    loadAlerts();
-  }, []);
-
-  function loadAlerts() {
+    let cancelled = false;
     setLoading(true);
     setError("");
-    listTamperAlerts()
-      .then(setAlerts)
-      .catch((err) => setError(extractErrorMessage(err, "Couldn't load tamper alerts.")))
-      .finally(() => setLoading(false));
-  }
-
+    listTamperAlerts(tab)
+      .then((data) => { if (!cancelled) setAlerts(data); })
+      .catch((err) => { if (!cancelled) setError(extractErrorMessage(err, "Couldn't load tamper alerts.")); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -56,51 +64,75 @@ export function TamperAlertsPage() {
   const clampedPage = Math.min(page, totalPages);
   const pageAlerts = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
-  function handleSearchChange(value) {
-    setSearch(value);
+  function changeTab(value) {
+    setTab(value);
+    setSearch("");
     setPage(1);
+  }
+
+  function openReview(alert) {
+    setNote("");
+    setResolveError("");
+    setConfirmTarget(alert);
+  }
+
+  function closeReview() {
+    if (resolving) return;
+    setConfirmTarget(null);
   }
 
   async function handleConfirmResolve() {
     const alert = confirmTarget;
-    if (!alert) return;
-    setResolvingId(alert.alertid);
+    if (!alert || note.trim().length < 10) return;
+    setResolving(true);
     setResolveError("");
     try {
-      await resolveTamperAlert(alert.alertid);
+      await resolveTamperAlert(alert.alertid, note.trim());
       setAlerts((prev) => prev.filter((a) => a.alertid !== alert.alertid));
       setConfirmTarget(null);
     } catch (err) {
-      setResolveError(extractErrorMessage(err, "Couldn't resolve this alert."));
+      setResolveError(extractErrorMessage(err, "Couldn't save the review."));
     } finally {
-      setResolvingId(null);
+      setResolving(false);
     }
   }
 
+  const reviewed = tab === "reviewed";
+
   return (
     <div className="tamper-page">
-      <div className="tamper-header">
-        <div>
+      <header className="page-header">
+        <div className="page-header-text">
           <h1>Tamper Alerts</h1>
-          <p className="tamper-subtitle">
-            These approved expenses were edited after approval, so they no longer match their
-            tamper-proof copy. Check each one with the person responsible, then mark it as reviewed.
-            The expense keeps its "Changed after approval" label as a permanent record.
+          <p className="page-header-sub">
+            Approved expenses whose record no longer matches the copy secured on the blockchain.
           </p>
         </div>
-        {!loading && !error && alerts.length > 0 && (
-          <span className="tamper-count-pill">{alerts.length} to review</span>
-        )}
+      </header>
+
+      <div className="tamper-tabs" role="tablist" aria-label="Alert status">
+        {TABS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.value}
+            className={"tamper-tab" + (tab === t.value ? " tamper-tab-active" : "")}
+            onClick={() => changeTab(t.value)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {error && <Banner tone="error" title={error} />}
-      {resolveError && <Banner tone="error" title={resolveError} />}
-
       {!error && loading && <p className="dashboard-loading">Loading alerts…</p>}
 
       {!error && !loading && alerts.length === 0 && (
-        <Banner tone="empty" title="Nothing to review">
-          No approved expense has been changed since it was approved.
+        <Banner tone="empty" title={reviewed ? "No reviewed alerts yet" : "Nothing to review"}>
+          {reviewed
+            ? "Alerts appear here once someone has reviewed them, with who did it, when and why."
+            : "No approved expense has been changed since it was approved."}
         </Banner>
       )}
 
@@ -111,9 +143,11 @@ export function TamperAlertsPage() {
               type="search"
               className="tamper-search"
               placeholder="Search by vendor or project"
+              aria-label="Search alerts"
               value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
+            <span className="tamper-count">{filtered.length} {filtered.length === 1 ? "alert" : "alerts"}</span>
           </div>
 
           {filtered.length === 0 ? (
@@ -127,40 +161,62 @@ export function TamperAlertsPage() {
                   <tr>
                     <th>Project</th>
                     <th>Vendor</th>
-                    <th>Amount</th>
+                    <th className="num">Amount</th>
                     <th>What happened</th>
-                    <th>Found on</th>
-                    <th aria-label="Actions" />
+                    <th>Found</th>
+                    {reviewed ? <th>Review</th> : <th aria-label="Actions" />}
                   </tr>
                 </thead>
                 <tbody>
-                  {pageAlerts.map((alert) => (
-                    <tr key={alert.alertid}>
-                      <td>
-                        {alert.projectid ? (
-                          <Link to={`/projects/${alert.projectid}`} className="tamper-project-link">
-                            {alert.projectname || "View project"}
-                          </Link>
+                  {pageAlerts.map((alert) => {
+                    const ownApproval = alert.approvedby && alert.approvedby === user.id;
+                    return (
+                      <tr key={alert.alertid}>
+                        <td>
+                          {alert.projectid ? (
+                            <Link to={`/projects/${alert.projectid}`} className="tamper-project-link">
+                              {alert.projectname || "View project"}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>{alert.vendorname}</td>
+                        <td className="num">{PESO_EXACT.format(alert.amount)}</td>
+                        <td className="tamper-reason">
+                          {tamperReason(alert)}
+                          <span className="tamper-state">
+                            {alert.restoredat ? (
+                              <Badge status="Completed">Back to approved values</Badge>
+                            ) : (
+                              <Badge status="Overdue">Still changed</Badge>
+                            )}
+                          </span>
+                        </td>
+                        <td>{DATETIME.format(new Date(alert.detectedat))}</td>
+                        {reviewed ? (
+                          <td className="tamper-review">
+                            <strong>{alert.resolvedbyname || "Unknown user"}</strong>
+                            {alert.resolvedbyrole ? ` (${alert.resolvedbyrole})` : ""}
+                            <span className="tamper-review-date">{DATETIME.format(new Date(alert.resolvedat))}</span>
+                            <span className="tamper-review-note">{alert.resolutionnote}</span>
+                          </td>
                         ) : (
-                          "—"
+                          <td>
+                            {ownApproval ? (
+                              <span className="tamper-own" title="You approved this expense, so someone else must review its alert.">
+                                You approved this; another reviewer needed
+                              </span>
+                            ) : (
+                              <Button variant="secondary" className="btn-sm" onClick={() => openReview(alert)}>
+                                Review
+                              </Button>
+                            )}
+                          </td>
                         )}
-                      </td>
-                      <td>{alert.vendorname}</td>
-                      <td>{PESO_EXACT.format(alert.amount)}</td>
-                      <td className="tamper-reason">{tamperReason(alert)}</td>
-                      <td>{DATETIME.format(new Date(alert.detectedat))}</td>
-                      <td>
-                        <Button
-                          variant="secondary"
-                          className="btn-sm"
-                          disabled={resolvingId === alert.alertid}
-                          onClick={() => setConfirmTarget(alert)}
-                        >
-                          Mark as reviewed
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </Card>
@@ -193,26 +249,36 @@ export function TamperAlertsPage() {
       )}
 
       {confirmTarget && (
-        <div className="tamper-modal-overlay" role="presentation" onClick={() => setConfirmTarget(null)}>
+        <div className="modal-overlay" role="presentation" onClick={closeReview}>
           <div
-            className="tamper-modal"
+            className="modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="tamper-modal-title"
+            aria-labelledby="tamper-review-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="tamper-modal-title" className="tamper-modal-title">Mark this alert as reviewed?</h2>
-            <p className="tamper-modal-body">
-              This confirms you've looked into <strong>{confirmTarget.vendorname}</strong>
-              {confirmTarget.projectname ? ` (${confirmTarget.projectname})` : ""}. The alert leaves this
-              list, but the expense keeps its "Changed after approval" label permanently.
+            <h2 id="tamper-review-title" className="modal-title">Review this alert</h2>
+            <p className="modal-body">
+              <strong>{confirmTarget.vendorname}</strong>
+              {confirmTarget.projectname ? ` (${confirmTarget.projectname})` : ""} · {PESO_EXACT.format(confirmTarget.amount)}.
+              The alert moves to Reviewed with your name, the time and your explanation, and every other General
+              Manager and System Administrator is notified. It can't be edited or removed afterwards, and the expense
+              keeps its "Changed after approval" status.
             </p>
-            <div className="tamper-modal-actions">
-              <Button variant="secondary" onClick={() => setConfirmTarget(null)} disabled={resolvingId === confirmTarget.alertid}>
-                Cancel
-              </Button>
-              <Button onClick={handleConfirmResolve} disabled={resolvingId === confirmTarget.alertid}>
-                {resolvingId === confirmTarget.alertid ? "Saving…" : "Mark as reviewed"}
+            <Field
+              label="What did you find?"
+              required
+              as="textarea"
+              placeholder="e.g. Checked with the purchaser; the amount was corrected to match the official receipt."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              error={note && note.trim().length < 10 ? "Write at least 10 characters." : undefined}
+            />
+            {resolveError && <Banner tone="error" title={resolveError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeReview} disabled={resolving}>Cancel</Button>
+              <Button onClick={handleConfirmResolve} disabled={resolving || note.trim().length < 10}>
+                {resolving ? "Saving…" : "Save review"}
               </Button>
             </div>
           </div>

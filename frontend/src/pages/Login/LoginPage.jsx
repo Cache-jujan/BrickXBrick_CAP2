@@ -11,24 +11,6 @@ import "./LoginPage.css";
 // Feature list mirrors what the backend actually supports today — RBAC
 // (F1), project/expense tracking (F2/F6), and the F12 blockchain audit
 // trail. Do not add claims for features that aren't implemented.
-const FEATURES = [
-  {
-    icon: <ShieldIcon />,
-    title: "Blockchain-Secured Audit Trail",
-    body: "Every approved expense is recorded on a tamper-evident ledger.",
-  },
-  {
-    icon: <LayersIcon />,
-    title: "Role-Based Access",
-    body: "Every account sees exactly what its role is meant to see.",
-  },
-  {
-    icon: <ChartIcon />,
-    title: "Project Visibility",
-    body: "Budgets, status, and timelines in one place per project.",
-  },
-];
-
 // FUNCTION F1 — Login
 // STATUS: IMPLEMENTED
 // PURPOSE: authenticate against POST /api/auth/login (Supabase-backed) and
@@ -74,58 +56,29 @@ export function LoginPage() {
         <div className="login-panel-scrim" />
         <div className="login-panel-content">
           <div className="login-brand-row">
-            <span className="login-brand-mark" aria-hidden="true" />
-            <span className="login-brand-text">
-              <span className="login-brand-name">
-                Brick <span className="login-brand-x">x</span> Brick
-              </span>
-              <span className="login-brand-tag">Build Smarter. Safer. Together.</span>
+            <img src="/images/logo.png" alt="" className="login-brand-logo" />
+            <span className="login-brand-name">
+              Brick <span className="login-brand-x">x</span> Brick
             </span>
           </div>
 
           <div className="login-panel-copy">
-            <p className="login-eyebrow">Construction Management</p>
-            <h1 className="login-headline">
-              Smarter construction management for a
-              <span className="login-headline-accent"> stronger tomorrow.</span>
-            </h1>
+            <h1 className="login-headline">Construction projects, purchases and expenses in one record.</h1>
             <p className="login-panel-tagline">
-              Manage your projects, track expenses, and secure your financial
-              records with blockchain-backed transparency.
+              For General Managers, Project Managers, Site Managers and Purchasers.
+              Approved expenses are protected against later changes.
             </p>
-
-            <ul className="login-features">
-              {FEATURES.map((f) => (
-                <li key={f.title} className="login-feature">
-                  <span className="login-feature-icon">{f.icon}</span>
-                  <span>
-                    <span className="login-feature-title">{f.title}</span>
-                    <span className="login-feature-body">{f.body}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
 
-          <div className="login-panel-footer">
-            <div className="login-security-note">
-              <span>Records are secured with blockchain-backed verification.</span>
-            </div>
-            <p className="login-copyright">&copy; 2026 Brick x Brick. All rights reserved.</p>
-          </div>
+          <p className="login-copyright">&copy; 2026 Brick x Brick</p>
         </div>
       </div>
 
       {/* Right — the sign-in form */}
       <div className="login-form-side">
-        <p className="login-contact-admin">
-          Accounts are created by your <span className="login-contact-admin-link">System Administrator</span>.
-        </p>
-
         <div className="login-card">
-          <div className="login-card-mark" aria-hidden="true" />
-          <h2 className="login-title">Welcome back</h2>
-          <p className="login-subtitle">Sign in to your dashboard</p>
+          <h2 className="login-title">Sign in</h2>
+          <p className="login-subtitle">Use the account your System Administrator created for you.</p>
 
           <form onSubmit={handleSubmit} noValidate className="login-form">
             {successMessage && <Banner tone="info" title={successMessage} />}
@@ -171,25 +124,18 @@ export function LoginPage() {
               </button>
             </div>
 
-            <p style={{ textAlign: "right", fontSize: "var(--text-sm)", margin: "0 0 var(--space-3)" }}>
+            <p className="login-forgot">
               <Link to="/forgot-password">Forgot password?</Link>
             </p>
 
             <Button type="submit" disabled={submitting} className="login-submit">
-              {submitting ? "Logging in…" : (
-                <>
-                  Sign In <ArrowIcon />
-                </>
-              )}
+              {submitting ? "Signing in…" : "Sign in"}
             </Button>
 
             {error && <Banner tone="error" title={error} />}
           </form>
         </div>
 
-        <p className="login-form-side-note">
-          Your data is secured with blockchain-backed verification. Built for transparency.
-        </p>
       </div>
     </div>
   );
@@ -211,46 +157,6 @@ function LockIcon() {
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <rect x="4" y="11" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.7" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ArrowIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ShieldIcon({ small }) {
-  const size = small ? 16 : 20;
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 2 4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function LayersIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m12 2 9 5-9 5-9-5 9-5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-      <path d="m3 12 9 5 9-5M3 17l9 5 9-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ChartIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
