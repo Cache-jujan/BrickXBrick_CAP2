@@ -2,58 +2,46 @@ const express = require("express");
 const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
-const { canonicalizeExpense, getOnChainHash } = require("../lib/blockchainService");
-const { raiseTamperAlert } = require("../lib/tamperAlerts");
+const { resolveTamperAlert } = require("../lib/tamperAlerts");
+const { checkExpenseIntegrity } = require("../lib/integrityCheck");
 
 const router = express.Router();
 router.use(requireAuth);
 
 // GET /api/blockchain/verify/:expenseId — General Manager only.
+// Same check as the background scan (lib/integrityCheck.js): compares the
+// expense with the hash secured on the chain when it was approved.
 router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res, next) => {
     try {
-        const expenseResult = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.expenseId]);
+        const expenseResult = await query("SELECT * FROM Expenses WHERE expenseID = $1::uuid", [req.params.expenseId]);
         if (expenseResult.rowCount === 0) {
             const err = new Error("Expense not found");
             err.status = 404;
             throw err;
         }
-        const expense = expenseResult.rows[0];
+        const result = await checkExpenseIntegrity(expenseResult.rows[0]);
 
-        const logResult = await query(
-            "SELECT * FROM BlockchainLogs WHERE expenseID = $1 ORDER BY timestamp DESC LIMIT 1",
-            [req.params.expenseId]
-        );
-        if (logResult.rowCount === 0) {
+        if (result.state === "NotSecured") {
             return res.status(404).json({ error: "This expense hasn't been secured yet, so there's nothing to check against." });
         }
-        const log = logResult.rows[0];
-
-        const recomputedHash = canonicalizeExpense(expense);
-
         // UC-12-01 E3: node unreachable is NOT tampering — tell the GM to retry.
-        let onChainHash;
-        try {
-            onChainHash = await getOnChainHash(log.txhash);
-        } catch (e) {
+        if (result.state === "Unreachable") {
             return res.status(503).json({
                 error: "We can't run the check right now because the verification servers didn't respond. Your records are safe. Try again in a few minutes.",
             });
         }
-        if (onChainHash !== null && recomputedHash === onChainHash) {
-            return res.json({ verified: true, txHash: log.txhash, blockNumber: log.blocknumber, timestamp: log.timestamp });
+        if (result.state === "Match") {
+            return res.json({
+                verified: true,
+                txHash: result.log.txhash,
+                blockNumber: result.log.blocknumber,
+                timestamp: result.log.timestamp,
+            });
         }
-
-        // Tamper detected — log permanently, flag expense, notify SysAdmin/GM.
-        const reason = onChainHash === null
-            ? "on-chain transaction could not be found"
-            : "recomputed hash does not match the stored on-chain value";
-
-        await raiseTamperAlert(expense, recomputedHash, onChainHash, reason);
-
         res.json({
             verified: false,
-            recomputedHash,
-            onChainHash: onChainHash || "MISSING",
+            recomputedHash: result.recomputedHash,
+            onChainHash: result.onChainHash || "MISSING",
             message: "This expense was changed after approval. It has been logged and your System Administrator has been notified.",
         });
     } catch (err) {
@@ -61,17 +49,27 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
     }
 });
 
-// GET /api/blockchain/alerts — GM/SysAdmin view of open tamper alerts.
+// GET /api/blockchain/alerts?status=open|reviewed|all — GM/SysAdmin.
+// Default "open" (the sidebar badge uses it). Reviewed alerts stay listed
+// with who reviewed them, when and why.
 router.get("/alerts", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
     try {
+        const status = ["open", "reviewed", "all"].includes(req.query.status) ? req.query.status : "open";
+        const where = status === "open" ? "WHERE ta.resolvedat IS NULL"
+            : status === "reviewed" ? "WHERE ta.resolvedat IS NOT NULL" : "";
         const result = await query(
             `SELECT ta.alertid, ta.expenseid, ta.recomputedhash, ta.onchainhash, ta.detectedat,
-                    e.vendorname, e.amount, e.projectid, p.name AS projectname
+                    ta.resolvedat, ta.resolutionnote, ta.restoredat, ta.notifiedsysadmin,
+                    rb.name AS resolvedbyname, rb.role AS resolvedbyrole,
+                    e.vendorname, e.amount, e.projectid, e.blockchainstatus, e.approvedby,
+                    ab.name AS approvedbyname, p.name AS projectname
                FROM tamper_alerts ta
                JOIN Expenses e ON e.expenseid = ta.expenseid
                LEFT JOIN Projects p ON p.projectid = e.projectid
-              WHERE ta.resolvedat IS NULL
-              ORDER BY ta.detectedat DESC`
+               LEFT JOIN users rb ON rb.userid = ta.resolvedby
+               LEFT JOIN users ab ON ab.userid = e.approvedby
+              ${where}
+              ORDER BY COALESCE(ta.resolvedat, ta.detectedat) DESC`
         );
         res.json(result.rows);
     } catch (err) {
@@ -112,20 +110,13 @@ router.get("/project/:projectId", requireRole("General Manager", "Project Manage
     }
 });
 
-// PATCH /api/blockchain/alerts/:id/resolve — GM/SysAdmin marks an alert as
-// investigated.
+// PATCH /api/blockchain/alerts/:id/resolve — GM/SysAdmin marks an alert
+// as reviewed. Body { note } is required. The alert stays on record and the
+// expense keeps its "changed after approval" status (lib/tamperAlerts.js).
 router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
     try {
-        const result = await query(
-            "UPDATE tamper_alerts SET resolvedAt = NOW() WHERE alertID = $1 AND resolvedAt IS NULL RETURNING *",
-            [req.params.id]
-        );
-        if (result.rowCount === 0) {
-            const err = new Error("Alert not found or already resolved");
-            err.status = 404;
-            throw err;
-        }
-        res.json(result.rows[0]);
+        const alert = await resolveTamperAlert({ alertId: req.params.id, user: req.user, note: req.body?.note });
+        res.json(alert);
     } catch (err) {
         next(err);
     }
