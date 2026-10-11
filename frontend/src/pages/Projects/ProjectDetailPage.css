@@ -342,6 +342,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Work-progress row: stack the label over a full-width bar instead of the
+   side-by-side dt/dd the other summary rows use. */
+.pd-group dl > div.pd-progress {
+  display: block;
+}
+.pd-progress dt {
+  margin-bottom: 6px;
+}
+.pd-progress dd {
+  text-align: left;
+}
+.pd-progress-track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.pd-progress-track .progress-bar {
+  flex: 1;
+}
+.pd-progress-pct {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .pd-dd-note {
   font-weight: 400;
   color: var(--color-ink-faint);

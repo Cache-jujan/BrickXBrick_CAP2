@@ -221,7 +221,9 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await query(
       `SELECT ${DETAIL_COLUMNS},
-              pm.name AS projectmanagername, sm.name AS sitemanagername
+              pm.name AS projectmanagername, sm.name AS sitemanagername,
+              (SELECT ROUND(COALESCE(AVG(m.completionPercentage), 0), 0)
+                 FROM milestones m WHERE m.projectId = p.projectId) AS progress
          FROM projects p
          LEFT JOIN users pm ON pm.userid = p.projectmanagerid
          LEFT JOIN users sm ON sm.userid = p.sitemanagerid

@@ -19,6 +19,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
+import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
@@ -296,6 +297,9 @@ export function ProjectDetailPage() {
   const pendingTotal = expenses.filter((e) => e.status === "Pending").reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const budget = Number(project.budget || 0);
   const budgetUsedPct = budget > 0 ? Math.round((approvedTotal / budget) * 100) : 0;
+  // Overall completion = mean of milestone completion %, computed server-side
+  // (projects.js DETAIL_SELECT) and carried on the overview payload.
+  const progressPct = Math.round(Number(project.progress || 0));
   const location = [project.siteaddress, project.municipality, project.province].filter(Boolean).join(", ");
 
   // Only the owning Project Manager may add milestones/tasks — mirrors
@@ -375,7 +379,15 @@ export function ProjectDetailPage() {
               <dt>Waiting for approval</dt>
               <dd className="num-left">{pendingTotal ? PESO.format(pendingTotal) : <span className="pd-dd-note">None</span>}</dd>
             </div>
-            <div><dt>Work progress</dt><dd>{Number(project.progress || 0)}%</dd></div>
+            <div className="pd-progress">
+              <dt>Work progress</dt>
+              <dd>
+                <div className="pd-progress-track">
+                  <ProgressBar value={progressPct} />
+                  <span className="pd-progress-pct">{progressPct}%</span>
+                </div>
+              </dd>
+            </div>
           </dl>
         </div>
         <div className="pd-group">

@@ -7,6 +7,7 @@ import { listTamperAlerts, getBlockchainSummary } from "../../api/blockchainApi"
 import { extractErrorMessage } from "../../api/client";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
+import { ProgressBar } from "../../components/milestones/ProgressBar";
 import "./DashboardPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -118,7 +119,15 @@ function ProjectsOverview({ role, name, userId }) {
     .map((p) => {
       const budget = Number(p.budget || 0);
       const spent = approvedByProject[p.projectid] || 0;
-      return { ...p, budgetValue: budget, spent, pct: budget > 0 ? (spent / budget) * 100 : 0 };
+      return {
+        ...p,
+        budgetValue: budget,
+        spent,
+        pct: budget > 0 ? (spent / budget) * 100 : 0,
+        // Overall completion = mean of milestone completion %, from the list
+        // query's progress subquery (projects.js GET /).
+        progressPct: Math.round(Number(p.progress || 0)),
+      };
     })
     .sort((a, b) => b.pct - a.pct);
 
@@ -195,6 +204,7 @@ function ProjectsOverview({ role, name, userId }) {
                     <th className="num">Budget</th>
                     <th className="num">Approved</th>
                     <th className="dash-used-col">Used</th>
+                    <th className="dash-progress-col">Progress</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -218,6 +228,12 @@ function ProjectsOverview({ role, name, userId }) {
                           <span className={"dash-pct" + (p.pct > 100 ? " dash-pct-over" : "")}>
                             {Math.round(p.pct)}%
                           </span>
+                        </div>
+                      </td>
+                      <td className="dash-progress-col">
+                        <div className="dash-progress">
+                          <ProgressBar value={p.progressPct} />
+                          <span className="dash-pct">{p.progressPct}%</span>
                         </div>
                       </td>
                     </tr>
