@@ -101,6 +101,14 @@
   background: var(--color-surface);
   color: var(--color-ink);
 }
+.ticket-queue-action-report {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
 .ticket-queue-warning {
   margin: 0;
   font-size: var(--text-sm);

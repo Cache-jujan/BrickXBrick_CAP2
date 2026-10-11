@@ -47,6 +47,7 @@ const NAV_BY_ROLE = {
   ],
   "Project Manager": [
     { to: "/dashboard/pm", label: "Dashboard", icon: GridIcon },
+    { to: "/tickets/new", label: "Create Ticket", icon: TicketIcon },
     { to: "/tickets/queue", label: "Ticket Queue", icon: TicketIcon },
     { to: "/tasks/progress-review", label: "Progress Review", icon: TicketIcon },
     { to: "/projects", label: "Projects", icon: FolderIcon },

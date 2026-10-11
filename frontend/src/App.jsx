@@ -57,7 +57,7 @@ export default function App() {
             <Route
               path="/tickets/new"
               element={
-                <RoleRoute allow={["Site Manager"]}>
+                <RoleRoute allow={["Site Manager" , "Project Manager"]}>
                   <CreateTicketPage />
                 </RoleRoute>
               }

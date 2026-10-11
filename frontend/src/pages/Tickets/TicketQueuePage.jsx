@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listPendingTickets, listPurchasers, acknowledgeTicket } from "../../api/ticketsApi";
+import { listPendingTickets, listPurchasers, acknowledgeTicket, resolveTicket } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
 import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
@@ -78,12 +78,27 @@ export function TicketQueuePage() {
     }
   }
 
+  // Report tickets are resolved directly by the PM (no Purchaser, no budget) —
+  // the backend takes Pending Report -> Resolved via PATCH /:id/resolve.
+  async function handleResolve(ticket) {
+    setSubmittingId(ticket.ticketid);
+    setError("");
+    try {
+      await resolveTicket(ticket.ticketid);
+      setTickets((current) => current.filter((item) => item.ticketid !== ticket.ticketid));
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't resolve this report."));
+    } finally {
+      setSubmittingId(null);
+    }
+  }
+
   return (
     <div className="ticket-queue">
       <div className="ticket-queue-header">
         <div>
           <h1>Ticket Queue</h1>
-          <p className="ticket-queue-subtitle">Review requests, confirm Material Request budgets, and assign each ticket to a Purchaser.</p>
+          <p className="ticket-queue-subtitle">Review requests, confirm Material Request budgets, and assign each ticket to a Purchaser. Issue reports are resolved here directly.</p>
         </div>
         <Button variant="secondary" type="button" onClick={loadQueue} disabled={loading}>Refresh</Button>
       </div>
@@ -95,7 +110,9 @@ export function TicketQueuePage() {
       )}
       {!loading && tickets.length > 0 && (
         <div className="ticket-queue-list">
-          {tickets.map((ticket) => (
+          {tickets.map((ticket) => {
+            const isReport = ticket.tickettype === "Report";
+            return (
             <Card key={ticket.ticketid} className="ticket-queue-card">
               <div className="ticket-queue-card-top">
                 <div>
@@ -106,7 +123,7 @@ export function TicketQueuePage() {
                 <time dateTime={ticket.createdat}>{DATE.format(new Date(ticket.createdat))}</time>
               </div>
               {ticket.description && <p className="ticket-queue-description">{ticket.description}</p>}
-              {(ticket.materialtype || ticket.quantity || ticket.vendorname) && (
+              {!isReport && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
                 <div className="ticket-queue-details">
                   <span><strong>Material:</strong> {ticket.materialtype || "—"}</span>
                   <span><strong>Quantity:</strong> {ticket.quantity ?? "—"}</span>
@@ -116,40 +133,53 @@ export function TicketQueuePage() {
                   )}
                 </div>
               )}
-              <div className="ticket-queue-action">
-                <label htmlFor={`purchaser-${ticket.ticketid}`}>
-                  Assign Purchaser
-                  <select
-                    id={`purchaser-${ticket.ticketid}`}
-                    value={assignments[ticket.ticketid] || ""}
-                    onChange={(event) => setAssignments((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
-                    disabled={submittingId === ticket.ticketid || purchasers.length === 0}
-                  >
-                    <option value="">Select a Purchaser</option>
-                    {purchasers.map((purchaser) => <option key={purchaser.userid} value={purchaser.userid}>{purchaser.name} ({purchaser.email})</option>)}
-                  </select>
-                </label>
-                {ticket.tickettype === "Material Request" && (
-                  <label htmlFor={`budget-${ticket.ticketid}`}>
-                    Approved budget (₱)
-                    <input
-                      id={`budget-${ticket.ticketid}`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={approvedBudgets[ticket.ticketid] ?? ""}
-                      onChange={(event) => setApprovedBudgets((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
-                      disabled={submittingId === ticket.ticketid}
-                    />
-                  </label>
-                )}
-                <Button type="button" disabled={!assignments[ticket.ticketid] || submittingId === ticket.ticketid} onClick={() => handleAcknowledge(ticket)}>
-                  {submittingId === ticket.ticketid ? "Assigning…" : "Acknowledge & Assign"}
-                </Button>
-              </div>
-              {purchasers.length === 0 && <p className="ticket-queue-warning">There are no active Purchasers available to assign.</p>}
+
+              {isReport ? (
+                <div className="ticket-queue-action-report">
+                  <p className="ticket-queue-context">Issue report — resolve it directly once it has been handled.</p>
+                  <Button type="button" disabled={submittingId === ticket.ticketid} onClick={() => handleResolve(ticket)}>
+                    {submittingId === ticket.ticketid ? "Resolving…" : "Resolve report"}
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="ticket-queue-action">
+                    <label htmlFor={`purchaser-${ticket.ticketid}`}>
+                      Assign Purchaser
+                      <select
+                        id={`purchaser-${ticket.ticketid}`}
+                        value={assignments[ticket.ticketid] || ""}
+                        onChange={(event) => setAssignments((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
+                        disabled={submittingId === ticket.ticketid || purchasers.length === 0}
+                      >
+                        <option value="">Select a Purchaser</option>
+                        {purchasers.map((purchaser) => <option key={purchaser.userid} value={purchaser.userid}>{purchaser.name} ({purchaser.email})</option>)}
+                      </select>
+                    </label>
+                    {ticket.tickettype === "Material Request" && (
+                      <label htmlFor={`budget-${ticket.ticketid}`}>
+                        Approved budget (₱)
+                        <input
+                          id={`budget-${ticket.ticketid}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={approvedBudgets[ticket.ticketid] ?? ""}
+                          onChange={(event) => setApprovedBudgets((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
+                          disabled={submittingId === ticket.ticketid}
+                        />
+                      </label>
+                    )}
+                    <Button type="button" disabled={!assignments[ticket.ticketid] || submittingId === ticket.ticketid} onClick={() => handleAcknowledge(ticket)}>
+                      {submittingId === ticket.ticketid ? "Assigning…" : "Acknowledge & Assign"}
+                    </Button>
+                  </div>
+                  {purchasers.length === 0 && <p className="ticket-queue-warning">There are no active Purchasers available to assign.</p>}
+                </>
+              )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
