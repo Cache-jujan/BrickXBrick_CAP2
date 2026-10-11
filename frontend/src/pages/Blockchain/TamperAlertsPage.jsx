@@ -83,9 +83,9 @@ export function TamperAlertsPage() {
         <div>
           <h1>Tamper Alerts</h1>
           <p className="tamper-subtitle">
-            These approved expenses were edited after approval, so they no longer match their
-            tamper-proof copy. Check each one with the person responsible, then mark it as reviewed.
-            The expense keeps its "Changed after approval" label as a permanent record.
+            Approved expenses whose database record no longer matches the hash stored on the
+            blockchain. Check each one, then mark it reviewed; the expense keeps its
+            "Changed after approval" label.
           </p>
         </div>
         {!loading && !error && alerts.length > 0 && (

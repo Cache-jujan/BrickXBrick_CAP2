@@ -117,19 +117,21 @@ export function TicketQueuePage() {
                 </div>
               )}
               <div className="ticket-queue-action">
-                <label htmlFor={`purchaser-${ticket.ticketid}`}>Assign Purchaser</label>
-                <select
-                  id={`purchaser-${ticket.ticketid}`}
-                  value={assignments[ticket.ticketid] || ""}
-                  onChange={(event) => setAssignments((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
-                  disabled={submittingId === ticket.ticketid || purchasers.length === 0}
-                >
-                  <option value="">Select a Purchaser</option>
-                  {purchasers.map((purchaser) => <option key={purchaser.userid} value={purchaser.userid}>{purchaser.name} ({purchaser.email})</option>)}
-                </select>
+                <label htmlFor={`purchaser-${ticket.ticketid}`}>
+                  Assign Purchaser
+                  <select
+                    id={`purchaser-${ticket.ticketid}`}
+                    value={assignments[ticket.ticketid] || ""}
+                    onChange={(event) => setAssignments((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
+                    disabled={submittingId === ticket.ticketid || purchasers.length === 0}
+                  >
+                    <option value="">Select a Purchaser</option>
+                    {purchasers.map((purchaser) => <option key={purchaser.userid} value={purchaser.userid}>{purchaser.name} ({purchaser.email})</option>)}
+                  </select>
+                </label>
                 {ticket.tickettype === "Material Request" && (
                   <label htmlFor={`budget-${ticket.ticketid}`}>
-                    PM-approved budget (PHP)
+                    Approved budget (₱)
                     <input
                       id={`budget-${ticket.ticketid}`}
                       type="number"

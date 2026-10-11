@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getEligibleSiteManagers, getProjectOverview, updateProjectSiteManager } from "../../api/projectsApi";
+import {
+  activateProject,
+  cancelProject,
+  completeProject,
+  getEligibleSiteManagers,
+  getProjectOverview,
+  updateProjectSiteManager,
+} from "../../api/projectsApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
@@ -11,15 +18,19 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
+import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
-import { ChainStatus } from "../../components/blockchain/ChainStatus";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
-import { ShieldCheckIcon } from "../../components/ui/icons";
 import "./ProjectDetailPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "long", day: "numeric" });
 const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const CLOSED_STATUSES = ["Completed", "Cancelled", "Archived"];
+
+function formatDate(value) {
+  return value ? DATE.format(new Date(value)) : "Not set";
+}
 
 export function ProjectDetailPage() {
   const { id } = useParams();
@@ -51,6 +62,11 @@ export function ProjectDetailPage() {
   const [siteManagers, setSiteManagers] = useState([]);
   const [siteManagersError, setSiteManagersError] = useState("");
   const [siteManagerSaving, setSiteManagerSaving] = useState(false);
+  // GM lifecycle actions: { kind: "activate" | "cancel" | "complete" } while a dialog is open.
+  const [statusDialog, setStatusDialog] = useState(null);
+  const [statusInput, setStatusInput] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +96,11 @@ export function ProjectDetailPage() {
     };
   }, [id]);
 
+  const isGM = user.role === "General Manager";
+  const isClosed = Boolean(project && CLOSED_STATUSES.includes(project.status));
   const canManageSiteManager = Boolean(
-    project && (
-      user.role === "General Manager" ||
+    project && !isClosed && (
+      isGM ||
       (user.role === "Project Manager" && project.projectmanagerid === user.id)
     )
   );
@@ -91,13 +109,13 @@ export function ProjectDetailPage() {
     if (!canManageSiteManager) return undefined;
     let cancelled = false;
     setSiteManagersError("");
-    getEligibleSiteManagers()
+    getEligibleSiteManagers(id)
       .then((data) => { if (!cancelled) setSiteManagers(data); })
       .catch((err) => {
         if (!cancelled) setSiteManagersError(extractErrorMessage(err, "Couldn't load Site Managers."));
       });
     return () => { cancelled = true; };
-  }, [canManageSiteManager]);
+  }, [canManageSiteManager, id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,17 +201,47 @@ export function ProjectDetailPage() {
     }
   }
 
-  async function handleSiteManagerChange(event) {
-    const siteManagerId = event.target.value || null;
+  async function handleSiteManagerChange(value) {
+    const siteManagerId = value || null;
     setSiteManagerSaving(true);
     setSiteManagersError("");
     try {
       const updated = await updateProjectSiteManager(id, siteManagerId);
       setProject((previous) => ({ ...previous, ...updated }));
+      setSiteManagers(await getEligibleSiteManagers(id));
     } catch (err) {
       setSiteManagersError(extractErrorMessage(err, "Couldn't update the Site Manager assignment."));
     } finally {
       setSiteManagerSaving(false);
+    }
+  }
+
+  function openStatusDialog(kind) {
+    setStatusError("");
+    setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
+    setStatusDialog({ kind });
+  }
+
+  function closeStatusDialog() {
+    if (statusBusy) return;
+    setStatusDialog(null);
+    setStatusError("");
+  }
+
+  async function handleStatusAction() {
+    if (!statusDialog || statusBusy) return;
+    setStatusBusy(true);
+    setStatusError("");
+    try {
+      if (statusDialog.kind === "activate") await activateProject(id);
+      if (statusDialog.kind === "cancel") await cancelProject(id, statusInput.trim());
+      if (statusDialog.kind === "complete") await completeProject(id, statusInput);
+      setProject(await getProjectOverview(id));
+      setStatusDialog(null);
+    } catch (err) {
+      setStatusError(extractErrorMessage(err, "Couldn't update the project status."));
+    } finally {
+      setStatusBusy(false);
     }
   }
 
@@ -219,80 +267,147 @@ export function ProjectDetailPage() {
   }
   if (!project) return null;
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  // Only approved expenses count against the budget; pending ones are shown
+  // separately so the GM can see what is about to land.
+  const approvedTotal = expenses.filter((e) => e.status === "Approved").reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const pendingTotal = expenses.filter((e) => e.status === "Pending").reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const budget = Number(project.budget || 0);
-  const budgetUsedPct = budget > 0 ? Math.min(100, Math.round((totalExpenses / budget) * 100)) : 0;
+  const budgetUsedPct = budget > 0 ? Math.round((approvedTotal / budget) * 100) : 0;
+  const location = [project.siteaddress, project.municipality, project.province].filter(Boolean).join(", ");
 
   // Only the owning Project Manager may add milestones/tasks — mirrors
   // getOwnedProject's check in backend/src/routes/milestones.js.
-  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id;
+  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   const hasSiteManager = Boolean(project.sitemanagerid);
 
   return (
     <div className="project-detail">
       <BackLink to="/projects">Back to Projects</BackLink>
 
-      <div className="spread project-detail-header">
-        <div>
-          <h1>{project.name}</h1>
-          <p className="project-detail-client">{project.clientname}</p>
-        </div>
-        <Badge status={project.status} />
-      </div>
-
-      {project.description && (
-        <Card className="project-detail-description"><p>{project.description}</p></Card>
-      )}
-
-      <div className="project-detail-facts">
-        <Fact label="Budget" value={PESO.format(project.budget)} />
-        <Fact label="Expenses Logged" value={PESO.format(totalExpenses)} note={`${budgetUsedPct}% of budget`} />
-        <Fact label="Start Date" value={DATE.format(new Date(project.startdate))} />
-        <Fact
-          label="Expected End Date"
-          value={project.enddate ? DATE.format(new Date(project.enddate)) : "Not set"}
-        />
-        <Fact label="Overall Progress" value={`${Number(project.progress || 0)}%`} />
-      </div>
-
-      <Card className="project-detail-assignment">
-        <div>
-          <p className="project-detail-fact-label">Current Site Manager</p>
-          <p className="project-detail-assignment-name">
-            {project.sitemanagername || "No Site Manager assigned"}
+      <header className="pd-header">
+        <div className="pd-header-text">
+          <div className="pd-title-row">
+            <h1>{project.name}</h1>
+            <Badge status={project.status} />
+          </div>
+          <p className="pd-meta">
+            {[project.clientname, project.projecttype, project.municipality].filter(Boolean).join(" · ")}
           </p>
-          {project.sitemanageremail && (
-            <p className="project-detail-fact-note">{project.sitemanageremail}</p>
-          )}
         </div>
-        {canManageSiteManager && (
-          <div className="project-detail-assignment-control">
-            <Field
-              label="Assign or replace Site Manager"
-              as="select"
-              value={project.sitemanagerid || ""}
-              disabled={siteManagerSaving || siteManagers.length === 0}
-              onChange={handleSiteManagerChange}
-            >
-              <option value="">No Site Manager</option>
-              {siteManagers.map((manager) => (
-                <option key={manager.userid} value={manager.userid}>
-                  {manager.name.trim()} ({manager.email})
-                </option>
-              ))}
-            </Field>
-            {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
-            {siteManagersError && <p className="field-error">{siteManagersError}</p>}
+        {isGM && !isClosed && (
+          <div className="page-header-actions">
+            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>Cancel project</Button>
+            <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">Edit details</Link>
+            {project.status === "Draft" && (
+              <Button onClick={() => openStatusDialog("activate")}>Activate project</Button>
+            )}
+            {project.status === "Active" && (
+              <Button onClick={() => openStatusDialog("complete")}>Mark as completed</Button>
+            )}
           </div>
         )}
-      </Card>
+      </header>
+
+      {project.status === "Draft" && (
+        <Banner tone="info" title="Draft: planning and procurement">
+          The Project Manager can already plan milestones and tasks. Material requests and purchases start
+          once a General Manager activates the project{hasSiteManager ? "." : ", which needs a Site Manager first."}
+        </Banner>
+      )}
+      {project.status === "Cancelled" && (
+        <Banner tone="warning" title="This project was cancelled">
+          {project.cancellationreason}
+          {project.cancelledat ? ` (${DATETIME.format(new Date(project.cancelledat))})` : ""}
+        </Banner>
+      )}
+      {(project.warnings || []).map((w) => (
+        <Banner key={w.code} tone="warning" title={w.message} />
+      ))}
+
+      {project.description && <p className="pd-description">{project.description}</p>}
+
+      <section className="pd-summary" aria-label="Project summary">
+        <div className="pd-group">
+          <h2 className="pd-group-title">Budget</h2>
+          <dl>
+            <div><dt>Target budget</dt><dd className="num-left">{PESO.format(budget)}</dd></div>
+            <div>
+              <dt>Approved spending</dt>
+              <dd className="num-left">
+                {PESO.format(approvedTotal)} <span className="pd-dd-note">{budgetUsedPct}% of budget</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Waiting for approval</dt>
+              <dd className="num-left">{pendingTotal ? PESO.format(pendingTotal) : <span className="pd-dd-note">None</span>}</dd>
+            </div>
+            <div><dt>Work progress</dt><dd>{Number(project.progress || 0)}%</dd></div>
+          </dl>
+        </div>
+        <div className="pd-group">
+          <h2 className="pd-group-title">Timeline</h2>
+          <dl>
+            <div><dt>Development</dt><dd>{formatDate(project.startdate)}</dd></div>
+            <div><dt>Construction</dt><dd>{formatDate(project.constructionstartdate)}</dd></div>
+            <div><dt>Completion (target)</dt><dd>{formatDate(project.enddate)}</dd></div>
+            {project.actualcompletiondate && (
+              <div><dt>Turnover (actual)</dt><dd>{formatDate(project.actualcompletiondate)}</dd></div>
+            )}
+          </dl>
+        </div>
+        <div className="pd-group">
+          <h2 className="pd-group-title">Site</h2>
+          <dl>
+            <div><dt>Type</dt><dd>{project.projecttype || "Not set"}</dd></div>
+            <div><dt>Location</dt><dd>{location || "Not set"}</dd></div>
+            <div><dt>Client</dt><dd>{project.clientname}</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section className="pd-team" aria-labelledby="pd-team-title">
+        <div className="section-head">
+          <h2 id="pd-team-title">Team</h2>
+          {isGM && !isClosed && (
+            <span className="section-head-note">Change the Project Manager from Edit details.</span>
+          )}
+        </div>
+        <div className="pd-team-grid">
+          <div className="pd-person">
+            <p className="pd-person-role">Project Manager</p>
+            <p className="pd-person-name">{project.projectmanagername || "Not assigned"}</p>
+            {project.projectmanageremail && <p className="pd-person-email">{project.projectmanageremail}</p>}
+          </div>
+          <div className="pd-person">
+            <p className="pd-person-role">Site Manager</p>
+            <p className="pd-person-name">{project.sitemanagername || "Not assigned yet"}</p>
+            {project.sitemanageremail && <p className="pd-person-email">{project.sitemanageremail}</p>}
+            {canManageSiteManager && (
+              <div className="pd-person-control">
+                <ManagerPicker
+                  label={project.sitemanagerid ? "Replace Site Manager" : "Assign a Site Manager"}
+                  managers={siteManagers}
+                  loading={false}
+                  value={project.sitemanagerid || ""}
+                  currentId={project.sitemanagerid}
+                  emptyOptionLabel="No Site Manager"
+                  disabled={siteManagerSaving || siteManagers.length === 0}
+                  onChange={handleSiteManagerChange}
+                />
+                {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
+                {siteManagersError && <p className="field-error">{siteManagersError}</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       <div className="project-detail-milestones">
-        <div className="spread project-detail-section-head">
+        <div className="section-head">
           <h2>Milestones</h2>
           {canManage && (
-            <Link to={`/projects/${project.projectid}/milestones/new`} className="btn btn-primary">
-              Add Milestone
+            <Link to={`/projects/${project.projectid}/milestones/new`} className="btn btn-secondary btn-sm">
+              Add milestone
             </Link>
           )}
         </div>
@@ -325,8 +440,11 @@ export function ProjectDetailPage() {
         )}
       </div>
 
-      <div className="spread project-detail-section-head">
+      <div className="section-head">
         <h2>Expenses</h2>
+        {!expensesLoading && expenses.length > 0 && (
+          <span className="section-head-note">{expenses.length} recorded · {PESO.format(approvedTotal)} approved</span>
+        )}
       </div>
 
       {expensesError && <Banner tone="error" title={expensesError} />}
@@ -342,7 +460,7 @@ export function ProjectDetailPage() {
           <div className="table-scroll">
             <table className="users-table project-detail-table">
               <thead>
-                <tr><th>Vendor</th><th>Category</th><th>Amount</th><th>Date</th><th>Status</th></tr>
+                <tr><th>Vendor</th><th>Category</th><th>Date</th><th className="num">Amount</th><th>Status</th></tr>
               </thead>
               <tbody>
                 {expenses.map((e) => {
@@ -356,8 +474,8 @@ export function ProjectDetailPage() {
                       >
                         <td>{e.vendorname}</td>
                         <td>{e.category}</td>
-                        <td>{PESO.format(e.amount)}</td>
                         <td>{DATE.format(new Date(e.receiptdate))}</td>
+                        <td className="num">{PESO.format(e.amount)}</td>
                         <td>
                           <span className="project-detail-badges">
                             <Badge status={e.status} />
@@ -428,15 +546,11 @@ export function ProjectDetailPage() {
       )}
 
       <section className="record-protection" aria-labelledby="record-protection-title">
-        <div className="record-protection-head">
-          <span className="record-protection-seal" aria-hidden="true"><ShieldCheckIcon size={22} /></span>
-          <div>
-            <h2 id="record-protection-title">Record Protection</h2>
-            <p className="record-protection-intro">
-              When an expense is approved, a tamper-proof copy is saved on three separate servers.
-              If anyone edits the expense afterwards, the system notices and raises an alert.
-            </p>
-          </div>
+        <div className="section-head">
+          <h2 id="record-protection-title">Record protection</h2>
+          <span className="section-head-note">
+            Each approved expense is hashed and stored on the blockchain; later edits raise an alert.
+          </span>
         </div>
 
           {chainError && <Banner tone="error" title={chainError} />}
@@ -469,6 +583,58 @@ export function ProjectDetailPage() {
             )
           )}
       </section>
+      {statusDialog && (
+        <div className="modal-overlay" role="presentation" onClick={closeStatusDialog}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-status-title" onClick={(ev) => ev.stopPropagation()}>
+            {statusDialog.kind === "activate" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">Activate this project?</h2>
+                <p className="modal-body">
+                  The Project Manager, Site Manager and Purchaser will be notified, and material requests and
+                  purchases can begin.
+                </p>
+              </>
+            )}
+            {statusDialog.kind === "complete" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">Mark this project as completed?</h2>
+                <Field
+                  label="Actual completion / turnover date"
+                  required
+                  type="date"
+                  value={statusInput}
+                  onChange={(ev) => setStatusInput(ev.target.value)}
+                />
+              </>
+            )}
+            {statusDialog.kind === "cancel" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">Cancel this project?</h2>
+                <p className="modal-body">Use this when the project didn't push through. It can't be reopened.</p>
+                <Field
+                  label="Reason"
+                  required
+                  as="textarea"
+                  placeholder="e.g. Client did not push through"
+                  value={statusInput}
+                  onChange={(ev) => setStatusInput(ev.target.value)}
+                />
+              </>
+            )}
+            {statusError && <Banner tone="error" title={statusError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeStatusDialog} disabled={statusBusy}>Back</Button>
+              <Button
+                variant={statusDialog.kind === "cancel" ? "danger" : "primary"}
+                onClick={handleStatusAction}
+                disabled={statusBusy || (statusDialog.kind !== "activate" && !statusInput.trim())}
+              >
+                {statusBusy ? "Saving…" : statusDialog.kind === "activate" ? "Activate" : statusDialog.kind === "complete" ? "Mark Completed" : "Cancel Project"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {rejecting && (
         <div className="modal-overlay" role="presentation" onClick={closeReject}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>
@@ -495,15 +661,5 @@ export function ProjectDetailPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function Fact({ label, value, note }) {
-  return (
-    <Card className="project-detail-fact">
-      <p className="project-detail-fact-label">{label}</p>
-      <p className="project-detail-fact-value">{value}</p>
-      {note && <p className="project-detail-fact-note">{note}</p>}
-    </Card>
   );
 }

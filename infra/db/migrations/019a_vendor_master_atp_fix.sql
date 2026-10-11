@@ -1,4 +1,6 @@
--- Fix two ATP numbers seeded by 016_vendor_master_bir_fields.sql.
+-- Fix two ATP numbers seeded by 019_vendor_master_bir_fields.sql (was 016).
+-- Renamed from 018_ so it runs AFTER the seed on a fresh database; on a
+-- database that already ran it, re-running is a no-op (see below).
 --
 -- A BIR ATP number is 19 characters: region code (080) + "AU" + 4-digit
 -- year + 10-digit serial. Two seed rows have 18 (one zero dropped from the

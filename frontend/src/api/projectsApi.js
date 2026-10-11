@@ -23,23 +23,62 @@ export async function getProjectOverview(id) {
   return data;
 }
 
-// POST /api/projects — General Manager only
-// payload: { name, description, clientName, budget, startDate, endDate, projectManagerId, siteManagerId }
+// POST /api/projects — General Manager only. Creates a Draft project.
+// payload: { name, description, clientName, budget, projectType,
+//            municipality, province, siteAddress,
+//            startDate (target date of development),
+//            constructionStartDate (target date of construction),
+//            endDate (target date of completion),
+//            projectManagerId, siteManagerId }
+// The response carries `warnings` (e.g. OUTSIDE_SERVICE_AREA).
 export async function createProject(payload) {
   const { data } = await apiClient.post("/api/projects", payload);
   return data;
 }
 
-// GET /api/projects/eligible-managers — Active Project Managers only, for
-// the Create Project PM dropdown (GM only)
-export async function getEligibleManagers() {
-  const { data } = await apiClient.get("/api/projects/eligible-managers");
+// GET /api/projects/eligible-managers — every active Project Manager with
+// { openProjects, openProjectCount, maxOpenProjects, available } (GM only).
+// Pass projectId when editing so that project doesn't count against its PM.
+export async function getEligibleManagers(projectId) {
+  const { data } = await apiClient.get("/api/projects/eligible-managers", {
+    params: projectId ? { projectId } : undefined,
+  });
   return data;
 }
 
-// GET /api/projects/eligible-site-managers — Active Site Managers (GM/PM)
-export async function getEligibleSiteManagers() {
-  const { data } = await apiClient.get("/api/projects/eligible-site-managers");
+// GET /api/projects/eligible-site-managers — same shape, Site Managers (GM/PM)
+export async function getEligibleSiteManagers(projectId) {
+  const { data } = await apiClient.get("/api/projects/eligible-site-managers", {
+    params: projectId ? { projectId } : undefined,
+  });
+  return data;
+}
+
+// GET /api/projects/options — project types, service area and limits (GM)
+export async function getProjectOptions() {
+  const { data } = await apiClient.get("/api/projects/options");
+  return data;
+}
+
+// PATCH /api/projects/:id — GM edits details (any subset of the create fields)
+export async function updateProject(projectId, payload) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}`, payload);
+  return data;
+}
+
+// Status changes (GM only)
+export async function activateProject(projectId) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/activate`);
+  return data;
+}
+
+export async function cancelProject(projectId, reason) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/cancel`, { reason });
+  return data;
+}
+
+export async function completeProject(projectId, actualCompletionDate) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/complete`, { actualCompletionDate });
   return data;
 }
 

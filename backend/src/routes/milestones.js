@@ -5,6 +5,9 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 
+// Statuses on which the PM may still plan work (milestones and tasks).
+const PLANNABLE_STATUSES = ["Draft", "Active"];
+
 const router = express.Router();
 router.use(requireAuth);
 
@@ -26,8 +29,10 @@ async function getOwnedProject(projectId, userId) {
     }
     // D-11: an Archived project had no status check, so milestones/tasks
     // could still be created on a project that's supposed to be closed.
-    if (project.status !== "Active") {
-        const err = new Error(`This project is ${project.status}, not Active — milestones and tasks cannot be created on it`);
+    // Draft is allowed too: the PM plans the project (e.g. a "Planning
+    // phase" milestone) before construction starts — adviser item 2.
+    if (!PLANNABLE_STATUSES.includes(project.status)) {
+        const err = new Error(`This project is ${project.status} — milestones and tasks can only be created on a Draft or Active project`);
         err.status = 409;
         throw err;
     }
@@ -162,8 +167,8 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
         }
         // D-11: mirror getOwnedProject's Active check here — this route
         // reaches the project via the milestone, not getOwnedProject.
-        if (milestone.projectstatus !== "Active") {
-            const err = new Error(`This project is ${milestone.projectstatus}, not Active — tasks cannot be created on it`);
+        if (!PLANNABLE_STATUSES.includes(milestone.projectstatus)) {
+            const err = new Error(`This project is ${milestone.projectstatus} — tasks can only be created on a Draft or Active project`);
             err.status = 409;
             throw err;
         }

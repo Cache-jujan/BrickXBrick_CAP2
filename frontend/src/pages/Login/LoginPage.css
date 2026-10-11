@@ -315,3 +315,77 @@
     margin-bottom: var(--space-2);
   }
 }
+
+/* --- Refinement (Oct 2026): plain, single-purpose sign-in --------------- */
+
+.login-panel-scrim {
+  background: linear-gradient(110deg, rgba(48, 47, 40, 0.94) 0%, rgba(48, 47, 40, 0.86) 55%, rgba(48, 47, 40, 0.7) 100%);
+}
+
+.login-panel-content {
+  padding: var(--space-6);
+}
+
+.login-brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 3px;
+}
+
+.login-brand-name {
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.login-panel-copy {
+  max-width: 460px;
+}
+
+.login-headline {
+  font-size: var(--text-xl);
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.login-panel-tagline {
+  margin-top: var(--space-3);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.login-copyright {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.login-card {
+  max-width: 400px;
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  box-shadow: none;
+}
+
+.login-title {
+  font-size: var(--text-lg);
+  text-align: left;
+  margin-bottom: var(--space-1);
+}
+
+.login-subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  text-align: left;
+  margin-bottom: var(--space-5);
+}
+
+.login-forgot {
+  text-align: right;
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-3);
+}
+
+.login-submit {
+  width: 100%;
+}

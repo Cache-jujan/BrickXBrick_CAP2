@@ -16,27 +16,35 @@ const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
 // Purely cosmetic label map for the topbar title/breadcrumb — does not
 // affect routing. Falls back to a generic label for any unmatched or
 // dynamic (":id") route rather than showing nothing.
+// Each page renders its own <h1>, so the top bar only shows where the page
+// sits ("Projects / Edit project") instead of repeating the title.
 const PAGE_LABELS = [
-  { test: (p) => p.startsWith("/dashboard"), label: "Dashboard", crumb: "Home" },
-  { test: (p) => p === "/projects", label: "Projects", crumb: "Projects" },
-  { test: (p) => p === "/projects/new", label: "Create Project", crumb: "Projects / New" },
-  { test: (p) => /^\/projects\/[^/]+$/.test(p), label: "Project Detail", crumb: "Projects / Detail" },
-  { test: (p) => p.includes("/milestones/new"), label: "Add Milestone", crumb: "Projects / Milestones / New" },
-  { test: (p) => p.includes("/tasks/new"), label: "Add Task", crumb: "Projects / Tasks / New" },
-  { test: (p) => p === "/expenses", label: "Expenses", crumb: "Finance" },
-  { test: (p) => p === "/admin/users", label: "User Accounts", crumb: "Administration" },
-  { test: (p) => p === "/blockchain/alerts", label: "Tamper Alerts", crumb: "Record Protection" },
+  { test: (p) => p.startsWith("/dashboard"), trail: ["Dashboard"] },
+  { test: (p) => p === "/projects", trail: ["Projects"] },
+  { test: (p) => p === "/projects/new", trail: ["Projects", "New project"] },
+  { test: (p) => /^\/projects\/[^/]+\/edit$/.test(p), trail: ["Projects", "Edit project"] },
+  { test: (p) => /^\/projects\/[^/]+$/.test(p), trail: ["Projects", "Project"] },
+  { test: (p) => p.includes("/milestones/new"), trail: ["Projects", "New milestone"] },
+  { test: (p) => p.includes("/tasks/new"), trail: ["Projects", "New task"] },
+  { test: (p) => p === "/expenses", trail: ["Finance", "Expenses"] },
+  { test: (p) => p === "/expenses/new", trail: ["Finance", "Submit expense"] },
+  { test: (p) => p === "/expenses/mine", trail: ["Finance", "My expenses"] },
+  { test: (p) => p.startsWith("/tickets/new"), trail: ["Tickets", "New ticket"] },
+  { test: (p) => p.startsWith("/tickets"), trail: ["Tickets"] },
+  { test: (p) => p.startsWith("/tasks/progress-review"), trail: ["Tasks", "Progress review"] },
+  { test: (p) => p === "/admin/users", trail: ["Administration", "User accounts"] },
+  { test: (p) => p === "/blockchain/alerts", trail: ["Record protection", "Tamper alerts"] },
 ];
 
 function pageInfoFor(pathname) {
   const match = PAGE_LABELS.find((entry) => entry.test(pathname));
-  return match || { label: "Brick x Brick", crumb: "" };
+  return match || { trail: ["Brick x Brick"] };
 }
 
 export function Topbar({ onMenuClick }) {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const { label, crumb } = pageInfoFor(location.pathname);
+  const { trail } = pageInfoFor(location.pathname);
   const initial = user?.name?.trim()?.[0]?.toUpperCase() || "?";
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -119,10 +127,15 @@ export function Topbar({ onMenuClick }) {
           </svg>
         </button>
 
-        <div className="topbar-titles">
-          <h1 className="topbar-page-title">{label}</h1>
-          {crumb && <p className="topbar-breadcrumb">{crumb}</p>}
-        </div>
+        <nav className="topbar-trail" aria-label="Breadcrumb">
+          <ol>
+            {trail.map((item, i) => (
+              <li key={item} aria-current={i === trail.length - 1 ? "page" : undefined}>
+                {item}
+              </li>
+            ))}
+          </ol>
+        </nav>
 
         <span className="topbar-spacer" />
 

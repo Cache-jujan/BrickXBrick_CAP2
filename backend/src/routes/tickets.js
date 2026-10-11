@@ -96,6 +96,14 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             throw err;
         }
 
+        // Tickets (and the purchases behind them) start only once the project
+        // is Active — Draft is the planning stage before the BOM is approved.
+        if (project.status !== "Active") {
+            const err = new Error(`Tickets can only be created on an Active project; this project is ${project.status}`);
+            err.status = 409;
+            throw err;
+        }
+
         const ticket = await withTransaction(async (client) => {
             const insertResult = await client.query(
                 `INSERT INTO tickets
