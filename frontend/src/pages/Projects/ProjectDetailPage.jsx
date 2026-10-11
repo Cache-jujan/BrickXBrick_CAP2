@@ -10,6 +10,7 @@ import {
 } from "../../api/projectsApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
+import { getBom } from "../../api/bomApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Badge } from "../../components/ui/Badge";
@@ -23,7 +24,15 @@ import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import "./ProjectDetailPage.css";
 
-const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
+const PESO_WHOLE = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
+const PESO_CENTS = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
+// Whole pesos stay short; amounts with centavos keep them (BOM totals often have them).
+const PESO = {
+  format: (value) => {
+    const n = Number(value || 0);
+    return (Math.abs(n * 100 - Math.round(n) * 100) < 0.5 ? PESO_WHOLE : PESO_CENTS).format(n);
+  },
+};
 const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "long", day: "numeric" });
 const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
 const CLOSED_STATUSES = ["Completed", "Cancelled", "Archived"];
@@ -67,6 +76,9 @@ export function ProjectDetailPage() {
   const [statusInput, setStatusInput] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState("");
+  // F2: the project's Bill of Materials summary (GM and owning PM).
+  const [bomInfo, setBomInfo] = useState(null);
+  const [bomError, setBomError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +128,17 @@ export function ProjectDetailPage() {
       });
     return () => { cancelled = true; };
   }, [canManageSiteManager, id]);
+
+  useEffect(() => {
+    if (!project) return undefined;
+    let cancelled = false;
+    setBomError("");
+    getBom(id)
+      .then((data) => { if (!cancelled) setBomInfo(data); })
+      .catch((err) => { if (!cancelled) setBomError(extractErrorMessage(err, "Couldn't load the Bill of Materials.")); });
+    return () => { cancelled = true; };
+    // Reload when the project's BOM status changes (e.g. after activation).
+  }, [id, project?.bomstatus, Boolean(project)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -279,6 +302,15 @@ export function ProjectDetailPage() {
   // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   const hasSiteManager = Boolean(project.sitemanagerid);
+  const bom = bomInfo?.bom || null;
+  const bomApproved = project.bomstatus === "Approved";
+  const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
+  const activationChecks = [
+    { label: "Project Manager assigned", done: Boolean(project.projectmanagerid) },
+    { label: "Site Manager assigned", done: hasSiteManager },
+    { label: "Bill of Materials approved", done: bomApproved },
+  ];
+  const readyToActivate = activationChecks.every((c) => c.done);
 
   return (
     <div className="project-detail">
@@ -311,7 +343,9 @@ export function ProjectDetailPage() {
       {project.status === "Draft" && (
         <Banner tone="info" title="Draft: planning and procurement">
           The Project Manager can already plan milestones and tasks. Material requests and purchases start
-          once a General Manager activates the project{hasSiteManager ? "." : ", which needs a Site Manager first."}
+          once a General Manager activates the project.
+          {!readyToActivate &&
+            ` Still needed: ${activationChecks.filter((c) => !c.done).map((c) => c.label).join(", ")}.`}
         </Banner>
       )}
       {project.status === "Cancelled" && (
@@ -363,6 +397,50 @@ export function ProjectDetailPage() {
             <div><dt>Client</dt><dd>{project.clientname}</dd></div>
           </dl>
         </div>
+      </section>
+
+      <section className="pd-bom" aria-labelledby="pd-bom-title">
+        <div className="section-head">
+          <h2 id="pd-bom-title">Bill of Materials</h2>
+          {bom && (
+            <Link to={`/projects/${project.projectid}/bom`} className="btn btn-secondary btn-sm">
+              {isGM && !isClosed && bom.status === "Draft" ? "Review and approve" : "Open BOM"}
+            </Link>
+          )}
+        </div>
+        {bomError && <Banner tone="error" title={bomError} />}
+        {!bomError && bomInfo && !bom && (
+          <div className="pd-bom-bar pd-bom-empty">
+            <p>
+              {isGM && !isClosed
+                ? "Add the signed BOM. It is the basis for every purchase and is required before activation."
+                : "The General Manager hasn't added the BOM yet."}
+            </p>
+            {isGM && !isClosed && (
+              <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">Add BOM</Link>
+            )}
+          </div>
+        )}
+        {bom && (
+          <div className="pd-bom-bar">
+            <div className="pd-bom-status">
+              <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />
+              <span>
+                {bom.status === "Approved"
+                  ? `Approved${bom.approvedAt ? ` ${DATETIME.format(new Date(bom.approvedAt))}` : ""}`
+                  : bomWarningCount
+                    ? `${bomWarningCount} ${bomWarningCount === 1 ? "thing" : "things"} to check before approval`
+                    : "Not approved yet"}
+              </span>
+            </div>
+            <dl className="pd-bom-figures">
+              <div><dt>Items</dt><dd>{bom.totals.itemCount} in {bom.totals.sectionCount} sections</dd></div>
+              <div><dt>Materials</dt><dd className="num">{PESO.format(bom.totals.materials)}</dd></div>
+              <div><dt>Labor</dt><dd className="num">{PESO.format(bom.totals.labor)}</dd></div>
+              <div><dt>Total</dt><dd className="num pd-bom-total">{PESO.format(bom.totals.total)}</dd></div>
+            </dl>
+          </div>
+        )}
       </section>
 
       <section className="pd-team" aria-labelledby="pd-team-title">
@@ -588,10 +666,20 @@ export function ProjectDetailPage() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-status-title" onClick={(ev) => ev.stopPropagation()}>
             {statusDialog.kind === "activate" && (
               <>
-                <h2 id="project-status-title" className="modal-title">Activate this project?</h2>
+                <h2 id="project-status-title" className="modal-title">
+                  {readyToActivate ? "Activate this project?" : "Not ready to activate"}
+                </h2>
+                <ul className="pd-checklist">
+                  {activationChecks.map((c) => (
+                    <li key={c.label} className={c.done ? "pd-check-done" : "pd-check-missing"}>
+                      <span aria-hidden="true">{c.done ? "✓" : "–"}</span> {c.label}
+                    </li>
+                  ))}
+                </ul>
                 <p className="modal-body">
-                  The Project Manager, Site Manager and Purchaser will be notified, and material requests and
-                  purchases can begin.
+                  {readyToActivate
+                    ? "The Project Manager, Site Manager and Purchaser will be notified, and material requests and purchases can begin."
+                    : "Complete the missing steps first."}
                 </p>
               </>
             )}
@@ -624,13 +712,16 @@ export function ProjectDetailPage() {
             {statusError && <Banner tone="error" title={statusError} />}
             <div className="modal-actions">
               <Button variant="secondary" onClick={closeStatusDialog} disabled={statusBusy}>Back</Button>
-              <Button
+              {!(statusDialog.kind === "activate" && !readyToActivate) && <Button
                 variant={statusDialog.kind === "cancel" ? "danger" : "primary"}
                 onClick={handleStatusAction}
-                disabled={statusBusy || (statusDialog.kind !== "activate" && !statusInput.trim())}
+                disabled={
+                  statusBusy ||
+                  (statusDialog.kind === "activate" ? !readyToActivate : !statusInput.trim())
+                }
               >
                 {statusBusy ? "Saving…" : statusDialog.kind === "activate" ? "Activate" : statusDialog.kind === "complete" ? "Mark Completed" : "Cancel Project"}
-              </Button>
+              </Button>}
             </div>
           </div>
         </div>

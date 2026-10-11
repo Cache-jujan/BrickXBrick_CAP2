@@ -52,6 +52,7 @@ export function EditProjectPage() {
             submitLabel="Save Changes"
             busyLabel="Saving…"
             cancelTo={`/projects/${id}`}
+            budgetLocked={project.bomstatus === "Approved"}
           />
         </Card>
       )}

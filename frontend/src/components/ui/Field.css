@@ -50,3 +50,16 @@ textarea.field-control {
   font-size: var(--text-xs);
   color: var(--color-danger);
 }
+
+.field-control:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-soft);
+  cursor: not-allowed;
+}
+
+/* Helper text under a field (the field keeps its own bottom margin). */
+.field-hint {
+  margin: calc(var(--space-4) * -1 + var(--space-1)) 0 var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}

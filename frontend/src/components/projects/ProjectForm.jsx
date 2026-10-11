@@ -60,7 +60,7 @@ export function projectToForm(project) {
  *   mode="edit":   the Site Manager is changed from the project page instead
  * onSubmit(payload) must return a promise; its rejection is shown as a banner.
  */
-export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLabel, busyLabel, cancelTo }) {
+export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLabel, busyLabel, cancelTo, budgetLocked = false }) {
   const [form, setForm] = useState(initialValues || EMPTY_PROJECT_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -189,17 +189,25 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
           error={fieldErrors.clientName}
           onChange={(e) => updateField("clientName", e.target.value)}
         />
-        <Field
-          label="Target Budget in PHP"
-          required
-          type="number"
-          min="0"
-          step="1000"
-          placeholder="0"
-          value={form.budget}
-          error={fieldErrors.budget}
-          onChange={(e) => updateField("budget", e.target.value)}
-        />
+        <div>
+          <Field
+            label="Target Budget in PHP"
+            required
+            type="number"
+            min="0"
+            step="any"
+            placeholder="0"
+            value={form.budget}
+            error={fieldErrors.budget}
+            disabled={budgetLocked}
+            onChange={(e) => updateField("budget", e.target.value)}
+          />
+          <p className="field-hint">
+            {budgetLocked
+              ? "Follows the approved BOM total. Reopen the BOM to change it."
+              : "The BOM total. It is set automatically when the BOM is approved."}
+          </p>
+        </div>
       </div>
 
       <Field

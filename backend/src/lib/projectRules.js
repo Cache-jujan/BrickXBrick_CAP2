@@ -298,7 +298,7 @@ async function notifyProject(client, { recipientId, type, projectId, message }) 
 /**
  * Throws 409 unless the project exists and is Active. Purchases and tickets
  * are only allowed once the project has left Draft (client: the BOM is signed
- * before any purchase; Patch 2 makes BOM approval the gate for activation).
+ * before any purchase; activation requires the approved BOM).
  */
 async function assertProjectActive(runQuery, projectId, action = "This action") {
   const result = await runQuery("SELECT status FROM projects WHERE projectid = $1", [projectId]);

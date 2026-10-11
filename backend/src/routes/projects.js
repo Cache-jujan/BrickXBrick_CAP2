@@ -4,7 +4,7 @@
 //   Draft      created by the GM after the client signs the BOM; PM is assigned
 //              now so planning and procurement can start (adviser item 2)
 //   Active     activated by the GM once the Site Manager is assigned
-//              (Patch 2 adds: and the BOM is approved); tickets and purchases
+//              and the Bill of Materials is approved; tickets and purchases
 //              are only allowed from here
 //   Completed  the GM records the actual completion / turnover date
 //   Cancelled  the project didn't push through; a reason is required
@@ -289,6 +289,14 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
       }
 
       const fields = validateProjectBody(req.body, existing);
+      // Client: the price given to the client is the BOM total, so once the
+      // BOM is approved the budget follows it (reopen the BOM to change it).
+      if (Math.abs(Number(fields.budget) - Number(existing.budget)) > 0.005) {
+        const bom = await client.query("SELECT status FROM boms WHERE projectid = $1::uuid", [existing.projectid]);
+        if (bom.rows[0]?.status === "Approved") {
+          throw httpError(409, "The budget follows the approved BOM total. Reopen the BOM to change it.");
+        }
+      }
       if (fields.name.toLowerCase() !== String(existing.name).trim().toLowerCase()) {
         await assertUniqueName(client, fields.name, existing.projectid);
       }
@@ -357,7 +365,7 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
 });
 
 // PATCH /:id/activate — GM. Draft -> Active. Requires both managers assigned.
-// Patch 2 (BOM) adds: the project's BOM must be approved.
+// The project's Bill of Materials must be approved (routes/bom.js).
 router.patch("/:id/activate", requireRole("General Manager"), async (req, res) => {
   try {
     const project = await withTransaction(async (client) => {
@@ -365,6 +373,12 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
       assertStatusTransition(existing.status, "Active");
       if (!existing.projectmanagerid) throw httpError(409, "Assign a Project Manager before activating");
       if (!existing.sitemanagerid) throw httpError(409, "Assign a Site Manager before activating");
+      // Client: the signed BOM is the basis for every purchase, so no
+      // purchases (Active) until the GM has approved the project's BOM.
+      const bom = await client.query("SELECT status FROM boms WHERE projectid = $1::uuid", [existing.projectid]);
+      if (bom.rows[0]?.status !== "Approved") {
+        throw httpError(409, "Approve the project's Bill of Materials before activating");
+      }
 
       const result = await client.query(
         `UPDATE projects SET status = 'Active', activatedAt = NOW()
@@ -531,13 +545,15 @@ const DETAIL_SELECT = `
   SELECT ${DETAIL_COLUMNS},
          sm.name AS sitemanagername, sm.email AS sitemanageremail,
          pm.name AS projectmanagername, pm.email AS projectmanageremail,
+         b.status AS bomstatus,
          ROUND(COALESCE(AVG(m.completionPercentage), 0), 2) AS progress
     FROM projects p
     LEFT JOIN milestones m ON m.projectId = p.projectId
     LEFT JOIN users sm ON sm.userid = p.sitemanagerid
     LEFT JOIN users pm ON pm.userid = p.projectmanagerid
+    LEFT JOIN boms b ON b.projectid = p.projectid
    WHERE p.projectid = $1
-   GROUP BY p.projectid, sm.name, sm.email, pm.name, pm.email`;
+   GROUP BY p.projectid, sm.name, sm.email, pm.name, pm.email, b.status`;
 
 async function loadDetail(projectId) {
   const result = await query(DETAIL_SELECT, [projectId]);
