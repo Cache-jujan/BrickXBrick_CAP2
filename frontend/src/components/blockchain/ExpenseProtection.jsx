@@ -21,7 +21,7 @@ export function ExpenseProtection({ status, canCheck, checking, result, onCheck 
     <section className="expense-protection" aria-label="Record protection">
       <div className="expense-protection-head">
         <ChainStatus status={effectiveStatus} withDescription />
-        {canCheck && status === "Confirmed" && (
+        {canCheck && (status === "Confirmed" || status === "TamperDetected") && (
           <Button variant="secondary" className="btn-sm" disabled={checking} onClick={onCheck}>
             {checking ? "Checking…" : "Check for changes"}
           </Button>

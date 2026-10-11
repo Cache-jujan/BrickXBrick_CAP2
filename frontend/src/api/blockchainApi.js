@@ -5,8 +5,9 @@ export async function verifyExpense(expenseId) {
   return data;
 }
 
-export async function listTamperAlerts() {
-  const { data } = await apiClient.get("/api/blockchain/alerts");
+// status: "open" (default; the sidebar badge uses it), "reviewed" or "all"
+export async function listTamperAlerts(status = "open") {
+  const { data } = await apiClient.get("/api/blockchain/alerts", { params: { status } });
   return data;
 }
 
@@ -15,8 +16,9 @@ export async function getProjectBlockchainSummary(projectId) {
   return data;
 }
 
-export async function resolveTamperAlert(alertId) {
-  const { data } = await apiClient.patch(`/api/blockchain/alerts/${alertId}/resolve`);
+// note: required explanation (10+ characters). The alert stays on record.
+export async function resolveTamperAlert(alertId, note) {
+  const { data } = await apiClient.patch(`/api/blockchain/alerts/${alertId}/resolve`, { note });
   return data;
 }
 
