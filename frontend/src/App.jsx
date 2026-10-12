@@ -11,8 +11,6 @@ import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
 import { EditProjectPage } from "./pages/Projects/EditProjectPage";
 import { BomPage } from "./pages/Projects/BomPage";
-import { CreateMilestonePage } from "./pages/Milestones/CreateMilestonePage";
-import { CreateTaskPage } from "./pages/Milestones/CreateTaskPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
@@ -57,7 +55,7 @@ export default function App() {
             <Route
               path="/tickets/new"
               element={
-                <RoleRoute allow={["Site Manager"]}>
+                <RoleRoute allow={["Site Manager" , "Project Manager"]}>
                   <CreateTicketPage />
                 </RoleRoute>
               }
@@ -123,24 +121,9 @@ export default function App() {
               }
             />
 
-            {/* F3: milestone/task creation is Project Manager only. Ownership of
-                the specific project is enforced by the backend's getOwnedProject. */}
-            <Route
-              path="/projects/:id/milestones/new"
-              element={
-                <RoleRoute allow={["Project Manager"]}>
-                  <CreateMilestonePage />
-                </RoleRoute>
-              }
-            />
-            <Route
-              path="/projects/:id/milestones/:milestoneId/tasks/new"
-              element={
-                <RoleRoute allow={["Project Manager"]}>
-                  <CreateTaskPage />
-                </RoleRoute>
-              }
-            />
+            {/* F3: milestone/task creation is Project Manager only, and now
+                happens in-place via modals on the project detail page — the old
+                standalone /milestones/new and /tasks/new routes were removed. */}
 
             <Route
               path="/expenses"

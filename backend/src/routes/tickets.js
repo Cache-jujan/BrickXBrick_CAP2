@@ -26,9 +26,21 @@ async function getTicket(ticketId) {
     return result.rows[0];
 }
 
-// POST / — Site Manager creates a ticket on their own assigned project.
+// POST / — create a ticket.
+//
+// Two creators:
+//   Site Manager    raises a request on their own assigned project. It starts
+//                   Pending; the PM acknowledges it later (assigns a Purchaser,
+//                   confirms the budget). Material Requests carry requestedBudget.
+//   Project Manager creates directly on a project they manage, to tell the
+//                   Purchaser what to buy this phase. Because the PM is the
+//                   approver, the ticket is created already Acknowledged: the PM
+//                   picks the Purchaser (assignedTo) now and, for a Material
+//                   Request, sets the approvedBudget. PMs create Material Request
+//                   or Work Item only (Reports are the SM's channel).
+//
 // ticketType is a category label only; it does not determine a recipient.
-router.post("/", requireRole("Site Manager"), async (req, res, next) => {
+router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
         const {
             projectID,
@@ -40,7 +52,15 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             quantity,
             vendorName,
             requestedBudget,
+            approvedBudget,
+            assignedTo,
+            bomItemID,
+            notInBom,
+            notInBomReason,
         } = req.body;
+
+        const isPM = req.user.role === "Project Manager";
+        const isSM = req.user.role === "Site Manager";
 
         if (!projectID || !ticketType || !subject) {
             const err = new Error("projectID, ticketType, and subject are required");
@@ -54,24 +74,24 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             throw err;
         }
 
-        // Material Request and Work Item tickets carry the structured context
-        // consumed later by F9 ticket-receipt mismatch screening. Reports
-        // remain free-text tickets and do not require these fields.
-        if (ticketType === "Material Request" || ticketType === "Work Item") {
-            if (!materialType || quantity === undefined || quantity === null || !vendorName) {
-                const err = new Error(
-                    "Material Request tickets require materialType, quantity, and vendorName"
-                );
+        const isMaterialReq = ticketType === "Material Request";
+        const isWorkItem = ticketType === "Work Item";
+
+        // Reports are the Site Manager's issue-report channel — the PM resolves
+        // them, not creates them.
+        if (isPM && ticketType === "Report") {
+            const err = new Error("Project Managers create Material Request or Work Item tickets; Reports are raised by the Site Manager");
+            err.status = 400;
+            throw err;
+        }
+
+        // Shared procurement context for Material Request / Work Item.
+        if (isMaterialReq || isWorkItem) {
+            if (quantity === undefined || quantity === null || !vendorName) {
+                const err = new Error("Material Request and Work Item tickets require quantity and vendorName");
                 err.status = 400;
                 throw err;
             }
-
-            if (ticketType === "Material Request" && (typeof requestedBudget !== "number" || !Number.isFinite(requestedBudget) || requestedBudget < 0)) {
-                const err = new Error("Material Request tickets require a non-negative requestedBudget in PHP");
-                err.status = 400;
-                throw err;
-            }
-
             if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0) {
                 const err = new Error("quantity must be a positive number");
                 err.status = 400;
@@ -79,8 +99,36 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             }
         }
 
+        // Work Item keeps a free-text materialType (no BOM link).
+        if (isWorkItem && !materialType) {
+            const err = new Error("Work Item tickets require materialType");
+            err.status = 400;
+            throw err;
+        }
+
+        // Budgets differ by creator:
+        //   SM Material Request -> requestedBudget (the PM confirms it later)
+        //   PM Material Request -> approvedBudget  (the PM is approving now)
+        if (isSM && isMaterialReq && (typeof requestedBudget !== "number" || !Number.isFinite(requestedBudget) || requestedBudget < 0)) {
+            const err = new Error("Material Request tickets require a non-negative requestedBudget in PHP");
+            err.status = 400;
+            throw err;
+        }
+        if (isPM && isMaterialReq && (typeof approvedBudget !== "number" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
+            const err = new Error("A Project Manager's Material Request requires a non-negative approvedBudget in PHP");
+            err.status = 400;
+            throw err;
+        }
+
+        // A PM-created ticket is born Acknowledged, so it needs its Purchaser now.
+        if (isPM && (isMaterialReq || isWorkItem) && !assignedTo) {
+            const err = new Error("assignedTo (a Purchaser's userId) is required when a Project Manager creates a ticket");
+            err.status = 400;
+            throw err;
+        }
+
         const projectResult = await query(
-            "SELECT projectId, status, siteManagerId FROM projects WHERE projectId = $1",
+            "SELECT projectId, status, siteManagerId, projectManagerId FROM projects WHERE projectId = $1",
             [projectID]
         );
         if (projectResult.rowCount === 0) {
@@ -90,8 +138,13 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
         }
         const project = projectResult.rows[0];
 
-        if (project.sitemanagerid !== req.user.id) {
+        if (isSM && project.sitemanagerid !== req.user.id) {
             const err = new Error("You may only create tickets on the project you are assigned to");
+            err.status = 403;
+            throw err;
+        }
+        if (isPM && project.projectmanagerid !== req.user.id) {
+            const err = new Error("You may only create tickets on a project you manage");
             err.status = 403;
             throw err;
         }
@@ -104,12 +157,103 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
             throw err;
         }
 
+        // Validate the Purchaser the PM is assigning (same rules as /acknowledge).
+        if (isPM) {
+            const assigneeResult = await query(
+                "SELECT userId, role, status FROM users WHERE userId = $1",
+                [assignedTo]
+            );
+            if (assigneeResult.rowCount === 0) {
+                const err = new Error(`Assigned user ${assignedTo} not found`);
+                err.status = 404;
+                throw err;
+            }
+            const assignee = assigneeResult.rows[0];
+            if (assignee.status !== "Active") {
+                const err = new Error(`Assigned user ${assignedTo} is not an active account`);
+                err.status = 400;
+                throw err;
+            }
+            if (assignee.role !== "Purchaser") {
+                const err = new Error(`assignedTo must be a Purchaser, but user ${assignedTo} is a ${assignee.role}`);
+                err.status = 400;
+                throw err;
+            }
+        }
+
+        // Resolve the BOM link for Material Requests (either creator). Active
+        // implies the project already has an Approved BOM to pick from;
+        // genuinely-absent materials take the Not-in-BOM path.
+        let resolvedMaterialType = materialType || null;
+        let resolvedBomItemID = null;
+        let resolvedNotInBom = false;
+        let resolvedNotInBomReason = null;
+
+        if (isMaterialReq) {
+            const hasBomItem = typeof bomItemID === "string" && bomItemID.trim() !== "";
+            const markedNotInBom = notInBom === true;
+
+            if (hasBomItem && markedNotInBom) {
+                const err = new Error("A Material Request is either from the BOM or marked Not in BOM, not both");
+                err.status = 400;
+                throw err;
+            }
+            if (!hasBomItem && !markedNotInBom) {
+                const err = new Error("Pick a BOM item, or mark the request as Not in BOM with a reason");
+                err.status = 400;
+                throw err;
+            }
+
+            if (hasBomItem) {
+                // The item must belong to THIS project's approved BOM.
+                const itemResult = await query(
+                    `SELECT i.bomitemid, i.description
+                       FROM bomitems i
+                       JOIN bomsections s ON s.sectionid = i.sectionid
+                       JOIN boms b ON b.bomid = s.bomid
+                      WHERE i.bomitemid = $1 AND b.projectid = $2 AND b.status = 'Approved'`,
+                    [bomItemID, projectID]
+                );
+                if (itemResult.rowCount === 0) {
+                    const err = new Error("That BOM item isn't part of this project's approved Bill of Materials");
+                    err.status = 400;
+                    throw err;
+                }
+                resolvedBomItemID = bomItemID;
+                resolvedMaterialType = itemResult.rows[0].description; // stay consistent with the BOM
+            } else {
+                if (typeof notInBomReason !== "string" || notInBomReason.trim() === "") {
+                    const err = new Error("A reason is required when the material isn't in the BOM");
+                    err.status = 400;
+                    throw err;
+                }
+                if (!materialType) {
+                    const err = new Error("Material Request tickets require materialType when the item isn't in the BOM");
+                    err.status = 400;
+                    throw err;
+                }
+                resolvedNotInBom = true;
+                resolvedNotInBomReason = notInBomReason.trim();
+                resolvedMaterialType = materialType;
+            }
+        }
+
+        // Creator-dependent columns.
+        const status = isPM ? "Acknowledged" : "Pending";
+        const requestedBudgetValue = isSM && isMaterialReq ? requestedBudget : null;
+        const approvedBudgetValue = isPM && isMaterialReq ? approvedBudget : null;
+        const assignedToValue = isPM ? assignedTo : null;
+        const acknowledgedByValue = isPM ? req.user.id : null;
+        const acknowledgedAtSql = isPM ? "NOW()" : "NULL"; // derived from role, not user input
+
         const ticket = await withTransaction(async (client) => {
             const insertResult = await client.query(
                 `INSERT INTO tickets
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
-                    materialType, quantity, vendorName, requestedBudget)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    materialType, quantity, vendorName, requestedBudget,
+                    bomItemID, notInBom, notInBomReason,
+                    status, assignedTo, acknowledgedBy, approvedBudget, acknowledgedAt)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, ${acknowledgedAtSql})
                  RETURNING *`,
                 [
                     projectID,
@@ -118,21 +262,37 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
                     subject,
                     description || null,
                     photoURL || null,
-                    materialType || null,
+                    resolvedMaterialType,
                     quantity ?? null,
                     vendorName || null,
-                    ticketType === "Material Request" ? requestedBudget : null,
+                    requestedBudgetValue,
+                    resolvedBomItemID,
+                    resolvedNotInBom,
+                    resolvedNotInBomReason,
+                    status,
+                    assignedToValue,
+                    acknowledgedByValue,
+                    approvedBudgetValue,
                 ]
             );
             const newTicket = insertResult.rows[0];
 
-            // Initial audit row: no prior state, lands straight on Pending.
+            // Audit: every ticket is born Pending. A PM-created ticket is
+            // acknowledged by the same action, so record that transition too.
             await logTransition(client, {
                 ticketId: newTicket.ticketid,
                 fromStatus: null,
                 toStatus: "Pending",
                 changedBy: req.user.id,
             });
+            if (isPM) {
+                await logTransition(client, {
+                    ticketId: newTicket.ticketid,
+                    fromStatus: "Pending",
+                    toStatus: "Acknowledged",
+                    changedBy: req.user.id,
+                });
+            }
 
             return newTicket;
         });
@@ -143,8 +303,8 @@ router.post("/", requireRole("Site Manager"), async (req, res, next) => {
     }
 });
 
-// GET /vendors — approved vendors available for Site Manager procurement tickets.
-router.get("/vendors", requireRole("Site Manager"), async (req, res, next) => {
+// GET /vendors — approved vendors available for procurement tickets (SM or PM).
+router.get("/vendors", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
         const result = await query(
             `SELECT vendorID AS "vendorID", vendorName AS "vendorName"

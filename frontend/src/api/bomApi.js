@@ -44,3 +44,11 @@ export async function reopenBom(projectId, reason) {
 export async function deleteBom(projectId) {
   await apiClient.delete(`/api/projects/${projectId}/bom`);
 }
+
+// GM, PM, assigned SM or Purchaser. Approved BOM items for the Material Request
+// picker. Unit costs are included only for GM/PM. Returns { status, items }.
+export async function getBomItems(projectId, search) {
+  const q = search ? `?search=${encodeURIComponent(search)}` : "";
+  const { data } = await apiClient.get(`/api/projects/${projectId}/bom/items${q}`);
+  return data;
+}

@@ -1,13 +1,28 @@
-import { useEffect, useState } from "react";
-import { listPendingTickets, listPurchasers, acknowledgeTicket } from "../../api/ticketsApi";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { listPendingTickets, listPurchasers, acknowledgeTicket, resolveTicket } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
 import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
+import { Field } from "../../components/ui/Field";
+import { TicketForm } from "../../components/tickets/TicketForm";
 import "./TicketQueuePage.css";
 
 const DATE = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
+
+// Ticket type drives everything the PM does with a ticket, so it's the primary
+// visual key: a colored spine down each card + a matching type pill. The tone
+// maps to CSS classes, not inline colors, so light/dark stays in the tokens.
+const TYPE_META = {
+  "Material Request": { key: "material", label: "Material Request" },
+  "Work Item": { key: "work", label: "Work Item" },
+  Report: { key: "report", label: "Report" },
+};
+
+// Filter bar: "All" plus one entry per type, each showing a live count.
+const TYPE_FILTERS = ["All", "Material Request", "Work Item", "Report"];
 
 export function TicketQueuePage() {
   const [tickets, setTickets] = useState([]);
@@ -17,6 +32,14 @@ export function TicketQueuePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submittingId, setSubmittingId] = useState(null);
+  const [activeType, setActiveType] = useState("All");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  // Deep-link from the dashboard "Needs your attention" panel: ?focus=<id>
+  // scrolls to that ticket's card and highlights it briefly.
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get("focus");
+  const [highlightId, setHighlightId] = useState(null);
 
   async function loadQueue() {
     setLoading(true);
@@ -57,6 +80,22 @@ export function TicketQueuePage() {
     loadQueue();
   }, []);
 
+  // Once tickets are loaded, if we arrived with ?focus=<id> and that ticket is
+  // in the queue, clear any type filter hiding it, scroll it into view and
+  // flash a highlight. rAF waits for the filter reset to paint first.
+  useEffect(() => {
+    if (!focusId || loading) return undefined;
+    if (!tickets.some((t) => String(t.ticketid) === String(focusId))) return undefined;
+    setActiveType("All");
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(`ticket-${focusId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    setHighlightId(focusId);
+    const timer = setTimeout(() => setHighlightId(null), 2500);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
+  }, [focusId, loading, tickets]);
+
   async function handleAcknowledge(ticket) {
     const assignedTo = assignments[ticket.ticketid];
     if (!assignedTo) return;
@@ -78,78 +117,208 @@ export function TicketQueuePage() {
     }
   }
 
+  // Report tickets are resolved directly by the PM (no Purchaser, no budget) —
+  // the backend takes Pending Report -> Resolved via PATCH /:id/resolve.
+  async function handleResolve(ticket) {
+    setSubmittingId(ticket.ticketid);
+    setError("");
+    try {
+      await resolveTicket(ticket.ticketid);
+      setTickets((current) => current.filter((item) => item.ticketid !== ticket.ticketid));
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't resolve this report."));
+    } finally {
+      setSubmittingId(null);
+    }
+  }
+
+  // A PM-created ticket is born Acknowledged and lands in the Purchaser's
+  // queue, not this Pending one — so confirm it with a notice rather than
+  // expecting it to appear in the list. Reload to pick up anything else.
+  function handleCreated(ticket) {
+    setCreateOpen(false);
+    setNotice(`Ticket “${ticket.subject}” was created and sent to the Purchaser.`);
+    loadQueue();
+  }
+
+  const counts = useMemo(() => {
+    const byType = { All: tickets.length };
+    for (const t of tickets) byType[t.tickettype] = (byType[t.tickettype] || 0) + 1;
+    return byType;
+  }, [tickets]);
+
+  const visibleTickets = activeType === "All"
+    ? tickets
+    : tickets.filter((t) => t.tickettype === activeType);
+
   return (
     <div className="ticket-queue">
       <div className="ticket-queue-header">
         <div>
-          <h1>Ticket Queue</h1>
-          <p className="ticket-queue-subtitle">Review requests, confirm Material Request budgets, and assign each ticket to a Purchaser.</p>
+          <h1>Tickets</h1>
+          <p className="ticket-queue-subtitle">
+            Requests from the field land here. Confirm a budget and assign a Purchaser, or resolve a report — or raise a new ticket yourself.
+          </p>
         </div>
-        <Button variant="secondary" type="button" onClick={loadQueue} disabled={loading}>Refresh</Button>
+        <Button type="button" onClick={() => { setNotice(""); setCreateOpen(true); }}>New ticket</Button>
       </div>
 
+      {notice && <Banner tone="success" title={notice} />}
       {error && <Banner tone="error" title={error} />}
-      {loading && <p className="ticket-queue-loading">Loading pending tickets…</p>}
-      {!loading && tickets.length === 0 && (
-        <Card className="ticket-queue-empty"><h2>Queue is clear</h2><p>New Site Manager requests will appear here when they are submitted.</p></Card>
-      )}
+
       {!loading && tickets.length > 0 && (
+        <div className="ticket-queue-filters" role="tablist" aria-label="Filter by type">
+          {TYPE_FILTERS.map((type) => {
+            const count = counts[type] || 0;
+            if (type !== "All" && count === 0) return null;
+            const meta = TYPE_META[type];
+            return (
+              <button
+                key={type}
+                type="button"
+                role="tab"
+                aria-selected={activeType === type}
+                className={
+                  "ticket-filter" +
+                  (activeType === type ? " ticket-filter-active" : "") +
+                  (meta ? ` ticket-filter-${meta.key}` : "")
+                }
+                onClick={() => setActiveType(type)}
+              >
+                {type === "All" ? "All" : meta.label}
+                <span className="ticket-filter-count">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {loading && <p className="ticket-queue-loading">Loading pending tickets…</p>}
+
+      {!loading && tickets.length === 0 && (
+        <div className="ticket-queue-empty">
+          <h2>You’re all caught up</h2>
+          <p>New requests from Site Managers will appear here. You can also raise one yourself with “New ticket”.</p>
+        </div>
+      )}
+
+      {!loading && tickets.length > 0 && visibleTickets.length === 0 && (
+        <div className="ticket-queue-empty ticket-queue-empty-filtered">
+          <p>No {TYPE_META[activeType]?.label.toLowerCase()} tickets waiting.</p>
+        </div>
+      )}
+
+      {!loading && visibleTickets.length > 0 && (
         <div className="ticket-queue-list">
-          {tickets.map((ticket) => (
-            <Card key={ticket.ticketid} className="ticket-queue-card">
-              <div className="ticket-queue-card-top">
-                <div>
-                  <div className="ticket-queue-meta"><Badge status={ticket.status} /><span>{ticket.tickettype}</span></div>
-                  <h2>{ticket.subject}</h2>
-                  <p className="ticket-queue-context">{ticket.projectname || ticket.projectName} · Submitted by {ticket.submittedbyname || "Site Manager"}</p>
+          {visibleTickets.map((ticket) => {
+            const meta = TYPE_META[ticket.tickettype] || { key: "work", label: ticket.tickettype };
+            const isReport = ticket.tickettype === "Report";
+            const busy = submittingId === ticket.ticketid;
+            return (
+              <article
+                key={ticket.ticketid}
+                id={`ticket-${ticket.ticketid}`}
+                className={`ticket-card ticket-card-${meta.key}` + (String(ticket.ticketid) === String(highlightId) ? " ticket-card-focus" : "")}
+              >
+                <div className="ticket-card-head">
+                  <div className="ticket-card-head-main">
+                    <div className="ticket-card-tags">
+                      <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{meta.label}</span>
+                      <Badge status={ticket.status} />
+                    </div>
+                    <h2 className="ticket-card-subject">{ticket.subject}</h2>
+                    <p className="ticket-card-context">
+                      {ticket.projectname || ticket.projectName} · Submitted by {ticket.submittedbyname || "Site Manager"}
+                    </p>
+                  </div>
+                  <time className="ticket-card-date" dateTime={ticket.createdat}>
+                    {DATE.format(new Date(ticket.createdat))}
+                  </time>
                 </div>
-                <time dateTime={ticket.createdat}>{DATE.format(new Date(ticket.createdat))}</time>
-              </div>
-              {ticket.description && <p className="ticket-queue-description">{ticket.description}</p>}
-              {(ticket.materialtype || ticket.quantity || ticket.vendorname) && (
-                <div className="ticket-queue-details">
-                  <span><strong>Material:</strong> {ticket.materialtype || "—"}</span>
-                  <span><strong>Quantity:</strong> {ticket.quantity ?? "—"}</span>
-                  <span><strong>Preferred vendor:</strong> {ticket.vendorname || "—"}</span>
-                  {ticket.tickettype === "Material Request" && (
-                    <span><strong>SM requested budget:</strong> {ticket.requestedbudget == null ? "Not provided" : `₱${Number(ticket.requestedbudget).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}</span>
-                  )}
-                </div>
-              )}
-              <div className="ticket-queue-action">
-                <label htmlFor={`purchaser-${ticket.ticketid}`}>
-                  Assign Purchaser
-                  <select
-                    id={`purchaser-${ticket.ticketid}`}
-                    value={assignments[ticket.ticketid] || ""}
-                    onChange={(event) => setAssignments((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
-                    disabled={submittingId === ticket.ticketid || purchasers.length === 0}
-                  >
-                    <option value="">Select a Purchaser</option>
-                    {purchasers.map((purchaser) => <option key={purchaser.userid} value={purchaser.userid}>{purchaser.name} ({purchaser.email})</option>)}
-                  </select>
-                </label>
-                {ticket.tickettype === "Material Request" && (
-                  <label htmlFor={`budget-${ticket.ticketid}`}>
-                    Approved budget (₱)
-                    <input
-                      id={`budget-${ticket.ticketid}`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={approvedBudgets[ticket.ticketid] ?? ""}
-                      onChange={(event) => setApprovedBudgets((current) => ({ ...current, [ticket.ticketid]: event.target.value }))}
-                      disabled={submittingId === ticket.ticketid}
-                    />
-                  </label>
+
+                {ticket.description && <p className="ticket-card-description">{ticket.description}</p>}
+
+                {!isReport && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
+                  <dl className="ticket-card-facts">
+                    <div><dt>Material</dt><dd>{ticket.materialtype || "—"}</dd></div>
+                    <div><dt>Quantity</dt><dd>{ticket.quantity ?? "—"}</dd></div>
+                    <div><dt>Preferred vendor</dt><dd>{ticket.vendorname || "—"}</dd></div>
+                    {ticket.tickettype === "Material Request" && (
+                      <div>
+                        <dt>SM requested budget</dt>
+                        <dd>{ticket.requestedbudget == null ? "Not provided" : PESO.format(Number(ticket.requestedbudget))}</dd>
+                      </div>
+                    )}
+                  </dl>
                 )}
-                <Button type="button" disabled={!assignments[ticket.ticketid] || submittingId === ticket.ticketid} onClick={() => handleAcknowledge(ticket)}>
-                  {submittingId === ticket.ticketid ? "Assigning…" : "Acknowledge & Assign"}
-                </Button>
-              </div>
-              {purchasers.length === 0 && <p className="ticket-queue-warning">There are no active Purchasers available to assign.</p>}
-            </Card>
-          ))}
+
+                {isReport ? (
+                  <div className="ticket-card-foot ticket-card-foot-report">
+                    <p className="ticket-card-context">Issue report — resolve it once it has been handled on site.</p>
+                    <Button type="button" disabled={busy} onClick={() => handleResolve(ticket)}>
+                      {busy ? "Resolving…" : "Resolve report"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="ticket-card-foot">
+                    <div className="ticket-card-assign">
+                      <Field
+                        label="Assign Purchaser"
+                        as="select"
+                        value={assignments[ticket.ticketid] || ""}
+                        disabled={busy || purchasers.length === 0}
+                        onChange={(e) => setAssignments((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
+                      >
+                        <option value="">Select a Purchaser</option>
+                        {purchasers.map((p) => (
+                          <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>
+                        ))}
+                      </Field>
+                      {ticket.tickettype === "Material Request" && (
+                        <Field
+                          label="Approved budget (₱)"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={approvedBudgets[ticket.ticketid] ?? ""}
+                          disabled={busy}
+                          onChange={(e) => setApprovedBudgets((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
+                        />
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={!assignments[ticket.ticketid] || busy}
+                      onClick={() => handleAcknowledge(ticket)}
+                    >
+                      {busy ? "Assigning…" : "Acknowledge & Assign"}
+                    </Button>
+                    {purchasers.length === 0 && (
+                      <p className="ticket-card-warning">There are no active Purchasers available to assign.</p>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {createOpen && (
+        <div className="modal-overlay" role="presentation" onClick={() => setCreateOpen(false)}>
+          <div
+            className="modal modal-ticket"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ticket-create-title"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h2 id="ticket-create-title" className="modal-title">New ticket</h2>
+            <p className="modal-body">
+              Raise a Material Request or Work Item and send it straight to a Purchaser.
+            </p>
+            <TicketForm onSuccess={handleCreated} onCancel={() => setCreateOpen(false)} />
+          </div>
         </div>
       )}
     </div>

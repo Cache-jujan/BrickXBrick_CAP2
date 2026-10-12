@@ -221,7 +221,9 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await query(
       `SELECT ${DETAIL_COLUMNS},
-              pm.name AS projectmanagername, sm.name AS sitemanagername
+              pm.name AS projectmanagername, sm.name AS sitemanagername,
+              (SELECT ROUND(COALESCE(AVG(m.completionPercentage), 0), 0)
+                 FROM milestones m WHERE m.projectId = p.projectId) AS progress
          FROM projects p
          LEFT JOIN users pm ON pm.userid = p.projectmanagerid
          LEFT JOIN users sm ON sm.userid = p.sitemanagerid
@@ -600,9 +602,42 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
       tasks = tasksResult.rows;
     }
 
+    // #14: review state per milestone. For each task we look only at its
+    // LATEST progress submission (a task that was flagged and then resubmitted
+    // should read as "awaiting review", not still "flagged"), then count how
+    // many of a milestone's tasks are currently awaiting review vs flagged.
+    // This mirrors the join GET /tasks/progress-log already uses.
+    const reviewByMilestone = {};
+    if (milestoneIds.length > 0) {
+      const reviewResult = await query(
+        `WITH latest AS (
+           SELECT DISTINCT ON (l.taskId)
+                  l.taskId, l.reviewStatus, t.milestoneId
+             FROM task_progress_log l
+             JOIN tasks t ON t.taskId = l.taskId
+            WHERE t.milestoneId = ANY($1)
+            ORDER BY l.taskId, l.createdAt DESC
+         )
+         SELECT milestoneId,
+                COUNT(*) FILTER (WHERE reviewStatus = 'Pending Review') AS awaitingReview,
+                COUNT(*) FILTER (WHERE reviewStatus = 'Flagged') AS flagged
+           FROM latest
+          GROUP BY milestoneId`,
+        [milestoneIds]
+      );
+      for (const row of reviewResult.rows) {
+        reviewByMilestone[row.milestoneid] = {
+          awaitingReview: Number(row.awaitingreview) || 0,
+          flagged: Number(row.flagged) || 0,
+        };
+      }
+    }
+
     const milestonesWithTasks = milestones.map((m) => ({
       ...m,
       tasks: tasks.filter((t) => t.milestoneid === m.milestoneid),
+      awaitingReview: reviewByMilestone[m.milestoneid]?.awaitingReview || 0,
+      flagged: reviewByMilestone[m.milestoneid]?.flagged || 0,
     }));
 
     res.json({ ...project, milestones: milestonesWithTasks });

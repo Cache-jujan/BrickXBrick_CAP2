@@ -146,6 +146,30 @@ router.get("/", async (req, res, next) => {
     }
 });
 
+// GET /attention — the owning PM's at-risk and overdue milestones across their
+// open projects, for the dashboard "Needs your attention" panel. Declared
+// before "/:id" so Express doesn't read "attention" as a milestone id.
+// Milestone status is the server-derived schedule status (milestoneProgress.js);
+// this only reads it, it doesn't recompute.
+router.get("/attention", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const result = await query(
+            `SELECT m.milestoneId, m.name, m.dueDate, m.status, m.completionPercentage,
+                    p.projectId, p.name AS projectName
+               FROM milestones m
+               JOIN projects p ON p.projectId = m.projectId
+              WHERE p.projectManagerId = $1
+                AND p.status IN ('Draft', 'Active')
+                AND m.status IN ('At Risk', 'Overdue')
+              ORDER BY m.dueDate ASC`,
+            [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // POST /:id/tasks — PM creates a task under a milestone they own, assigned
 // to that project's Site Manager (schema is 1 SM per project — no open pick).
 router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next) => {

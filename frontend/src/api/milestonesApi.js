@@ -24,3 +24,11 @@ export async function getMilestone(id) {
   const { data } = await apiClient.get(`/api/milestones/${id}`);
   return data;
 }
+
+// GET /api/milestones/attention — Project Manager only. The PM's At Risk /
+// Overdue milestones across their open projects, each with projectName, for
+// the dashboard "Needs your attention" panel.
+export async function getAttentionMilestones() {
+  const { data } = await apiClient.get("/api/milestones/attention");
+  return data;
+}

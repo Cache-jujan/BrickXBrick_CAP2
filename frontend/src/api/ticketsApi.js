@@ -34,3 +34,10 @@ export async function acknowledgeTicket(ticketId, assignedTo, approvedBudget) {
   });
   return data;
 }
+
+// PATCH /api/tickets/:id/resolve — PM resolves a Report ticket directly
+// (Pending -> Resolved). Also used by the assigned Purchaser for other types.
+export async function resolveTicket(ticketId) {
+  const { data } = await apiClient.patch(`/api/tickets/${ticketId}/resolve`);
+  return data;
+}

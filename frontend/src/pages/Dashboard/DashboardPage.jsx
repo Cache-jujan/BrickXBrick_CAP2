@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listProjects } from "../../api/projectsApi";
 import { listExpenses } from "../../api/expensesApi";
 import { listTamperAlerts, getBlockchainSummary } from "../../api/blockchainApi";
+import { listPendingTickets } from "../../api/ticketsApi";
+import { listProgressSubmissions } from "../../api/taskProgressApi";
+import { getAttentionMilestones } from "../../api/milestonesApi";
 import { extractErrorMessage } from "../../api/client";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
+import { ProgressBar } from "../../components/milestones/ProgressBar";
 import "./DashboardPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -24,18 +28,29 @@ const WEB_ROLES = ["General Manager", "Project Manager"];
 export function DashboardPage() {
   const { user } = useAuth();
 
+  // Admin has no dashboard of its own — its only web job is account
+  // management, so send it straight to User Accounts.
   if (user.role === "System Administrator") {
-    return <AdminOverview />;
+    return <Navigate to="/admin/users" replace />;
   }
   if (WEB_ROLES.includes(user.role)) {
     return <ProjectsOverview role={user.role} name={user.name} userId={user.id} />;
   }
+  // Purchaser works from mobile for everything except reviewing their own
+  // expenses, which the web does carry — land them there rather than on a
+  // dead "mobile only" notice.
+  if (user.role === "Purchaser") {
+    return <Navigate to="/expenses" replace />;
+  }
+  // Site Manager stays mobile-only for now (its web dashboard is a separate,
+  // backend-touching item on the list).
   return <MobileOnlyNotice name={user.name} role={user.role} />;
 }
 
 function ProjectsOverview({ role, name, userId }) {
   const canCreate = role === "General Manager";
   const canSeeAlerts = role === "General Manager"; // matches backend requireRole on /alerts
+  const isPM = role === "Project Manager";
 
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -48,6 +63,15 @@ function ProjectsOverview({ role, name, userId }) {
   const [alertCount, setAlertCount] = useState(null);
   const [confirmedCount, setConfirmedCount] = useState(null);
   const [tamperedCount, setTamperedCount] = useState(null);
+
+  // PM "Needs your attention": tickets waiting to be assigned, progress
+  // submissions waiting to be reviewed, and milestones that are At Risk /
+  // Overdue. Each comes from a PM-scoped endpoint (backend filters by the
+  // PM's own projects), so there's nothing to re-scope on the client.
+  const [attnTickets, setAttnTickets] = useState([]);
+  const [attnReviews, setAttnReviews] = useState([]);
+  const [attnMilestones, setAttnMilestones] = useState([]);
+  const [attnLoading, setAttnLoading] = useState(isPM);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +99,25 @@ function ProjectsOverview({ role, name, userId }) {
       .catch(() => { if (!cancelled) setAlertCount(null); });
     return () => { cancelled = true; };
   }, [canSeeAlerts]);
+
+  useEffect(() => {
+    if (!isPM) return undefined;
+    let cancelled = false;
+    setAttnLoading(true);
+    Promise.all([
+      listPendingTickets().catch(() => []),
+      listProgressSubmissions("Pending Review").catch(() => []),
+      getAttentionMilestones().catch(() => []),
+    ])
+      .then(([tickets, reviews, milestones]) => {
+        if (cancelled) return;
+        setAttnTickets(tickets);
+        setAttnReviews(reviews);
+        setAttnMilestones(milestones);
+      })
+      .finally(() => { if (!cancelled) setAttnLoading(false); });
+    return () => { cancelled = true; };
+  }, [isPM]);
 
   useEffect(() => {
     if (!canSeeAlerts) return;
@@ -118,7 +161,15 @@ function ProjectsOverview({ role, name, userId }) {
     .map((p) => {
       const budget = Number(p.budget || 0);
       const spent = approvedByProject[p.projectid] || 0;
-      return { ...p, budgetValue: budget, spent, pct: budget > 0 ? (spent / budget) * 100 : 0 };
+      return {
+        ...p,
+        budgetValue: budget,
+        spent,
+        pct: budget > 0 ? (spent / budget) * 100 : 0,
+        // Overall completion = mean of milestone completion %, from the list
+        // query's progress subquery (projects.js GET /).
+        progressPct: Math.round(Number(p.progress || 0)),
+      };
     })
     .sort((a, b) => b.pct - a.pct);
 
@@ -195,6 +246,7 @@ function ProjectsOverview({ role, name, userId }) {
                     <th className="num">Budget</th>
                     <th className="num">Approved</th>
                     <th className="dash-used-col">Used</th>
+                    <th className="dash-progress-col">Progress</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -220,6 +272,12 @@ function ProjectsOverview({ role, name, userId }) {
                           </span>
                         </div>
                       </td>
+                      <td className="dash-progress-col">
+                        <div className="dash-progress">
+                          <ProgressBar value={p.progressPct} />
+                          <span className="dash-pct">{p.progressPct}%</span>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -230,6 +288,14 @@ function ProjectsOverview({ role, name, userId }) {
         </section>
 
         <div className="dash-side">
+          {isPM && (
+            <NeedsAttentionPanel
+              loading={attnLoading}
+              tickets={attnTickets}
+              reviews={attnReviews}
+              milestones={attnMilestones}
+            />
+          )}
           {canSeeAlerts && (
             <section className="dash-panel">
               <header className="dash-panel-head">
@@ -299,6 +365,118 @@ function Stat({ label, value, note, to, emphasis }) {
   return to ? <Link to={to} className={className}>{body}</Link> : <div className={className}>{body}</div>;
 }
 
+function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
+  const total = tickets.length + reviews.length + milestones.length;
+
+  return (
+    <section className="dash-panel">
+      <header className="dash-panel-head">
+        <h2>Needs your attention</h2>
+      </header>
+
+      {loading && <p className="dashboard-loading">Loading…</p>}
+
+      {!loading && total === 0 && (
+        <p className="dash-empty">You’re all caught up — nothing needs action right now.</p>
+      )}
+
+      {!loading && total > 0 && (
+        <div className="attn-groups">
+          {tickets.length > 0 && (
+            <AttnGroup
+              accent="tickets"
+              count={tickets.length}
+              label="Tickets to assign"
+              to="/tickets/queue"
+              linkText="Go to tickets"
+              items={tickets.slice(0, 3).map((t) => ({
+                key: t.ticketid,
+                to: `/tickets/queue?focus=${t.ticketid}`,
+                primary: t.subject,
+                secondary: t.projectname || t.projectName,
+              }))}
+              moreCount={tickets.length - Math.min(3, tickets.length)}
+            />
+          )}
+
+          {reviews.length > 0 && (
+            <AttnGroup
+              accent="reviews"
+              count={reviews.length}
+              label="Submissions to review"
+              to="/tasks/progress-review"
+              linkText="Review submissions"
+              items={reviews.slice(0, 3).map((r) => ({
+                key: r.logid,
+                to: `/tasks/progress-review?focus=${r.logid}`,
+                primary: r.taskname,
+                secondary: r.projectname,
+              }))}
+              moreCount={reviews.length - Math.min(3, reviews.length)}
+            />
+          )}
+
+          {milestones.length > 0 && (
+            <AttnGroup
+              accent="risk"
+              count={milestones.length}
+              label="Milestones at risk"
+              items={milestones.slice(0, 3).map((m) => ({
+                key: m.milestoneid,
+                to: `/projects/${m.projectid}`,
+                primary: m.name,
+                secondary: m.projectname,
+                badge: m.status,
+              }))}
+              moreCount={milestones.length - Math.min(3, milestones.length)}
+            />
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AttnGroup({ accent, count, label, to, linkText, items, moreCount }) {
+  return (
+    <div className={`attn-group attn-group-${accent}`}>
+      <div className="attn-group-head">
+        <span className="attn-label">{label}</span>
+        <span className="attn-count">{count}</span>
+      </div>
+      <ul className="attn-items">
+        {items.map((item) => {
+          const body = (
+            <>
+              <span className="attn-item-text">
+                <span className="attn-item-primary">{item.primary}</span>
+                {item.secondary && <span className="attn-item-secondary">{item.secondary}</span>}
+              </span>
+              {item.badge && <Badge status={item.badge} />}
+            </>
+          );
+          return (
+            <li key={item.key}>
+              {item.to
+                ? <Link to={item.to} className="attn-item attn-item-link">{body}</Link>
+                : <span className="attn-item">{body}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      {to && linkText ? (
+        <p className="attn-foot">
+          <Link to={to} className="dash-link">
+            {linkText}{moreCount > 0 ? ` · +${moreCount} more` : ""}
+          </Link>
+        </p>
+      ) : (
+        moreCount > 0 && <p className="attn-more">+{moreCount} more</p>
+      )}
+    </div>
+  );
+}
+
 function MobileOnlyNotice({ name, role }) {
   return (
     <div className="dashboard mobile-only">
@@ -307,22 +485,6 @@ function MobileOnlyNotice({ name, role }) {
         The {role} role works from the Brick x Brick mobile app, not this web
         dashboard. Please open the app on your Android device to continue.
       </p>
-    </div>
-  );
-}
-
-function AdminOverview() {
-  return (
-    <div className="dashboard">
-      <div className="page-header">
-        <div className="page-header-text">
-          <h1>System administration</h1>
-          <p className="page-header-sub">Create accounts, change roles, reset passwords and unlock accounts.</p>
-        </div>
-        <div className="page-header-actions">
-          <Link to="/admin/users" className="btn btn-primary">User accounts</Link>
-        </div>
-      </div>
     </div>
   );
 }

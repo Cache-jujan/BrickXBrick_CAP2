@@ -8,6 +8,8 @@ import {
   getProjectOverview,
   updateProjectSiteManager,
 } from "../../api/projectsApi";
+import { createMilestone } from "../../api/milestonesApi";
+import { createTask } from "../../api/tasksApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { getBom } from "../../api/bomApi";
@@ -19,6 +21,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { MilestoneCard } from "../../components/milestones/MilestoneCard";
+import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
@@ -79,6 +82,18 @@ export function ProjectDetailPage() {
   // F2: the project's Bill of Materials summary (GM and owning PM).
   const [bomInfo, setBomInfo] = useState(null);
   const [bomError, setBomError] = useState("");
+  // F3: milestone/task creation happens in-place via modals (was a separate
+  // page). taskDialog carries the milestone it targets so the title can name it.
+  const [milestoneDialog, setMilestoneDialog] = useState(false);
+  const [milestoneForm, setMilestoneForm] = useState({ name: "", dueDate: "" });
+  const [milestoneBusy, setMilestoneBusy] = useState(false);
+  const [milestoneError, setMilestoneError] = useState("");
+  const [taskDialog, setTaskDialog] = useState(null); // { milestone } | null
+  const [taskForm, setTaskForm] = useState({ taskName: "", dueDate: "" });
+  const [taskBusy, setTaskBusy] = useState(false);
+  const [taskError, setTaskError] = useState("");
+  // Site Manager assignment moved from an always-open picker into a modal.
+  const [smDialog, setSmDialog] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,10 +247,76 @@ export function ProjectDetailPage() {
       const updated = await updateProjectSiteManager(id, siteManagerId);
       setProject((previous) => ({ ...previous, ...updated }));
       setSiteManagers(await getEligibleSiteManagers(id));
+      return true;
     } catch (err) {
       setSiteManagersError(extractErrorMessage(err, "Couldn't update the Site Manager assignment."));
+      return false;
     } finally {
       setSiteManagerSaving(false);
+    }
+  }
+
+  function openMilestoneDialog() {
+    setMilestoneError("");
+    setMilestoneForm({ name: "", dueDate: "" });
+    setMilestoneDialog(true);
+  }
+
+  function closeMilestoneDialog() {
+    if (milestoneBusy) return;
+    setMilestoneDialog(false);
+  }
+
+  async function handleCreateMilestone() {
+    if (milestoneBusy) return;
+    if (!milestoneForm.name.trim() || !milestoneForm.dueDate) {
+      setMilestoneError("Milestone name and due date are required.");
+      return;
+    }
+    setMilestoneBusy(true);
+    setMilestoneError("");
+    try {
+      // milestones.js destructures projectID (capital ID) off req.body.
+      await createMilestone({ projectID: id, name: milestoneForm.name.trim(), dueDate: milestoneForm.dueDate });
+      setProject(await getProjectOverview(id));
+      setMilestoneDialog(false);
+    } catch (err) {
+      setMilestoneError(extractErrorMessage(err, "Couldn't create the milestone. Please try again."));
+    } finally {
+      setMilestoneBusy(false);
+    }
+  }
+
+  function openTaskDialog(milestone) {
+    setTaskError("");
+    setTaskForm({ taskName: "", dueDate: "" });
+    setTaskDialog({ milestone });
+  }
+
+  function closeTaskDialog() {
+    if (taskBusy) return;
+    setTaskDialog(null);
+  }
+
+  async function handleCreateTask() {
+    if (!taskDialog || taskBusy) return;
+    if (!taskForm.taskName.trim() || !taskForm.dueDate) {
+      setTaskError("Task name and due date are required.");
+      return;
+    }
+    setTaskBusy(true);
+    setTaskError("");
+    try {
+      await createTask(taskDialog.milestone.milestoneid, {
+        taskName: taskForm.taskName.trim(),
+        dueDate: taskForm.dueDate,
+      });
+      setProject(await getProjectOverview(id));
+      setTaskDialog(null);
+    } catch (err) {
+      setTaskError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
+    } finally {
+      setTaskBusy(false);
     }
   }
 
@@ -296,6 +377,9 @@ export function ProjectDetailPage() {
   const pendingTotal = expenses.filter((e) => e.status === "Pending").reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const budget = Number(project.budget || 0);
   const budgetUsedPct = budget > 0 ? Math.round((approvedTotal / budget) * 100) : 0;
+  // Overall completion = mean of milestone completion %, computed server-side
+  // (projects.js DETAIL_SELECT) and carried on the overview payload.
+  const progressPct = Math.round(Number(project.progress || 0));
   const location = [project.siteaddress, project.municipality, project.province].filter(Boolean).join(", ");
 
   // Only the owning Project Manager may add milestones/tasks — mirrors
@@ -375,7 +459,15 @@ export function ProjectDetailPage() {
               <dt>Waiting for approval</dt>
               <dd className="num-left">{pendingTotal ? PESO.format(pendingTotal) : <span className="pd-dd-note">None</span>}</dd>
             </div>
-            <div><dt>Work progress</dt><dd>{Number(project.progress || 0)}%</dd></div>
+            <div className="pd-progress">
+              <dt>Work progress</dt>
+              <dd>
+                <div className="pd-progress-track">
+                  <ProgressBar value={progressPct} />
+                  <span className="pd-progress-pct">{progressPct}%</span>
+                </div>
+              </dd>
+            </div>
           </dl>
         </div>
         <div className="pd-group">
@@ -463,18 +555,14 @@ export function ProjectDetailPage() {
             {project.sitemanageremail && <p className="pd-person-email">{project.sitemanageremail}</p>}
             {canManageSiteManager && (
               <div className="pd-person-control">
-                <ManagerPicker
-                  label={project.sitemanagerid ? "Replace Site Manager" : "Assign a Site Manager"}
-                  managers={siteManagers}
-                  loading={false}
-                  value={project.sitemanagerid || ""}
-                  currentId={project.sitemanagerid}
-                  emptyOptionLabel="No Site Manager"
-                  disabled={siteManagerSaving || siteManagers.length === 0}
-                  onChange={handleSiteManagerChange}
-                />
-                {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
-                {siteManagersError && <p className="field-error">{siteManagersError}</p>}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setSiteManagersError(""); setSmDialog(true); }}
+                >
+                  {project.sitemanagerid ? "Change" : "Assign a Site Manager"}
+                </button>
+                {!smDialog && siteManagersError && <p className="field-error">{siteManagersError}</p>}
               </div>
             )}
           </div>
@@ -485,9 +573,9 @@ export function ProjectDetailPage() {
         <div className="section-head">
           <h2>Milestones</h2>
           {canManage && (
-            <Link to={`/projects/${project.projectid}/milestones/new`} className="btn btn-secondary btn-sm">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={openMilestoneDialog}>
               Add milestone
-            </Link>
+            </button>
           )}
         </div>
 
@@ -510,9 +598,9 @@ export function ProjectDetailPage() {
               <MilestoneCard
                 key={milestone.milestoneid}
                 milestone={milestone}
-                projectId={project.projectid}
                 canManage={canManage}
                 hasSiteManager={hasSiteManager}
+                onAddTask={openTaskDialog}
               />
             ))}
           </div>
@@ -723,6 +811,90 @@ export function ProjectDetailPage() {
               >
                 {statusBusy ? "Saving…" : statusDialog.kind === "activate" ? "Activate" : statusDialog.kind === "complete" ? "Mark Completed" : "Cancel Project"}
               </Button>}
+            </div>
+          </div>
+        </div>
+      )}
+      {milestoneDialog && (
+        <div className="modal-overlay" role="presentation" onClick={closeMilestoneDialog}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-milestone-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="pd-milestone-title" className="modal-title">Add milestone</h2>
+            <Field
+              label="Milestone name"
+              required
+              placeholder="Enter milestone name"
+              value={milestoneForm.name}
+              onChange={(ev) => setMilestoneForm((f) => ({ ...f, name: ev.target.value }))}
+            />
+            <Field
+              label="Due date"
+              required
+              type="date"
+              value={milestoneForm.dueDate}
+              onChange={(ev) => setMilestoneForm((f) => ({ ...f, dueDate: ev.target.value }))}
+            />
+            {milestoneError && <Banner tone="error" title={milestoneError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeMilestoneDialog} disabled={milestoneBusy}>Cancel</Button>
+              <Button onClick={handleCreateMilestone} disabled={milestoneBusy || !milestoneForm.name.trim() || !milestoneForm.dueDate}>
+                {milestoneBusy ? "Adding…" : "Add Milestone"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {taskDialog && (
+        <div className="modal-overlay" role="presentation" onClick={closeTaskDialog}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-task-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="pd-task-title" className="modal-title">Add task to "{taskDialog.milestone.name}"</h2>
+            <p className="modal-body">Assigned automatically to this project's Site Manager.</p>
+            <Field
+              label="Task name"
+              required
+              placeholder="Enter task name"
+              value={taskForm.taskName}
+              onChange={(ev) => setTaskForm((f) => ({ ...f, taskName: ev.target.value }))}
+            />
+            <Field
+              label="Due date"
+              required
+              type="date"
+              value={taskForm.dueDate}
+              onChange={(ev) => setTaskForm((f) => ({ ...f, dueDate: ev.target.value }))}
+            />
+            {taskError && <Banner tone="error" title={taskError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeTaskDialog} disabled={taskBusy}>Cancel</Button>
+              <Button onClick={handleCreateTask} disabled={taskBusy || !taskForm.taskName.trim() || !taskForm.dueDate}>
+                {taskBusy ? "Adding…" : "Add Task"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {smDialog && (
+        <div className="modal-overlay" role="presentation" onClick={() => { if (!siteManagerSaving) setSmDialog(false); }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-sm-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="pd-sm-title" className="modal-title">
+              {project.sitemanagerid ? "Change Site Manager" : "Assign a Site Manager"}
+            </h2>
+            <p className="modal-body">
+              Tasks are auto-assigned to this project's Site Manager when a Project Manager creates them.
+            </p>
+            <ManagerPicker
+              label="Site Manager"
+              managers={siteManagers}
+              loading={false}
+              value={project.sitemanagerid || ""}
+              currentId={project.sitemanagerid}
+              emptyOptionLabel="No Site Manager"
+              disabled={siteManagerSaving || siteManagers.length === 0}
+              onChange={async (value) => { const ok = await handleSiteManagerChange(value); if (ok) setSmDialog(false); }}
+            />
+            {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
+            {siteManagersError && <Banner tone="error" title={siteManagersError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => setSmDialog(false)} disabled={siteManagerSaving}>Close</Button>
             </div>
           </div>
         </div>
