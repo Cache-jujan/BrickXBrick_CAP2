@@ -592,9 +592,9 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     );
     const milestones = milestonesResult.rows;
 
+    const milestoneIds = milestones.map((m) => m.milestoneid);
     let tasks = [];
     if (milestones.length > 0) {
-      const milestoneIds = milestones.map((m) => m.milestoneid);
       const tasksResult = await query(
         "SELECT * FROM tasks WHERE milestoneId = ANY($1) ORDER BY dueDate ASC",
         [milestoneIds]
