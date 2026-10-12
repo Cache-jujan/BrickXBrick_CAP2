@@ -2,6 +2,16 @@
   margin-bottom: var(--space-4);
 }
 
+/* Status badge plus the optional #14 review chip, stacked and right-aligned
+   so a long "Needs resubmit" never crowds the milestone name. */
+.milestone-card-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
 .milestone-card-name {
   font-size: var(--text-md);
   line-height: 1.3;

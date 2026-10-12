@@ -129,3 +129,17 @@
     flex-basis: 100%;
   }
 }
+
+/* Deep-link highlight: a brief ring when arriving via ?focus=<logId>. */
+.progress-review-card-focus {
+  outline: 2px solid var(--color-brick);
+  outline-offset: 2px;
+  animation: review-focus-fade 2.5s var(--ease);
+}
+@keyframes review-focus-fade {
+  0%, 60% { box-shadow: 0 0 0 4px var(--color-brick-tint); }
+  100% { box-shadow: 0 0 0 4px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-review-card-focus { animation: none; }
+}

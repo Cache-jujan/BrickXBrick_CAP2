@@ -28,6 +28,17 @@ function taskIsOverdue(task) {
 // can change a task's status, so each task is shown as read-only: name,
 // due date, and its current Badge. No photo/review action here.
 export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask }) {
+  // #14: review state from /overview. Flagged takes priority over awaiting —
+  // a flagged submission needs the Site Manager to resubmit before the PM can
+  // act, so it's the more urgent signal.
+  const flaggedCount = Number(milestone.flagged || 0);
+  const awaitingCount = Number(milestone.awaitingReview || milestone.awaitingreview || 0);
+  const reviewChip = flaggedCount > 0
+    ? { tone: "Overdue", label: "Needs resubmit" }
+    : awaitingCount > 0
+    ? { tone: "Pending", label: "Awaiting review" }
+    : null;
+
   return (
     <Card className="milestone-card">
       <div className="spread milestone-card-head">
@@ -35,7 +46,10 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask 
           <h3 className="milestone-card-name">{milestone.name}</h3>
           <p className="milestone-card-due">Due {DATE.format(new Date(milestone.duedate))}</p>
         </div>
-        <Badge status={milestone.status} />
+        <div className="milestone-card-badges">
+          <Badge status={milestone.status} />
+          {reviewChip && <Badge status={reviewChip.tone}>{reviewChip.label}</Badge>}
+        </div>
       </div>
 
       <div className="milestone-card-progress">

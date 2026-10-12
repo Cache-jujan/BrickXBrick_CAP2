@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { listProgressSubmissions, reviewProgressSubmission } from "../../api/taskProgressApi";
 import { extractErrorMessage } from "../../api/client";
 import { Badge } from "../../components/ui/Badge";
@@ -15,6 +16,11 @@ export function ProgressReviewPage() {
   const [error, setError] = useState("");
   const [reasonById, setReasonById] = useState({});
   const [submittingId, setSubmittingId] = useState(null);
+  // Deep-link from the dashboard "Needs your attention" panel: ?focus=<logId>
+  // scrolls to that submission's card and highlights it briefly.
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get("focus");
+  const [highlightId, setHighlightId] = useState(null);
 
   async function loadQueue() {
     setLoading(true);
@@ -31,6 +37,18 @@ export function ProgressReviewPage() {
   useEffect(() => {
     loadQueue();
   }, []);
+
+  useEffect(() => {
+    if (!focusId || loading) return undefined;
+    if (!submissions.some((s) => String(s.logid) === String(focusId))) return undefined;
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(`submission-${focusId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    setHighlightId(focusId);
+    const timer = setTimeout(() => setHighlightId(null), 2500);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
+  }, [focusId, loading, submissions]);
 
   async function handleReview(submission, decision) {
     const reason = reasonById[submission.logid] || "";
@@ -79,7 +97,11 @@ export function ProgressReviewPage() {
           {submissions.map((submission) => {
             const isSubmitting = submittingId === submission.logid;
             return (
-              <Card key={submission.logid} className="progress-review-card">
+              <Card
+                key={submission.logid}
+                id={`submission-${submission.logid}`}
+                className={"progress-review-card" + (String(submission.logid) === String(highlightId) ? " progress-review-card-focus" : "")}
+              >
                 <div className="progress-review-card-top">
                   <div>
                     <div className="progress-review-meta">
