@@ -474,9 +474,9 @@ export function BomPage() {
               </span>
             </div>
             <div className="bom-total">
-              <span className="bom-total-label">Labor</span>
+              <span className="bom-total-label">Labor and other costs</span>
               <span className="bom-total-value">{PESO.format(totals.labor)}</span>
-              <span className="bom-total-note">Reference only; not purchased</span>
+              <span className="bom-total-note">Labor, lump sums, overhead; not purchased</span>
             </div>
             <div className="bom-total bom-total-main">
               <span className="bom-total-label">BOM total</span>
@@ -493,7 +493,9 @@ export function BomPage() {
               <span className="bom-total-label">Project budget</span>
               <span className="bom-total-value">{PESO.format(Number(project?.budget ?? data.projectBudget ?? 0))}</span>
               <span className="bom-total-note">
-                {bom?.status === "Approved" ? "Set from the BOM total" : "Becomes the BOM total on approval"}
+                {bom?.status === "Approved"
+                  ? statedTotal !== null ? "Set from the signed total in the file" : "Set from the BOM total"
+                  : statedTotal !== null ? "Becomes the signed total on approval" : "Becomes the BOM total on approval"}
               </span>
             </div>
           </section>
@@ -628,7 +630,13 @@ export function BomPage() {
                         );
                       })}
                       {s.items.length === 0 && (
-                        <tr><td colSpan={editing ? 7 : 6} className="bom-empty-row">No items in this section.</td></tr>
+                        <tr>
+                          <td colSpan={editing ? 7 : 6} className="bom-empty-row">
+                            {c.labor > 0
+                              ? "No materials to buy: this section is a lump-sum cost (below)."
+                              : "No items in this section."}
+                          </td>
+                        </tr>
                       )}
                     </tbody>
                     <tfoot>
@@ -643,7 +651,7 @@ export function BomPage() {
                       <tr>
                         <td colSpan={5}>
                           <span className="bom-labor">
-                            Labor
+                            {s.items.length === 0 ? "Lump-sum cost (not purchased)" : "Labor"}
                             {editing ? (
                               <>
                                 <select className="bom-input bom-labor-mode" value={s.laborMode} aria-label="How labor is computed"
@@ -717,9 +725,12 @@ export function BomPage() {
               <>
                 <h2 id="bom-dialog-title" className="modal-title">Approve this BOM?</h2>
                 <p className="modal-body">
-                  It will be locked and used as the basis for every material request. The project budget becomes the
-                  BOM total, <strong>{PESO.format(bom.totals.total)}</strong>
-                  {Number(data.projectBudget) !== bom.totals.total ? ` (now ${PESO.format(Number(data.projectBudget))})` : ""}.
+                  It will be locked and used as the basis for every material request. The project budget becomes{" "}
+                  {bom.statedTotal !== null ? "the signed total from the file" : "the BOM total"},{" "}
+                  <strong>{PESO.format(bom.budgetOnApproval ?? bom.totals.total)}</strong>
+                  {Number(data.projectBudget) !== (bom.budgetOnApproval ?? bom.totals.total)
+                    ? ` (now ${PESO.format(Number(data.projectBudget))})`
+                    : ""}.
                 </p>
                 {warnings.length > 0 && (
                   <>

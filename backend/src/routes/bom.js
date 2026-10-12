@@ -7,7 +7,8 @@
 //   GET    /          GM, owning PM     the BOM with totals and review warnings
 //   POST   /import    GM                upload the .xlsx; replaces the Draft
 //   PUT    /          GM                save the edited Draft (or start one by hand)
-//   PATCH  /approve   GM                lock it; the project budget becomes the BOM total
+//   PATCH  /approve   GM                lock it; the project budget becomes the signed
+//                                      total from the file (or the computed total)
 //   PATCH  /reopen    GM                back to Draft for a correction, with a reason
 //   DELETE /          GM                remove a Draft BOM (e.g. the wrong file)
 //   GET    /items     GM, PM, SM, Purchaser   approved items for Material Requests
@@ -71,6 +72,12 @@ function sendError(res, err) {
 
 const runnerOf = (target) => (typeof target === "function" ? target : (t, p) => target.query(t, p));
 const n = (v) => (v === null || v === undefined ? null : Number(v));
+
+// Project budget on approval: the signed total from the file when it has
+// one, otherwise the computed BOM total.
+function budgetFor(statedTotal, computedTotal) {
+  return statedTotal !== null && statedTotal !== undefined && statedTotal > 0 ? round2(statedTotal) : computedTotal;
+}
 
 async function loadProject(target, projectId, { lock = false } = {}) {
   if (!UUID_RE.test(String(projectId))) throw httpError(404, "Project not found");
@@ -170,6 +177,7 @@ async function buildResponse(target, project) {
       revisionNote: bom.revisionnote,
       sections: sections.map((s) => ({ ...s, laborMode: laborModeOf(s), totals: sectionTotals(s) })),
       totals: bomTotals(sections),
+      budgetOnApproval: budgetFor(n(bom.statedtotal), bomTotals(sections).total),
       warnings: buildBomWarnings(sections, { statedTotal: n(bom.statedtotal) }),
     },
   };
@@ -414,19 +422,23 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
           WHERE bomid = $1::uuid`,
         [bom.bomid, req.user.id]
       );
-      // Client: the price given to the client is the BOM total.
+      // Client: the price given to the client is the BOM total, i.e. the signed
+      // TOTAL PROJECT COST. Use the file's stated total when there is one
+      // (issue #89: lines the importer can't itemise must not lower the
+      // budget); a BOM entered by hand uses the computed total.
+      const budget = budgetFor(n(bom.statedtotal), totals.total);
       const previousBudget = n(project.budget);
-      if (round2(previousBudget) !== totals.total) {
+      if (round2(previousBudget) !== budget) {
         await client.query(`UPDATE projects SET budget = $2::numeric WHERE projectid = $1::uuid`, [
           project.projectid,
-          totals.total,
+          budget,
         ]);
       }
       await notifyProject(client, {
         recipientId: project.projectmanagerid,
         type: "BOMApproved",
         projectId: project.projectid,
-        message: `The Bill of Materials for "${project.name}" was approved (₱${totals.total.toLocaleString("en-PH")}).`,
+        message: `The Bill of Materials for "${project.name}" was approved (₱${budget.toLocaleString("en-PH")}).`,
       });
       const fresh = await loadProject(client, project.projectid);
       return { ...(await buildResponse(client, fresh)), previousBudget };
