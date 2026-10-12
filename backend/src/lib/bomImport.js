@@ -33,7 +33,14 @@ const LABEL = {
   TOTALPROJECTCOST: "total",
   TOTALCOST: "total",
   GRANDTOTAL: "total",
+  // A section given as one amount, e.g. "DEMOLITION & HAULING ... COST 15,000"
+  COST: "lumpsum",
+  LUMPSUM: "lumpsum",
+  LOTCOST: "lumpsum",
 };
+
+// Currency markers that sit in their own cell next to an amount ("PHP 49,159").
+const CURRENCY_TEXT = new Set(["PHP", "P", "PESO", "PESOS"]);
 
 const MAX_ITEMS = 2000;
 
@@ -51,7 +58,7 @@ function cleanText(value) {
 function asNumber(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
-    const s = value.replace(/[₱,\s]/g, "");
+    const s = value.replace(/PHP/gi, "").replace(/[₱,\s]/g, "");
     if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
   }
   return null;
@@ -149,6 +156,7 @@ function parseBomRows(rows) {
       statedMaterialTotal: null,
       statedLaborAmount: null,
       items: [],
+      closed: false, // a summary row (MATERIAL COST, LABOR COST, COST) has been read
     };
     sections.push(current);
     return current;
@@ -187,10 +195,38 @@ function parseBomRows(rows) {
         statedTotal = amount === null ? null : round2(amount);
         continue;
       }
+      if (kind === "lumpsum") {
+        // "DEMOLITION & HAULING  ...  COST  15,000": a service section given as one
+        // amount, with no material lines. Kept as the section's fixed amount
+        // (part of the total, never purchased against).
+        const scopeName = cleanText(valueAt(row, scopeCol));
+        const nameOnRow = scopeName && normLabel(scopeName) !== normLabel(labelCell.text) ? scopeName : null;
+        if (amount === null) {
+          rowWarnings.push({ row: r, message: `Row ${r}: "${cleanText(labelCell.text)}" has no amount and was ignored.` });
+          continue;
+        }
+        if (nameOnRow) {
+          newSection(nameOnRow.slice(0, 150), r);
+        } else if (!current || current.items.length > 0 || current.closed) {
+          if (current && current.items.length > 0 && current.statedMaterialTotal === null) {
+            current.statedMaterialTotal = round2(amount); // "COST" used as the material subtotal
+            current.closed = true;
+            materialRowToSection.set(r, current);
+            continue;
+          }
+          rowWarnings.push({ row: r, message: `Row ${r}: an amount of ₱${amount} without a section name was ignored.` });
+          continue;
+        }
+        current.laborAmount = round2(amount);
+        current.statedLaborAmount = round2(amount);
+        current.closed = true;
+        continue;
+      }
       if (!current) {
         rowWarnings.push({ row: r, message: `Row ${r}: "${cleanText(labelCell.text)}" appears before any section and was ignored.` });
         continue;
       }
+      current.closed = true;
       if (kind === "material") {
         current.statedMaterialTotal = amount === null ? null : round2(amount);
         materialRowToSection.set(r, current);
@@ -217,9 +253,42 @@ function parseBomRows(rows) {
     const unitRaw = valueAt(row, cols.unit);
     const unit = cleanText(unitRaw === null ? null : String(unitRaw));
 
+    // An amount with a label but no item: a lump-sum section, a subtotal, or
+    // an extra cost such as "OVERHEAD SUPERVISION" (spelling varies, e.g.
+    // "OVEHEAD"). Subtotals ("TOTAL LABMAT COST") are skipped so nothing is
+    // counted twice; anything else is kept as its own fixed cost line.
+    if (!description && quantity === null) {
+      const labelTexts = texts.filter((t) => !CURRENCY_TEXT.has(normLabel(t.text)) && asNumber(t.text) === null);
+      let amountHere = asNumber(valueAt(row, cols.total));
+      if (amountHere === null && labelTexts.length) {
+        for (let c = labelTexts[0].idx + 1; c < row.length; c += 1) {
+          if (asNumber(row[c]?.v) !== null) {
+            amountHere = asNumber(row[c].v);
+            break;
+          }
+        }
+      }
+      if (amountHere !== null && labelTexts.length) {
+        const name = cleanText((scopeText || labelTexts[0].text).replace(/:\s*$/, ""));
+        const key = normLabel(name);
+        if (key.startsWith("TOTAL") || key.startsWith("SUBTOTAL")) continue; // a subtotal
+        newSection(name.slice(0, 150), r);
+        current.laborAmount = round2(amountHere);
+        current.statedLaborAmount = round2(amountHere);
+        current.closed = true;
+        if (!scopeText) {
+          rowWarnings.push({
+            row: r,
+            message: `Row ${r}: "${name}" (₱${round2(amountHere).toLocaleString("en-PH")}) was added as a separate fixed cost. It counts in the total but is not purchased, and it won't change if you edit items.`,
+          });
+        }
+        continue;
+      }
+    }
+
     // Section header (or the sub-heading right after it)
     if (scopeText && !description && quantity === null) {
-      if (current && current.items.length === 0 && !current.subheading && !current.statedMaterialTotal) {
+      if (current && current.items.length === 0 && !current.subheading && !current.closed) {
         current.subheading = scopeText.slice(0, 200);
       } else {
         newSection(scopeText.slice(0, 150), r);
@@ -277,6 +346,7 @@ function parseBomRows(rows) {
     throw err;
   }
 
+  sections.forEach((s) => delete s.closed);
   return { sections, statedTotal, skippedRows, rowWarnings };
 }
 
