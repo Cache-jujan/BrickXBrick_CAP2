@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listProjects } from "../../api/projectsApi";
 import { listExpenses } from "../../api/expensesApi";
@@ -25,12 +25,22 @@ const WEB_ROLES = ["General Manager", "Project Manager"];
 export function DashboardPage() {
   const { user } = useAuth();
 
+  // Admin has no dashboard of its own — its only web job is account
+  // management, so send it straight to User Accounts.
   if (user.role === "System Administrator") {
-    return <AdminOverview />;
+    return <Navigate to="/admin/users" replace />;
   }
   if (WEB_ROLES.includes(user.role)) {
     return <ProjectsOverview role={user.role} name={user.name} userId={user.id} />;
   }
+  // Purchaser works from mobile for everything except reviewing their own
+  // expenses, which the web does carry — land them there rather than on a
+  // dead "mobile only" notice.
+  if (user.role === "Purchaser") {
+    return <Navigate to="/expenses" replace />;
+  }
+  // Site Manager stays mobile-only for now (its web dashboard is a separate,
+  // backend-touching item on the list).
   return <MobileOnlyNotice name={user.name} role={user.role} />;
 }
 
@@ -323,22 +333,6 @@ function MobileOnlyNotice({ name, role }) {
         The {role} role works from the Brick x Brick mobile app, not this web
         dashboard. Please open the app on your Android device to continue.
       </p>
-    </div>
-  );
-}
-
-function AdminOverview() {
-  return (
-    <div className="dashboard">
-      <div className="page-header">
-        <div className="page-header-text">
-          <h1>System administration</h1>
-          <p className="page-header-sub">Create accounts, change roles, reset passwords and unlock accounts.</p>
-        </div>
-        <div className="page-header-actions">
-          <Link to="/admin/users" className="btn btn-primary">User accounts</Link>
-        </div>
-      </div>
     </div>
   );
 }

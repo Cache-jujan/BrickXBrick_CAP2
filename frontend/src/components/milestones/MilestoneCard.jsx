@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { ProgressBar } from "./ProgressBar";
@@ -10,11 +9,25 @@ const DATE = new Intl.DateTimeFormat("en-PH", {
   day: "numeric",
 });
 
+// A task is overdue when its due date has passed and it isn't Completed yet.
+// Task status is only ever Pending or Completed (see note below), so "overdue"
+// is derived here from the date rather than being a status the backend sends.
+// Compared at day granularity: a task due today is not overdue.
+function taskIsOverdue(task) {
+  if (task.status === "Completed") return false;
+  const due = new Date(task.duedate);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return due < today;
+}
+
 // Tasks only ever move Pending -> Completed through the F5 review flow
 // (SM submits a photo on mobile, PM acknowledges) — nothing on this page
 // can change a task's status, so each task is shown as read-only: name,
 // due date, and its current Badge. No photo/review action here.
-export function MilestoneCard({ milestone, projectId, canManage, hasSiteManager }) {
+export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask }) {
   return (
     <Card className="milestone-card">
       <div className="spread milestone-card-head">
@@ -37,26 +50,40 @@ export function MilestoneCard({ milestone, projectId, canManage, hasSiteManager 
           <p className="milestone-card-empty">No tasks yet.</p>
         ) : (
           <ul className="milestone-card-task-list">
-            {milestone.tasks.map((task) => (
-              <li key={task.taskid} className="milestone-card-task">
-                <span className="milestone-card-task-name">{task.taskname}</span>
-                <span className="milestone-card-task-due">
-                  Due {DATE.format(new Date(task.duedate))}
-                </span>
-                <Badge status={task.status} />
-              </li>
-            ))}
+            {milestone.tasks.map((task) => {
+              const overdue = taskIsOverdue(task);
+              return (
+                <li key={task.taskid} className="milestone-card-task">
+                  <span className="milestone-card-task-name">{task.taskname}</span>
+                  <div className="milestone-card-task-meta">
+                    <span
+                      className={
+                        "milestone-card-task-due" +
+                        (overdue ? " milestone-card-task-due-overdue" : "")
+                      }
+                    >
+                      Due {DATE.format(new Date(task.duedate))}
+                    </span>
+                    <span className="milestone-card-task-badges">
+                      {overdue && <Badge status="Overdue" />}
+                      <Badge status={task.status} />
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
 
         {canManage &&
           (hasSiteManager ? (
-            <Link
-              to={`/projects/${projectId}/milestones/${milestone.milestoneid}/tasks/new`}
+            <button
+              type="button"
               className="milestone-card-add-task"
+              onClick={() => onAddTask?.(milestone)}
             >
               + Add Task
-            </Link>
+            </button>
           ) : (
             // Backend 400s POST /:id/tasks when project.siteManagerId is
             // null — catch it here instead of letting the PM hit a dead

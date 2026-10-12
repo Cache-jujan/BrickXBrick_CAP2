@@ -48,9 +48,11 @@
 }
 
 .milestone-card-task {
+  /* Two-line row: name on top, due + badge underneath, so long task names
+     wrap on their own line instead of squeezing the date and badge. */
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: 4px;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -58,14 +60,34 @@
 }
 
 .milestone-card-task-name {
-  flex: 1;
   font-size: var(--text-sm);
   font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.milestone-card-task-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.milestone-card-task-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
 }
 
 .milestone-card-task-due {
   font-size: var(--text-xs);
   color: var(--color-ink-faint);
+}
+
+.milestone-card-task-due-overdue {
+  color: var(--color-status-overdue, var(--color-danger));
+  font-weight: 600;
 }
 
 .milestone-card-add-task {
@@ -74,6 +96,14 @@
   font-weight: 600;
   color: var(--color-brick);
   text-decoration: none;
+  /* Rendered as a <button> now (opens the add-task modal) — strip the native
+     button chrome so it still reads as the inline link it was. */
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
 .milestone-card-add-task:hover {
   text-decoration: underline;
