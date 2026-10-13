@@ -14,12 +14,9 @@ export function CreateTicketPage() {
   const { user } = useAuth();
   const dashPath = user?.role === "Project Manager" ? "/dashboard/pm" : "/dashboard/sm";
 
-  function handleSuccess(ticket, { isPM }) {
-    navigate(dashPath, {
-      replace: true,
-      state: { successMessage: `Ticket “${ticket.subject}” was ${isPM ? "created and sent to the Purchaser" : "submitted"}.` },
-    });
-  }
+  // The form shows its own success step (with "Create another"); leaving it —
+  // via Done or Cancel — returns to the dashboard.
+  const toDashboard = () => navigate(dashPath);
 
   return (
     <div className="create-ticket">
@@ -27,7 +24,7 @@ export function CreateTicketPage() {
       <h1 className="create-ticket-title">Create Ticket</h1>
 
       <Card className="create-ticket-card">
-        <TicketForm onSuccess={handleSuccess} onCancel={() => navigate(dashPath)} />
+        <TicketForm onCancel={toDashboard} onClose={toDashboard} />
       </Card>
     </div>
   );
