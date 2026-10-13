@@ -36,15 +36,10 @@ export function DashboardPage() {
   if (WEB_ROLES.includes(user.role)) {
     return <ProjectsOverview role={user.role} name={user.name} userId={user.id} />;
   }
-  // Purchaser works from mobile for everything except reviewing their own
-  // expenses, which the web does carry — land them there rather than on a
-  // dead "mobile only" notice.
-  if (user.role === "Purchaser") {
-    return <Navigate to="/expenses" replace />;
-  }
-  // Site Manager stays mobile-only for now (its web dashboard is a separate,
-  // backend-touching item on the list).
-  return <MobileOnlyNotice name={user.name} role={user.role} />;
+  // Site Manager and Purchaser have no web app — they're walled at the app
+  // entry (AppShell in App.jsx) and never reach a dashboard. This is just a
+  // defensive fallback.
+  return <Navigate to="/" replace />;
 }
 
 function ProjectsOverview({ role, name, userId }) {
@@ -473,18 +468,6 @@ function AttnGroup({ accent, count, label, to, linkText, items, moreCount }) {
       ) : (
         moreCount > 0 && <p className="attn-more">+{moreCount} more</p>
       )}
-    </div>
-  );
-}
-
-function MobileOnlyNotice({ name, role }) {
-  return (
-    <div className="dashboard mobile-only">
-      <h1>Welcome, {name.split(" ")[0]}</h1>
-      <p className="dashboard-subtitle">
-        The {role} role works from the Brick x Brick mobile app, not this web
-        dashboard. Please open the app on your Android device to continue.
-      </p>
     </div>
   );
 }
