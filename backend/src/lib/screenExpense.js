@@ -13,6 +13,25 @@ const DUPLICATE_REASON =
 const TICKET_MISMATCH_REASON =
   "Expense does not match ticket material type, quantity, or vendor";
 
+// The review screen names its reconciliation line "Adjustment ..." (mobile
+// lib/receipt-checks.ts, ADJUSTMENT_PREFIX). Keep the two in step.
+const ADJUSTMENT_LINE = /^adjustment\b/i;
+
+// lineitems is jsonb, but a row written as a JSON string still parses.
+function adjustmentLines(lineitems) {
+  let items = lineitems;
+  if (typeof items === "string") {
+    try { items = JSON.parse(items); } catch { return []; }
+  }
+  if (!Array.isArray(items)) return [];
+  return items.filter((item) => item && ADJUSTMENT_LINE.test(String(item.description || "").trim()));
+}
+
+function adjustmentReason(lines) {
+  const parts = lines.map((line) => `${String(line.description).trim()} (₱${Number(line.amount || 0).toFixed(2)})`);
+  return `Line items were adjusted to match the receipt total: ${parts.join("; ")}`;
+}
+
 async function screenExpense(expenseID, { query } = {}) {
   // Lazy require so unit tests can pass a fake query without a database.
   const runQuery = query || require("./db").query;
@@ -63,7 +82,13 @@ async function screenExpense(expenseID, { query } = {}) {
     await addFlag("Ticket_Mismatch", reason);
   }
 
+  // Layer 4: the submitter closed a totals gap with an adjustment line.
+  const adjustments = adjustmentLines(expense.lineitems);
+  if (adjustments.length > 0) {
+    await addFlag("Receipt_Adjustment", adjustmentReason(adjustments));
+  }
+
   return { flagTypes };
 }
 
-module.exports = { screenExpense };
+module.exports = { screenExpense, adjustmentLines };

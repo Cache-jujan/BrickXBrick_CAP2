@@ -52,6 +52,7 @@ const FLAG_LABELS = {
   Ticket_Mismatch: "Doesn't match the material request",
   Vendor_Validation: "Vendor needs checking",
   BIR_Duplicate: "Possible duplicate receipt",
+  Receipt_Adjustment: "Totals adjusted by the purchaser",
 };
 
 export function flagLabel(flagType) {
