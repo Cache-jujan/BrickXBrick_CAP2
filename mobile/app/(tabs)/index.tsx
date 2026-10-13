@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -23,6 +23,11 @@ import { formatQty } from "@/lib/money";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { ScannedReceipts } from "@/components/scanned-receipts";
+import { dismissScan, fetchScans, type ReceiptScan } from "@/lib/receipt-scans";
+
+// While a receipt is still being read, refresh the list this often.
+const SCAN_REFRESH_MS = 4000;
 
 type FilterKey = "All" | "Pending" | "Completed";
 
@@ -49,6 +54,17 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
+  const [scans, setScans] = useState<ReceiptScan[]>([]);
+  const [focused, setFocused] = useState(false);
+
+  // Background scans. A failure here must not hide the tickets.
+  const loadScans = useCallback(async () => {
+    try {
+      setScans(await fetchScans());
+    } catch {
+      // Keep whatever was shown; the next refresh tries again.
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -89,9 +105,25 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setFocused(true);
       load();
-    }, [load])
+      loadScans();
+      return () => setFocused(false);
+    }, [load, loadScans])
   );
+
+  // Keep "Reading…" rows moving to "Review" without a manual pull-to-refresh.
+  const anyScanning = scans.some((scan) => scan.status === "Scanning");
+  useEffect(() => {
+    if (!focused || !anyScanning) return;
+    const timer = setInterval(loadScans, SCAN_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [focused, anyScanning, loadScans]);
+
+  function removeScan(scan: ReceiptScan) {
+    setScans((prev) => prev.filter((s) => s.scanID !== scan.scanID));
+    dismissScan(scan.scanID).catch(() => loadScans());
+  }
 
   const actionable = tickets.filter((t) => isSiteManager
     ? t.status === "Resolved" && t.tickettype === "Material Request"
@@ -109,14 +141,6 @@ export default function HomeScreen() {
         new Date(a.createdat).getTime()
     );
 
-  // The Site Manager's rejected requests, surfaced with their reason so they
-  // know what to fix (shown above the expense-capture list, not mixed into it).
-  const rejected = isSiteManager
-    ? tickets
-        .filter((t) => t.status === "Rejected")
-        .sort((a, b) => new Date(b.createdat).getTime() - new Date(a.createdat).getTime())
-    : [];
-
   const counts = {
     All: actionable.length,
     Pending: actionable.filter(
@@ -126,6 +150,14 @@ export default function HomeScreen() {
       (t) => toBucket(t.status) === "Completed"
     ).length,
   };
+
+  // The Site Manager's rejected requests, surfaced with their reason so they
+  // know what to fix (shown above the list, not mixed into it).
+  const rejected = isSiteManager
+    ? tickets
+        .filter((t) => t.status === "Rejected")
+        .sort((a, b) => new Date(b.createdat).getTime() - new Date(a.createdat).getTime())
+    : [];
 
   // To-buy list: open requests grouped by material (lowercased, trimmed).
   const toBuy = Object.values(
@@ -205,7 +237,9 @@ export default function HomeScreen() {
         keyExtractor={(t) => t.ticketid}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          isSiteManager ? (
+          <>
+          <ScannedReceipts scans={scans} onDismiss={removeScan} />
+          {isSiteManager ? (
             rejected.length > 0 ? (
               <View style={styles.rejectedBox}>
                 <Text style={styles.rejectedTitle}>Rejected — needs another look</Text>
@@ -249,12 +283,13 @@ export default function HomeScreen() {
                 ))
               )}
             </View>
-          )
+          )}
+          </>
         }
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={load}
+            onRefresh={() => { load(); loadScans(); }}
           />
         }
         ListEmptyComponent={
