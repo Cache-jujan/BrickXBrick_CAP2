@@ -40,8 +40,11 @@ async function getTicket(ticketId) {
 //                   or Work Item only (Reports are the SM's channel).
 //
 // ticketType is a category label only; it does not determine a recipient.
-router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
-    try {
+// Build and insert ONE ticket inside the transaction `client`, acting as
+// `user`, from a request `body`. Validation reads use the pool; the write
+// (insert + status transitions) uses `client` so a batch of these is atomic.
+// Throws (err.status) on bad input. Reused by POST / and POST /batch.
+async function createTicketRecord(client, user, body) {
         const {
             projectID,
             ticketType,
@@ -58,10 +61,10 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
             bomItemID,
             notInBom,
             notInBomReason,
-        } = req.body;
+        } = body;
 
-        const isPM = req.user.role === "Project Manager";
-        const isSM = req.user.role === "Site Manager";
+        const isPM = user.role === "Project Manager";
+        const isSM = user.role === "Site Manager";
 
         if (!projectID || !ticketType || !subject) {
             const err = new Error("projectID, ticketType, and subject are required");
@@ -87,9 +90,11 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         }
 
         // Shared procurement context for Material Request / Work Item.
+        // Vendor is optional: a Site Manager may not know where to buy, so the
+        // Project Manager can fill it in when acknowledging the ticket.
         if (isMaterialReq || isWorkItem) {
-            if (quantity === undefined || quantity === null || !vendorName) {
-                const err = new Error("Material Request and Work Item tickets require quantity and vendorName");
+            if (quantity === undefined || quantity === null) {
+                const err = new Error("Material Request and Work Item tickets require a quantity");
                 err.status = 400;
                 throw err;
             }
@@ -149,12 +154,12 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         }
         const project = projectResult.rows[0];
 
-        if (isSM && project.sitemanagerid !== req.user.id) {
+        if (isSM && project.sitemanagerid !== user.id) {
             const err = new Error("You may only create tickets on the project you are assigned to");
             err.status = 403;
             throw err;
         }
-        if (isPM && project.projectmanagerid !== req.user.id) {
+        if (isPM && project.projectmanagerid !== user.id) {
             const err = new Error("You may only create tickets on a project you manage");
             err.status = 403;
             throw err;
@@ -264,10 +269,10 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         const requestedBudgetValue = isSM && isMaterialReq ? requestedBudget : null;
         const approvedBudgetValue = isPM && isMaterialReq ? approvedBudget : null;
         const assignedToValue = isPM ? assignedTo : null;
-        const acknowledgedByValue = isPM ? req.user.id : null;
+        const acknowledgedByValue = isPM ? user.id : null;
         const acknowledgedAtSql = isPM ? "NOW()" : "NULL"; // derived from role, not user input
 
-        const ticket = await withTransaction(async (client) => {
+        {
             const insertResult = await client.query(
                 `INSERT INTO tickets
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
@@ -278,7 +283,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                  RETURNING *`,
                 [
                     projectID,
-                    req.user.id,
+                    user.id,
                     ticketType,
                     subject,
                     description || null,
@@ -305,21 +310,55 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                 ticketId: newTicket.ticketid,
                 fromStatus: null,
                 toStatus: "Pending",
-                changedBy: req.user.id,
+                changedBy: user.id,
             });
             if (isPM) {
                 await logTransition(client, {
                     ticketId: newTicket.ticketid,
                     fromStatus: "Pending",
                     toStatus: "Acknowledged",
-                    changedBy: req.user.id,
+                    changedBy: user.id,
                 });
             }
 
             return newTicket;
-        });
+        }
+}
 
+// POST / — create a single ticket (SM request, or PM direct create).
+router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const ticket = await withTransaction((client) => createTicketRecord(client, req.user, req.body));
         res.status(201).json(ticket);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// POST /batch — create several tickets atomically (all succeed or none).
+// Used by the Site Manager's mobile multi-card form. Mixed ticket types are
+// allowed; each item is validated exactly like a single create.
+router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const items = Array.isArray(req.body && req.body.tickets) ? req.body.tickets : null;
+        if (!items || items.length === 0) {
+            const err = new Error("tickets must be a non-empty array");
+            err.status = 400;
+            throw err;
+        }
+        if (items.length > 20) {
+            const err = new Error("A batch can contain at most 20 tickets");
+            err.status = 400;
+            throw err;
+        }
+        const created = await withTransaction(async (client) => {
+            const out = [];
+            for (const item of items) {
+                out.push(await createTicketRecord(client, req.user, item));
+            }
+            return out;
+        });
+        res.status(201).json({ tickets: created });
     } catch (err) {
         next(err);
     }
