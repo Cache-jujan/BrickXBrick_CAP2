@@ -293,3 +293,82 @@
 @media (prefers-reduced-motion: reduce) {
   .ticket-card-focus { animation: none; }
 }
+
+/* Card head: date + Edit stacked at the top-right. */
+.ticket-card-head-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.ticket-card-edit {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-brick-dark);
+}
+.ticket-card-edit:hover { text-decoration: underline; }
+
+/* Edit modal: quantity + unit on one row; the fields drop their page margin
+   only where needed via the shared Field styles. */
+.ticket-edit-qty-row {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: var(--space-4);
+}
+.ticket-edit-locked {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+@media (max-width: 480px) {
+  .ticket-edit-qty-row { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* Reject-with-reason row, under the primary action on a pending card. */
+.ticket-card-reject-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: var(--space-2) 0 0;
+  margin-top: var(--space-1);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-danger);
+}
+.ticket-card-reject-toggle:hover { text-decoration: underline; }
+.ticket-card-reject {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.ticket-reject-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+}
+.ticket-reject-input:focus {
+  outline: none;
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-bg);
+}
+@media (max-width: 640px) {
+  .ticket-card-reject { flex-wrap: wrap; }
+  .ticket-reject-input { flex-basis: 100%; }
+}

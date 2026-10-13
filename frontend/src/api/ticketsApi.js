@@ -41,3 +41,18 @@ export async function resolveTicket(ticketId) {
   const { data } = await apiClient.patch(`/api/tickets/${ticketId}/resolve`);
   return data;
 }
+
+// PATCH /api/tickets/:id — PM edits a pending ticket's fields before acting on
+// it. Send the editable fields for the ticket's shape; an on-BOM Material
+// Request's materialType/unit are locked server-side and ignored here.
+export async function updateTicket(ticketId, payload) {
+  const { data } = await apiClient.patch(`/api/tickets/${ticketId}`, payload);
+  return data;
+}
+
+// PATCH /api/tickets/:id/reject — PM rejects a pending ticket with a reason
+// (so the Site Manager knows what was wrong). Pending -> Rejected.
+export async function rejectTicket(ticketId, reason) {
+  const { data } = await apiClient.patch(`/api/tickets/${ticketId}/reject`, { reason });
+  return data;
+}

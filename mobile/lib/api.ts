@@ -13,6 +13,10 @@ export type Ticket = {
   description: string | null;
   status: string;
   createdat: string;
+  // Present on a Rejected ticket (GET /tickets/submitted returns t.* +
+  // the rejecting user's role), so the Site Manager can see why.
+  rejectionreason?: string | null;
+  rejectedbyrole?: string | null;
 };
 
 export type Project = {
