@@ -252,3 +252,77 @@ test("approval needs at least one item and a total above zero", () => {
   ]);
   assert.deepEqual(approvalProblems([{ name: "A", items: [{ quantity: 1, unitCost: 5 }] }]), []);
 });
+
+// Issue #89: the company format can also have a lump-sum service section
+// ("DEMOLITION & HAULING ... COST 15,000"), a "TOTAL LABMAT COST" subtotal and
+// an overhead line (spelled "OVEHEAD" in the sample) before the total.
+// Made-up figures, same layout as the School Café sample.
+async function lumpSumWorkbook({ costLabel = true } = {}) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("BOM");
+  ws.getRow(10).values = ["SCOPE", "DESCRIPTION", "QUANTITY", "UNIT", "UNIT COST", "COST", "TOTAL"];
+  ws.getCell("A12").value = "CARPENTRY";
+  ws.getRow(13).values = [null, "PLYWOOD", 10, "sheets", 800];
+  ws.getCell("F13").value = { formula: "C13*E13", result: 8000 };
+  ws.getRow(14).values = [null, "NAILS", 2, "box", 1000];
+  ws.getCell("F14").value = { formula: "C14*E14", result: 2000 };
+  ws.getCell("F15").value = "M ATERIAL COST";
+  ws.getCell("G15").value = { formula: "SUM(F13:F14)", result: 10000 };
+  ws.getCell("F16").value = "LABOR COST";
+  ws.getCell("G16").value = { formula: "G15*0.6", result: 6000 };
+  ws.getCell("A18").value = "DEMOLITION & HAULING";
+  if (costLabel) ws.getCell("F18").value = "COST";
+  ws.getCell("G18").value = 15000;
+  ws.getCell("A20").value = "PAINTING"; // a normal section AFTER the lump sum
+  ws.getRow(21).values = [null, "PAINT", 4, "gal.", 500];
+  ws.getCell("F21").value = { formula: "C21*E21", result: 2000 };
+  ws.getCell("F22").value = "MATERIAL COST";
+  ws.getCell("G22").value = { formula: "SUM(F21:F21)", result: 2000 };
+  ws.getCell("F23").value = "LABOR COST";
+  ws.getCell("G23").value = 1000;
+  ws.getCell("D25").value = "TOTAL LABMAT COST:";
+  ws.getCell("F25").value = "PHP";
+  ws.getCell("G25").value = { formula: "SUM(G15:G23)", result: 34000 };
+  ws.getCell("D26").value = "OVEHEAD SUPERVISION :";
+  ws.getCell("F26").value = "PHP";
+  ws.getCell("G26").value = { formula: "G25*0.12", result: 4080 };
+  ws.getCell("D27").value = "TOTAL PROJECT COST:";
+  ws.getCell("F27").value = "PHP";
+  ws.getCell("G27").value = { formula: "G25+G26", result: 38080 };
+  ws.getCell("A29").value = "PREPARED BY:";
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+test("#89: lump-sum section, LABMAT subtotal and overhead are imported; total matches the file", async () => {
+  const bom = await parseBomWorkbook(await lumpSumWorkbook());
+  assert.deepEqual(
+    bom.sections.map((s) => s.name),
+    ["CARPENTRY", "DEMOLITION & HAULING", "PAINTING", "OVEHEAD SUPERVISION"]
+  );
+  const [, demolition, painting, overhead] = bom.sections;
+  assert.equal(demolition.items.length, 0);
+  assert.equal(demolition.laborAmount, 15000);
+  assert.equal(demolition.subheading, null);
+  assert.equal(painting.subheading, null); // not swallowed as DEMOLITION's sub-heading
+  assert.equal(painting.items.length, 1);
+  assert.equal(overhead.laborAmount, 4080);
+  assert.equal(bom.statedTotal, 38080);
+  assert.equal(bomTotals(bom.sections).total, 38080); // LABMAT subtotal not counted twice
+  assert.match(bom.rowWarnings.map((w) => w.message).join(" "), /OVEHEAD SUPERVISION.*separate fixed cost/);
+
+  const codes = buildBomWarnings(bom.sections, { statedTotal: bom.statedTotal }).map((w) => w.code);
+  assert.ok(!codes.includes("EMPTY_SECTION"));
+  assert.ok(!codes.includes("TOTAL_MISMATCH"));
+});
+
+test("#89: a lump-sum section without the COST label is still read", async () => {
+  const bom = await parseBomWorkbook(await lumpSumWorkbook({ costLabel: false }));
+  const demolition = bom.sections.find((s) => s.name === "DEMOLITION & HAULING");
+  assert.equal(demolition.laborAmount, 15000);
+  assert.equal(bomTotals(bom.sections).total, 38080);
+});
+
+test("#89: an empty section with no amount is still flagged", () => {
+  const codes = buildBomWarnings([{ name: "X", items: [] }]).map((w) => w.code);
+  assert.deepEqual(codes, ["EMPTY_SECTION"]);
+});

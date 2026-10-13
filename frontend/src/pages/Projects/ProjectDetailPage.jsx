@@ -529,7 +529,7 @@ export function ProjectDetailPage() {
               <div><dt>Items</dt><dd>{bom.totals.itemCount} in {bom.totals.sectionCount} sections</dd></div>
               {/* BOM figures always show centavos, like the BOM itself */}
               <div><dt>Materials</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
-              <div><dt>Labor</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
+              <div><dt>Labor and other</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
               <div><dt>Total</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
             </dl>
           </div>

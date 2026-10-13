@@ -85,8 +85,10 @@ function buildBomWarnings(sections, { statedTotal = null } = {}) {
   sections.forEach((s, si) => {
     const t = sectionTotals(s);
     const label = s.name || `Section ${si + 1}`;
-    if (!s.items || s.items.length === 0) {
-      warnings.push({ level: "warning", code: "EMPTY_SECTION", section: si, message: `${label} has no items.` });
+    // A section with no items is fine when it is a lump sum (e.g. demolition,
+    // overhead); it is only a problem when it adds nothing to the total.
+    if ((!s.items || s.items.length === 0) && t.total === 0) {
+      warnings.push({ level: "warning", code: "EMPTY_SECTION", section: si, message: `${label} has no items and no amount.` });
     }
     if (differs(t.materials, num(s.statedMaterialTotal))) {
       warnings.push({
