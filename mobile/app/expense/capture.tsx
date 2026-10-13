@@ -4,7 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
 
 import { FilePreview, type FileState } from "@/components/file-preview";
 import { FlowHeader } from "@/components/flow-header";
@@ -12,7 +11,8 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { COLORS } from "@/constants/expense-flow-colors";
-import { API_URL, authHeaders } from "@/constants/api";
+import { compressReceiptImage } from "@/lib/compress-image";
+import { startScan } from "@/lib/receipt-scans";
 
 function formatBytes(bytes?: number) {
   if (!bytes) return "";
@@ -46,7 +46,7 @@ function imageFileFromAsset(asset: { fileName?: string | null; mimeType?: string
 }
 
 export default function CaptureScreen() {
-  const { draft, setFile, setOcrResult } = useExpenseDraft();
+  const { draft, setFile, setScanID } = useExpenseDraft();
   const [file, setLocalFile] = useState<FileState>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -62,25 +62,32 @@ export default function CaptureScreen() {
     setErrorMessage(null);
   }
 
+  // Compress once at pick time, so the preview shows exactly what gets
+  // uploaded. If compression fails, upload the original rather than block.
+  async function pickImage(asset: ImagePicker.ImagePickerAsset) {
+    const selected = imageFileFromAsset(asset);
+    if (!selected) return Alert.alert("Unsupported image", "Choose a JPG or PNG receipt.");
+    try {
+      const small = await compressReceiptImage(asset.uri, asset.width, asset.height);
+      const baseName = selected.name.replace(/\.[^.]+$/, "");
+      pick({ ...selected, uri: small.uri, mimeType: small.mimeType, name: `${baseName}.jpg` });
+    } catch (err) {
+      console.warn("Image compression failed; uploading the original:", err);
+      pick(selected);
+    }
+  }
+
   async function handleCamera() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) return Alert.alert("Camera access needed", "Enable it in Settings.");
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) {
-      const selected = imageFileFromAsset(result.assets[0]);
-      if (!selected) return Alert.alert("Unsupported image", "Choose a JPG or PNG receipt.");
-      pick(selected);
-    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 1 });
+    if (!result.canceled) await pickImage(result.assets[0]);
   }
   async function handleGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return Alert.alert("Photo access needed", "Enable it in Settings.");
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
-    if (!result.canceled) {
-      const selected = imageFileFromAsset(result.assets[0]);
-      if (!selected) return Alert.alert("Unsupported image", "Choose a JPG or PNG receipt.");
-      pick(selected);
-    }
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 1 });
+    if (!result.canceled) await pickImage(result.assets[0]);
   }
   async function handlePdf() {
     const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
@@ -90,26 +97,21 @@ export default function CaptureScreen() {
     }
   }
 
+  // Only the upload happens here. OCR runs on the server in the background,
+  // so the user can leave the scanning screen or close the app.
   async function handleSubmit() {
     if (!file || status === "uploading") return;
     setStatus("uploading"); setErrorMessage(null);
     try {
-      const uploadResult = await FileSystem.uploadAsync(`${API_URL}/api/receipts/scan`, file.uri, {
-        httpMethod: "POST", uploadType: FileSystem.FileSystemUploadType.MULTIPART, fieldName: "file",
-        mimeType: file.mimeType ?? (file.type === "image" ? "image/jpeg" : "application/pdf"),
-        headers: authHeaders(),
-      });
-      if (uploadResult.status < 200 || uploadResult.status >= 300) throw new Error(`Server responded ${uploadResult.status}`);
-      const data = JSON.parse(uploadResult.body);
+      const scan = await startScan(file, { mode: draft.mode, ticket: draft.ticket, fileName: file.name, fileType: file.type });
       setFile(file);
-      setOcrResult(data);
+      setScanID(scan.scanID);
       setStatus("idle");
-      if (data.ocrError) Alert.alert("Heads up", data.ocrError);
-      router.push("/expense/review");
+      router.replace({ pathname: "/expense/scanning", params: { id: scan.scanID } });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const isNetworkError = /network|connect|timed out|unreachable/i.test(message);
-      setErrorMessage(isNetworkError ? "Can't reach the server. Check your connection." : "Something went wrong while scanning. Please try again.");
+      setErrorMessage(isNetworkError ? "Can't reach the server. Check your connection." : "Something went wrong while uploading. Please try again.");
       setStatus("error");
     }
   }
@@ -183,7 +185,7 @@ export default function CaptureScreen() {
         </View>
       )}
 
-      <LoadingOverlay visible={status === "uploading"} message="Reading receipt…" detail="Uploading and extracting the details." />
+      <LoadingOverlay visible={status === "uploading"} message="Uploading receipt…" detail="Keep the app open until the upload finishes." />
     </SafeAreaView>
   );
 }

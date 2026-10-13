@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { dismissScan } from "@/lib/receipt-scans";
 import { getSession } from "@/lib/auth";
 import { resolveTicket, submitExpense } from "@/lib/api";
 import { COLORS } from "@/constants/expense-flow-colors";
@@ -71,6 +72,8 @@ export default function LinkScreen() {
         lineItems,
       });
 
+      // Submitted: take it off "Scanned receipts" so it can't be sent twice.
+      if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
       Alert.alert("Expense submitted", "Your expense was submitted successfully.");
       router.replace("/");
       reset();

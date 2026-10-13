@@ -77,3 +77,28 @@ test("a ticket mismatch writes a Ticket_Mismatch flag", async () => {
   assert.deepEqual(result.flagTypes, ["Ticket_Mismatch"]);
   assert.equal(db.inserted[0].params[1], "Ticket_Mismatch");
 });
+test("an adjustment line routes the expense to PM review", async () => {
+  const db = fakeDatabase({
+    expense: {
+      ...cleanExpense,
+      lineitems: [
+        { description: "Portland cement 40kg", quantity: 20, amount: 5600 },
+        { description: "Adjustment / rounding", quantity: 0, amount: 3.5 },
+      ],
+    },
+    vendor: { vendorid: "v1", approvalstatus: "Approved" },
+  });
+  const result = await screenExpense("exp-1", { query: db.query });
+  assert.deepEqual(result.flagTypes, ["Receipt_Adjustment"]);
+  assert.equal(db.inserted[0].params[1], "Receipt_Adjustment");
+  assert.match(db.inserted[0].params[2], /Adjustment \/ rounding \(₱3\.50\)/);
+});
+
+test("a line that only mentions an adjustment mid-name is not flagged", async () => {
+  const db = fakeDatabase({
+    expense: { ...cleanExpense, lineitems: JSON.stringify([{ description: "Hinge, adjustment type", quantity: 2, amount: 80 }]) },
+    vendor: { vendorid: "v1", approvalstatus: "Approved" },
+  });
+  const result = await screenExpense("exp-1", { query: db.query });
+  assert.deepEqual(result.flagTypes, []);
+});
