@@ -1,0 +1,42 @@
+.mobile-wall {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-bg);
+}
+
+.mobile-wall-card {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-7) var(--space-6);
+}
+
+.mobile-wall-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: var(--space-4);
+}
+
+.mobile-wall-title {
+  font-size: var(--text-xl);
+  margin: 0 0 var(--space-3);
+}
+
+.mobile-wall-text {
+  color: var(--color-ink-soft);
+  line-height: 1.5;
+  margin: 0 auto var(--space-6);
+  max-width: 46ch;
+}
+
+.mobile-wall-logout {
+  min-width: 140px;
+}

@@ -40,8 +40,11 @@ async function getTicket(ticketId) {
 //                   or Work Item only (Reports are the SM's channel).
 //
 // ticketType is a category label only; it does not determine a recipient.
-router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
-    try {
+// Build and insert ONE ticket inside the transaction `client`, acting as
+// `user`, from a request `body`. Validation reads use the pool; the write
+// (insert + status transitions) uses `client` so a batch of these is atomic.
+// Throws (err.status) on bad input. Reused by POST / and POST /batch.
+async function createTicketRecord(client, user, body) {
         const {
             projectID,
             ticketType,
@@ -58,10 +61,10 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
             bomItemID,
             notInBom,
             notInBomReason,
-        } = req.body;
+        } = body;
 
-        const isPM = req.user.role === "Project Manager";
-        const isSM = req.user.role === "Site Manager";
+        const isPM = user.role === "Project Manager";
+        const isSM = user.role === "Site Manager";
 
         if (!projectID || !ticketType || !subject) {
             const err = new Error("projectID, ticketType, and subject are required");
@@ -87,9 +90,11 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         }
 
         // Shared procurement context for Material Request / Work Item.
+        // Vendor is optional: a Site Manager may not know where to buy, so the
+        // Project Manager can fill it in when acknowledging the ticket.
         if (isMaterialReq || isWorkItem) {
-            if (quantity === undefined || quantity === null || !vendorName) {
-                const err = new Error("Material Request and Work Item tickets require quantity and vendorName");
+            if (quantity === undefined || quantity === null) {
+                const err = new Error("Material Request and Work Item tickets require a quantity");
                 err.status = 400;
                 throw err;
             }
@@ -149,12 +154,12 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         }
         const project = projectResult.rows[0];
 
-        if (isSM && project.sitemanagerid !== req.user.id) {
+        if (isSM && project.sitemanagerid !== user.id) {
             const err = new Error("You may only create tickets on the project you are assigned to");
             err.status = 403;
             throw err;
         }
-        if (isPM && project.projectmanagerid !== req.user.id) {
+        if (isPM && project.projectmanagerid !== user.id) {
             const err = new Error("You may only create tickets on a project you manage");
             err.status = 403;
             throw err;
@@ -264,10 +269,10 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         const requestedBudgetValue = isSM && isMaterialReq ? requestedBudget : null;
         const approvedBudgetValue = isPM && isMaterialReq ? approvedBudget : null;
         const assignedToValue = isPM ? assignedTo : null;
-        const acknowledgedByValue = isPM ? req.user.id : null;
+        const acknowledgedByValue = isPM ? user.id : null;
         const acknowledgedAtSql = isPM ? "NOW()" : "NULL"; // derived from role, not user input
 
-        const ticket = await withTransaction(async (client) => {
+        {
             const insertResult = await client.query(
                 `INSERT INTO tickets
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
@@ -278,7 +283,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                  RETURNING *`,
                 [
                     projectID,
-                    req.user.id,
+                    user.id,
                     ticketType,
                     subject,
                     description || null,
@@ -305,21 +310,55 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                 ticketId: newTicket.ticketid,
                 fromStatus: null,
                 toStatus: "Pending",
-                changedBy: req.user.id,
+                changedBy: user.id,
             });
             if (isPM) {
                 await logTransition(client, {
                     ticketId: newTicket.ticketid,
                     fromStatus: "Pending",
                     toStatus: "Acknowledged",
-                    changedBy: req.user.id,
+                    changedBy: user.id,
                 });
             }
 
             return newTicket;
-        });
+        }
+}
 
+// POST / — create a single ticket (SM request, or PM direct create).
+router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const ticket = await withTransaction((client) => createTicketRecord(client, req.user, req.body));
         res.status(201).json(ticket);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// POST /batch — create several tickets atomically (all succeed or none).
+// Used by the Site Manager's mobile multi-card form. Mixed ticket types are
+// allowed; each item is validated exactly like a single create.
+router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const items = Array.isArray(req.body && req.body.tickets) ? req.body.tickets : null;
+        if (!items || items.length === 0) {
+            const err = new Error("tickets must be a non-empty array");
+            err.status = 400;
+            throw err;
+        }
+        if (items.length > 20) {
+            const err = new Error("A batch can contain at most 20 tickets");
+            err.status = 400;
+            throw err;
+        }
+        const created = await withTransaction(async (client) => {
+            const out = [];
+            for (const item of items) {
+                out.push(await createTicketRecord(client, req.user, item));
+            }
+            return out;
+        });
+        res.status(201).json({ tickets: created });
     } catch (err) {
         next(err);
     }
@@ -604,10 +643,18 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser"), async (
     try {
         const ticket = await getTicket(req.params.id);
 
+        const reasonText = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+
         if (req.user.role === "Project Manager") {
             if (ticket.status !== "Pending") {
                 const err = new Error("Project Manager may only reject a ticket while it is Pending");
                 err.status = 409;
+                throw err;
+            }
+            // The PM must say why, so the Site Manager knows what to fix.
+            if (!reasonText) {
+                const err = new Error("A reason is required to reject a ticket");
+                err.status = 400;
                 throw err;
             }
         } else {
@@ -629,10 +676,11 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser"), async (
         const updated = await withTransaction(async (client) => {
             const updateResult = await client.query(
                 `UPDATE tickets
-                    SET status = 'Rejected', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW()
+                    SET status = 'Rejected', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW(),
+                        rejectionReason = $4
                   WHERE ticketId = $2 AND status = $3
                   RETURNING *`,
-                [req.user.id, req.params.id, ticket.status]
+                [req.user.id, req.params.id, ticket.status, reasonText || null]
             );
 
             if (updateResult.rowCount === 0) {
@@ -652,6 +700,115 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser"), async (
         });
 
         res.json(updated);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PATCH /:id — the Project Manager edits a Site Manager's pending ticket
+// before acting on it (fix a quantity, add the vendor the SM didn't know, etc).
+// Declared after the specific /:id/* routes so it only matches a bare id.
+//
+// Scope: PM-only, on a project they manage, and only while the ticket is still
+// Pending. Editable fields depend on the ticket's shape; the BOM linkage itself
+// (which BOM item, or on-BOM vs not-in-BOM) is NOT editable here — an on-BOM
+// Material Request keeps its BOM-derived materialType and unit locked.
+router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const ticket = await getTicket(req.params.id);
+
+        if (ticket.projectmanagerid !== req.user.id) {
+            const err = new Error("You may only edit tickets from projects you manage");
+            err.status = 403;
+            throw err;
+        }
+        if (ticket.status !== "Pending") {
+            const err = new Error(`Only pending tickets can be edited; this one is ${ticket.status}`);
+            err.status = 409;
+            throw err;
+        }
+
+        const isReport = ticket.tickettype === "Report";
+        const isMaterialReq = ticket.tickettype === "Material Request";
+        const isWorkItem = ticket.tickettype === "Work Item";
+        const onBom = ticket.bomitemid != null; // on-BOM MR → material/unit locked
+
+        const { subject, description, quantity, unit, materialType, vendorName, requestedBudget, notInBomReason } = req.body;
+
+        if (typeof subject !== "string" || !subject.trim()) {
+            const err = new Error("subject is required");
+            err.status = 400;
+            throw err;
+        }
+
+        let p = 0;
+        const sets = [];
+        const vals = [];
+        const set = (col, val) => { p += 1; sets.push(`${col} = $${p}`); vals.push(val); };
+
+        set("subject", subject.trim().slice(0, 100));
+        set("description", typeof description === "string" && description.trim() ? description.trim() : null);
+
+        if (isMaterialReq || isWorkItem) {
+            const q = Number(quantity);
+            if (!Number.isFinite(q) || q <= 0) {
+                const err = new Error("quantity must be a positive number");
+                err.status = 400;
+                throw err;
+            }
+            set("quantity", q);
+            // Vendor is optional (nullable) — the SM may not know it.
+            set("vendorName", typeof vendorName === "string" && vendorName.trim() ? vendorName.trim() : null);
+        }
+
+        if (isMaterialReq) {
+            const b = Number(requestedBudget);
+            if (!Number.isFinite(b) || b < 0) {
+                const err = new Error("requestedBudget must be 0 or more");
+                err.status = 400;
+                throw err;
+            }
+            set("requestedBudget", b);
+        }
+
+        // Material + unit are creator-supplied only when not on the BOM.
+        if ((isMaterialReq && !onBom) || isWorkItem) {
+            if (typeof materialType !== "string" || !materialType.trim()) {
+                const err = new Error("materialType is required");
+                err.status = 400;
+                throw err;
+            }
+            if (typeof unit !== "string" || !unit.trim()) {
+                const err = new Error("unit is required");
+                err.status = 400;
+                throw err;
+            }
+            set("materialType", materialType.trim());
+            set("unit", unit.trim().slice(0, 30));
+        }
+
+        if (isMaterialReq && !onBom) {
+            if (typeof notInBomReason !== "string" || !notInBomReason.trim()) {
+                const err = new Error("a reason is required for a not-in-BOM Material Request");
+                err.status = 400;
+                throw err;
+            }
+            set("notInBomReason", notInBomReason.trim());
+        }
+
+        // isReport falls through with just subject + description updated.
+        const result = await query(
+            `UPDATE tickets SET ${sets.join(", ")}, updatedAt = NOW()
+              WHERE ticketId = $${p + 1} AND status = 'Pending'
+              RETURNING *`,
+            [...vals, req.params.id]
+        );
+        if (result.rowCount === 0) {
+            const err = new Error("This ticket is no longer pending");
+            err.status = 409;
+            throw err;
+        }
+        res.json(result.rows[0]);
     } catch (err) {
         next(err);
     }

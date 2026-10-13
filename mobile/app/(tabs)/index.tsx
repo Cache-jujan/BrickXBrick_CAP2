@@ -151,6 +151,14 @@ export default function HomeScreen() {
     ).length,
   };
 
+  // The Site Manager's rejected requests, surfaced with their reason so they
+  // know what to fix (shown above the list, not mixed into it).
+  const rejected = isSiteManager
+    ? tickets
+        .filter((t) => t.status === "Rejected")
+        .sort((a, b) => new Date(b.createdat).getTime() - new Date(a.createdat).getTime())
+    : [];
+
   // To-buy list: open requests grouped by material (lowercased, trimmed).
   const toBuy = Object.values(
     openRequests.reduce<Record<string, { material: string; total: number; requests: number; projects: string[] }>>(
@@ -231,7 +239,26 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <>
           <ScannedReceipts scans={scans} onDismiss={removeScan} />
-          {isSiteManager ? null : (
+          {isSiteManager ? (
+            rejected.length > 0 ? (
+              <View style={styles.rejectedBox}>
+                <Text style={styles.rejectedTitle}>Rejected — needs another look</Text>
+                {rejected.map((t) => (
+                  <View key={t.ticketid} style={styles.rejectedRow}>
+                    <Text style={styles.rejectedSubject} numberOfLines={2}>{t.subject}</Text>
+                    <Text style={styles.rejectedMeta}>
+                      {t.tickettype} · {projectsById[t.projectid]?.name ?? "Project"}
+                    </Text>
+                    <Text style={styles.rejectedReason}>
+                      {t.rejectionreason
+                        ? `Reason: ${t.rejectionreason}`
+                        : "No reason was given."}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null
+          ) : (
             <View style={styles.toBuyBox}>
               <View style={styles.toBuyHeader}>
                 <Text style={styles.toBuyTitle}>To buy</Text>
@@ -540,5 +567,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: COLORS.success,
+  },
+
+  rejectedBox: {
+    backgroundColor: "#FFF5F3",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#F4C7C3",
+    padding: 14,
+    marginBottom: 6,
+  },
+
+  rejectedTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#B42318",
+    marginBottom: 8,
+  },
+
+  rejectedRow: {
+    paddingTop: 8,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F4C7C3",
+  },
+
+  rejectedSubject: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.heading,
+  },
+
+  rejectedMeta: {
+    fontSize: 11,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+
+  rejectedReason: {
+    fontSize: 13,
+    color: "#B42318",
+    marginTop: 4,
+    lineHeight: 18,
   },
 });
