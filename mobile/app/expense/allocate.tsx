@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { dismissScan } from "@/lib/receipt-scans";
 import {
   ApiError,
   previewAllocation,
@@ -133,6 +134,8 @@ export default function AllocateScreen() {
         feeTargets,
       });
       setResult(saved);
+      // Submitted: take it off "Scanned receipts" so it can't be sent twice.
+      if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
     } catch (err) {
       if (err instanceof ApiError && Array.isArray(err.details?.problems)) {
         // The requests changed since the preview (e.g. another receipt filled

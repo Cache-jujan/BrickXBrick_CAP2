@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -23,6 +23,11 @@ import { formatQty } from "@/lib/money";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { ScannedReceipts } from "@/components/scanned-receipts";
+import { dismissScan, fetchScans, type ReceiptScan } from "@/lib/receipt-scans";
+
+// While a receipt is still being read, refresh the list this often.
+const SCAN_REFRESH_MS = 4000;
 
 type FilterKey = "All" | "Pending" | "Completed";
 
@@ -49,6 +54,17 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
+  const [scans, setScans] = useState<ReceiptScan[]>([]);
+  const [focused, setFocused] = useState(false);
+
+  // Background scans. A failure here must not hide the tickets.
+  const loadScans = useCallback(async () => {
+    try {
+      setScans(await fetchScans());
+    } catch {
+      // Keep whatever was shown; the next refresh tries again.
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -89,9 +105,25 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setFocused(true);
       load();
-    }, [load])
+      loadScans();
+      return () => setFocused(false);
+    }, [load, loadScans])
   );
+
+  // Keep "Reading…" rows moving to "Review" without a manual pull-to-refresh.
+  const anyScanning = scans.some((scan) => scan.status === "Scanning");
+  useEffect(() => {
+    if (!focused || !anyScanning) return;
+    const timer = setInterval(loadScans, SCAN_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [focused, anyScanning, loadScans]);
+
+  function removeScan(scan: ReceiptScan) {
+    setScans((prev) => prev.filter((s) => s.scanID !== scan.scanID));
+    dismissScan(scan.scanID).catch(() => loadScans());
+  }
 
   const actionable = tickets.filter((t) => isSiteManager
     ? t.status === "Resolved" && t.tickettype === "Material Request"
@@ -197,7 +229,9 @@ export default function HomeScreen() {
         keyExtractor={(t) => t.ticketid}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          isSiteManager ? null : (
+          <>
+          <ScannedReceipts scans={scans} onDismiss={removeScan} />
+          {isSiteManager ? null : (
             <View style={styles.toBuyBox}>
               <View style={styles.toBuyHeader}>
                 <Text style={styles.toBuyTitle}>To buy</Text>
@@ -222,12 +256,13 @@ export default function HomeScreen() {
                 ))
               )}
             </View>
-          )
+          )}
+          </>
         }
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={load}
+            onRefresh={() => { load(); loadScans(); }}
           />
         }
         ListEmptyComponent={

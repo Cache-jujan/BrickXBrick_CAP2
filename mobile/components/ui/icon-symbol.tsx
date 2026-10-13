@@ -32,6 +32,8 @@ const MAPPING = {
   "exclamationmark.triangle.fill": "warning",
   "checkmark.seal.fill": "verified",
   "person.crop.circle": "account-circle",
+  "calendar": "calendar-today",
+  "info.circle.fill": "info",
 } satisfies IconMapping;
 
 type IconSymbolName = keyof typeof MAPPING;

@@ -35,3 +35,16 @@ export function formatPeso(amount: string | number | null | undefined): string {
 export function formatQty(quantity: number): string {
   return Number.isInteger(quantity) ? String(quantity) : String(Number(quantity.toFixed(2)));
 }
+
+// 125000 -> "1,250.00": what an amount field shows once the user leaves it.
+// toCents() strips the commas again, so grouped text stays valid input.
+export function formatAmountInput(cents: number): string {
+  return formatPesoCents(cents).replace("₱", "");
+}
+
+// Groups an amount field's text on blur; leaves invalid text alone so the
+// field's error message still points at it.
+export function groupAmountText(text: string): string {
+  const cents = toCents(text);
+  return cents === null ? text : formatAmountInput(cents);
+}
