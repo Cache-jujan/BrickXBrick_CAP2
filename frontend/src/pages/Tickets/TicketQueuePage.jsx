@@ -34,7 +34,6 @@ export function TicketQueuePage() {
   const [submittingId, setSubmittingId] = useState(null);
   const [activeType, setActiveType] = useState("All");
   const [createOpen, setCreateOpen] = useState(false);
-  const [notice, setNotice] = useState("");
   // Deep-link from the dashboard "Needs your attention" panel: ?focus=<id>
   // scrolls to that ticket's card and highlights it briefly.
   const [searchParams] = useSearchParams();
@@ -133,11 +132,10 @@ export function TicketQueuePage() {
   }
 
   // A PM-created ticket is born Acknowledged and lands in the Purchaser's
-  // queue, not this Pending one — so confirm it with a notice rather than
-  // expecting it to appear in the list. Reload to pick up anything else.
-  function handleCreated(ticket) {
-    setCreateOpen(false);
-    setNotice(`Ticket “${ticket.subject}” was created and sent to the Purchaser.`);
+  // queue, not this Pending one. The form shows its own confirmation step, so
+  // here we just refresh the queue in the background; the PM closes the modal
+  // when done (or creates another).
+  function handleCreated() {
     loadQueue();
   }
 
@@ -160,10 +158,9 @@ export function TicketQueuePage() {
             Requests from the field land here. Confirm a budget and assign a Purchaser, or resolve a report — or raise a new ticket yourself.
           </p>
         </div>
-        <Button type="button" onClick={() => { setNotice(""); setCreateOpen(true); }}>New ticket</Button>
+        <Button type="button" onClick={() => setCreateOpen(true)}>New ticket</Button>
       </div>
 
-      {notice && <Banner tone="success" title={notice} />}
       {error && <Banner tone="error" title={error} />}
 
       {!loading && tickets.length > 0 && (
@@ -241,7 +238,7 @@ export function TicketQueuePage() {
                 {!isReport && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
                   <dl className="ticket-card-facts">
                     <div><dt>Material</dt><dd>{ticket.materialtype || "—"}</dd></div>
-                    <div><dt>Quantity</dt><dd>{ticket.quantity ?? "—"}</dd></div>
+                    <div><dt>Quantity</dt><dd>{ticket.quantity != null ? `${ticket.quantity}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
                     <div><dt>Preferred vendor</dt><dd>{ticket.vendorname || "—"}</dd></div>
                     {ticket.tickettype === "Material Request" && (
                       <div>
@@ -317,7 +314,7 @@ export function TicketQueuePage() {
             <p className="modal-body">
               Raise a Material Request or Work Item and send it straight to a Purchaser.
             </p>
-            <TicketForm onSuccess={handleCreated} onCancel={() => setCreateOpen(false)} />
+            <TicketForm onSuccess={handleCreated} onClose={() => setCreateOpen(false)} onCancel={() => setCreateOpen(false)} />
           </div>
         </div>
       )}

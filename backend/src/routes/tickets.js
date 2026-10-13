@@ -50,6 +50,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
             photoURL,
             materialType,
             quantity,
+            unit,
             vendorName,
             requestedBudget,
             approvedBudget,
@@ -102,6 +103,16 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         // Work Item keeps a free-text materialType (no BOM link).
         if (isWorkItem && !materialType) {
             const err = new Error("Work Item tickets require materialType");
+            err.status = 400;
+            throw err;
+        }
+
+        // Unit of measure. A Work Item and a Not-in-BOM Material Request need an
+        // explicit unit from the creator; an on-BOM Material Request derives it
+        // from the BOM item below, so it's not required in the request body.
+        const unitText = typeof unit === "string" ? unit.trim() : "";
+        if (isWorkItem && !unitText) {
+            const err = new Error("Work Item tickets require a unit (e.g. pcs, kg, m)");
             err.status = 400;
             throw err;
         }
@@ -188,6 +199,9 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
         let resolvedBomItemID = null;
         let resolvedNotInBom = false;
         let resolvedNotInBomReason = null;
+        // On-BOM: derived from the BOM item. Not-in-BOM / Work Item: from the
+        // creator's pick. Report / anything else: null.
+        let resolvedUnit = isWorkItem ? unitText : null;
 
         if (isMaterialReq) {
             const hasBomItem = typeof bomItemID === "string" && bomItemID.trim() !== "";
@@ -207,7 +221,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
             if (hasBomItem) {
                 // The item must belong to THIS project's approved BOM.
                 const itemResult = await query(
-                    `SELECT i.bomitemid, i.description
+                    `SELECT i.bomitemid, i.description, i.unit
                        FROM bomitems i
                        JOIN bomsections s ON s.sectionid = i.sectionid
                        JOIN boms b ON b.bomid = s.bomid
@@ -221,6 +235,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                 }
                 resolvedBomItemID = bomItemID;
                 resolvedMaterialType = itemResult.rows[0].description; // stay consistent with the BOM
+                resolvedUnit = itemResult.rows[0].unit; // unit comes from the BOM too
             } else {
                 if (typeof notInBomReason !== "string" || notInBomReason.trim() === "") {
                     const err = new Error("A reason is required when the material isn't in the BOM");
@@ -232,9 +247,15 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                     err.status = 400;
                     throw err;
                 }
+                if (!unitText) {
+                    const err = new Error("Material Request tickets require a unit when the item isn't in the BOM");
+                    err.status = 400;
+                    throw err;
+                }
                 resolvedNotInBom = true;
                 resolvedNotInBomReason = notInBomReason.trim();
                 resolvedMaterialType = materialType;
+                resolvedUnit = unitText;
             }
         }
 
@@ -250,10 +271,10 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
             const insertResult = await client.query(
                 `INSERT INTO tickets
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
-                    materialType, quantity, vendorName, requestedBudget,
+                    materialType, quantity, unit, vendorName, requestedBudget,
                     bomItemID, notInBom, notInBomReason,
                     status, assignedTo, acknowledgedBy, approvedBudget, acknowledgedAt)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, ${acknowledgedAtSql})
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ${acknowledgedAtSql})
                  RETURNING *`,
                 [
                     projectID,
@@ -264,6 +285,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
                     photoURL || null,
                     resolvedMaterialType,
                     quantity ?? null,
+                    resolvedUnit,
                     vendorName || null,
                     requestedBudgetValue,
                     resolvedBomItemID,

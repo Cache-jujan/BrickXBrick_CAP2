@@ -26,6 +26,25 @@ export type ApprovedVendor = {
   vendorName: string;
 };
 
+// F2 Bill of Materials — approved BOM items for the Material Request picker.
+// Unit costs are intentionally omitted for the Site Manager (backend strips
+// them), so unitCost is never present in the mobile shape.
+export type BomItem = {
+  bomItemId: string;
+  section: string;
+  description: string;
+  quantity: number;
+  unit: string;
+};
+
+// status: the project BOM's status ("Approved" | "Draft" | "Locked" | null).
+// items is non-empty only when status === "Approved"; otherwise the Material
+// Request must take the Not-in-BOM path.
+export type BomItemsResponse = {
+  status: string | null;
+  items: BomItem[];
+};
+
 export type AssignedTask = {
   taskid: string;
   milestoneid: string;
@@ -128,6 +147,23 @@ export async function fetchApprovedVendors(): Promise<ApprovedVendor[]> {
   return data;
 }
 
+// Approved BOM items for the given project, for the Material Request picker.
+// The SM is only authorised on the project they're assigned to (403 otherwise);
+// a project with no Approved BOM comes back as { status, items: [] }, which the
+// caller treats as "Not in BOM only".
+export async function fetchBomItems(projectID: string): Promise<BomItemsResponse> {
+  const res = await fetch(`${API_URL}/api/projects/${projectID}/bom/items`, {
+    headers: authHeaders(),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to load BOM items (${res.status})`);
+  }
+
+  return { status: data.status ?? null, items: Array.isArray(data.items) ? data.items : [] };
+}
+
 export async function createTicket(body: {
   projectID: string;
   ticketType: "Material Request" | "Work Item" | "Report";
@@ -137,6 +173,12 @@ export async function createTicket(body: {
   quantity?: number;
   vendorName?: string;
   requestedBudget?: number;
+  // Material Request BOM link: send exactly one of bomItemID (an approved item
+  // of this project — the backend derives materialType from it) OR
+  // notInBom:true + notInBomReason + materialType (free text).
+  bomItemID?: string;
+  notInBom?: boolean;
+  notInBomReason?: string;
 }) {
   const res = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",

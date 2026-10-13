@@ -29,3 +29,45 @@
 .ticket-form .banner {
   margin-bottom: var(--space-4);
 }
+
+/* Quantity + unit sit on one row — quantity flexes, unit is a fixed column. */
+.ticket-form-qty-row {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: var(--space-4);
+}
+@media (max-width: 480px) {
+  .ticket-form-qty-row { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* Post-submit confirmation step (replaces the form on success). */
+.ticket-form-success {
+  text-align: center;
+  padding: var(--space-4) var(--space-2) var(--space-2);
+}
+.ticket-form-success-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-status-active-bg);
+  color: var(--color-status-active);
+  margin-bottom: var(--space-3);
+}
+.ticket-form-success-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+.ticket-form-success-text {
+  margin: 0 auto var(--space-5);
+  max-width: 42ch;
+  color: var(--color-ink-soft);
+}
+.ticket-form-success-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}

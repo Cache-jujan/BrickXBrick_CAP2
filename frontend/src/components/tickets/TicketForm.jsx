@@ -13,6 +13,15 @@ import "./TicketForm.css";
 // Not a UUID, so it is never sent to the backend as a bomItemID.
 const NOT_IN_BOM = "__not_in_bom__";
 
+// Units offered when the creator picks one (Not-in-BOM Material Request or a
+// Work Item). On-BOM Material Requests take the unit from the BOM item instead.
+const UNIT_OPTIONS = [
+  "pcs", "set", "lot", "unit",
+  "kg", "g", "L", "mL",
+  "m", "cm", "mm", "sq.m", "cu.m",
+  "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
+];
+
 const EMPTY_FORM = {
   projectID: "",
   ticketType: "Material Request",
@@ -20,6 +29,7 @@ const EMPTY_FORM = {
   description: "",
   materialType: "",
   quantity: "",
+  unit: "",
   vendorName: "",
   requestedBudget: "",
   approvedBudget: "",
@@ -36,9 +46,12 @@ const EMPTY_FORM = {
 //
 // onSuccess(ticket, { isPM }) — called after the ticket is created.
 // onCancel()                  — called when the user backs out.
-export function TicketForm({ onSuccess, onCancel }) {
+export function TicketForm({ onSuccess, onCancel, onClose }) {
   const { user } = useAuth();
   const isPM = user?.role === "Project Manager";
+  // After a successful create we show a confirmation step (with "Create
+  // another") instead of leaving the caller to close immediately.
+  const [created, setCreated] = useState(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [projects, setProjects] = useState([]);
@@ -139,6 +152,12 @@ export function TicketForm({ onSuccess, onCancel }) {
       if (isPM && !form.assignedTo) errors.assignedTo = "Choose a Purchaser to assign.";
     }
 
+    // Unit: an on-BOM Material Request takes it from the BOM item, so it's only
+    // required when the creator must supply it (Work Item or Not-in-BOM).
+    if ((isMaterialReq && notInBom) || isWorkItem) {
+      if (!form.unit.trim()) errors.unit = "Select a unit.";
+    }
+
     // Work Item keeps a free-text material type.
     if (isWorkItem && !form.materialType.trim()) {
       errors.materialType = "Material type is required.";
@@ -190,6 +209,9 @@ export function TicketForm({ onSuccess, onCancel }) {
       payload.quantity = Number(form.quantity);
       payload.vendorName = form.vendorName.trim();
       if (isPM) payload.assignedTo = form.assignedTo; // PM assigns the Purchaser now
+      // On-BOM Material Requests derive their unit server-side from the BOM
+      // item; only send a unit when the creator picked one.
+      if ((isMaterialReq && notInBom) || isWorkItem) payload.unit = form.unit;
     }
     if (isWorkItem) {
       payload.materialType = form.materialType.trim();
@@ -213,6 +235,7 @@ export function TicketForm({ onSuccess, onCancel }) {
     setSubmitting(true);
     try {
       const ticket = await createTicket(payload);
+      setCreated(ticket);
       onSuccess?.(ticket, { isPM });
     } catch (err) {
       setFormError(extractErrorMessage(err, "Couldn't create the ticket. Please try again."));
@@ -221,9 +244,21 @@ export function TicketForm({ onSuccess, onCancel }) {
     }
   }
 
+  function handleCreateAnother() {
+    setForm(EMPTY_FORM);
+    setFieldErrors({});
+    setFormError("");
+    setCreated(null);
+  }
+
   const isMaterialReq = form.ticketType === "Material Request";
   const isWorkItem = form.ticketType === "Work Item";
   const notInBom = isMaterialReq && form.bomItemID === NOT_IN_BOM;
+  // An on-BOM item carries its own unit — show it read-only so it's clear the
+  // request will use the BOM's unit, not a free choice.
+  const selectedBomItem = bomItems.find((it) => it.bomItemId === form.bomItemID);
+  const onBomUnit = isMaterialReq && form.bomItemID && !notInBom ? selectedBomItem?.unit : null;
+  const needsUnitPicker = (isMaterialReq && notInBom) || isWorkItem;
 
   // Group the BOM items by their section for the picker.
   const groupedBomItems = Object.entries(
@@ -233,6 +268,30 @@ export function TicketForm({ onSuccess, onCancel }) {
       return acc;
     }, {})
   );
+
+  if (created) {
+    return (
+      <div className="ticket-form-success">
+        <span className="ticket-form-success-check" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </span>
+        <h3 className="ticket-form-success-title">Ticket created</h3>
+        <p className="ticket-form-success-text">
+          “{created.subject}” was {isPM ? "created and sent to the Purchaser" : "submitted for review"}.
+        </p>
+        <div className="ticket-form-success-actions">
+          <Button type="button" variant="secondary" onClick={handleCreateAnother}>
+            Create another ticket
+          </Button>
+          <Button type="button" onClick={() => (onClose || onCancel)?.()}>
+            Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form className="ticket-form" onSubmit={handleSubmit} noValidate>
@@ -363,17 +422,42 @@ export function TicketForm({ onSuccess, onCancel }) {
             />
           )}
 
-          <Field
-            label="Quantity"
-            required
-            type="number"
-            min="0.01"
-            step="0.01"
-            placeholder="0"
-            value={form.quantity}
-            error={fieldErrors.quantity}
-            onChange={(e) => updateField("quantity", e.target.value)}
-          />
+          <div className="ticket-form-qty-row">
+            <Field
+              label="Quantity"
+              required
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="0"
+              value={form.quantity}
+              error={fieldErrors.quantity}
+              onChange={(e) => updateField("quantity", e.target.value)}
+            />
+            {needsUnitPicker ? (
+              <Field
+                label="Unit"
+                as="select"
+                required
+                value={form.unit}
+                error={fieldErrors.unit}
+                onChange={(e) => updateField("unit", e.target.value)}
+              >
+                <option value="">Select a unit</option>
+                {UNIT_OPTIONS.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </Field>
+            ) : (
+              <Field
+                label="Unit"
+                value={onBomUnit || ""}
+                placeholder="From the BOM item"
+                readOnly
+                disabled
+              />
+            )}
+          </div>
 
           <Field
             label="Preferred Vendor"
