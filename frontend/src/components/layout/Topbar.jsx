@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
 import {
@@ -9,9 +9,11 @@ import {
   markAllNotificationsRead,
 } from "../../api/notificationsApi";
 import { humanizeNotification } from "../../utils/plainLanguage";
+import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
 import "./Topbar.css";
 
 const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
+const DROPDOWN_LIMIT = 8;
 
 // Purely cosmetic label map for the topbar title/breadcrumb — does not
 // affect routing. Falls back to a generic label for any unmatched or
@@ -33,6 +35,7 @@ const PAGE_LABELS = [
   { test: (p) => p.startsWith("/tasks/progress-review"), trail: ["Tasks", "Progress review"] },
   { test: (p) => p === "/admin/users", trail: ["Administration", "User accounts"] },
   { test: (p) => p === "/blockchain/alerts", trail: ["Record protection", "Tamper alerts"] },
+  { test: (p) => p === "/notifications", trail: ["Notifications"] },
 ];
 
 function pageInfoFor(pathname) {
@@ -43,6 +46,7 @@ function pageInfoFor(pathname) {
 export function Topbar({ onMenuClick }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const { trail } = pageInfoFor(location.pathname);
   const initial = user?.name?.trim()?.[0]?.toUpperCase() || "?";
 
@@ -95,7 +99,7 @@ export function Topbar({ onMenuClick }) {
     setNotifOpen((v) => {
       const next = !v;
       if (next) {
-        listMyNotifications()
+        listMyNotifications({ limit: DROPDOWN_LIMIT })
           .then(setNotifications)
           .catch(() => {});
       }
@@ -115,6 +119,21 @@ export function Topbar({ onMenuClick }) {
     await markAllNotificationsRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, isread: true })));
     setUnreadCount(0);
+  }
+
+  // Whole row is clickable: mark read (if needed) then navigate, if this
+  // notification's type has somewhere to go on the web app.
+  function handleRowClick(n) {
+    if (!n.isread) {
+      markNotificationRead(n.notificationid).catch(() => {});
+      setNotifications((prev) => prev.map((x) => (x.notificationid === n.notificationid ? { ...x, isread: true } : x)));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    }
+    const route = routeForNotification(n, user?.role);
+    if (route) {
+      setNotifOpen(false);
+      navigate(route);
+    }
   }
 
   return (
@@ -165,24 +184,50 @@ export function Topbar({ onMenuClick }) {
                   )}
                 </div>
 
-                {notifications.length === 0 ? (
-                  <p className="topbar-notif-empty">No notifications yet.</p>
-                ) : (
-                  <ul className="topbar-notif-list">
-                    {notifications.map((n) => (
-                      <li
-                        key={n.notificationid}
-                        className={"topbar-notif-item" + (n.isread ? "" : " topbar-notif-item-unread")}
-                        onClick={() => !n.isread && handleMarkRead(n.notificationid)}
-                      >
-                        <p className="topbar-notif-message">{humanizeNotification(n.message)}</p>
-                        <p className="topbar-notif-time">
-                          {new Date(n.createdat).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="topbar-notif-scroll">
+                  {notifications.length === 0 ? (
+                    <div className="topbar-notif-empty">
+                      <p>You're all caught up.</p>
+                      <p className="topbar-notif-empty-sub">New activity on your projects will show up here.</p>
+                    </div>
+                  ) : (
+                    groupByDay(notifications).map(([label, items]) => (
+                      <div key={label} className="topbar-notif-group">
+                        <p className="topbar-notif-group-label">{label}</p>
+                        <ul className="topbar-notif-list">
+                          {items.map((n) => {
+                            const { Icon, bg, fg, fallback } = metaFor(n.type);
+                            const clickable = !n.isread || routeForNotification(n, user?.role);
+                            return (
+                              <li
+                                key={n.notificationid}
+                                className={"topbar-notif-item" + (n.isread ? "" : " topbar-notif-item-unread") + (clickable ? "" : " topbar-notif-item-static")}
+                                onClick={clickable ? () => handleRowClick(n) : undefined}
+                              >
+                                <span className="topbar-notif-icon" style={{ background: bg, color: fg }}>
+                                  <Icon />
+                                </span>
+                                <span className="topbar-notif-body">
+                                  <p className="topbar-notif-message">{humanizeNotification(n.message) || fallback}</p>
+                                  <p className="topbar-notif-time">{relativeTime(n.createdat)}</p>
+                                </span>
+                                {!n.isread && <span className="topbar-notif-dot" aria-hidden="true" />}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="topbar-notif-footer"
+                  onClick={() => { setNotifOpen(false); navigate("/notifications"); }}
+                >
+                  See all notifications
+                </button>
               </div>
             )}
           </div>

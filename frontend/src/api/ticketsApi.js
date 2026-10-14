@@ -15,6 +15,17 @@ export async function listPendingTickets() {
   return data;
 }
 
+// GET /api/tickets/managed — the PM's tickets by status group
+// ("Pending" | "Acknowledged" | "History"), optionally one project. Rows carry
+// BOM context (bomUnitCost, bomQuantity, bomAlreadyRequested) for on-BOM
+// Material Requests, plus submittedByName / resolvedByName.
+export async function listManagedTickets(status, projectId) {
+  const params = { status };
+  if (projectId) params.projectId = projectId;
+  const { data } = await apiClient.get("/api/tickets/managed", { params });
+  return data;
+}
+
 // GET /api/tickets/expense-linkable — resolved Material Request tickets.
 // The backend restricts Project Managers to their own projects.
 export async function listExpenseLinkableTickets() {
