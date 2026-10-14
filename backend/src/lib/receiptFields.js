@@ -97,8 +97,21 @@ function toExpenseDraft(parsed) {
 }
 
 /**
- * F7 classification. Presence check on the three BIR-required fields; it
- * does NOT verify a TIN is real.
+ * Philippine TIN shape: 9 digits, then an optional 3-5 digit branch code
+ * (000 is the head office; the vendor master list stores 5-digit codes), so
+ * 9, 12, 13 or 14 digits once separators are removed. Rejects the obvious
+ * placeholders (all zeros, one digit repeated). Shape only: it cannot tell a
+ * real TIN from a made-up one that happens to look right.
+ */
+function isValidPhTin(value) {
+  const tin = String(value ?? "").replace(/\D/g, "");
+  if (![9, 12, 13, 14].includes(tin.length)) return false;
+  return !/^(\d)\1{8}$/.test(tin.slice(0, 9));
+}
+
+/**
+ * F7 classification. Presence check on the three BIR-required fields, plus a
+ * format check on the TIN; it does NOT verify a TIN is real.
  *
  * This runs server-side on submit, not just on scan — birValidationStatus
  * decides what lands in the BIR tax-deductible report (F11), so a client
@@ -106,7 +119,7 @@ function toExpenseDraft(parsed) {
  */
 function classifyBir({ tin, birPermitNumber, birNumber }) {
   const missing = [];
-  if (!tin) missing.push("tin");
+  if (!isValidPhTin(tin)) missing.push("tin");
   if (!birPermitNumber) missing.push("birPermitNumber");
   if (!birNumber) missing.push("birNumber");
 
@@ -202,6 +215,7 @@ module.exports = {
   EXPENSE_COLUMNS,
   toExpenseDraft,
   classifyBir,
+  isValidPhTin,
   normalizeBirFields,
   normalizeLineItems,
   computeQuantityFromLineItems,

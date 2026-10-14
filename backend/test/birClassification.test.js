@@ -65,16 +65,27 @@ test("numeric input (not strings) is accepted", () => {
   assert.equal(classify({ tin: 123456789000, birPermitNumber: 123, birNumber: 4567 }).birValidationStatus, FORMAL);
 });
 
-// Known gaps. F7 only checks that a value is PRESENT, not that it looks like a
-// real BIR number, so these receipts are currently marked tax-deductible.
+// Known gaps. The TIN has a format check, but the permit and OR/SI numbers are
+// only checked for presence, so these receipts are currently marked tax-deductible.
 // They are marked `todo` so they document the gap without failing the suite;
 // turn them into plain tests once the team decides the validation rules.
 test("TODO: a placeholder permit number such as N/A should not count as Formal", { todo: true }, () => {
   assert.equal(classify({ ...ALL, birPermitNumber: "N/A" }).birValidationStatus, INFORMAL);
 });
 
-test("TODO: a TIN that is too short should not count as Formal", { todo: true }, () => {
-  assert.equal(classify({ ...ALL, tin: "12" }).birValidationStatus, INFORMAL);
+test("TIN must be 9 digits plus an optional 3-5 digit branch code", () => {
+  for (const tin of ["123-456-789", "123-456-789-000", "123-456-789-0000", "180-400-144-00000"]) {
+    assert.equal(classify({ ...ALL, tin }).birValidationStatus, FORMAL, tin);
+  }
+  for (const tin of ["12", "12345678", "1234567890", "12345678901", "123456789000000"]) {
+    assert.deepEqual(classify({ ...ALL, tin }), { birValidationStatus: INFORMAL, missingBirFields: ["tin"] }, tin);
+  }
+});
+
+test("placeholder TINs (all zeros, one repeated digit) are not Formal", () => {
+  for (const tin of ["000-000-000", "000-000-000-000", "111-111-111-000", "999999999"]) {
+    assert.equal(classify({ ...ALL, tin }).birValidationStatus, INFORMAL, tin);
+  }
 });
 
 test("TODO: an OR/SI number of 0 should not count as Formal", { todo: true }, () => {

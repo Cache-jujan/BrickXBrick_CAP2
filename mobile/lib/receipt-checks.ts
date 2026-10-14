@@ -20,11 +20,19 @@ export function receiptDateProblem(text: string): string | null {
   return null;
 }
 
-// Mirrors the server's classifyBir: Formal needs TIN, BIR permit and OR/SI.
+// Philippine TIN shape, same rule as the server's isValidPhTin: 9 digits plus an
+// optional 3-5 digit branch code, and not an obvious placeholder.
+export function isValidPhTin(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  if (![9, 12, 13, 14].includes(digits.length)) return false;
+  return !/^(\d)\1{8}$/.test(digits.slice(0, 9));
+}
+
+// Mirrors the server's classifyBir: Formal needs a valid TIN, BIR permit and OR/SI.
 // The server classifies again on submit; this is a preview.
 export function birStatusPreview(fields: { tin: string; birPermitNumber: string; birNumber: string }) {
   const missing: string[] = [];
-  if (!fields.tin.replace(/\D/g, "")) missing.push("TIN");
+  if (!isValidPhTin(fields.tin)) missing.push("TIN");
   if (!fields.birPermitNumber.replace(/[\s-]/g, "")) missing.push("BIR permit");
   if (!fields.birNumber.replace(/[\s-]/g, "")) missing.push("OR/SI");
   return { formal: missing.length === 0, missing };
