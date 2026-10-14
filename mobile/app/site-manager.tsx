@@ -1,253 +1,624 @@
-import { useCallback, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import type { Href } from "expo-router";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
-  RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
-import { Redirect, router, useFocusEffect } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
-import { fetchAssignedTasks, type AssignedTask } from "@/lib/api";
+import {
+  createTicketsBatch,
+  fetchActiveProjects,
+  fetchApprovedVendors,
+  fetchBomItems,
+  fetchSubmittedTicket,
+  type ApprovedVendor,
+  type BomItem,
+  type Project,
+  type Ticket,
+  type TicketInput,
+} from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { IconSymbol } from "@/components/ui/icon-symbol";
 
-export default function SiteManagerHomeScreen() {
+type TicketType = "Material Request" | "Work Item" | "Report";
+const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
+
+// Sentinel for the BOM-item picker when the material isn't in the BOM.
+const NOT_IN_BOM = "__not_in_bom__";
+
+const UNIT_OPTIONS = [
+  "pcs", "set", "lot", "unit",
+  "kg", "g", "L", "mL",
+  "m", "cm", "mm", "sq.m", "cu.m",
+  "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
+];
+
+type Card = {
+  id: string;
+  ticketType: TicketType;
+  bomItemID: string; // "" | NOT_IN_BOM | a real bomItemId
+  materialType: string; // not-in-BOM Material Request, or Work Item
+  notInBomReason: string;
+  quantity: string;
+  unit: string; // chosen unit (not-in-BOM / Work Item)
+  vendorName: string; // optional
+  requestedBudget: string;
+  reportText: string; // Report
+};
+
+function emptyCard(id: string): Card {
+  return {
+    id,
+    ticketType: "Material Request",
+    bomItemID: "",
+    materialType: "",
+    notInBomReason: "",
+    quantity: "",
+    unit: "",
+    vendorName: "",
+    requestedBudget: "",
+    reportText: "",
+  };
+}
+
+// Build a card prefilled from a rejected ticket, so the SM lands with every
+// field already filled from the original and only has to fix what the PM
+// flagged. BOM linkage is preserved; "not in BOM" too.
+function prefilledCard(id: string, t: Ticket): Card {
+  const tt = (t.tickettype as Card["ticketType"]) || "Material Request";
+  const isReport = tt === "Report";
+  const notInBom = t.notinbom === true;
+  return {
+    id,
+    ticketType: tt,
+    bomItemID: isReport ? "" : (t.bomitemid ? String(t.bomitemid) : (notInBom ? NOT_IN_BOM : "")),
+    materialType: t.materialtype || "",
+    notInBomReason: t.notinbomreason || "",
+    quantity: t.quantity == null ? "" : String(t.quantity),
+    unit: t.unit || "",
+    vendorName: t.vendorname || "",
+    requestedBudget: t.requestedbudget == null ? "" : String(t.requestedbudget),
+    reportText: isReport ? (t.description || t.subject || "") : "",
+  };
+}
+
+export default function TicketRequestScreen() {
   const session = getSession();
-  const [tasks, setTasks] = useState<AssignedTask[]>([]);
+  // Optional query param: when present, this screen is in "fix & resubmit"
+  // mode — one card prefilled from the rejected ticket, project locked,
+  // "+ Add another" hidden, and the ticket id sent back as resubmittedFromId.
+  const { resubmitFrom } = useLocalSearchParams<{ resubmitFrom?: string }>();
+  const resubmitId = typeof resubmitFrom === "string" ? resubmitFrom : null;
+
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [vendors, setVendors] = useState<ApprovedVendor[]>([]);
+  // The rejected ticket we're resubmitting (null in the ordinary flow).
+  const [resubmitOf, setResubmitOf] = useState<Ticket | null>(null);
 
-  const loadTasks = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
+  // step: which stage of the gate we're in.
+  const [project, setProject] = useState<Project | null>(null);
+  const [bomItems, setBomItems] = useState<BomItem[]>([]);
+  const [bomLoading, setBomLoading] = useState(false);
 
-    try {
-      setTasks(await fetchAssignedTasks());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load assigned tasks.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const [cards, setCards] = useState<Card[]>([emptyCard("c1")]);
+  const cardSeq = useRef(1);
+  const [openKey, setOpenKey] = useState<string | null>(null); // "<cardId>:<field>"
+  const [submitting, setSubmitting] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (session?.user.role === "Site Manager") loadTasks();
-    }, [loadTasks, session?.user.role])
-  );
+  useEffect(() => {
+    if (!session || session.user.role !== "Site Manager") return;
+    const loads: Promise<unknown>[] = [fetchActiveProjects(), fetchApprovedVendors()];
+    if (resubmitId) loads.push(fetchSubmittedTicket(resubmitId));
+    Promise.all(loads)
+      .then((results) => {
+        const projectList = results[0] as Project[];
+        const vendorList = results[1] as ApprovedVendor[];
+        setProjects(projectList);
+        setVendors(vendorList);
+        if (resubmitId) {
+          const orig = results[2] as Ticket;
+          if (orig.status !== "Rejected") {
+            setError("This request has already been handled — only rejected requests can be resubmitted.");
+            return;
+          }
+          setResubmitOf(orig);
+          const origProject = projectList.find((p) => p.projectid === orig.projectid);
+          if (origProject) setProject(origProject);
+          // Prefill one card from the rejected original.
+          setCards([prefilledCard("c1", orig)]);
+        } else if (projectList.length === 1) {
+          // Auto-route: exactly one project → skip the chooser.
+          setProject(projectList[0]);
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load request options."))
+      .finally(() => setLoading(false));
+  }, [session?.user.role, resubmitId]);
+
+  // Load the approved BOM items once a project is chosen (for the item picker).
+  useEffect(() => {
+    if (!project) return;
+    let cancelled = false;
+    setBomLoading(true);
+    fetchBomItems(project.projectid)
+      .then((items) => { if (!cancelled) setBomItems(items); })
+      .catch(() => { if (!cancelled) setBomItems([]); })
+      .finally(() => { if (!cancelled) setBomLoading(false); });
+    return () => { cancelled = true; };
+  }, [project?.projectid]);
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
-  const firstName = session.user.name.split(" ")[0] || "there";
-  const pendingTasks = tasks.filter((task) => task.status !== "Completed");
-  const completedTasks = tasks.filter((task) => task.status === "Completed");
+  function updateCard(id: string, patch: Partial<Card>) {
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    setError(null);
+  }
+  function addCard() {
+    cardSeq.current += 1;
+    setCards((prev) => [...prev, emptyCard(`c${cardSeq.current}`)]);
+  }
+  function removeCard(id: string) {
+    setCards((prev) => (prev.length === 1 ? prev : prev.filter((c) => c.id !== id)));
+  }
 
+  function bomUnitFor(card: Card): string | null {
+    if (card.ticketType !== "Material Request" || !card.bomItemID || card.bomItemID === NOT_IN_BOM) return null;
+    return bomItems.find((it) => it.bomItemId === card.bomItemID)?.unit ?? null;
+  }
+
+  // Returns an error string for a card, or null if it's valid.
+  function validateCard(card: Card): string | null {
+    const qty = Number(card.quantity);
+    if (card.ticketType === "Report") {
+      if (!card.reportText.trim()) return "Describe the issue.";
+      return null;
+    }
+    // Material Request / Work Item share quantity.
+    if (!card.quantity || !Number.isFinite(qty) || qty <= 0) return "Enter a quantity greater than 0.";
+
+    if (card.ticketType === "Work Item") {
+      if (!card.materialType.trim()) return "Enter what's needed.";
+      if (!card.unit.trim()) return "Choose a unit.";
+      return null;
+    }
+    // Material Request
+    if (!card.bomItemID) return "Pick a BOM item, or “Not in the BOM”.";
+    if (card.bomItemID === NOT_IN_BOM) {
+      if (!card.materialType.trim()) return "Enter the material.";
+      if (!card.unit.trim()) return "Choose a unit.";
+      if (!card.notInBomReason.trim()) return "Say why it isn't in the BOM.";
+    }
+    if (card.requestedBudget === "" || !Number.isFinite(Number(card.requestedBudget)) || Number(card.requestedBudget) < 0) {
+      return "Enter a requested budget of 0 or more.";
+    }
+    return null;
+  }
+
+  function cap100(text: string) {
+    const t = text.trim();
+    return t.length > 100 ? t.slice(0, 100) : t;
+  }
+
+  function buildPayload(card: Card): TicketInput {
+    const vendorName = card.vendorName.trim() || undefined;
+    if (card.ticketType === "Report") {
+      return {
+        projectID: project!.projectid,
+        ticketType: "Report",
+        subject: cap100(card.reportText),
+        description: card.reportText.trim(),
+      };
+    }
+    if (card.ticketType === "Work Item") {
+      return {
+        projectID: project!.projectid,
+        ticketType: "Work Item",
+        subject: cap100(card.materialType),
+        materialType: card.materialType.trim(),
+        quantity: Number(card.quantity),
+        unit: card.unit,
+        vendorName,
+      };
+    }
+    // Material Request
+    const notInBom = card.bomItemID === NOT_IN_BOM;
+    const bomDesc = notInBom
+      ? card.materialType
+      : bomItems.find((it) => it.bomItemId === card.bomItemID)?.description || "Material request";
+    const base: TicketInput = {
+      projectID: project!.projectid,
+      ticketType: "Material Request",
+      subject: cap100(bomDesc),
+      quantity: Number(card.quantity),
+      vendorName,
+      requestedBudget: Number(card.requestedBudget),
+    };
+    if (notInBom) {
+      base.notInBom = true;
+      base.notInBomReason = card.notInBomReason.trim();
+      base.materialType = card.materialType.trim();
+      base.unit = card.unit; // creator-supplied for not-in-BOM
+    } else {
+      base.bomItemID = card.bomItemID; // materialType + unit derived server-side
+    }
+    return base;
+  }
+
+  // In resubmit mode, tag the first card with the original ticket's id so the
+  // backend links the two (and the PM sees the resubmission marked).
+  function withResubmitTag(payloads: TicketInput[]): TicketInput[] {
+    if (!resubmitOf) return payloads;
+    const [first, ...rest] = payloads;
+    return [{ ...first, resubmittedFromId: resubmitOf.ticketid }, ...rest];
+  }
+
+  const firstInvalid = cards.map(validateCard).findIndex((e) => e !== null);
+  const canSubmit = firstInvalid === -1 && !submitting && !!project;
+
+  async function handleSubmit() {
+    const errors = cards.map(validateCard);
+    const bad = errors.findIndex((e) => e !== null);
+    if (bad !== -1) {
+      setError(`Ticket ${bad + 1}: ${errors[bad]}`);
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const created = await createTicketsBatch(withResubmitTag(cards.map(buildPayload)));
+      Alert.alert(
+        resubmitOf ? "Request resubmitted" : created.length > 1 ? "Tickets submitted" : "Ticket submitted",
+        resubmitOf
+          ? "Your updated request was sent to your Project Manager."
+          : `${created.length} ${created.length > 1 ? "requests were" : "request was"} sent to your Project Manager.`,
+        [{ text: "Done", onPress: () => router.replace((resubmitOf ? "/site-manager/my-requests" : "/site-manager") as Href) }]      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to submit the tickets.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ---- Render states ----------------------------------------------------
+  if (loading) {
+    return (
+      <Shell>
+        <View style={styles.loadingCard}><ActivityIndicator color={COLORS.primary} /><Text style={styles.muted}>Loading…</Text></View>
+      </Shell>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <Shell>
+        <Text style={styles.title}>Request a ticket</Text>
+        <View style={styles.loadingCard}>
+          <Text style={styles.muted}>You don't have an active project yet. Tickets appear here once a project is assigned to you.</Text>
+        </View>
+      </Shell>
+    );
+  }
+
+  // 2+ projects and none chosen → the project gate.
+  if (!project) {
+    return (
+      <Shell>
+        <Text style={styles.title}>Which project?</Text>
+        <Text style={styles.subtitle}>Choose the project you're raising tickets for.</Text>
+        {projects.map((p) => (
+          <Pressable key={p.projectid} style={styles.projectChoice} onPress={() => setProject(p)}>
+            <Text style={styles.projectChoiceName}>{p.name}</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        ))}
+      </Shell>
+    );
+  }
+
+  // Form.
+  return (
+    <Shell>
+      <Text style={styles.title}>{resubmitOf ? "Fix & resubmit" : "Request tickets"}</Text>
+      <View style={styles.projectBar}>
+        <Text style={styles.projectBarName} numberOfLines={1}>{project.name}</Text>
+        {!resubmitOf && projects.length > 1 && (
+          <Pressable onPress={() => { setProject(null); setCards([emptyCard("c1")]); cardSeq.current = 1; }}>
+            <Text style={styles.changeLink}>Change</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {resubmitOf && (
+        <View style={styles.rejectionBanner}>
+          <Text style={styles.rejectionBannerLabel}>
+            Rejected{resubmitOf.rejectedbyrole ? ` by ${resubmitOf.rejectedbyrole}` : ""}
+          </Text>
+          <Text style={styles.rejectionBannerReason}>
+            {resubmitOf.rejectionreason?.trim() || "No reason given."}
+          </Text>
+          <Text style={styles.rejectionBannerHint}>
+            Fix what's needed below, then resubmit — this will replace the rejected request.
+          </Text>
+        </View>
+      )}
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {cards.map((card, index) => {
+        const onBomUnit = bomUnitFor(card);
+        const isMR = card.ticketType === "Material Request";
+        const isWork = card.ticketType === "Work Item";
+        const isReport = card.ticketType === "Report";
+        const notInBom = card.bomItemID === NOT_IN_BOM;
+        const k = (field: string) => `${card.id}:${field}`;
+
+        return (
+          <View key={card.id} style={styles.ticketCard}>
+            <View style={styles.ticketCardHead}>
+              <Text style={styles.ticketCardTitle}>Ticket {index + 1}</Text>
+              {cards.length > 1 && (
+                <Pressable onPress={() => removeCard(card.id)} hitSlop={8}>
+                  <Text style={styles.removeLink}>Remove</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <Dropdown
+              label="Type"
+              value={card.ticketType}
+              open={openKey === k("type")}
+              onToggle={() => setOpenKey(openKey === k("type") ? null : k("type"))}
+              options={TICKET_TYPES.map((t) => ({
+                key: t,
+                label: t,
+                onPress: () => { updateCard(card.id, { ticketType: t }); setOpenKey(null); },
+              }))}
+            />
+
+            {isReport && (
+              <Field
+                label="What's the issue?"
+                value={card.reportText}
+                onChangeText={(v) => updateCard(card.id, { reportText: v })}
+                placeholder="Describe what happened on site and what needs attention"
+                multiline
+              />
+            )}
+
+            {isMR && (
+              <Dropdown
+                label="BOM item"
+                value={
+                  notInBom
+                    ? "Not in the BOM"
+                    : bomItems.find((it) => it.bomItemId === card.bomItemID)?.description ||
+                      (bomLoading ? "Loading items…" : "Select a BOM item")
+                }
+                open={openKey === k("bom")}
+                onToggle={() => setOpenKey(openKey === k("bom") ? null : k("bom"))}
+                options={[
+                  ...bomItems.map((it) => ({
+                    key: it.bomItemId,
+                    label: `${it.description} (${it.unit})`,
+                    onPress: () => { updateCard(card.id, { bomItemID: it.bomItemId }); setOpenKey(null); },
+                  })),
+                  {
+                    key: NOT_IN_BOM,
+                    label: "— Not in the BOM —",
+                    onPress: () => { updateCard(card.id, { bomItemID: NOT_IN_BOM }); setOpenKey(null); },
+                  },
+                ]}
+              />
+            )}
+
+            {((isMR && notInBom) || isWork) && (
+              <Field
+                label="Material"
+                value={card.materialType}
+                onChangeText={(v) => updateCard(card.id, { materialType: v })}
+                placeholder={isWork ? "e.g. Cement" : "e.g. Pendant light"}
+              />
+            )}
+
+            {isMR && notInBom && (
+              <Field
+                label="Why isn't it in the BOM?"
+                value={card.notInBomReason}
+                onChangeText={(v) => updateCard(card.id, { notInBomReason: v })}
+                placeholder="e.g. Additional fixture, billed separately"
+                multiline
+              />
+            )}
+
+            {!isReport && (
+              <View style={styles.qtyRow}>
+                <View style={styles.qtyCol}>
+                  <Field
+                    label="Quantity"
+                    value={card.quantity}
+                    onChangeText={(v) => updateCard(card.id, { quantity: v })}
+                    placeholder="0"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={styles.unitCol}>
+                  {onBomUnit ? (
+                    <View>
+                      <Text style={styles.label}>Unit</Text>
+                      <View style={styles.readonlyBox}><Text style={styles.readonlyText}>{onBomUnit}</Text></View>
+                    </View>
+                  ) : (
+                    <Dropdown
+                      label="Unit"
+                      value={card.unit || "Unit"}
+                      open={openKey === k("unit")}
+                      onToggle={() => setOpenKey(openKey === k("unit") ? null : k("unit"))}
+                      options={UNIT_OPTIONS.map((u) => ({
+                        key: u,
+                        label: u,
+                        onPress: () => { updateCard(card.id, { unit: u }); setOpenKey(null); },
+                      }))}
+                    />
+                  )}
+                </View>
+              </View>
+            )}
+
+            {!isReport && (
+              <Dropdown
+                label="Preferred vendor (optional)"
+                value={card.vendorName || "Not sure yet"}
+                open={openKey === k("vendor")}
+                onToggle={() => setOpenKey(openKey === k("vendor") ? null : k("vendor"))}
+                options={[
+                  { key: "__none__", label: "Not sure yet", onPress: () => { updateCard(card.id, { vendorName: "" }); setOpenKey(null); } },
+                  ...vendors.map((v) => ({
+                    key: v.vendorID,
+                    label: v.vendorName,
+                    onPress: () => { updateCard(card.id, { vendorName: v.vendorName }); setOpenKey(null); },
+                  })),
+                ]}
+              />
+            )}
+
+            {isMR && (
+              <Field
+                label="Requested budget (PHP)"
+                value={card.requestedBudget}
+                onChangeText={(v) => updateCard(card.id, { requestedBudget: v })}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            )}
+          </View>
+        );
+      })}
+
+      {!resubmitOf && (
+        <Pressable onPress={addCard} style={styles.addButton}>
+          <Text style={styles.addButtonText}>＋ Add another ticket</Text>
+        </Pressable>
+      )}
+
+      <Pressable onPress={handleSubmit} disabled={!canSubmit} style={[styles.submitButton, !canSubmit && styles.disabled]}>
+        <Text style={styles.submitText}>
+          {submitting
+            ? resubmitOf ? "Resubmitting…" : "Submitting…"
+            : resubmitOf
+              ? "Resubmit request"
+              : cards.length > 1 ? `Submit ${cards.length} tickets` : "Submit ticket"}
+        </Text>
+      </Pressable>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadTasks(true)} />
-        }
-      >
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.eyebrow}>SITE MANAGER</Text>
-            <Text style={styles.title}>Good morning, {firstName}.</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push("/settings")}
-            style={styles.settingsButton}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Open settings"
-          >
-            <IconSymbol name="gearshape.fill" size={22} color={COLORS.heading} />
-          </Pressable>
-        </View>
-
-        <Text style={styles.subtitle}>Keep your site work moving and up to date.</Text>
-
-        <View style={styles.actionGrid}>
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => router.push("/ticket-request")}
-            accessibilityRole="button"
-            accessibilityLabel="Request ticket"
-          >
-            <Text style={styles.actionIcon}>＋</Text>
-            <Text style={styles.actionLabel}>Ticket</Text>
-          </Pressable>
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => router.push("/(tabs)")}
-            accessibilityRole="button"
-            accessibilityLabel="Submit receipt"
-          >
-            <Text style={styles.actionIcon}>▣</Text>
-            <Text style={styles.actionLabel}>Receipt</Text>
-          </Pressable>
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => loadTasks(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh tasks"
-          >
-            <Text style={styles.actionIcon}>↻</Text>
-            <Text style={styles.actionLabel}>Refresh</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.summaryCard}>
-          <View>
-            <Text style={styles.summaryLabel}>MY TASKS</Text>
-            <Text style={styles.summaryTitle}>Stay on top of today’s work</Text>
-            <Text style={styles.summaryBody}>
-              {loading ? "Checking your assigned tasks…" : `${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} need your attention.`}
-            </Text>
-          </View>
-          <View style={styles.summaryIcon}>
-            <View style={styles.checkLine} />
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Assigned tasks</Text>
-          <Text style={styles.sectionMeta}>{tasks.length} total</Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Couldn’t load tasks</Text>
-            <Text style={styles.errorBody}>{error}</Text>
-            <Pressable onPress={() => loadTasks()} style={styles.retryButton}>
-              <Text style={styles.retryText}>Try again</Text>
-            </Pressable>
-          </View>
-        ) : loading ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator color={COLORS.primary} />
-            <Text style={styles.emptyBody}>Loading assigned tasks…</Text>
-          </View>
-        ) : tasks.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}>
-              <Text style={styles.emptyIconText}>✓</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No tasks to show yet</Text>
-            <Text style={styles.emptyBody}>
-              Tasks assigned to you by your Project Manager will appear here.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.taskList}>
-            {pendingTasks.map((task) => <TaskCard key={task.taskid} task={task} />)}
-            {completedTasks.length > 0 && (
-              <Text style={styles.completedHeading}>Completed</Text>
-            )}
-            {completedTasks.map((task) => <TaskCard key={task.taskid} task={task} />)}
-          </View>
-        )}
-
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Pressable onPress={() => router.back()} style={styles.backButton}><Text style={styles.backText}>‹ Back</Text></Pressable>
+        <Text style={styles.eyebrow}>SITE MANAGER</Text>
+        {children}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function TaskCard({ task }: { task: AssignedTask }) {
-  const completed = task.status === "Completed";
-  // D-04: the SM previously had no way to see that a submission was
-  // flagged — a flag only lived in the log row, never surfaced here.
-  const flagged = task.latestreviewstatus === "Flagged";
-  const dueDate = new Date(task.duedate);
-  const formattedDueDate = Number.isNaN(dueDate.getTime())
-    ? task.duedate
-    : dueDate.toLocaleDateString();
-
+function Dropdown({ label, value, open, disabled, onToggle, options }: { label: string; value: string; open: boolean; disabled?: boolean; onToggle: () => void; options: { key: string; label: string; onPress: () => void }[] }) {
+  const isPlaceholder = value.startsWith("Select") || value === "Unit" || value === "Not sure yet" || value === "Loading items…";
   return (
-    <Pressable
-      onPress={() => router.push(`/site-manager/task/${task.taskid}`)}
-      style={({ pressed }) => [styles.taskCard, pressed && styles.taskCardPressed]}
-    >
-      <View style={styles.taskTopRow}>
-        <Text style={styles.taskStatus}>{completed ? "COMPLETED" : "ASSIGNED"}</Text>
-        <Text style={styles.taskDue}>Due {formattedDueDate}</Text>
-      </View>
-      <Text style={styles.taskName}>{task.taskname}</Text>
-      {task.projectname && (
-        <Text style={styles.taskProject}>{task.projectname} &middot; {task.milestonename}</Text>
-      )}
-      {flagged && (
-        <View style={styles.flagPill}>
-          <Text style={styles.flagPillText}>Flagged — resubmission needed</Text>
+    <View style={styles.dropdownWrap}>
+      <Text style={styles.label}>{label}</Text>
+      <Pressable disabled={disabled} onPress={onToggle} style={[styles.dropdownButton, disabled && styles.dropdownDisabled]}>
+        <Text style={[styles.dropdownValue, !isPlaceholder && styles.dropdownValueSelected]} numberOfLines={1}>{value}</Text>
+        <Text style={styles.chevron}>{open ? "⌃" : "⌄"}</Text>
+      </Pressable>
+      {open && (
+        <View style={styles.dropdownMenu}>
+          {options.length === 0 ? <Text style={styles.noOptions}>No options available</Text> : options.map((option) => (
+            <Pressable key={option.key} onPress={option.onPress} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{option.label}</Text></Pressable>
+          ))}
         </View>
       )}
-      <View style={styles.taskBottomRow}>
-        <Text style={styles.taskProgress}>{Number(task.completionpercentage || 0)}% complete</Text>
-        <View style={[styles.statusPill, completed && styles.statusPillCompleted]}>
-          <Text style={[styles.statusPillText, completed && styles.statusPillTextCompleted]}>
-            {task.status}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
+    </View>
+  );
+}
+
+function Field({ label, value, onChangeText, placeholder, multiline, keyboardType }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean; keyboardType?: "default" | "decimal-pad" }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#A79E8C" multiline={multiline} keyboardType={keyboardType} style={[styles.input, multiline && styles.multilineInput]} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
-  content: { padding: 20, paddingBottom: 36 },
-  headerRow: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
-  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 },
-  title: { color: "#1A1A1A", fontSize: 25, fontWeight: "800", letterSpacing: -0.4, maxWidth: 250 },
-  subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10 },
-  settingsButton: { borderColor: "#D8CDBD", borderRadius: 10, borderWidth: 1, padding: 7 },
-  summaryCard: { backgroundColor: "#1A1A1A", borderRadius: 18, flexDirection: "row", justifyContent: "space-between", marginTop: 24, minHeight: 160, overflow: "hidden", padding: 20 },
-  summaryLabel: { color: "#D8C7AA", fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
-  summaryTitle: { color: "#FFFFFF", fontSize: 21, fontWeight: "800", lineHeight: 27, marginTop: 12, maxWidth: 230 },
-  summaryBody: { color: "#C9C0B3", fontSize: 13, lineHeight: 19, marginTop: 10, maxWidth: 230 },
-  summaryIcon: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 28, height: 56, justifyContent: "center", width: 56 },
-  checkLine: { borderBottomColor: "#FFFFFF", borderBottomWidth: 3, borderRightColor: "#FFFFFF", borderRightWidth: 3, height: 19, transform: [{ rotate: "45deg" }], width: 11 },
-  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 26 },
-  sectionTitle: { color: COLORS.heading, fontSize: 17, fontWeight: "800" },
-  sectionMeta: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
-  taskList: { gap: 10 },
-  taskCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, padding: 16 },
-  taskCardPressed: { opacity: 0.78 },
-  taskTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  taskStatus: { color: COLORS.primary, fontSize: 10, fontWeight: "800", letterSpacing: 1.1 },
-  taskDue: { color: COLORS.muted, fontSize: 12 },
-  taskName: { color: COLORS.heading, fontSize: 16, fontWeight: "800", lineHeight: 22, marginTop: 10 },
-  taskProject: { color: COLORS.muted, fontSize: 12, fontWeight: "600", marginTop: 4 },
-  flagPill: { alignSelf: "flex-start", backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 10, borderWidth: 1, marginTop: 10, paddingHorizontal: 10, paddingVertical: 5 },
-  flagPillText: { color: "#B42318", fontSize: 11, fontWeight: "800" },
-  taskBottomRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
-  taskProgress: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
-  statusPill: { backgroundColor: "#FFF0E6", borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5 },
-  statusPillCompleted: { backgroundColor: COLORS.successBg },
-  statusPillText: { color: COLORS.primary, fontSize: 11, fontWeight: "700" },
-  statusPillTextCompleted: { color: COLORS.success },
-  completedHeading: { color: COLORS.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, marginTop: 10, textTransform: "uppercase" },
-  emptyCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, paddingHorizontal: 24, paddingVertical: 28 },
-  emptyIcon: { alignItems: "center", backgroundColor: COLORS.successBg, borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
-  emptyIconText: { color: COLORS.success, fontSize: 23, fontWeight: "800" },
-  emptyTitle: { color: COLORS.heading, fontSize: 16, fontWeight: "800", marginTop: 14 },
-  emptyBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7, textAlign: "center" },
-  errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, padding: 16 },
-  errorTitle: { color: "#B42318", fontSize: 15, fontWeight: "800" },
-  errorBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
-  retryButton: { alignSelf: "flex-start", backgroundColor: COLORS.primary, borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 9 },
-  retryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
-  actionGrid: { flexDirection: "row", gap: 10, marginTop: 18 },
-  actionCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flex: 1, minHeight: 78, justifyContent: "center" },
-  actionIcon: { color: COLORS.primary, fontSize: 24, fontWeight: "700" },
-  actionLabel: { color: COLORS.heading, fontSize: 13, fontWeight: "700", marginTop: 8 },
+  safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
+  content: { padding: 20, paddingBottom: 48 },
+  backButton: { alignSelf: "flex-start", marginBottom: 20 },
+  backText: { color: COLORS.primary, fontSize: 14, fontWeight: "700" },
+  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  title: { color: COLORS.heading, fontSize: 27, fontWeight: "800", marginTop: 7 },
+  subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 6 },
+  errorText: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 12, borderWidth: 1, color: "#B42318", lineHeight: 19, marginTop: 14, padding: 12 },
+  rejectionBanner: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 14 },
+  rejectionBannerLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
+  rejectionBannerReason: { color: COLORS.heading, fontSize: 14, fontWeight: "600", lineHeight: 20 },
+  rejectionBannerHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
+  loadingCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, gap: 10, marginTop: 18, padding: 24 },
+  muted: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
+
+  // Project gate
+  projectChoice: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 16, paddingVertical: 18 },
+  projectChoiceName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "700" },
+
+  // Selected-project bar
+  projectBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12, marginTop: 14 },
+  projectBarName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "700" },
+  changeLink: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
+
+  // Ticket card
+  ticketCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
+  ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
+  removeLink: { color: "#B42318", fontSize: 13, fontWeight: "700" },
+
+  qtyRow: { flexDirection: "row", gap: 12 },
+  qtyCol: { flex: 1 },
+  unitCol: { width: 120 },
+  readonlyBox: { backgroundColor: "#F1E9DD", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, justifyContent: "center", minHeight: 47, paddingHorizontal: 12, marginTop: 0 },
+  readonlyText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
+
+  label: { color: COLORS.muted, fontSize: 12, fontWeight: "700", marginBottom: 7, marginTop: 12 },
+  dropdownWrap: { zIndex: 2 },
+  dropdownButton: { alignItems: "center", backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 47, paddingHorizontal: 12 },
+  dropdownDisabled: { opacity: 0.55 },
+  dropdownValue: { color: COLORS.muted, flex: 1, fontSize: 14 },
+  dropdownValueSelected: { color: COLORS.heading, fontWeight: "600" },
+  chevron: { color: COLORS.primary, fontSize: 19, fontWeight: "800", marginLeft: 8 },
+  dropdownMenu: { backgroundColor: "#FFFDFA", borderColor: "#D8CDBD", borderRadius: 12, borderWidth: 1, elevation: 5, marginTop: 5, maxHeight: 260, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 6 },
+  dropdownOption: { borderBottomColor: "#EFE7DC", borderBottomWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
+  dropdownOptionText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
+  noOptions: { color: COLORS.muted, fontSize: 13, padding: 13 },
+  field: { marginTop: 2 },
+  input: { backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11 },
+  multilineInput: { minHeight: 84, textAlignVertical: "top" },
+
+  addButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderStyle: "dashed", borderWidth: 1.5, marginTop: 16, paddingVertical: 14 },
+  addButtonText: { color: COLORS.primary, fontSize: 14, fontWeight: "800" },
+  submitButton: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 14, marginTop: 20, paddingVertical: 15 },
+  disabled: { opacity: 0.6 },
+  submitText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
 });

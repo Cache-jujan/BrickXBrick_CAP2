@@ -4,11 +4,17 @@
 // on them. This moves every open task to the new SM in the same transaction
 // as the project update.
 //
-// tasks.assignedTo is NOT NULL, so clearing the SM (siteManagerId: null)
-// while open tasks exist would silently leave them with the outgoing SM —
-// that's rejected with 409 instead. Completed tasks keep their original
-// assignee; the work and photo evidence really are theirs, and the PM
-// review route doesn't key off current assignment anyway.
+// #5: a Planning-phase milestone's tasks are never assigned to a Site
+// Manager at all (assignedTo is NULL; they're "Handled by: GM/PM" instead —
+// see tasks_owner_present_check in migration 035), so they must never be
+// counted or touched here. Scoped to Construction-phase milestones only,
+// which is exactly the set of tasks that can ever have assignedTo set.
+//
+// Clearing the SM (siteManagerId: null) while open Construction tasks exist
+// would silently leave them with the outgoing SM — that's rejected with 409
+// instead. Completed tasks keep their original assignee; the work and photo
+// evidence really are theirs, and the PM review route doesn't key off
+// current assignment anyway.
 //
 // `client` must expose .query(text, params) — pass the transaction client
 // from withTransaction.
@@ -18,7 +24,7 @@ async function countOpenTasks(client, projectId) {
         `SELECT COUNT(*)::int AS count
            FROM tasks t
            JOIN milestones m ON m.milestoneId = t.milestoneId
-          WHERE m.projectId = $1 AND t.status <> 'Completed'`,
+          WHERE m.projectId = $1 AND m.phase = 'Construction' AND t.status <> 'Completed'`,
         [projectId]
     );
     return result.rows[0].count;
@@ -42,6 +48,7 @@ async function reassignSiteManager(client, { projectId, siteManagerId }) {
               FROM milestones m
              WHERE m.milestoneId = t.milestoneId
                AND m.projectId = $2
+               AND m.phase = 'Construction'
                AND t.status <> 'Completed'`,
             [siteManagerId, projectId]
         );
