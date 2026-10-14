@@ -8,19 +8,24 @@ type Category = "Materials" | "Equipment" | "Other";
 export type DraftMode = "single" | "split";
 // scanID: the background scan this draft came from, so it can be cleared
 // from "Scanned receipts" once the expense is submitted.
+// resubmit: set when the draft is a Rejected expense being corrected, so the
+// last step updates that expense instead of creating a new one.
+type Resubmit = { expenseID: string; reason: string | null };
 type ExpenseDraft = {
   mode: DraftMode; ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult | null;
-  category: Category | null; notes: string; scanID: string | null;
+  category: Category | null; notes: string; scanID: string | null; resubmit: Resubmit | null;
 };
 // Everything needed to pick a scanned receipt back up (see lib/receipt-scans.ts).
 type ResumeScan = { scanID: string; mode: DraftMode; ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult | null };
+type ResubmitStart = Resubmit & { ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult; category: Category };
 type Ctx = {
   draft: ExpenseDraft; setTicket: (t: SelectedTicket) => void; setFile: (f: FileState) => void;
   setOcrResult: (r: OcrResult) => void; setCategory: (c: Category) => void; setNotes: (n: string) => void; reset: () => void;
   startSplit: () => void; setScanID: (id: string | null) => void; resumeScan: (scan: ResumeScan) => void;
+  startResubmit: (draft: ResubmitStart) => void;
 };
 
-const EMPTY: ExpenseDraft = { mode: "single", ticket: null, file: null, ocrResult: null, category: null, notes: "", scanID: null };
+const EMPTY: ExpenseDraft = { mode: "single", ticket: null, file: null, ocrResult: null, category: null, notes: "", scanID: null, resubmit: null };
 const ExpenseDraftContext = createContext<Ctx | null>(null);
 
 export function ExpenseDraftProvider({ children }: { children: ReactNode }) {
@@ -39,6 +44,9 @@ export function ExpenseDraftProvider({ children }: { children: ReactNode }) {
       setScanID: (scanID) => setDraft((d) => ({ ...d, scanID })),
       // Replaces the whole draft: a resumed scan never mixes with the old one.
       resumeScan: ({ scanID, mode, ticket, file, ocrResult }) => setDraft({ ...EMPTY, scanID, mode, ticket, file, ocrResult }),
+      // A Rejected expense, loaded for correction (always a single-ticket receipt).
+      startResubmit: ({ expenseID, reason, ticket, file, ocrResult, category }) =>
+        setDraft({ ...EMPTY, mode: "single", ticket, file, ocrResult, category, resubmit: { expenseID, reason } }),
     }}>
       {children}
     </ExpenseDraftContext.Provider>

@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 
 import { API_URL, authHeaders, getAuthToken } from "../constants/api";
+import type { BackendLineItem } from "./expense-types";
 
 export type Ticket = {
   ticketid: string;
@@ -259,6 +260,50 @@ export async function submitExpense(body: ExpenseSubmission) {
     );
   }
 
+  return data;
+}
+
+// ---- Rejected expenses: correct and resubmit --------------------------------
+
+// One row of GET /api/expenses/mine. amount is a string (Postgres numeric) and
+// receiptDate a full timestamp (Postgres DATE read as midnight server time).
+export type MyExpense = {
+  expenseID: string;
+  ticketID: string | null;
+  projectID: string;
+  vendorName: string | null;
+  amount: string | number;
+  receiptDate: string | null;
+  category: "Materials" | "Equipment" | "Other";
+  status: "Pending" | "Approved" | "Rejected";
+  rejectionReason: string | null;
+  submittedAt: string;
+  receiptImageURL: string;
+  birNumber: string | null;
+  tin: string | null;
+  birPermitNumber: string | null;
+  lineItems: BackendLineItem[] | null;
+};
+
+export async function fetchMyExpenses(): Promise<MyExpense[]> {
+  const res = await fetch(`${API_URL}/api/expenses/mine`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Failed to load your expenses (${res.status})`);
+  return res.json();
+}
+
+// The receipt image, ticket and project stay as they were; only the
+// correctable fields are sent.
+export type ExpenseResubmission = Omit<ExpenseSubmission, "ticketID" | "receiptImageURL">;
+
+export async function resubmitExpense(expenseID: string, body: ExpenseResubmission) {
+  const res = await fetch(`${API_URL}/api/expenses/${expenseID}/resubmit`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to resubmit expense (${res.status})`);
   return data;
 }
 

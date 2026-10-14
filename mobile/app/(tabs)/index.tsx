@@ -15,6 +15,8 @@ import {
   fetchAllAssignedTickets,
   fetchActiveProjects,
   fetchOpenRequests,
+  fetchMyExpenses,
+  type MyExpense,
   type OpenRequest,
   type Ticket,
   type Project,
@@ -24,6 +26,8 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { ScannedReceipts } from "@/components/scanned-receipts";
+import { RejectedExpenses } from "@/components/rejected-expenses";
+import { fileFromExpense, ocrResultFromExpense } from "@/lib/resubmit";
 import { dismissScan, fetchScans, type ReceiptScan } from "@/lib/receipt-scans";
 
 // While a receipt is still being read, refresh the list this often.
@@ -43,7 +47,7 @@ function toBucket(
 }
 
 export default function HomeScreen() {
-  const { setTicket, reset, startSplit } = useExpenseDraft();
+  const { setTicket, reset, startSplit, startResubmit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -55,6 +59,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
   const [scans, setScans] = useState<ReceiptScan[]>([]);
+  const [rejected, setRejected] = useState<MyExpense[]>([]);
   const [focused, setFocused] = useState(false);
 
   // Background scans. A failure here must not hide the tickets.
@@ -90,6 +95,12 @@ export default function HomeScreen() {
           setOpenRequests(await fetchOpenRequests());
         } catch {
           setOpenRequests([]);
+        }
+        // Rejected expenses to correct and resubmit. A failure keeps the last list.
+        try {
+          setRejected((await fetchMyExpenses()).filter((e) => e.status === "Rejected"));
+        } catch {
+          // Shown again on the next refresh.
         }
       }
     } catch (err) {
@@ -180,6 +191,29 @@ export default function HomeScreen() {
     router.push("/expense/capture");
   }
 
+  // A Rejected expense goes back through the review screen, then updates the
+  // same expense (PATCH .../resubmit) instead of creating a new one.
+  function fixRejected(expense: MyExpense) {
+    const ticket = tickets.find((t) => t.ticketid === expense.ticketID);
+    startResubmit({
+      expenseID: expense.expenseID,
+      reason: expense.rejectionReason,
+      ticket: ticket
+        ? {
+            ticketId: ticket.ticketid,
+            projectId: ticket.projectid,
+            projectName: projectsById[ticket.projectid]?.name ?? "Unknown project",
+            subject: ticket.subject,
+            budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
+          }
+        : null,
+      file: fileFromExpense(expense),
+      ocrResult: ocrResultFromExpense(expense),
+      category: expense.category,
+    });
+    router.push("/expense/review");
+  }
+
   function openTicket(ticket: Ticket) {
     reset();
 
@@ -238,6 +272,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <>
+          {isSiteManager ? null : <RejectedExpenses expenses={rejected} onFix={fixRejected} />}
           <ScannedReceipts scans={scans} onDismiss={removeScan} />
           {isSiteManager ? (
             rejected.length > 0 ? (

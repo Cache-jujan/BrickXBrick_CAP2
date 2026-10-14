@@ -1,0 +1,57 @@
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { COLORS } from "@/constants/expense-flow-colors";
+import type { MyExpense } from "@/lib/api";
+import { formatPeso } from "@/lib/money";
+
+const RED = "#C1121F";
+const RED_BG = "#FEE2E2";
+
+// Expenses the Project Manager rejected. Tapping one reopens it on the review
+// screen with the receipt's values, ready to correct and resubmit. Renders
+// nothing when there are none.
+export function RejectedExpenses({ expenses, onFix }: { expenses: MyExpense[]; onFix: (expense: MyExpense) => void }) {
+  if (expenses.length === 0) return null;
+
+  return (
+    <View style={styles.box}>
+      <Text style={styles.title}>Rejected: fix and resubmit</Text>
+      {expenses.map((expense) => (
+        <Pressable
+          key={expense.expenseID}
+          onPress={() => onFix(expense)}
+          style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`${expense.vendorName ?? "Receipt"}, ${formatPeso(expense.amount)}, rejected. Fix and resubmit.`}
+        >
+          <View style={styles.flex}>
+            <Text style={styles.rowTitle} numberOfLines={1}>
+              {expense.vendorName ?? "Receipt"} · {formatPeso(expense.amount)}
+            </Text>
+            <Text style={styles.reason} numberOfLines={3}>
+              {expense.rejectionReason ? `"${expense.rejectionReason}"` : "No reason was given."}
+            </Text>
+          </View>
+          <View style={styles.pill}>
+            <IconSymbol name="exclamationmark.triangle.fill" size={14} color={RED} />
+            <Text style={styles.pillText}>Fix ›</Text>
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  box: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: RED, borderRadius: 14, padding: 12, marginBottom: 12, gap: 8 },
+  title: { fontSize: 15, fontWeight: "800", color: RED },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
+  pressed: { opacity: 0.7 },
+  flex: { flex: 1 },
+  rowTitle: { fontSize: 14, fontWeight: "700", color: COLORS.heading },
+  reason: { fontSize: 12, color: COLORS.muted, marginTop: 2, fontStyle: "italic" },
+  pill: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10, backgroundColor: RED_BG },
+  pillText: { fontSize: 12, fontWeight: "700", color: RED },
+});
