@@ -2,11 +2,14 @@ import React, { useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
+import * as Crypto from "expo-crypto";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { dismissScan } from "@/lib/receipt-scans";
 import { getSession } from "@/lib/auth";
 import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
+import { queueExpense } from "@/lib/sync/db";
+import { useNetwork } from "@/lib/sync/network-context";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
@@ -16,6 +19,7 @@ const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 
 export default function LinkScreen() {
   const { draft, setCategory: setDraftCategory, setNotes: setDraftNotes, reset } = useExpenseDraft();
+  const { isOnline, refreshPendingCount } = useNetwork();
   const { ticket, ocrResult } = draft;
   const [category, setCategory] = useState<(typeof CATEGORIES)[number] | null>(draft.category as any);
   const [notes, setNotes] = useState(draft.notes);
@@ -45,9 +49,44 @@ export default function LinkScreen() {
       return Alert.alert("No line items", "Add at least one item on the Review screen.");
     }
 
+    // Resubmitting a Rejected expense needs the server (it edits the existing row),
+    // so it can't be queued offline.
+    if (!isOnline && draft.resubmit) {
+      return Alert.alert("You're offline", "Reconnect to resubmit a rejected expense.");
+    }
+
     busyRef.current = true;
     setSubmitting(true);
     try {
+      // F10 — offline: queue the expense in SQLite instead of POSTing.
+      // The server (POST /api/sync) runs the full validation + screening on reconnect.
+      if (!isOnline) {
+        if (!ticket) throw new Error("This receipt isn't linked to a request. Open the request and try again.");
+
+        const queued = queueExpense(Crypto.randomUUID(), {
+          ticketID: ticket.ticketId,
+          vendorName: ocrResult.vendorName,
+          amount: amountNum,
+          receiptDate: ocrResult.receiptDate,
+          category,
+          receiptImageURL: ocrResult.receiptImageURL,
+          birNumber: ocrResult.birNumber,
+          tin: ocrResult.tin,
+          birPermitNumber: ocrResult.birPermitNumber,
+          lineItems,
+        });
+        if (!queued) {
+          throw new Error("Offline queue is full (100 expenses). Reconnect to sync before saving more.");
+        }
+
+        refreshPendingCount();
+        if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
+        Alert.alert("Saved offline", "Your expense will be submitted automatically when you're back online.");
+        router.replace("/");
+        reset();
+        return;
+      }
+
       // Correcting a Rejected expense: update it in place. The receipt, ticket
       // and project stay as they were, and the server screens it again.
       if (draft.resubmit) {
@@ -109,6 +148,14 @@ export default function LinkScreen() {
 
   const itemCount = (ocrResult.lineItems ?? []).length;
 
+  const submitLabel = !category
+    ? "Pick a category"
+    : draft.resubmit
+      ? "Resubmit for approval"
+      : isOnline
+        ? "Submit for approval"
+        : "Save offline";
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader title={draft.resubmit ? "Resubmit expense" : "Link & submit"} caption="Step 3 of 3" />
@@ -147,12 +194,12 @@ export default function LinkScreen() {
             <Text style={styles.summaryAmount}>{formatPeso(ocrResult.amount)}</Text>
           </View>
           <Pressable style={[styles.submitButton, (!category || submitting) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={submitting} accessibilityRole="button">
-            <Text style={styles.submitButtonText}>{category ? (draft.resubmit ? "Resubmit for approval" : "Submit for approval") : "Pick a category"}</Text>
+            <Text style={styles.submitButtonText}>{submitLabel}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
 
-      <LoadingOverlay visible={submitting} message={draft.resubmit ? "Resubmitting expense…" : "Submitting expense…"} detail="Running the screening checks." />
+      <LoadingOverlay visible={submitting} message={draft.resubmit ? "Resubmitting expense…" : isOnline ? "Submitting expense…" : "Saving offline…"} detail={isOnline ? "Running the screening checks." : "Queuing on this device."} />
     </SafeAreaView>
   );
 }
