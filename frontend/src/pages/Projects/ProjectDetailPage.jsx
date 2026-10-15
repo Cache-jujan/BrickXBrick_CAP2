@@ -444,7 +444,15 @@ export function ProjectDetailPage() {
   const activationChecks = [
     { label: "Project Manager assigned", done: Boolean(project.projectmanagerid) },
     { label: "Site Manager assigned", done: hasSiteManager },
-    { label: "Bill of Materials approved", done: bomApproved },
+    {
+      label:
+        bomApproved && bom?.clientAgreedOn
+          ? `Bill of Materials approved · client agreed on ${new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" }).format(
+              new Date(`${bom.clientAgreedOn}T00:00:00`)
+            )}${bom.clientAgreedBy ? ` (${bom.clientAgreedBy})` : ""}`
+          : "Bill of Materials approved, with the client's agreement recorded",
+      done: bomApproved,
+    },
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
 

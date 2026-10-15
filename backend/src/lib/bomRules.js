@@ -258,6 +258,43 @@ function validateBomPayload(body) {
 }
 
 /** What must be true before the GM can approve. Returns a list of problems. */
+// Today's date in the Philippines (YYYY-MM-DD), whatever timezone the server runs in.
+function manilaToday(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(now);
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Adviser item 5: the client agrees to the BOM outside the system; approving
+ * it records when and with whom. Returns { clientAgreedOn, clientAgreedBy,
+ * agreementRef } or throws-ready errors [{ field, message }].
+ */
+function validateClientAgreement(body, today = manilaToday()) {
+  const errors = [];
+  const on = typeof body?.clientAgreedOn === "string" ? body.clientAgreedOn.trim() : "";
+  const by = typeof body?.clientAgreedBy === "string" ? body.clientAgreedBy.trim().replace(/\s+/g, " ") : "";
+  const refRaw = typeof body?.agreementRef === "string" ? body.agreementRef.trim() : "";
+
+  const parsed = ISO_DATE_RE.test(on) ? new Date(`${on}T00:00:00Z`) : null;
+  if (!on) {
+    errors.push({ field: "clientAgreedOn", message: "Enter the date the client agreed to the BOM" });
+  } else if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== on) {
+    errors.push({ field: "clientAgreedOn", message: "The agreement date isn't a real date" });
+  } else if (on > today) {
+    errors.push({ field: "clientAgreedOn", message: "The agreement date can't be in the future" });
+  }
+  if (by.length < 2) {
+    errors.push({ field: "clientAgreedBy", message: "Enter who agreed for the client (their name)" });
+  } else if (by.length > 150) {
+    errors.push({ field: "clientAgreedBy", message: "The name is too long (150 characters max)" });
+  }
+  if (refRaw.length > 100) {
+    errors.push({ field: "agreementRef", message: "The reference is too long (100 characters max)" });
+  }
+  return { errors, value: { clientAgreedOn: on, clientAgreedBy: by, agreementRef: refRaw || null } };
+}
+
 function approvalProblems(sections) {
   const problems = [];
   const totals = bomTotals(sections);
@@ -274,6 +311,8 @@ module.exports = {
   bomTotals,
   buildBomWarnings,
   validateBomPayload,
+  validateClientAgreement,
+  manilaToday,
   approvalProblems,
   familyKey,
 };

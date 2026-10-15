@@ -23,6 +23,20 @@ import "./BomPage.css";
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
 const QTY = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 });
 const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const DAY = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" });
+const fmtDay = (iso) => (iso ? DAY.format(new Date(`${iso}T00:00:00`)) : "");
+
+// Today in the Philippines as YYYY-MM-DD (the agreement date can't be later).
+function manilaToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
+}
+
+// "Client agreed on Oct 3, 2026 (Maria Santos, Contract #2026-014)"
+function agreementText(bom) {
+  if (!bom?.clientAgreedOn) return "";
+  const who = [bom.clientAgreedBy, bom.agreementRef].filter(Boolean).join(", ");
+  return `Client agreed on ${fmtDay(bom.clientAgreedOn)}${who ? ` (${who})` : ""}`;
+}
 const LABOR_OPTIONS = [
   { value: "rate", label: "% of materials" },
   { value: "amount", label: "Fixed amount" },
@@ -135,6 +149,7 @@ export function BomPage() {
   const [dialog, setDialog] = useState(null); // "approve" | "reopen" | "delete" | "replace"
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
+  const [agreement, setAgreement] = useState({ clientAgreedOn: "", clientAgreedBy: "", agreementRef: "" });
   const fileInput = useRef(null);
 
   const applyResponse = useCallback((resp) => {
@@ -275,7 +290,11 @@ export function BomPage() {
 
   async function handleApprove() {
     await run("approve", async () => {
-      const resp = await approveBom(id, confirmChecked);
+      const resp = await approveBom(id, confirmChecked, {
+        clientAgreedOn: agreement.clientAgreedOn,
+        clientAgreedBy: agreement.clientAgreedBy.trim(),
+        agreementRef: agreement.agreementRef.trim() || undefined,
+      });
       applyResponse(resp);
       setProject((p) => ({ ...p, budget: resp.projectBudget, bomstatus: "Approved" }));
       setImportReport(null);
@@ -309,6 +328,7 @@ export function BomPage() {
 
   function openDialog(kind) {
     setActionError("");
+    setFieldErrors({});
     setConfirmChecked(false);
     setDialog(kind);
   }
@@ -398,6 +418,7 @@ export function BomPage() {
 
       {bom?.status === "Approved" && (
         <p className="bom-status-line">
+          {bom.clientAgreedOn && <strong className="bom-agreement">{agreementText(bom)}.</strong>}{" "}
           Approved{bom.approvedByName ? ` by ${bom.approvedByName}` : ""} on {DATETIME.format(new Date(bom.approvedAt))}.
           It is locked; material requests use these items.
         </p>
@@ -411,8 +432,8 @@ export function BomPage() {
       )}
       {bom?.status === "Draft" && !bom.revisionNote && isGM && (
         <p className="bom-status-line">
-          Check every section against the signed and sealed copy, correct anything that differs, then approve.
-          The project can be activated once the BOM is approved.
+          Check every section against the copy the client agreed to, correct anything that differs, then approve
+          and record when and with whom the client agreed. The project can be activated once the BOM is approved.
         </p>
       )}
 
@@ -732,6 +753,38 @@ export function BomPage() {
                     ? ` (now ${PESO.format(Number(data.projectBudget))})`
                     : ""}.
                 </p>
+                <p className="bom-agreement-intro">
+                  The client agrees to the BOM outside the system (on paper, at a meeting or by email).
+                  Record it here; purchases can only start after this.
+                </p>
+                <div className="bom-agreement-fields">
+                  <Field
+                    label="Date the client agreed"
+                    required
+                    type="date"
+                    max={manilaToday()}
+                    value={agreement.clientAgreedOn}
+                    error={fieldErrors.clientAgreedOn}
+                    onChange={(e) => setAgreement((a) => ({ ...a, clientAgreedOn: e.target.value }))}
+                  />
+                  <Field
+                    label="Who agreed"
+                    required
+                    placeholder="Client's name, e.g. Maria Santos"
+                    maxLength={150}
+                    value={agreement.clientAgreedBy}
+                    error={fieldErrors.clientAgreedBy}
+                    onChange={(e) => setAgreement((a) => ({ ...a, clientAgreedBy: e.target.value }))}
+                  />
+                  <Field
+                    label="Reference (optional)"
+                    placeholder="e.g. Contract #2026-014"
+                    maxLength={100}
+                    value={agreement.agreementRef}
+                    error={fieldErrors.agreementRef}
+                    onChange={(e) => setAgreement((a) => ({ ...a, agreementRef: e.target.value }))}
+                  />
+                </div>
                 {warnings.length > 0 && (
                   <>
                     <ul className="bom-list bom-dialog-list">
@@ -773,7 +826,15 @@ export function BomPage() {
             <div className="modal-actions">
               <Button variant="secondary" onClick={() => setDialog(null)} disabled={Boolean(busy)}>Back</Button>
               {dialog === "approve" && (
-                <Button onClick={handleApprove} disabled={Boolean(busy) || (warnings.length > 0 && !confirmChecked)}>
+                <Button
+                  onClick={handleApprove}
+                  disabled={
+                    Boolean(busy) ||
+                    (warnings.length > 0 && !confirmChecked) ||
+                    !agreement.clientAgreedOn ||
+                    agreement.clientAgreedBy.trim().length < 2
+                  }
+                >
                   {busy === "approve" ? "Approving…" : "Approve"}
                 </Button>
               )}

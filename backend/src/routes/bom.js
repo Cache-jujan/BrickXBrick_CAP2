@@ -7,7 +7,9 @@
 //   GET    /          GM, owning PM     the BOM with totals and review warnings
 //   POST   /import    GM                upload the .xlsx; replaces the Draft
 //   PUT    /          GM                save the edited Draft (or start one by hand)
-//   PATCH  /approve   GM                lock it; the project budget becomes the signed
+//   PATCH  /approve   GM                body { clientAgreedOn, clientAgreedBy, agreementRef? }:
+//                                      record the client's agreement (adviser item 5) and
+//                                      lock it; the project budget becomes the signed
 //                                      total from the file (or the computed total)
 //   PATCH  /reopen    GM                back to Draft for a correction, with a reason
 //   DELETE /          GM                remove a Draft BOM (e.g. the wrong file)
@@ -29,6 +31,7 @@ const {
   buildBomWarnings,
   validateBomPayload,
   approvalProblems,
+  validateClientAgreement,
   round2,
 } = require("../lib/bomRules");
 
@@ -68,6 +71,14 @@ function sendError(res, err) {
   }
   if (!err.status) console.error("BOM route error:", err);
   res.status(err.status || 500).json({ error: err.status ? err.message : "Internal server error", ...(err.details || {}) });
+}
+
+// DATE columns come back as JS Dates at local midnight; send plain YYYY-MM-DD.
+function isoDay(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value.slice(0, 10);
+  const pad = (x) => String(x).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
 const runnerOf = (target) => (typeof target === "function" ? target : (t, p) => target.query(t, p));
@@ -172,6 +183,10 @@ async function buildResponse(target, project) {
       updatedAt: bom.updatedat,
       approvedAt: bom.approvedat,
       approvedByName: bom.approvedbyname,
+      // adviser item 5: the client's agreement, recorded at approval
+      clientAgreedOn: isoDay(bom.clientagreedon),
+      clientAgreedBy: bom.clientagreedby ?? null,
+      agreementRef: bom.agreementref ?? null,
       reopenedAt: bom.reopenedat,
       reopenedByName: bom.reopenedbyname,
       revisionNote: bom.revisionnote,
@@ -397,6 +412,14 @@ router.put("/", requireRole(GM), async (req, res) => {
 // PATCH /approve — body { confirmWarnings: true } when there are warnings.
 router.patch("/approve", requireRole(GM), async (req, res) => {
   try {
+    // Adviser item 5: record when and with whom the client agreed (the agreement
+    // itself happens outside the system). Checked first so the dialog can show it.
+    const agreement = validateClientAgreement(req.body);
+    if (agreement.errors.length) {
+      throw httpError(400, agreement.errors[0].message, { errors: agreement.errors });
+    }
+    const { clientAgreedOn, clientAgreedBy, agreementRef } = agreement.value;
+
     const result = await withTransaction(async (client) => {
       const project = await loadProject(client, req.params.projectId, { lock: true });
       assertProjectEditable(project);
@@ -418,9 +441,10 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
       const totals = bomTotals(sections);
       await client.query(
         `UPDATE boms SET status = 'Approved', approvedby = $2::uuid, approvedat = NOW(),
+                         clientagreedon = $3::date, clientagreedby = $4, agreementref = $5,
                          updatedby = $2::uuid, updatedat = NOW()
           WHERE bomid = $1::uuid`,
-        [bom.bomid, req.user.id]
+        [bom.bomid, req.user.id, clientAgreedOn, clientAgreedBy, agreementRef]
       );
       // Client: the price given to the client is the BOM total, i.e. the signed
       // TOTAL PROJECT COST. Use the file's stated total when there is one
@@ -465,6 +489,7 @@ router.patch("/reopen", requireRole(GM), async (req, res) => {
 
       await client.query(
         `UPDATE boms SET status = 'Draft', reopenedby = $2::uuid, reopenedat = NOW(), revisionnote = $3,
+                         clientagreedon = NULL, clientagreedby = NULL, agreementref = NULL,
                          updatedby = $2::uuid, updatedat = NOW()
           WHERE bomid = $1::uuid`,
         [bom.bomid, req.user.id, reason]

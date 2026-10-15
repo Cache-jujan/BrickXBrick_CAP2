@@ -345,7 +345,10 @@ async function assertProjectActive(runQuery, projectId, action = "This action") 
   if (result.rowCount === 0) throw httpError(404, `Project ${projectId} not found`);
   const { status } = result.rows[0];
   if (status !== "Active") {
-    throw httpError(409, `${action} requires an Active project; this project is ${status}`);
+    throw httpError(
+      409,
+      `${action} isn't allowed yet: purchases start after the client agrees to the BOM and the project is activated (this project is ${status}).`
+    );
   }
 }
 
