@@ -14,7 +14,7 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { login } from "@/lib/auth";
+import { login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
@@ -37,7 +37,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       const session = await login(email, password);
-      router.replace(session.user.role === "Site Manager" ? "/site-manager" : "/(tabs)");
+      // Terms of Use / Privacy Notice first if not yet accepted (app/terms.tsx).
+      router.replace(nextRouteAfterLogin(session.user));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in right now.");
     } finally {

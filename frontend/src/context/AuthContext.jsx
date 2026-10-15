@@ -53,6 +53,12 @@ export function AuthProvider({ children }) {
     return result;
   }
 
+  // Called after the user accepts the Terms of Use / Privacy Notice
+  // (pages/Legal/TermsAcceptPage.jsx), so the app opens without a reload.
+  function markTermsAccepted(version) {
+    setUser((current) => (current ? { ...current, termsAccepted: true, termsVersion: version } : current));
+  }
+
   function logout() {
     localStorage.removeItem("bxb_token");
     setUser(null);
@@ -60,7 +66,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, status, login, logout }),
+    () => ({ user, status, login, logout, markTermsAccepted }),
     [user, status]
   );
 
