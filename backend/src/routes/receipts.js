@@ -71,12 +71,12 @@ router.post("/scan", requireRole(...SCAN_ROLES), upload.single("file"), async (r
     // re-uploading.
     const receiptImageURL = await storeReceiptImage(req.file.buffer, req.file.mimetype);
     const draft = await buildScanDraft(req.file.buffer, req.file.mimetype, receiptImageURL);
-    // Saved so F9 Layer 5 can tell what the submitter changed. Without it
+    // Saved so F9 can tell what the submitter changed. Without it
     // the expense is flagged Manual_Entry, so a failure here is logged, not fatal.
     try {
       await scans.recordScan({ userID: req.user.id, receiptImageURL, mimeType: req.file.mimetype, draft });
     } catch (err) {
-      console.error("Could not save the scan result for Layer 5:", err.message);
+      console.error("Could not save the scan result for the scan comparison:", err.message);
     }
     res.json(draft);
   } catch (err) {

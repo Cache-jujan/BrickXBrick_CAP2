@@ -1,4 +1,4 @@
-// scanComparison.js — F9 Layer 5. Compares a submitted expense with what the
+// scanComparison.js — F9. Compares a submitted expense with what the
 // server's own OCR read from the same receipt image (ReceiptScans.result).
 //
 // Why: the review screen lets the submitter correct every field, which is

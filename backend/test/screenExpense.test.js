@@ -109,7 +109,7 @@ test("a line that only mentions an adjustment mid-name is not flagged", async ()
   assert.deepEqual(result.flagTypes, []);
 });
 
-// ---- Layer 5: the expense against the server's own scan ---------------------
+// ---- scan comparison: the expense against the server's own scan ---------------------
 
 const scannedDraft = {
   vendorName: "Cebu Builders Supply",
@@ -135,7 +135,7 @@ test("a line renamed away from what the scan read is flagged Receipt_Edited", as
   assert.match(db.inserted[0].params[2], /"HEAVY DUTY PLUG"/);
 });
 
-test("an expense that matches its scan gets no Layer 5 flag", async () => {
+test("an expense that matches its scan gets no scan-comparison flag", async () => {
   const db = fakeDatabase({
     expense: scannedExpense,
     vendor: approvedVendor,

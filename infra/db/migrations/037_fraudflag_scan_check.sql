@@ -1,5 +1,5 @@
 -- 037_fraudflag_scan_check.sql
--- F9 Layer 5: the server compares what was submitted with what its own OCR
+-- F9: the server compares what was submitted with what its own OCR
 -- read from the same receipt image (ReceiptScans.result).
 --   Receipt_Edited  a value or line was changed (or typed into a blank) after
 --                   the scan, e.g. "Heavy duty plug" renamed to "Cement"
@@ -14,6 +14,6 @@ ALTER TABLE FraudFlags ADD CONSTRAINT fraudflags_flagtype_check
   CHECK (flagType IN ('BIR_Duplicate', 'Vendor_Validation', 'Ticket_Mismatch', 'Receipt_Adjustment',
                       'Receipt_Edited', 'Manual_Entry'));
 
--- Layer 5 looks a scan up by the receipt image it read.
+-- The scan comparison looks a scan up by the receipt image it read.
 CREATE INDEX IF NOT EXISTS receiptscans_receiptimageurl_idx
     ON ReceiptScans (receiptImageURL);

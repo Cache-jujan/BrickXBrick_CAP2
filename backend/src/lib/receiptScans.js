@@ -62,7 +62,7 @@ function createReceiptScans({ query, buildScanDraft }) {
     return result.rows[0];
   }
 
-  // The synchronous POST /receipts/scan keeps its draft too, so F9 Layer 5
+  // The synchronous POST /receipts/scan keeps its draft too, so F9
   // can compare the submitted expense with what the OCR read. Stored
   // already dismissed: the user has the draft, it isn't a pending scan.
   async function recordScan({ userID, receiptImageURL, mimeType, draft }) {

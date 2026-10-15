@@ -89,7 +89,7 @@ async function screenExpense(expenseID, { query } = {}) {
     await addFlag("Receipt_Adjustment", adjustmentReason(adjustments));
   }
 
-  // Layer 5: compare with what the server's own scan read from this image.
+  // Compare with what the server's own scan read from this image.
   const scanCheck = await checkAgainstScan(expense, runQuery);
   if (scanCheck) {
     await addFlag(scanCheck.flagType, scanCheck.reason);
