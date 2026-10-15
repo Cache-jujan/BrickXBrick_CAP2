@@ -19,6 +19,7 @@
 // parseBomRows() is pure (rows in, sections out) so it can be unit tested
 // without a file. parseBomWorkbook() reads the .xlsx with exceljs and only
 // takes cell values and formula text; formulas are never evaluated or run.
+const { guessCostCategory } = require("./bomRules");
 
 const LABEL = {
   MATERIALCOST: "material",
@@ -346,7 +347,10 @@ function parseBomRows(rows) {
     throw err;
   }
 
-  sections.forEach((s) => delete s.closed);
+  sections.forEach((s) => {
+    delete s.closed;
+    s.costCategory = guessCostCategory(s); // adviser item 6; the GM can change it
+  });
   return { sections, statedTotal, skippedRows, rowWarnings };
 }
 

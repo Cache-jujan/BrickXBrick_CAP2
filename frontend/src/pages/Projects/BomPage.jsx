@@ -9,6 +9,8 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { BackLink } from "../../components/ui/BackLink";
+import { BudgetJustification } from "../../components/bom/BudgetJustification";
+import { COST_CATEGORIES, DEFAULT_COST_CATEGORY, MAX_ESCALATION_PCT } from "../../utils/costCategories";
 import "./BomPage.css";
 
 // F2: the project's Bill of Materials.
@@ -55,6 +57,7 @@ function toDraft(bom) {
     sectionId: s.sectionId,
     name: s.name,
     subheading: s.subheading || "",
+    costCategory: s.costCategory || DEFAULT_COST_CATEGORY,
     laborMode: s.laborMode,
     laborRatePct: s.laborRate != null ? String(round2(s.laborRate * 100)) : "",
     laborAmount: s.laborAmount != null ? String(s.laborAmount) : "",
@@ -77,6 +80,7 @@ function toPayload(draft) {
     sectionId: s.sectionId || undefined,
     name: s.name,
     subheading: s.subheading || null,
+    costCategory: s.costCategory || DEFAULT_COST_CATEGORY,
     laborMode: s.laborMode,
     laborRate: s.laborMode === "rate" ? numOrNaN(s.laborRatePct) / 100 : null,
     laborAmount: s.laborMode === "amount" ? numOrNaN(s.laborAmount) : null,
@@ -115,6 +119,7 @@ function emptySection() {
     sectionId: null,
     name: "",
     subheading: "",
+    costCategory: DEFAULT_COST_CATEGORY,
     laborMode: "none",
     laborRatePct: "",
     laborAmount: "",
@@ -150,11 +155,19 @@ export function BomPage() {
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [agreement, setAgreement] = useState({ clientAgreedOn: "", clientAgreedBy: "", agreementRef: "" });
+  // Adviser item 6: escalation allowance as typed (percent) and its note.
+  const [escalation, setEscalation] = useState({ ratePct: "5", note: "" });
   const fileInput = useRef(null);
 
   const applyResponse = useCallback((resp) => {
     setData(resp);
     setDraft(resp.bom ? toDraft(resp.bom) : null);
+    if (resp.bom) {
+      setEscalation({
+        ratePct: String(Math.round((resp.bom.escalationRate || 0) * 10000) / 100),
+        note: resp.bom.escalationNote || "",
+      });
+    }
     setDirty(false);
     setFieldErrors({});
   }, []);
@@ -199,13 +212,16 @@ export function BomPage() {
     let materials = 0;
     let labor = 0;
     let items = 0;
+    const byCategory = {};
     draft.forEach((s) => {
       const c = sectionCalc(s);
       materials += c.materials;
       labor += c.labor;
       items += s.items.length;
+      const cat = s.costCategory || DEFAULT_COST_CATEGORY;
+      byCategory[cat] = round2((byCategory[cat] || 0) + c.total);
     });
-    return { materials: round2(materials), labor: round2(labor), total: round2(materials + labor), items };
+    return { materials: round2(materials), labor: round2(labor), total: round2(materials + labor), items, byCategory };
   }, [draft]);
 
   function update(fn) {
@@ -219,6 +235,18 @@ export function BomPage() {
   const addItem = (si) => update((d) => { d[si].items.push(emptyItem()); return d; });
   const removeItem = (si, ii) => update((d) => { d[si].items.splice(ii, 1); return d; });
   const addSection = () => update((d) => { d.push(emptySection()); return d; });
+  // "Add other cost": a non-material cost (fees, permits, transport...) as its
+  // own section with a fixed amount and no items to buy (adviser item 6).
+  const addOtherCost = ({ category, description, amount }) =>
+    update((d) => {
+      d.push({ ...emptySection(), name: description, costCategory: category, laborMode: "amount", laborAmount: String(amount), items: [] });
+      return d;
+    });
+  function changeEscalation(patch) {
+    setEscalation((e) => ({ ...e, ...patch }));
+    setDirty(true);
+    setNotice("");
+  }
   const removeSection = (si) => update((d) => { d.splice(si, 1); return d; });
   const moveSection = (si, dir) =>
     update((d) => {
@@ -235,6 +263,9 @@ export function BomPage() {
   }
 
   function discard() {
+    if (bom) {
+      setEscalation({ ratePct: String(Math.round((bom.escalationRate || 0) * 10000) / 100), note: bom.escalationNote || "" });
+    }
     if (bom) setDraft(toDraft(bom));
     else setDraft(null);
     setDirty(false);
@@ -280,7 +311,14 @@ export function BomPage() {
 
   async function handleSave() {
     await run("save", async () => {
-      const resp = await saveBom(id, toPayload(draft));
+      const pct = Number(escalation.ratePct);
+      if (escalation.ratePct === "" || !Number.isFinite(pct) || pct < 0 || pct > MAX_ESCALATION_PCT) {
+        throw new Error(`The escalation allowance must be between 0% and ${MAX_ESCALATION_PCT}%.`);
+      }
+      const resp = await saveBom(id, toPayload(draft), {
+        escalationRate: Math.round(pct * 100) / 10000,
+        escalationNote: escalation.note.trim(),
+      });
       applyResponse(resp);
       // Keep the import report only while it lists rows that still need adding.
       setImportReport((r) => (r && r.skippedRows.length ? r : null));
@@ -511,15 +549,28 @@ export function BomPage() {
               </span>
             </div>
             <div className="bom-total">
-              <span className="bom-total-label">Project budget</span>
+              <span className="bom-total-label">Project Target Budget</span>
               <span className="bom-total-value">{PESO.format(Number(project?.budget ?? data.projectBudget ?? 0))}</span>
               <span className="bom-total-note">
                 {bom?.status === "Approved"
-                  ? statedTotal !== null ? "Set from the signed total in the file" : "Set from the BOM total"
-                  : statedTotal !== null ? "Becomes the signed total on approval" : "Becomes the BOM total on approval"}
+                  ? `Agreed price + ${Math.round((bom.escalationRate || 0) * 10000) / 100}% allowance`
+                  : `Becomes the agreed price + ${escalation.ratePct || 0}% allowance on approval`}
               </span>
             </div>
           </section>
+
+          <BudgetJustification
+            byCategory={totals.byCategory}
+            subtotal={totals.total}
+            statedTotal={statedTotal}
+            ratePct={escalation.ratePct}
+            note={escalation.note}
+            editing={editing}
+            onRateChange={(v) => changeEscalation({ ratePct: v })}
+            onNoteChange={(v) => changeEscalation({ note: v })}
+            onAddCost={addOtherCost}
+            rateError={fieldErr("escalationRate")}
+          />
 
           {!dirty && (warnings.length > 0 || infos.length > 0) && (
             <section className="bom-checks" aria-labelledby="bom-checks-title">
@@ -564,11 +615,20 @@ export function BomPage() {
                         aria-label="Sub-heading"
                         onChange={(e) => setSection(si, { subheading: e.target.value })}
                       />
+                      <select
+                        className="bom-input bom-input-category"
+                        value={s.costCategory || DEFAULT_COST_CATEGORY}
+                        aria-label="Type of cost"
+                        onChange={(e) => setSection(si, { costCategory: e.target.value })}
+                      >
+                        {COST_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
                     </div>
                   ) : (
                     <div>
                       <h2 className="bom-section-title">{s.name}</h2>
                       {s.subheading && <p className="bom-section-sub">{s.subheading}</p>}
+                      <span className="bom-category">{s.costCategory || DEFAULT_COST_CATEGORY}</span>
                     </div>
                   )}
                   <div className="bom-section-side">
@@ -746,9 +806,12 @@ export function BomPage() {
               <>
                 <h2 id="bom-dialog-title" className="modal-title">Approve this BOM?</h2>
                 <p className="modal-body">
-                  It will be locked and used as the basis for every material request. The project budget becomes{" "}
-                  {bom.statedTotal !== null ? "the signed total from the file" : "the BOM total"},{" "}
-                  <strong>{PESO.format(bom.budgetOnApproval ?? bom.totals.total)}</strong>
+                  It will be locked and used as the basis for every material request. The project&apos;s Target Budget
+                  becomes {bom.statedTotal !== null ? "the signed total from the file" : "the BOM total"}
+                  {bom.budget?.escalationAllowance > 0
+                    ? ` plus the ${Math.round(bom.budget.escalationRate * 10000) / 100}% escalation allowance`
+                    : ""}
+                  , <strong>{PESO.format(bom.budgetOnApproval ?? bom.totals.total)}</strong>
                   {Number(data.projectBudget) !== (bom.budgetOnApproval ?? bom.totals.total)
                     ? ` (now ${PESO.format(Number(data.projectBudget))})`
                     : ""}.

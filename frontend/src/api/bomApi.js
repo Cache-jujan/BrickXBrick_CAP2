@@ -22,8 +22,9 @@ export async function importBom(projectId, file) {
 // GM. Saves the edited Draft (or starts one by hand).
 // sections: [{ sectionId?, name, subheading, laborMode, laborRate, laborAmount,
 //              items: [{ bomItemId?, description, quantity, unit, unitCost }] }]
-export async function saveBom(projectId, sections) {
-  const { data } = await apiClient.put(`/api/projects/${projectId}/bom`, { sections });
+// extra = { escalationRate (0–0.10), escalationNote } (adviser item 6), optional.
+export async function saveBom(projectId, sections, extra = {}) {
+  const { data } = await apiClient.put(`/api/projects/${projectId}/bom`, { sections, ...extra });
   return data;
 }
 
