@@ -1,25 +1,24 @@
-import { useEffect } from "react";
+import { View } from "react-native";
 import { Stack } from "expo-router";
-import NetInfo from "@react-native-community/netinfo";
-import { initDb, getUnsyncedRecords, markSynced } from "@/lib/sync/db";
-import { syncAllPending } from "@/lib/sync/sync";
+
 import { ExpenseDraftProvider } from "@/lib/expense-draft-context";
+import { NetworkProvider } from "@/lib/sync/network-context";
+import { OfflineBanner } from "@/components/offline-banner";
 
 export default function RootLayout() {
-  useEffect(() => {
-    initDb();
-    const unsubscribe = NetInfo.addEventListener((state) => { if (state.isConnected) syncAllPending(getUnsyncedRecords, markSynced); });
-    return () => unsubscribe();
-  }, []);
-
   return (
     <ExpenseDraftProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="expense" />
-        <Stack.Screen name="oauth/callback" />
-        <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
-      </Stack>
+      <NetworkProvider>
+        <View style={{ flex: 1 }}>
+          <OfflineBanner />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="expense" />
+            <Stack.Screen name="oauth/callback" />
+            <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
+          </Stack>
+        </View>
+      </NetworkProvider>
     </ExpenseDraftProvider>
   );
 }
