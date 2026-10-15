@@ -103,7 +103,12 @@ async function syncExpense(user, uuid, data) {
       throw new SyncReject("TICKET_NOT_YOURS", "You may only submit an expense against a ticket assigned to you");
     }
     if (ticket.status !== "Resolved") {
-      throw new SyncReject("TICKET_NOT_RESOLVED", "Ticket must be Resolved before an expense can be linked to it");
+      // Auto-resolve: the online path calls resolveTicket before submitting,
+      // but offline queues skip that step, so the sync endpoint does it here.
+      await query(
+        "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
+        [ticketID]
+      );
     }
     projectID = ticket.projectid;
   }
