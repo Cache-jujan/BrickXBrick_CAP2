@@ -1,6 +1,7 @@
 const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAnon } = require("../lib/supabaseAnon");
+const { termsFields } = require("./legal");
 
 const router = express.Router();
 
@@ -88,6 +89,8 @@ router.post("/login", async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        // false until the current Terms of Use / Privacy Notice is accepted
+        ...(await termsFields(user.userid)),
       },
       redirectPath: ROLE_DASHBOARDS[user.role] || "/dashboard", // sub-point 8
     });

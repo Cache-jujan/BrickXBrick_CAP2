@@ -18,6 +18,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="expense" />
         <Stack.Screen name="oauth/callback" />
+        <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
       </Stack>
     </ExpenseDraftProvider>
   );
