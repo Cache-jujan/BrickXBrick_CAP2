@@ -53,6 +53,7 @@ export default function AllocateScreen() {
       description: li.description,
       quantity: Number(li.quantity),
       amount: Number(li.amount),
+      bomItemID: li.bomItemID ?? null,
     })),
     [ocrResult]
   );

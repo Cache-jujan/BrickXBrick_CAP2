@@ -12,6 +12,7 @@ export type RequestedMaterial = {
   key: string;
   name: string;
   detail: string;
+  bomItemID: string | null;
 };
 
 type Props = {

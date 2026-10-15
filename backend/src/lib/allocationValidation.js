@@ -6,6 +6,7 @@
 // JavaScript floats can't hold most peso amounts exactly (0.1 + 0.2 !== 0.3),
 // so we never add or compare floats.
 
+const { asUUIDOrNull } = require("./uuid");
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_AMOUNT_CENTS = 999_999_999_999; // DECIMAL(12,2)
@@ -116,6 +117,7 @@ function parseAllocationLines(lineItems) {
       amount: line.amount,
       quantityH,
       amountCents,
+      bomItemID: asUUIDOrNull(line.bomItemID),
     };
   });
 }

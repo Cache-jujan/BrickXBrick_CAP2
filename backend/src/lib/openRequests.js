@@ -36,6 +36,7 @@ function buildOpenRequestsQuery(user) {
            p.name          AS "projectName",
            t.subject,
            t.materialtype  AS "materialType",
+           t.bomitemid     AS "bomItemID",
            t.vendorname    AS "vendorName",
            t.quantity      AS "requestedQuantity",
            t.approvedbudget AS "approvedBudget",

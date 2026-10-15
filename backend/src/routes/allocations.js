@@ -54,6 +54,7 @@ const storedLine = (line) => ({
   quantity: line.quantityH / 100,
   amount: line.amountCents / 100,
   unitPrice: null,
+  bomItemID: line.bomItemID ?? null,
 });
 
 function planError(plan) {

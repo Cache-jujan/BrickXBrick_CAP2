@@ -82,6 +82,7 @@ export default function ReviewScreen() {
             key: r.ticketID,
             name: r.materialType,
             detail: `${r.projectName} · ${r.remainingQuantity} still needed · ${r.subject}`,
+            bomItemID: r.bomItemID ?? null,
           }))
         );
       })
@@ -217,7 +218,7 @@ export default function ReviewScreen() {
     const clean = (text: string) => Number(text.replace(/,/g, "").trim());
     setOcrResult({
       ...result!, vendorName: vendorName.trim(), tin, birPermitNumber, birNumber, amount: clean(amount), receiptDate: receiptDate.trim(),
-      lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: null })),
+      lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: null, bomItemID: it.bomItemID ?? null })),
     });
     router.push(isSplit ? "/expense/allocate" : "/expense/link");
   }
@@ -351,7 +352,7 @@ export default function ReviewScreen() {
                       <Text style={styles.removeText}>Remove</Text>
                     </Pressable>
                   </View>
-                  <TextInput style={styles.input} placeholder="Item name" placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v })} />
+                  <TextInput style={styles.input} placeholder="Item name" placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null })} />
                   {materials.length > 0 && (
                     <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Choose a requested material for item ${index + 1}`}>
                       <Text style={styles.pickButtonText}>Choose from requested materials ▾</Text>
@@ -395,7 +396,7 @@ export default function ReviewScreen() {
         materials={materials}
         onClose={() => setPickingItemId(null)}
         onSelect={(m) => {
-          if (pickingItemId) updateItem(pickingItemId, { name: m.name });
+            if (pickingItemId) updateItem(pickingItemId, { name: m.name, bomItemID: m.bomItemID ?? null });
           setPickingItemId(null);
         }}
       />

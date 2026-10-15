@@ -12,6 +12,7 @@
 
 // Use as: `SELECT ${EXPENSE_COLUMNS} FROM expenses WHERE ...`
 // and as: `... RETURNING ${EXPENSE_COLUMNS}`  (never RETURNING *)
+const { asUUIDOrNull } = require("./uuid");
 const EXPENSE_COLUMNS = `
   expenseid            AS "expenseID",
   projectid            AS "projectID",
@@ -64,6 +65,7 @@ function normalizeLineItems(rawItems) {
       amount: item.amount,
       quantity: Number.isFinite(item.quantity) ? item.quantity : null,
       unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : null,
+            bomItemID: asUUIDOrNull(item.bomItemID),
     }));
 }
 
