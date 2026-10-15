@@ -6,7 +6,7 @@ export async function listUsers() {
   return data;
 }
 
-// POST /api/admin/users — payload: { name, email, role, tempPassword }
+// POST /api/admin/users — payload: { name, email, role }; an invitation email is sent
 export async function createUser(payload) {
   const { data } = await apiClient.post("/api/admin/users", payload);
   return data;
@@ -30,10 +30,12 @@ export async function unlockUser(id) {
   return data;
 }
 
-// POST /api/admin/users/:id/reset-password — payload: { newPassword }
-// The only way to change a password: there is no self-service reset.
-export async function resetUserPassword(id, newPassword) {
-  const { data } = await apiClient.post(`/api/admin/users/${id}/reset-password`, { newPassword });
+// POST /api/admin/users/:id/send-password-email
+// "Enforce change password upon login": the user gets an email link and sets
+// their own password. The System Administrator never types or sees one.
+// Returns { userID, status: "password_email_sent", channel: "invite" | "recovery" }.
+export async function sendPasswordEmail(id) {
+  const { data } = await apiClient.post(`/api/admin/users/${id}/send-password-email`);
   return data;
 }
 

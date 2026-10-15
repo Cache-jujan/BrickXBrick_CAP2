@@ -5,7 +5,7 @@ import {
   updateUser,
   deactivateUser,
   unlockUser,
-  resetUserPassword,
+  sendPasswordEmail,
   VALID_ROLES,
 } from "../../api/adminApi";
 import { extractErrorMessage } from "../../api/client";
@@ -16,23 +16,6 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Banner } from "../../components/ui/Banner";
 import "./UserManagementPage.css";
-
-const MIN_PASSWORD_LENGTH = 8;
-
-// 12 characters with upper, lower, digit and symbol so it always passes
-// the backend length check and reads clearly when handed over.
-function generatePassword() {
-  const sets = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnpqrstuvwxyz", "23456789", "!@#$%&*?"];
-  const all = sets.join("");
-  const pick = (chars) => chars[crypto.getRandomValues(new Uint32Array(1))[0] % chars.length];
-  const out = sets.map(pick);
-  while (out.length < 12) out.push(pick(all));
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out.join("");
-}
 
 export function UserManagementPage() {
   const { user: me } = useAuth();
@@ -46,7 +29,7 @@ export function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  // { type: "reset" | "role" | "deactivate" | "reactivate", user }
+  // { type: "password" | "role" | "deactivate" | "reactivate", user }
   const [dialog, setDialog] = useState(null);
   const [rowError, setRowError] = useState("");
 
@@ -92,8 +75,8 @@ export function UserManagementPage() {
         <div>
           <h1>User Accounts</h1>
           <p className="users-subtitle">
-            Create accounts, change roles, and set new passwords. Password changes are done
-            only here. Users cannot reset their own.
+            Create accounts, change roles, and send password emails. Users always set their own
+            password from the email link.
           </p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>
@@ -175,8 +158,8 @@ export function UserManagementPage() {
                           )}
                         </td>
                         <td className="users-actions">
-                          <button type="button" className="users-action-link" onClick={() => setDialog({ type: "reset", user: u })}>
-                            Reset password
+                          <button type="button" className="users-action-link" onClick={() => setDialog({ type: "password", user: u })}>
+                            Send password email
                           </button>
                           {!isSelf && (
                             <button type="button" className="users-action-link" onClick={() => setDialog({ type: "role", user: u })}>
@@ -209,8 +192,8 @@ export function UserManagementPage() {
         </Card>
       )}
 
-      {dialog?.type === "reset" && (
-        <ResetPasswordDialog user={dialog.user} onClose={() => { setDialog(null); reload(); }} />
+      {dialog?.type === "password" && (
+        <SendPasswordEmailDialog user={dialog.user} onClose={() => { setDialog(null); reload(); }} />
       )}
       {dialog?.type === "role" && (
         <ChangeRoleDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => { setDialog(null); reload(); }} />
@@ -288,7 +271,10 @@ function CreateUserForm({ onCreated }) {
             </select>
           </label>
         </div>
-        <p className="users-form-hint">An invitation email is sent to this Gmail. The user sets their own password from the link.</p>
+        <p className="users-form-hint">
+          <strong>Enforce change password upon login:</strong> an invitation email is sent to this Gmail and the
+          user sets their own password from the link before their first sign-in. You never see or type it.
+        </p>
         {error && <Banner tone="error" title={error} />}
         <div className="users-form-actions">
           <Button type="submit" disabled={submitting}>{submitting ? "Sending invite…" : "Create & Send Invite"}</Button>
@@ -298,40 +284,34 @@ function CreateUserForm({ onCreated }) {
   );
 }
 
-function ResetPasswordDialog({ user, onClose }) {
-  const [password, setPassword] = useState(() => generatePassword());
+function SendPasswordEmailDialog({ user, onClose }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [sent, setSent] = useState(null); // "invite" | "recovery"
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
+  async function handleSend() {
     setBusy(true);
+    setError("");
     try {
-      await resetUserPassword(user.userid, password);
-      setDone(true);
+      const result = await sendPasswordEmail(user.userid);
+      setSent(result.channel);
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't reset the password."));
+      setError(extractErrorMessage(err, "Couldn't send the password email."));
     } finally {
       setBusy(false);
     }
   }
 
-  if (done) {
+  if (sent) {
     return (
-      <Modal title="Password updated" onClose={onClose}>
+      <Modal title="Password email sent" onClose={onClose}>
         <p className="modal-body">
-          {user.name} can now sign in with the password below. Copy it now and share it
-          securely. It is not shown again.
+          {sent === "invite"
+            ? `${user.name} hasn't set a password yet, so their invitation was sent again to ${user.email}.`
+            : `A link to set a new password was sent to ${user.email}. Their old password no longer works.`}{" "}
+          They choose the new password themselves from that link.
         </p>
-        <p className="users-password-reveal">{password}</p>
         <div className="modal-actions">
-          <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(password)}>Copy</Button>
           <Button onClick={onClose}>Done</Button>
         </div>
       </Modal>
@@ -339,21 +319,16 @@ function ResetPasswordDialog({ user, onClose }) {
   }
 
   return (
-    <Modal title={`Reset password for ${user.name}`} onClose={onClose}>
-      <form onSubmit={handleSubmit} noValidate>
-        <p className="modal-body">
-          This replaces their current password and clears any login lockout.
-        </p>
-        <div className="users-password-field">
-          <Field label="New Password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="button" className="users-generate" onClick={() => setPassword(generatePassword())}>Generate</button>
-        </div>
-        {error && <Banner tone="error" title={error} />}
-        <div className="modal-actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Set password"}</Button>
-        </div>
-      </form>
+    <Modal title={`Send a password email to ${user.name}?`} onClose={onClose}>
+      <p className="modal-body">
+        A link goes to <strong>{user.email}</strong>. {user.name} sets a new password from it; you never
+        see or type it. Their current password stops working right away, and any login lockout is cleared.
+      </p>
+      {error && <Banner tone="error" title={error} />}
+      <div className="modal-actions">
+        <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button onClick={handleSend} disabled={busy}>{busy ? "Sending…" : "Send email"}</Button>
+      </div>
     </Modal>
   );
 }
@@ -377,6 +352,10 @@ function ChangeRoleDialog({ user, onClose, onDone }) {
 
   return (
     <Modal title={`Change role for ${user.name}`} onClose={onClose}>
+      <p className="modal-body">
+        Their past records keep their name. If they still manage an open project, have unfinished
+        tasks or have material requests waiting on them, reassign those first.
+      </p>
       <label className="field">
         <span className="field-label">Role</span>
         <select className="field-control" value={role} onChange={(e) => setRole(e.target.value)}>
@@ -414,7 +393,7 @@ function StatusDialog({ user, activate, onClose, onDone }) {
       <p className="modal-body">
         {activate
           ? "They will be able to sign in again with their current password."
-          : "They will no longer be able to sign in. Their records stay in the system."}
+          : "They will no longer be able to sign in. Their records stay in the system. Open projects, tasks and requests must be reassigned first."}
       </p>
       {error && <Banner tone="error" title={error} />}
       <div className="modal-actions">

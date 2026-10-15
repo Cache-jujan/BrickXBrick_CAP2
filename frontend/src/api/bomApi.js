@@ -22,15 +22,19 @@ export async function importBom(projectId, file) {
 // GM. Saves the edited Draft (or starts one by hand).
 // sections: [{ sectionId?, name, subheading, laborMode, laborRate, laborAmount,
 //              items: [{ bomItemId?, description, quantity, unit, unitCost }] }]
-export async function saveBom(projectId, sections) {
-  const { data } = await apiClient.put(`/api/projects/${projectId}/bom`, { sections });
+// extra = { escalationRate (0–0.10), escalationNote } (adviser item 6), optional.
+export async function saveBom(projectId, sections, extra = {}) {
+  const { data } = await apiClient.put(`/api/projects/${projectId}/bom`, { sections, ...extra });
   return data;
 }
 
-// GM. Locks the BOM; the project budget becomes the BOM total.
+// GM. Records the client's agreement and locks the BOM; the project budget
+// becomes the BOM total. agreement = { clientAgreedOn: "YYYY-MM-DD",
+// clientAgreedBy, agreementRef? } (adviser item 5: the client agrees outside
+// the system; this records when and with whom).
 // A 409 with code CONFIRM_WARNINGS means the warnings must be confirmed.
-export async function approveBom(projectId, confirmWarnings = false) {
-  const { data } = await apiClient.patch(`/api/projects/${projectId}/bom/approve`, { confirmWarnings });
+export async function approveBom(projectId, confirmWarnings = false, agreement = {}) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/bom/approve`, { confirmWarnings, ...agreement });
   return data;
 }
 

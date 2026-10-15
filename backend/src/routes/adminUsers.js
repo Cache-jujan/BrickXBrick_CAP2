@@ -1,7 +1,10 @@
 // adminUsers.js — F1 account actions. System Administrator only.
+const crypto = require("crypto");
 const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
+const { supabaseAnon } = require("../lib/supabaseAnon");
+const { findOpenWork, hasOpenWork, describeOpenWork } = require("../lib/userOpenWork");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
@@ -13,7 +16,24 @@ const VALID_ROLES = [
   "General Manager", "Project Manager", "Site Manager",
   "Purchaser", "System Administrator"
 ];
-const MIN_PASSWORD_LENGTH = 8;
+
+// Refuse a role change or deactivation that would leave work stuck: a person
+// who still manages an open project, has unfinished tasks or has material
+// requests waiting on them must hand that work over first (lib/userOpenWork.js).
+// Returns the 409 body, or null when the change is safe.
+async function openWorkConflict(user) {
+  const work = await findOpenWork(query, user.userid);
+  if (!hasOpenWork(work)) return null;
+  return { error: describeOpenWork(user.name, work), code: "user_has_open_work", openWork: work };
+}
+
+async function loadUser(id) {
+  const r = await query(
+    "SELECT userID, name, email, role, status, supabaseUserId FROM Users WHERE userID = $1",
+    [id]
+  );
+  return r.rows[0] || null;
+}
 
 // CREATE
 router.post("/", async (req, res) => {
@@ -79,14 +99,27 @@ router.patch("/:id", async (req, res) => {
   if (req.params.id === req.user.id && (role || status === "Inactive")) {
     return res.status(400).json({ error: "You can't change your own role or deactivate your own account" });
   }
-  const result = await query(
-    `UPDATE Users SET role = COALESCE($1, role), status = COALESCE($2, status)
-     WHERE userID = $3
-     RETURNING userID, name, email, role, status`,
-    [role || null, status || null, req.params.id]
-  );
-  if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
-  res.json(result.rows[0]);
+  try {
+    const user = await loadUser(req.params.id);
+    if (!user) return res.status(404).json({ error: "Not found" });
+
+    const roleChanges = role && role !== user.role;
+    const deactivating = status === "Inactive" && user.status !== "Inactive";
+    if (roleChanges || deactivating) {
+      const conflict = await openWorkConflict(user);
+      if (conflict) return res.status(409).json(conflict);
+    }
+
+    const result = await query(
+      `UPDATE Users SET role = COALESCE($1, role), status = COALESCE($2, status)
+       WHERE userID = $3
+       RETURNING userID, name, email, role, status`,
+      [role || null, status || null, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DEACTIVATE
@@ -94,13 +127,22 @@ router.post("/:id/deactivate", async (req, res) => {
   if (req.params.id === req.user.id) {
     return res.status(400).json({ error: "You can't deactivate your own account" });
   }
-  const result = await query(
-    `UPDATE Users SET status = 'Inactive' WHERE userID = $1
-     RETURNING userID, status`,
-    [req.params.id]
-  );
-  if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
-  res.json(result.rows[0]);
+  try {
+    const user = await loadUser(req.params.id);
+    if (!user) return res.status(404).json({ error: "Not found" });
+    if (user.status !== "Inactive") {
+      const conflict = await openWorkConflict(user);
+      if (conflict) return res.status(409).json(conflict);
+    }
+    const result = await query(
+      `UPDATE Users SET status = 'Inactive' WHERE userID = $1
+       RETURNING userID, status`,
+      [req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // UNLOCK (admin early-unlock)
@@ -114,32 +156,56 @@ router.post("/:id/unlock", async (req, res) => {
   res.json(result.rows[0]);
 });
 
-// RESET PASSWORD — the only password-change path. Sets a new Supabase Auth
-// password for the user and clears any login lockout so they can sign in
-// straight away. Requests never echo the password back.
-router.post("/:id/reset-password", async (req, res) => {
-  const { newPassword } = req.body;
-  if (typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
-    return res.status(400).json({ error: `newPassword must be at least ${MIN_PASSWORD_LENGTH} characters` });
-  }
+// SEND PASSWORD EMAIL — "Enforce change password upon login" (adviser, F1).
+// The System Administrator never types or sees a password. This sends the
+// user an email link to set their own password at /set-password:
+//   - account never confirmed (invite not used yet) -> the invite is sent again
+//   - active account                                  -> a password-recovery email
+// After the email is sent, the old password is replaced with a random one
+// nobody knows, so it stops working at once (useful when an account may be
+// compromised), and any login lockout is cleared. A hacked admin account
+// therefore can't take over other accounts: the new password is chosen from
+// the user's own Gmail, and admins can't change a user's email.
+router.post("/:id/send-password-email", async (req, res) => {
   try {
-    const lookup = await query(
-      "SELECT supabaseuserid FROM Users WHERE userID = $1",
-      [req.params.id]
-    );
-    if (lookup.rowCount === 0) return res.status(404).json({ error: "Not found" });
+    const user = await loadUser(req.params.id);
+    if (!user) return res.status(404).json({ error: "Not found" });
+    if (user.status === "Inactive") {
+      return res.status(409).json({ error: "This account is deactivated. Reactivate it before sending a password email." });
+    }
+    const redirectTo = `${process.env.FRONTEND_URL}/set-password`;
 
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(
-      lookup.rows[0].supabaseuserid,
-      { password: newPassword }
-    );
-    if (error) return res.status(400).json({ error: error.message });
+    const { data: authData, error: lookupError } = await supabaseAdmin.auth.admin.getUserById(user.supabaseuserid);
+    if (lookupError || !authData?.user) {
+      return res.status(400).json({ error: lookupError?.message || "This account has no sign-in record" });
+    }
+    const confirmed = Boolean(authData.user.email_confirmed_at || authData.user.confirmed_at);
+
+    let channel;
+    if (confirmed) {
+      const { error } = await supabaseAnon.auth.resetPasswordForEmail(user.email, { redirectTo });
+      if (error) return res.status(400).json({ error: error.message });
+      channel = "recovery";
+    } else {
+      const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(user.email, {
+        data: { role: user.role },
+        redirectTo,
+      });
+      if (error) return res.status(400).json({ error: error.message });
+      channel = "invite";
+    }
+
+    if (confirmed) {
+      const throwaway = crypto.randomBytes(32).toString("base64url");
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(user.supabaseuserid, { password: throwaway });
+      if (error) console.error(`Could not retire the old password for ${user.userid}:`, error.message);
+    }
 
     await query(
       "UPDATE Users SET lockoutUntil = NULL, failedloginattempts = 0 WHERE userID = $1",
       [req.params.id]
     );
-    res.json({ userID: req.params.id, status: "password_reset" });
+    res.json({ userID: user.userid, status: "password_email_sent", channel });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

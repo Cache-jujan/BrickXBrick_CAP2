@@ -208,7 +208,9 @@ async function loadManagerWorkload(runQuery, role, { excludeProjectId = null, se
   const result = await runQuery(
     `SELECT u.userid, u.name, u.email,
             p.projectid, p.name AS projectname, p.status AS projectstatus,
-            p.startdate, p.constructionstartdate, p.enddate, p.municipality
+            p.startdate, p.constructionstartdate, p.enddate, p.municipality,
+            (SELECT ROUND(COALESCE(AVG(m.completionPercentage), 0))
+               FROM milestones m WHERE m.projectId = p.projectid) AS progress
        FROM users u
        LEFT JOIN projects p
          ON p.${column} = u.userid
@@ -234,6 +236,8 @@ async function loadManagerWorkload(runQuery, role, { excludeProjectId = null, se
         constructionstartdate: row.constructionstartdate,
         enddate: row.enddate,
         municipality: row.municipality,
+        // average milestone completion, the same number the Projects list shows
+        progress: row.progress === null || row.progress === undefined ? 0 : Number(row.progress),
       });
     }
   }
@@ -286,6 +290,42 @@ async function assertManagerAvailable(client, { userId, role, excludeProjectId =
   return user;
 }
 
+// Assignment limits the GM can change (adviser item 4). Lowering a limit never
+// removes anyone from a project; it only blocks new assignments.
+const LIMIT_MIN = 1;
+const LIMIT_MAX = 10;
+const LIMIT_KEYS = { pm: "pm_max_open_projects", sm: "sm_max_open_projects" };
+
+function validateLimits(body) {
+  const out = {};
+  const errors = [];
+  for (const key of Object.keys(LIMIT_KEYS)) {
+    if (body?.[key] === undefined) continue;
+    const n = body[key];
+    if (!Number.isInteger(n) || n < LIMIT_MIN || n > LIMIT_MAX) {
+      errors.push({ field: key, message: `Must be a whole number from ${LIMIT_MIN} to ${LIMIT_MAX}` });
+    } else {
+      out[key] = n;
+    }
+  }
+  if (!errors.length && Object.keys(out).length === 0) {
+    errors.push({ field: "pm", message: "Send pm and/or sm" });
+  }
+  if (errors.length) throw httpError(400, errors[0].message, { errors });
+  return out;
+}
+
+async function saveLimits(runQuery, limits) {
+  for (const [key, value] of Object.entries(limits)) {
+    await runQuery(
+      `INSERT INTO system_settings (settingKey, settingValue, description, updatedAt)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (settingKey) DO UPDATE SET settingValue = EXCLUDED.settingValue, updatedAt = NOW()`,
+      [LIMIT_KEYS[key], String(value), `Max open (Draft/Active) projects per ${key === "pm" ? "Project Manager" : "Site Manager"}`]
+    );
+  }
+}
+
 async function notifyProject(client, { recipientId, type, projectId, message }) {
   if (!recipientId) return;
   await client.query(
@@ -305,11 +345,18 @@ async function assertProjectActive(runQuery, projectId, action = "This action") 
   if (result.rowCount === 0) throw httpError(404, `Project ${projectId} not found`);
   const { status } = result.rows[0];
   if (status !== "Active") {
-    throw httpError(409, `${action} requires an Active project; this project is ${status}`);
+    throw httpError(
+      409,
+      `${action} isn't allowed yet: purchases start after the client agrees to the BOM and the project is activated (this project is ${status}).`
+    );
   }
 }
 
 module.exports = {
+  LIMIT_MIN,
+  LIMIT_MAX,
+  validateLimits,
+  saveLimits,
   PROJECT_TYPES,
   OPEN_PROJECT_STATUSES,
   CLOSED_PROJECT_STATUSES,

@@ -120,7 +120,10 @@ test("imports sections, items, labor modes and the stated total", async () => {
   assert.deepEqual(bom.skippedRows, []);
 
   const totals = bomTotals(bom.sections);
-  assert.deepEqual(totals, { materials: 50350, labor: 21300, total: 71650, itemCount: 9, sectionCount: 4 });
+  const { byCategory, ...rest } = totals;
+  assert.deepEqual(rest, { materials: 50350, labor: 21300, total: 71650, itemCount: 9, sectionCount: 4 });
+  // every section has materials, so the whole total is Materials & Labor (adviser item 6)
+  assert.equal(byCategory["Materials & Labor"], 71650);
 });
 
 test("header block and footer are never imported", async () => {
