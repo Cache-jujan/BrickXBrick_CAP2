@@ -47,6 +47,8 @@ const MAPPING = {
   "folder.fill": "folder",
   "arrow.up.forward.circle.fill": "rocket-launch",
   "arrow.triangle.2.circlepath.circle": "sync",
+  // F10 — offline banner
+  "wifi.slash": "wifi-off",
 } satisfies IconMapping;
 
 type IconSymbolName = keyof typeof MAPPING;
