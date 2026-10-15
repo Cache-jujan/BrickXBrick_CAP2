@@ -56,6 +56,15 @@ export default function SettingsScreen() {
         </View>
 
         <Pressable
+          onPress={() => router.push("/terms")}
+          style={({ pressed }) => [styles.card, styles.linkRow, pressed && { opacity: 0.8 }]}
+          accessibilityRole="link"
+        >
+          <Text style={styles.linkText}>Terms of Use & Privacy Notice</Text>
+          <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
+        </Pressable>
+
+        <Pressable
           onPress={confirmLogout}
           style={({ pressed }) => [styles.logout, pressed && { opacity: 0.8 }]}
           accessibilityRole="button"
@@ -88,6 +97,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
   rowLabel: { fontSize: 14, color: COLORS.muted },
   rowValue: { fontSize: 14, fontWeight: "600", color: COLORS.heading },
+  linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  linkText: { fontSize: 15, fontWeight: "600", color: COLORS.heading },
   logout: { borderWidth: 1, borderColor: DANGER, borderRadius: 14, paddingVertical: 14, alignItems: "center", backgroundColor: COLORS.card },
   logoutText: { color: DANGER, fontSize: 15, fontWeight: "700" },
 });

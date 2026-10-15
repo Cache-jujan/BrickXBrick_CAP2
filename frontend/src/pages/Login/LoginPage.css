@@ -389,3 +389,14 @@
 .login-submit {
   width: 100%;
 }
+
+/* Terms of Use / Privacy Notice links under the sign-in form */
+.login-legal {
+  margin: var(--space-4) 0 0;
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+.login-legal a {
+  color: var(--color-ink-soft);
+}

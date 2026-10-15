@@ -7,6 +7,10 @@ export type MobileUser = {
   name: string;
   email: string;
   role: MobileRole;
+  // false until the current Terms of Use / Privacy Notice is accepted
+  // (app/terms.tsx). Missing on an older backend: treated as accepted.
+  termsAccepted?: boolean;
+  termsVersion?: string;
 };
 
 export type MobileSession = {
@@ -47,6 +51,22 @@ export async function login(email: string, password: string): Promise<MobileSess
   };
   setSession(nextSession);
   return nextSession;
+}
+
+// Where each role lands after sign-in.
+export function homeRouteFor(role: MobileRole) {
+  return role === "Site Manager" ? "/site-manager" : "/(tabs)";
+}
+
+// Where to go right after sign-in: the terms screen first if needed.
+export function nextRouteAfterLogin(user: MobileUser) {
+  return user.termsAccepted === false ? "/terms?accept=1" : homeRouteFor(user.role);
+}
+
+// Called by app/terms.tsx once the user has accepted the current version.
+export function setTermsAccepted(version: string) {
+  if (!session) return;
+  session = { ...session, user: { ...session.user, termsAccepted: true, termsVersion: version } };
 }
 
 export function logout() {

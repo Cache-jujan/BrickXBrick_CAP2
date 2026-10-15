@@ -133,6 +133,12 @@ export function LoginPage() {
             </Button>
 
             {error && <Banner tone="error" title={error} />}
+
+            <p className="login-legal">
+              <Link to="/legal">Terms of Use</Link>
+              <span aria-hidden="true"> · </span>
+              <Link to="/legal?doc=privacy">Privacy Notice</Link>
+            </p>
           </form>
         </div>
 

@@ -23,6 +23,7 @@ import { MyExpensesPage } from "./pages/Expenses/MyExpensesPage";
 import { NotificationsPage } from "./pages/Notifications/NotificationsPage";
 import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
 import { SetPasswordPage } from "./pages/Auth/SetPasswordPage";
+import { LegalPage } from "./pages/Legal/LegalPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/set-password" element={<SetPasswordPage />} />
+          <Route path="/legal" element={<LegalPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
 
           <Route

@@ -369,3 +369,10 @@
     width: auto;
   }
 }
+/* "Terms & Privacy" link in the user menu */
+a.topbar-menu-item {
+  text-decoration: none;
+}
+a.topbar-menu-item:hover {
+  background: var(--color-surface-muted);
+}

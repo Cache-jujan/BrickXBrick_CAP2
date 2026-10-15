@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
 import {
@@ -254,6 +254,14 @@ export function Topbar({ onMenuClick }) {
                   <p className="topbar-menu-name">{user?.name}</p>
                   <p className="topbar-menu-email">{user?.email}</p>
                 </div>
+                <Link
+                  to="/legal"
+                  className="topbar-menu-item"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Terms &amp; Privacy
+                </Link>
                 <button
                   type="button"
                   className="topbar-menu-item topbar-menu-logout"

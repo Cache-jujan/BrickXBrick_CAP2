@@ -8,6 +8,8 @@ const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
 const adminUsers = require("./routes/adminUsers");
 const authRoutes = require("./routes/auth");
+const legalRoutes = require("./routes/legal");
+const { termsFields } = legalRoutes;
 const expenseRoutes = require("./routes/expenses");
 const milestoneRoutes = require("./routes/milestones");
 const projectRoutes = require("./routes/projects");
@@ -28,10 +30,19 @@ app.use(express.json());
 
 // --- Health / session ---
 app.get("/health", (req, res) => res.json({ ok: true }));
-app.get("/api/me", requireAuth, (req, res) => res.json({ user: req.user }));
+// GET /api/me — the signed-in user, plus whether they have accepted the
+// current Terms of Use / Privacy Notice (routes/legal.js).
+app.get("/api/me", requireAuth, async (req, res, next) => {
+  try {
+    res.json({ user: { ...req.user, ...(await termsFields(req.user.id)) } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // --- Routes ---
 app.use("/api/auth", authRoutes);                 // login / session
+app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Notice
 app.use("/api/admin/users", adminUsers);          // F1 account management
 app.use("/api/projects/:projectId/bom", bomRoutes); // F2 bill of materials
 app.use("/api/projects", projectRoutes);          // F2 projects
