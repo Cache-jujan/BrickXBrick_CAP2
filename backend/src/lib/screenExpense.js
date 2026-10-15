@@ -1,4 +1,4 @@
-// screenExpense.js — F9 shared helper. Runs all three screening layers on one
+// screenExpense.js — F9 shared helper. Runs every screening layer on one
 // expense and writes FraudFlags for the PM review queue.
 //
 // ALWAYS call this AFTER COMMIT, never inside a transaction. It reads through
@@ -7,6 +7,7 @@
 // Finding nothing is not an error: it returns { flagTypes: [] }.
 
 const { createFraudScreening } = require("./fraudScreening");
+const { compareWithScan, manualEntryReason } = require("./scanComparison");
 
 const DUPLICATE_REASON =
   "Duplicate: same TIN, BIR permit number, and BIR number as an existing expense";
@@ -88,7 +89,63 @@ async function screenExpense(expenseID, { query } = {}) {
     await addFlag("Receipt_Adjustment", adjustmentReason(adjustments));
   }
 
+  // Layer 5: compare with what the server's own scan read from this image.
+  const scanCheck = await checkAgainstScan(expense, runQuery);
+  if (scanCheck) {
+    await addFlag(scanCheck.flagType, scanCheck.reason);
+  }
+
   return { flagTypes };
+}
+
+// The newest successful scan of this image wins over a failed retry.
+async function loadScan(receiptImageURL, runQuery) {
+  const result = await runQuery(
+    `SELECT status, result
+       FROM receiptscans
+      WHERE receiptimageurl = $1
+      ORDER BY (status = 'Ready') DESC, createdat DESC
+      LIMIT 1`,
+    [receiptImageURL]
+  );
+  const scan = result.rows[0];
+  if (!scan) return null;
+  let draft = scan.result;
+  if (typeof draft === "string") {
+    try { draft = JSON.parse(draft); } catch { draft = null; }
+  }
+  return { status: scan.status, result: draft };
+}
+
+// One portion of a split receipt: the receipt total is the sum of all its
+// portions, since each portion stores only its own share.
+async function loadSplitTotal(expenseID, runQuery) {
+  const result = await runQuery(
+    `SELECT (SELECT SUM(e2.amount)
+               FROM receiptallocations ra2
+               JOIN expenses e2 ON e2.expenseid = ra2.expenseid
+              WHERE ra2.commonreceiptid = ra.commonreceiptid) AS receipttotal
+       FROM receiptallocations ra
+      WHERE ra.expenseid = $1`,
+    [expenseID]
+  );
+  return result.rows[0] ? result.rows[0].receipttotal : null;
+}
+
+async function checkAgainstScan(expense, runQuery) {
+  if (!expense.receiptimageurl) return null;
+  const scan = await loadScan(expense.receiptimageurl, runQuery);
+  const manual = manualEntryReason(scan);
+  if (manual) return { flagType: "Manual_Entry", reason: manual };
+
+  const splitTotal = await loadSplitTotal(expense.expenseid, runQuery);
+  const { reason } = compareWithScan({
+    expense,
+    draft: scan.result,
+    receiptAmount: splitTotal ?? expense.amount,
+    split: splitTotal !== null,
+  });
+  return reason ? { flagType: "Receipt_Edited", reason } : null;
 }
 
 module.exports = { screenExpense, adjustmentLines };

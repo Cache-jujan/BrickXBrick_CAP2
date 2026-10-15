@@ -48,6 +48,8 @@ const CONFIDENCE_KEY: Record<string, string> = {
 const FIELD_LABEL: Record<string, string> = { tin: "TIN", birPermitNumber: "BIR permit" };
 
 function makeId() { return Math.random().toString(36).slice(2, 10); }
+// Case, spacing and punctuation don't count as renaming a line.
+function simpleText(text: string) { return text.toLowerCase().replace(/[^a-z0-9]+/g, ""); }
 
 export default function ReviewScreen() {
   const { draft, setOcrResult } = useExpenseDraft();
@@ -109,7 +111,7 @@ export default function ReviewScreen() {
     const lineItemsOcr = draft.resubmit ? undefined : result.confidence?.lineItems === "medium" ? "medium" : "low";
     setItems(
       result.lineItems?.length
-        ? result.lineItems.map((li) => ({ id: makeId(), name: li.description ?? "", quantity: li.quantity != null ? String(li.quantity) : "", price: li.amount != null ? groupAmountText(String(li.amount)) : "", ocr: lineItemsOcr }))
+        ? result.lineItems.map((li) => ({ id: makeId(), name: li.description ?? "", quantity: li.quantity != null ? String(li.quantity) : "", price: li.amount != null ? groupAmountText(String(li.amount)) : "", ocr: lineItemsOcr, scanned: draft.resubmit ? undefined : li.description || undefined }))
         : [{ id: makeId(), name: "", quantity: "", price: result.amount != null ? groupAmountText(String(result.amount)) : "" }]
     );
     setEdited(new Set());
@@ -362,6 +364,11 @@ export default function ReviewScreen() {
                     </Pressable>
                   </View>
                   <TextInput style={styles.input} placeholder="Item name" placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null })} />
+                  {item.scanned && simpleText(item.scanned) !== simpleText(item.name) && (
+                    <Text style={styles.scannedNote}>
+                      Receipt says: &quot;{item.scanned}&quot;. The Project Manager will see this change.
+                    </Text>
+                  )}
                   {materials.length > 0 && (
                     <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Choose a requested material for item ${index + 1}`}>
                       <Text style={styles.pickButtonText}>Choose from requested materials ▾</Text>
@@ -514,6 +521,7 @@ const styles = StyleSheet.create({
   hint: { fontSize: 11, color: COLORS.muted, marginBottom: 8 },
   pickButton: { alignSelf: "flex-start", borderWidth: 1, borderColor: COLORS.primary, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
   pickButtonText: { fontSize: 12, fontWeight: "600", color: COLORS.primary },
+  scannedNote: { fontSize: 12, color: AMBER, marginTop: 4 },
   itemLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemCardOcr: { borderColor: AMBER, backgroundColor: "#FFFBEB" },
   ocrBadge: { fontSize: 10, fontWeight: "700", color: AMBER, backgroundColor: AMBER_BG, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },

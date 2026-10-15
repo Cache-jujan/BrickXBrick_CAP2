@@ -53,6 +53,8 @@ const FLAG_LABELS = {
   Vendor_Validation: "Vendor needs checking",
   BIR_Duplicate: "Possible duplicate receipt",
   Receipt_Adjustment: "Totals adjusted by the purchaser",
+  Receipt_Edited: "Changed from what the receipt scan read",
+  Manual_Entry: "Typed in by hand (scan couldn't read it)",
 };
 
 export function flagLabel(flagType) {
