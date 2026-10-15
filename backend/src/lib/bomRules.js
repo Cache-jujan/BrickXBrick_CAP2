@@ -7,6 +7,47 @@
 
 const LABOR_MODES = ["rate", "amount", "included", "none"];
 
+// Adviser item 6: what kind of cost each section is, so the BOM explains the
+// whole budget. Follows the DPWH split of direct costs (materials, labor,
+// equipment) and indirect costs (overhead, fees, permits). Same list as the
+// bomsections_cost_category_check constraint (migration 038).
+const COST_CATEGORIES = [
+  "Materials & Labor",
+  "Manpower",
+  "Equipment",
+  "Utilities",
+  "Travel & Transport",
+  "Professional Fees",
+  "Permits & Documentation",
+  "Overhead & Contingency",
+];
+const DEFAULT_COST_CATEGORY = COST_CATEGORIES[0];
+const MAX_ESCALATION_RATE = 0.1;
+
+function categoryOf(section) {
+  return COST_CATEGORIES.includes(section?.costCategory) ? section.costCategory : DEFAULT_COST_CATEGORY;
+}
+
+// Guess the category of a section imported from a file, from its name. Only
+// item-less (lump-sum) sections are guessed; sections with materials stay
+// 'Materials & Labor'. The GM can change it before approving.
+const CATEGORY_KEYWORDS = [
+  [/overhead|supervision|contingenc|profit|mark-?up/i, "Overhead & Contingency"],
+  [/permit|licen[cs]e|clearance|documentation|notar/i, "Permits & Documentation"],
+  [/architect|engineer|design|consult|survey|professional|plans?\b/i, "Professional Fees"],
+  [/transport|hauling|haul|mobili[sz]|delivery|freight|trucking/i, "Travel & Transport"],
+  [/water|electric|power|generator|utilit|internet/i, "Utilities"],
+  [/equipment|rental|scaffold|mixer|backhoe|crane/i, "Equipment"],
+  [/foreman|manpower|daily|workers|labou?r force|man-?days?/i, "Manpower"],
+];
+
+function guessCostCategory(section) {
+  if ((section.items || []).length > 0) return DEFAULT_COST_CATEGORY;
+  const text = `${section.name || ""} ${section.subheading || ""}`;
+  const hit = CATEGORY_KEYWORDS.find(([re]) => re.test(text));
+  return hit ? hit[1] : DEFAULT_COST_CATEGORY;
+}
+
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 }
@@ -35,19 +76,58 @@ function sectionTotals(section) {
   return { materials, labor, total: round2(materials + labor), laborMode: mode };
 }
 
+// total = the BOM total (what the client agrees to). byCategory = the same
+// total split by cost category, every category listed in order (0 when unused).
 function bomTotals(sections) {
   let materials = 0;
   let labor = 0;
   let itemCount = 0;
+  const byCategory = Object.fromEntries(COST_CATEGORIES.map((c) => [c, 0]));
   for (const s of sections) {
     const t = sectionTotals(s);
     materials += t.materials;
     labor += t.labor;
     itemCount += (s.items || []).length;
+    byCategory[categoryOf(s)] = round2(byCategory[categoryOf(s)] + t.total);
   }
   materials = round2(materials);
   labor = round2(labor);
-  return { materials, labor, total: round2(materials + labor), itemCount, sectionCount: sections.length };
+  return { materials, labor, total: round2(materials + labor), itemCount, sectionCount: sections.length, byCategory };
+}
+
+/**
+ * Adviser item 6: Target Budget = the price agreed with the client + an
+ * allowance for construction-year price increases. The agreed price itself
+ * never changes. Returns { contractPrice, escalationRate, escalationAllowance, targetBudget }.
+ */
+function budgetWithEscalation(contractPrice, escalationRate = 0) {
+  const base = round2(Number(contractPrice) || 0);
+  const rate = Number(escalationRate) || 0;
+  const allowance = round2(base * rate);
+  return { contractPrice: base, escalationRate: rate, escalationAllowance: allowance, targetBudget: round2(base + allowance) };
+}
+
+/** Escalation fields of a PUT body; undefined when the body doesn't set them. */
+function validateEscalation(body) {
+  if (body?.escalationRate === undefined && body?.escalationNote === undefined) return undefined;
+  const errors = [];
+  const rate = body.escalationRate === undefined ? undefined : num(body.escalationRate);
+  if (body.escalationRate !== undefined && (rate === null || rate < 0 || rate > MAX_ESCALATION_RATE)) {
+    errors.push({ field: "escalationRate", message: "The escalation allowance must be between 0% and 10%" });
+  }
+  let note;
+  if (body.escalationNote !== undefined) {
+    note = typeof body.escalationNote === "string" ? body.escalationNote.trim() : "";
+    if (note.length > 500) errors.push({ field: "escalationNote", message: "The note is too long (500 characters max)" });
+    note = note || null;
+  }
+  if (errors.length) {
+    const err = new Error(errors[0].message);
+    err.status = 400;
+    err.details = { errors };
+    throw err;
+  }
+  return { escalationRate: rate === undefined ? undefined : Math.round(rate * 10000) / 10000, escalationNote: note };
 }
 
 // ₱541,975 or ₱270,987.50 (centavos only when there are any)
@@ -79,8 +159,33 @@ function median(values) {
  * level "info":    worth knowing, not a problem (e.g. the same material in two
  *                  sections with different units; they're tracked separately).
  */
-function buildBomWarnings(sections, { statedTotal = null } = {}) {
+function buildBomWarnings(
+  sections,
+  { statedTotal = null, escalationRate = null, constructionStartDate = null, today = manilaToday() } = {}
+) {
   const warnings = [];
+
+  // Adviser item 6: prices agreed this year rise by the time construction
+  // starts next year. Only checked when the caller knows the rate.
+  if (escalationRate !== null && constructionStartDate) {
+    const buildYear = Number(String(constructionStartDate).slice(0, 4));
+    const thisYear = Number(today.slice(0, 4));
+    if (Number(escalationRate) === 0 && buildYear > thisYear) {
+      warnings.push({
+        level: "warning",
+        code: "NO_ESCALATION",
+        message: `Construction starts in ${buildYear} but this BOM has no escalation allowance. Prices usually rise by then; the adviser suggests 5 to 6%.`,
+      });
+    }
+    const hasIndirect = sections.some((s) => categoryOf(s) === "Overhead & Contingency");
+    if (Number(escalationRate) === 0 && !hasIndirect) {
+      warnings.push({
+        level: "info",
+        code: "NO_CONTINGENCY",
+        message: "There is no Overhead & Contingency cost and no escalation allowance, so the budget has no buffer for surprises.",
+      });
+    }
+  }
 
   sections.forEach((s, si) => {
     const t = sectionTotals(s);
@@ -196,6 +301,10 @@ function validateBomPayload(body) {
     if (!name) fieldError(errors, `${p}.name`, "Section name is required");
     if (name.length > 150) fieldError(errors, `${p}.name`, "Section name is too long (150 max)");
     const subheading = typeof s?.subheading === "string" && s.subheading.trim() ? s.subheading.trim().slice(0, 200) : null;
+    const costCategory = s?.costCategory === undefined || s?.costCategory === null ? DEFAULT_COST_CATEGORY : s.costCategory;
+    if (!COST_CATEGORIES.includes(costCategory)) {
+      fieldError(errors, `${p}.costCategory`, `Cost category must be one of: ${COST_CATEGORIES.join(", ")}`);
+    }
 
     const mode = s?.laborMode ?? "none";
     if (!LABOR_MODES.includes(mode)) fieldError(errors, `${p}.laborMode`, `Labor must be one of: ${LABOR_MODES.join(", ")}`);
@@ -240,6 +349,7 @@ function validateBomPayload(body) {
       sectionId: typeof s?.sectionId === "string" ? s.sectionId : null,
       name,
       subheading,
+      costCategory,
       laborRate,
       laborAmount: laborAmount === null ? null : round2(laborAmount),
       laborIncludedInItems: mode === "included",
@@ -257,6 +367,43 @@ function validateBomPayload(body) {
   return out;
 }
 
+// Today's date in the Philippines (YYYY-MM-DD), whatever timezone the server runs in.
+function manilaToday(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(now);
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Adviser item 5: the client agrees to the BOM outside the system; approving
+ * it records when and with whom. Returns { clientAgreedOn, clientAgreedBy,
+ * agreementRef } or throws-ready errors [{ field, message }].
+ */
+function validateClientAgreement(body, today = manilaToday()) {
+  const errors = [];
+  const on = typeof body?.clientAgreedOn === "string" ? body.clientAgreedOn.trim() : "";
+  const by = typeof body?.clientAgreedBy === "string" ? body.clientAgreedBy.trim().replace(/\s+/g, " ") : "";
+  const refRaw = typeof body?.agreementRef === "string" ? body.agreementRef.trim() : "";
+
+  const parsed = ISO_DATE_RE.test(on) ? new Date(`${on}T00:00:00Z`) : null;
+  if (!on) {
+    errors.push({ field: "clientAgreedOn", message: "Enter the date the client agreed to the BOM" });
+  } else if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== on) {
+    errors.push({ field: "clientAgreedOn", message: "The agreement date isn't a real date" });
+  } else if (on > today) {
+    errors.push({ field: "clientAgreedOn", message: "The agreement date can't be in the future" });
+  }
+  if (by.length < 2) {
+    errors.push({ field: "clientAgreedBy", message: "Enter who agreed for the client (their name)" });
+  } else if (by.length > 150) {
+    errors.push({ field: "clientAgreedBy", message: "The name is too long (150 characters max)" });
+  }
+  if (refRaw.length > 100) {
+    errors.push({ field: "agreementRef", message: "The reference is too long (100 characters max)" });
+  }
+  return { errors, value: { clientAgreedOn: on, clientAgreedBy: by, agreementRef: refRaw || null } };
+}
+
 /** What must be true before the GM can approve. Returns a list of problems. */
 function approvalProblems(sections) {
   const problems = [];
@@ -268,12 +415,21 @@ function approvalProblems(sections) {
 
 module.exports = {
   LABOR_MODES,
+  COST_CATEGORIES,
+  DEFAULT_COST_CATEGORY,
+  MAX_ESCALATION_RATE,
+  categoryOf,
+  guessCostCategory,
+  budgetWithEscalation,
+  validateEscalation,
   round2,
   laborModeOf,
   sectionTotals,
   bomTotals,
   buildBomWarnings,
   validateBomPayload,
+  validateClientAgreement,
+  manilaToday,
   approvalProblems,
   familyKey,
 };

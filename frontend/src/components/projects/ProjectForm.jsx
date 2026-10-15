@@ -296,7 +296,8 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
           {!loadingLists && !listError && availablePMs.length === 0 && (
             <Banner tone="warning" title="No Project Manager is available">
               Every Project Manager already has the maximum number of open projects. Complete or cancel one
-              of their projects first, or ask the System Administrator to create another Project Manager account.
+              of their projects, raise the limit under Assignment limits on the Projects page, or ask the
+              System Administrator to create another Project Manager account.
             </Banner>
           )}
           <ManagerPicker

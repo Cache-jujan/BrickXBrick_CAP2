@@ -27,10 +27,10 @@ function dateWindowWarning(phase, dueDate, project) {
     if (phase === "Planning") {
         if (!start || !constructionStart) return null;
         if (due < start) {
-            return `This due date is before the project's start date (${start.toDateString()}).`;
+            return `This due date is before the project's Target Date of Development (${start.toDateString()}).`;
         }
         if (due > constructionStart) {
-            return `This due date is after construction is set to begin (${constructionStart.toDateString()}) — Planning work is usually finished before then.`;
+            return `This due date is after the project's Target Date of Construction (${constructionStart.toDateString()}) — Planning work is usually finished before then.`;
         }
         return null;
     }
@@ -39,10 +39,10 @@ function dateWindowWarning(phase, dueDate, project) {
     const windowStart = constructionStart || start;
     if (!windowStart || !end) return null;
     if (due < windowStart) {
-        return `This due date is before construction is set to begin (${windowStart.toDateString()}).`;
+        return `This due date is before the project's Target Date of Construction (${windowStart.toDateString()}).`;
     }
     if (due > end) {
-        return `This due date is after the project's target completion (${end.toDateString()}).`;
+        return `This due date is after the project's Target Date of Completion (${end.toDateString()}).`;
     }
     return null;
 }

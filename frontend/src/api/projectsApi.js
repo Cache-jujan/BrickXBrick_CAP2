@@ -54,6 +54,20 @@ export async function getEligibleSiteManagers(projectId) {
   return data;
 }
 
+// GET /api/projects/settings/limits — { pm, sm }: how many open projects a
+// Project Manager / Site Manager may hold at once (GM)
+export async function getAssignmentLimits() {
+  const { data } = await apiClient.get("/api/projects/settings/limits");
+  return data;
+}
+
+// PATCH /api/projects/settings/limits — payload { pm?, sm? }, whole numbers 1–10 (GM).
+// Lowering a limit never removes anyone from a project.
+export async function updateAssignmentLimits(payload) {
+  const { data } = await apiClient.patch("/api/projects/settings/limits", payload);
+  return data;
+}
+
 // GET /api/projects/options — project types, service area and limits (GM)
 export async function getProjectOptions() {
   const { data } = await apiClient.get("/api/projects/options");

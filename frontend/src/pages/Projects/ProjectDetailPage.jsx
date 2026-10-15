@@ -444,7 +444,15 @@ export function ProjectDetailPage() {
   const activationChecks = [
     { label: "Project Manager assigned", done: Boolean(project.projectmanagerid) },
     { label: "Site Manager assigned", done: hasSiteManager },
-    { label: "Bill of Materials approved", done: bomApproved },
+    {
+      label:
+        bomApproved && bom?.clientAgreedOn
+          ? `Bill of Materials approved · client agreed on ${new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" }).format(
+              new Date(`${bom.clientAgreedOn}T00:00:00`)
+            )}${bom.clientAgreedBy ? ` (${bom.clientAgreedBy})` : ""}`
+          : "Bill of Materials approved, with the client's agreement recorded",
+      done: bomApproved,
+    },
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
 
@@ -525,9 +533,9 @@ export function ProjectDetailPage() {
         <div className="pd-group">
           <h2 className="pd-group-title">Timeline</h2>
           <dl>
-            <div><dt>Development</dt><dd>{formatDate(project.startdate)}</dd></div>
-            <div><dt>Construction</dt><dd>{formatDate(project.constructionstartdate)}</dd></div>
-            <div><dt>Completion (target)</dt><dd>{formatDate(project.enddate)}</dd></div>
+            <div><dt>Target Date of Development</dt><dd>{formatDate(project.startdate)}</dd></div>
+            <div><dt>Target Date of Construction</dt><dd>{formatDate(project.constructionstartdate)}</dd></div>
+            <div><dt>Target Date of Completion</dt><dd>{formatDate(project.enddate)}</dd></div>
             {project.actualcompletiondate && (
               <div><dt>Turnover (actual)</dt><dd>{formatDate(project.actualcompletiondate)}</dd></div>
             )}

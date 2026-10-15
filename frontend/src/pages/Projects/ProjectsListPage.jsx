@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useProjects } from "../../utils/useProjects";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
+import { AssignmentLimitsCard } from "../../components/projects/AssignmentLimitsCard";
 import "./ProjectsListPage.css";
 
 const STATUS_FILTERS = ["All", "Draft", "Active", "Completed", "Cancelled", "Archived"];
@@ -58,6 +59,8 @@ export function ProjectsListPage() {
           </div>
         )}
       </div>
+
+      {canCreate && <AssignmentLimitsCard />}
 
       <div className="projects-toolbar">
         <div className="projects-tabs" role="tablist" aria-label="Filter by status">

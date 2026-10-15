@@ -7,7 +7,9 @@
 //   GET    /          GM, owning PM     the BOM with totals and review warnings
 //   POST   /import    GM                upload the .xlsx; replaces the Draft
 //   PUT    /          GM                save the edited Draft (or start one by hand)
-//   PATCH  /approve   GM                lock it; the project budget becomes the signed
+//   PATCH  /approve   GM                body { clientAgreedOn, clientAgreedBy, agreementRef? }:
+//                                      record the client's agreement (adviser item 5) and
+//                                      lock it; the project budget becomes the signed
 //                                      total from the file (or the computed total)
 //   PATCH  /reopen    GM                back to Draft for a correction, with a reason
 //   DELETE /          GM                remove a Draft BOM (e.g. the wrong file)
@@ -29,6 +31,10 @@ const {
   buildBomWarnings,
   validateBomPayload,
   approvalProblems,
+  validateClientAgreement,
+  validateEscalation,
+  budgetWithEscalation,
+  categoryOf,
   round2,
 } = require("../lib/bomRules");
 
@@ -70,6 +76,14 @@ function sendError(res, err) {
   res.status(err.status || 500).json({ error: err.status ? err.message : "Internal server error", ...(err.details || {}) });
 }
 
+// DATE columns come back as JS Dates at local midnight; send plain YYYY-MM-DD.
+function isoDay(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value.slice(0, 10);
+  const pad = (x) => String(x).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
+
 const runnerOf = (target) => (typeof target === "function" ? target : (t, p) => target.query(t, p));
 const n = (v) => (v === null || v === undefined ? null : Number(v));
 
@@ -82,7 +96,8 @@ function budgetFor(statedTotal, computedTotal) {
 async function loadProject(target, projectId, { lock = false } = {}) {
   if (!UUID_RE.test(String(projectId))) throw httpError(404, "Project not found");
   const result = await runnerOf(target)(
-    `SELECT projectid, name, status, budget, projectmanagerid, sitemanagerid
+    `SELECT projectid, name, status, budget, projectmanagerid, sitemanagerid,
+            to_char(constructionstartdate, 'YYYY-MM-DD') AS constructionstartdate
        FROM projects WHERE projectid = $1::uuid${lock ? " FOR UPDATE" : ""}`,
     [projectId]
   );
@@ -119,7 +134,7 @@ async function loadSections(target, bomId) {
   const run = runnerOf(target);
   const sections = await run(
     `SELECT sectionid, name, subheading, sortorder, laborrate, laboramount,
-            laborincludedinitems, statedmaterialtotal, statedlaboramount
+            laborincludedinitems, statedmaterialtotal, statedlaboramount, costcategory
        FROM bomsections WHERE bomid = $1::uuid ORDER BY sortorder`,
     [bomId]
   );
@@ -137,6 +152,7 @@ async function loadSections(target, bomId) {
     sectionId: s.sectionid,
     name: s.name,
     subheading: s.subheading,
+    costCategory: categoryOf({ costCategory: s.costcategory }),
     laborRate: n(s.laborrate),
     laborAmount: n(s.laboramount),
     laborIncludedInItems: s.laborincludedinitems,
@@ -156,11 +172,28 @@ async function loadSections(target, bomId) {
   }));
 }
 
+// Adviser item 6: the budget the project gets on approval. The price agreed
+// with the client (the file's signed total, or the computed BOM total) plus
+// the escalation allowance for construction-year price increases.
+function budgetBreakdown(bom, sections) {
+  const contractPrice = budgetFor(n(bom.statedtotal), bomTotals(sections).total);
+  return budgetWithEscalation(contractPrice, n(bom.escalationrate) || 0);
+}
+
+function warningsFor(bom, sections, project) {
+  return buildBomWarnings(sections, {
+    statedTotal: n(bom.statedtotal),
+    escalationRate: n(bom.escalationrate) || 0,
+    constructionStartDate: project.constructionstartdate || null,
+  });
+}
+
 async function buildResponse(target, project) {
   const bom = await loadBomRow(target, project.projectid);
   const base = { projectId: project.projectid, projectStatus: project.status, projectBudget: n(project.budget) };
   if (!bom) return { ...base, bom: null };
   const sections = await loadSections(target, bom.bomid);
+  const budget = budgetBreakdown(bom, sections);
   return {
     ...base,
     bom: {
@@ -172,13 +205,21 @@ async function buildResponse(target, project) {
       updatedAt: bom.updatedat,
       approvedAt: bom.approvedat,
       approvedByName: bom.approvedbyname,
+      // adviser item 5: the client's agreement, recorded at approval
+      clientAgreedOn: isoDay(bom.clientagreedon),
+      clientAgreedBy: bom.clientagreedby ?? null,
+      agreementRef: bom.agreementref ?? null,
       reopenedAt: bom.reopenedat,
       reopenedByName: bom.reopenedbyname,
       revisionNote: bom.revisionnote,
       sections: sections.map((s) => ({ ...s, laborMode: laborModeOf(s), totals: sectionTotals(s) })),
       totals: bomTotals(sections),
-      budgetOnApproval: budgetFor(n(bom.statedtotal), bomTotals(sections).total),
-      warnings: buildBomWarnings(sections, { statedTotal: n(bom.statedtotal) }),
+      escalationRate: n(bom.escalationrate) || 0,
+      escalationNote: bom.escalationnote ?? null,
+      // { contractPrice, escalationRate, escalationAllowance, targetBudget }
+      budget,
+      budgetOnApproval: budget.targetBudget,
+      warnings: warningsFor(bom, sections, project),
     },
   };
 }
@@ -189,8 +230,8 @@ async function insertSection(client, bomId, s, sortOrder) {
   const laborAmount = s.laborIncludedInItems || laborRate !== null ? null : s.laborAmount ?? null;
   const result = await client.query(
     `INSERT INTO bomsections (bomid, name, subheading, sortorder, laborrate, laboramount,
-                              laborincludedinitems, statedmaterialtotal, statedlaboramount)
-     VALUES ($1::uuid, $2, $3, $4::int, $5::numeric, $6::numeric, $7::boolean, $8::numeric, $9::numeric)
+                              laborincludedinitems, statedmaterialtotal, statedlaboramount, costcategory)
+     VALUES ($1::uuid, $2, $3, $4::int, $5::numeric, $6::numeric, $7::boolean, $8::numeric, $9::numeric, $10)
      RETURNING sectionid`,
     [
       bomId,
@@ -202,6 +243,7 @@ async function insertSection(client, bomId, s, sortOrder) {
       Boolean(s.laborIncludedInItems),
       s.statedMaterialTotal ?? null,
       s.statedLaborAmount ?? null,
+      categoryOf(s),
     ]
   );
   return result.rows[0].sectionid;
@@ -223,14 +265,25 @@ async function deleteAllSections(client, bomId) {
   await client.query(`DELETE FROM bomsections WHERE bomid = $1::uuid`, [bomId]);
 }
 
+// The escalation rate a new BOM starts with: system_settings
+// 'bom_escalation_rate_default' (migration 038), 0.05 when unset or invalid.
+async function defaultEscalationRate(client) {
+  const r = await client.query(
+    "SELECT settingvalue FROM system_settings WHERE settingkey = 'bom_escalation_rate_default'"
+  );
+  const v = Number(r.rows[0]?.settingvalue);
+  return Number.isFinite(v) && v >= 0 && v <= 0.1 ? v : 0.05;
+}
+
 // Creates the BOM row if the project has none. Returns the locked row.
 async function ensureDraftBom(client, project, userId, { sourceFileName, statedTotal, replaceSource = false }) {
   let bom = await loadBomRow(client, project.projectid, { lock: true });
   if (!bom) {
+    // A new BOM starts with the default escalation allowance (adviser item 6).
     await client.query(
-      `INSERT INTO boms (projectid, sourcefilename, statedtotal, createdby, updatedby)
-       VALUES ($1::uuid, $2, $3::numeric, $4::uuid, $4::uuid)`,
-      [project.projectid, sourceFileName ?? null, statedTotal ?? null, userId]
+      `INSERT INTO boms (projectid, sourcefilename, statedtotal, createdby, updatedby, escalationrate)
+       VALUES ($1::uuid, $2, $3::numeric, $4::uuid, $4::uuid, $5::numeric)`,
+      [project.projectid, sourceFileName ?? null, statedTotal ?? null, userId, await defaultEscalationRate(client)]
     );
     bom = await loadBomRow(client, project.projectid, { lock: true });
   } else if (bom.status === "Approved") {
@@ -311,6 +364,7 @@ router.post("/import", requireRole(GM), (req, res, next) => {
 router.put("/", requireRole(GM), async (req, res) => {
   try {
     const sections = validateBomPayload(req.body);
+    const escalation = validateEscalation(req.body); // undefined when not sent
 
     const payload = await withTransaction(async (client) => {
       const project = await loadProject(client, req.params.projectId, { lock: true });
@@ -360,9 +414,9 @@ router.put("/", requireRole(GM), async (req, res) => {
           await client.query(
             `UPDATE bomsections
                 SET name = $2, subheading = $3, sortorder = $4::int, laborrate = $5::numeric,
-                    laboramount = $6::numeric, laborincludedinitems = $7::boolean
+                    laboramount = $6::numeric, laborincludedinitems = $7::boolean, costcategory = $8
               WHERE sectionid = $1::uuid`,
-            [sectionId, s.name, s.subheading, si + 1, laborRate, laborAmount, s.laborIncludedInItems]
+            [sectionId, s.name, s.subheading, si + 1, laborRate, laborAmount, s.laborIncludedInItems, s.costCategory]
           );
         } else {
           sectionId = await insertSection(client, bom.bomid, { ...s, laborRate, laborAmount }, si + 1);
@@ -385,6 +439,14 @@ router.put("/", requireRole(GM), async (req, res) => {
       if (removedSections.length) {
         await client.query(`DELETE FROM bomsections WHERE sectionid = ANY($1::uuid[])`, [removedSections]);
       }
+      if (escalation) {
+        await client.query(
+          `UPDATE boms SET escalationrate = COALESCE($2::numeric, escalationrate),
+                           escalationnote = CASE WHEN $3::boolean THEN $4 ELSE escalationnote END
+            WHERE bomid = $1::uuid`,
+          [bom.bomid, escalation.escalationRate ?? null, escalation.escalationNote !== undefined, escalation.escalationNote ?? null]
+        );
+      }
       await touch(client, bom.bomid, req.user.id);
       return buildResponse(client, project);
     });
@@ -397,6 +459,14 @@ router.put("/", requireRole(GM), async (req, res) => {
 // PATCH /approve — body { confirmWarnings: true } when there are warnings.
 router.patch("/approve", requireRole(GM), async (req, res) => {
   try {
+    // Adviser item 5: record when and with whom the client agreed (the agreement
+    // itself happens outside the system). Checked first so the dialog can show it.
+    const agreement = validateClientAgreement(req.body);
+    if (agreement.errors.length) {
+      throw httpError(400, agreement.errors[0].message, { errors: agreement.errors });
+    }
+    const { clientAgreedOn, clientAgreedBy, agreementRef } = agreement.value;
+
     const result = await withTransaction(async (client) => {
       const project = await loadProject(client, req.params.projectId, { lock: true });
       assertProjectEditable(project);
@@ -408,25 +478,27 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
       const problems = approvalProblems(sections);
       if (problems.length) throw httpError(409, problems.join(" "));
 
-      const warnings = buildBomWarnings(sections, { statedTotal: n(bom.statedtotal) }).filter((w) => w.level === "warning");
+      const warnings = warningsFor(bom, sections, project).filter((w) => w.level === "warning");
       if (warnings.length && req.body?.confirmWarnings !== true) {
         const err = httpError(409, "Check the warnings against the signed BOM, then confirm to approve.");
         err.details = { code: "CONFIRM_WARNINGS", warnings };
         throw err;
       }
 
-      const totals = bomTotals(sections);
       await client.query(
         `UPDATE boms SET status = 'Approved', approvedby = $2::uuid, approvedat = NOW(),
+                         clientagreedon = $3::date, clientagreedby = $4, agreementref = $5,
                          updatedby = $2::uuid, updatedat = NOW()
           WHERE bomid = $1::uuid`,
-        [bom.bomid, req.user.id]
+        [bom.bomid, req.user.id, clientAgreedOn, clientAgreedBy, agreementRef]
       );
       // Client: the price given to the client is the BOM total, i.e. the signed
       // TOTAL PROJECT COST. Use the file's stated total when there is one
       // (issue #89: lines the importer can't itemise must not lower the
       // budget); a BOM entered by hand uses the computed total.
-      const budget = budgetFor(n(bom.statedtotal), totals.total);
+      // Adviser item 6: the project's Target Budget adds the escalation
+      // allowance on top; the agreed price itself (statedTotal) never changes.
+      const budget = budgetBreakdown(bom, sections).targetBudget;
       const previousBudget = n(project.budget);
       if (round2(previousBudget) !== budget) {
         await client.query(`UPDATE projects SET budget = $2::numeric WHERE projectid = $1::uuid`, [
@@ -465,6 +537,7 @@ router.patch("/reopen", requireRole(GM), async (req, res) => {
 
       await client.query(
         `UPDATE boms SET status = 'Draft', reopenedby = $2::uuid, reopenedat = NOW(), revisionnote = $3,
+                         clientagreedon = NULL, clientagreedby = NULL, agreementref = NULL,
                          updatedby = $2::uuid, updatedat = NOW()
           WHERE bomid = $1::uuid`,
         [bom.bomid, req.user.id, reason]
