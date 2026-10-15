@@ -9,14 +9,52 @@ const router = express.Router();
 router.use(requireAuth);
 
 // GET /mine — the calling user's notifications, newest first.
-// ?unreadOnly=true filters to isRead = false.
+//   ?unreadOnly=true   only unread
+//   ?before=<ISO ts>   keyset page: rows older than this createdAt (for "load more")
+//   ?limit=<n>         page size (default 30, max 100)
+// Ticket rows carry enough of the ticket (project/status/type/submitter) to
+// deep-link straight to it without a second request.
 router.get("/mine", async (req, res, next) => {
     try {
-        const { unreadOnly } = req.query;
-        const base = "SELECT * FROM notifications WHERE recipientId = $1";
-        const result = unreadOnly === "true"
-            ? await query(`${base} AND isRead = FALSE ORDER BY createdAt DESC`, [req.user.id])
-            : await query(`${base} ORDER BY createdAt DESC LIMIT 50`, [req.user.id]);
+        const { unreadOnly, before } = req.query;
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
+
+        const params = [req.user.id];
+        const where = ["n.recipientId = $1"];
+        if (unreadOnly === "true") where.push("n.isRead = FALSE");
+        if (before) {
+            params.push(before);
+            where.push(`n.createdAt < $${params.length}`);
+        }
+        params.push(limit);
+
+        // Milestone/Task notifications carry the milestone's or task's own id
+        // as relatedEntityId (see milestoneProgress.js) — join through to the
+        // project id so the web app's notifications can deep-link straight to
+        // "that project's milestones", the same way the Ticket join does.
+        const result = await query(
+            `SELECT n.*,
+                    t.projectId   AS ticket_projectid,
+                    t.status      AS ticket_status,
+                    t.ticketType  AS ticket_type,
+                    t.submittedBy AS ticket_submittedby,
+                    t.createdAt   AS ticket_createdat,
+                    m.projectId   AS milestone_projectid,
+                    tm.projectId  AS task_projectid
+               FROM notifications n
+               LEFT JOIN tickets t
+                 ON n.relatedEntityType = 'Ticket' AND t.ticketId = n.relatedEntityId
+               LEFT JOIN milestones m
+                 ON n.relatedEntityType = 'Milestone' AND m.milestoneId = n.relatedEntityId
+               LEFT JOIN tasks tk
+                 ON n.relatedEntityType = 'Task' AND tk.taskId = n.relatedEntityId
+               LEFT JOIN milestones tm
+                 ON tk.milestoneId = tm.milestoneId
+              WHERE ${where.join(" AND ")}
+              ORDER BY n.createdAt DESC
+              LIMIT $${params.length}`,
+            params
+        );
         res.json(result.rows);
     } catch (err) {
         next(err);

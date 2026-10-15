@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/*.test.js",
+    "migrate": "node scripts/migrate.js",
     "eval:ocr": "node scripts/ocr-eval/eval-ocr.js --layout --verbose"
   },
   "dependencies": {

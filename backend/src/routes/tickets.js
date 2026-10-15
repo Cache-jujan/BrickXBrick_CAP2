@@ -5,10 +5,53 @@ const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { assertLegalTransition, logTransition } = require("../lib/ticketTransitions");
+const { notify } = require("../lib/notify");
 const { VALID_TICKET_TYPES } = require("../lib/ticketRouting");
 
 const router = express.Router();
 router.use(requireAuth);
+
+// After a Site Manager creates one or more tickets, tell the managing PM of
+// each project. One notification per (project) per request, so a batch of
+// several requests to the same project is a single "N new requests" notice
+// (decided: one notification per batch). PM-created tickets are born
+// Acknowledged and notify the Purchaser via logTransition instead, so they're
+// skipped here. Resubmissions are flagged in the message.
+async function notifySubmission(client, submitter, tickets) {
+    if (submitter.role !== "Site Manager") return;
+    // Group this submission's tickets by project.
+    const byProject = new Map();
+    for (const t of tickets) {
+        if (!byProject.has(t.projectid)) byProject.set(t.projectid, []);
+        byProject.get(t.projectid).push(t);
+    }
+    for (const [projectId, group] of byProject) {
+        const projRes = await client.query(
+            "SELECT name, projectManagerId FROM projects WHERE projectId = $1",
+            [projectId]
+        );
+        if (projRes.rowCount === 0) continue;
+        const { name: projectName, projectmanagerid: pmId } = projRes.rows[0];
+        const resubmitted = group.filter((t) => t.resubmittedfromid != null).length;
+        let message;
+        if (group.length === 1) {
+            const only = group[0];
+            const lead = only.resubmittedfromid != null ? "resubmitted a request" : "sent a request";
+            message = `${submitter.name} ${lead}: "${only.subject}" (${projectName}).`;
+        } else {
+            const extra = resubmitted > 0 ? ` (${resubmitted} resubmitted)` : "";
+            message = `${submitter.name} sent ${group.length} requests${extra} (${projectName}).`;
+        }
+        await notify(client, {
+            recipientIds: [pmId],
+            excludeUserId: submitter.id,
+            type: "TicketSubmitted",
+            entityType: "Ticket",
+            entityId: group[0].ticketid,
+            message,
+        });
+    }
+}
 
 async function getTicket(ticketId) {
     const result = await query(
@@ -61,6 +104,7 @@ async function createTicketRecord(client, user, body) {
             bomItemID,
             notInBom,
             notInBomReason,
+            resubmittedFromId,
         } = body;
 
         const isPM = user.role === "Project Manager";
@@ -264,6 +308,49 @@ async function createTicketRecord(client, user, body) {
             }
         }
 
+        // Fix & resubmit (Site Manager only): this new ticket replaces a
+        // ticket of theirs that the PM rejected. The original must be their
+        // own, currently Rejected, and not already resubmitted (a partial
+        // unique index also enforces the last rule at the DB level).
+        let resolvedResubmittedFromId = null;
+        if (resubmittedFromId !== undefined && resubmittedFromId !== null && resubmittedFromId !== "") {
+            if (!isSM) {
+                const err = new Error("Only a Site Manager can resubmit a rejected request");
+                err.status = 403;
+                throw err;
+            }
+            const origResult = await query(
+                "SELECT ticketId, submittedBy, status, projectId FROM tickets WHERE ticketId = $1",
+                [resubmittedFromId]
+            );
+            if (origResult.rowCount === 0) {
+                const err = new Error("The request you're resubmitting no longer exists");
+                err.status = 404;
+                throw err;
+            }
+            const orig = origResult.rows[0];
+            if (orig.submittedby !== user.id) {
+                const err = new Error("You can only resubmit your own request");
+                err.status = 403;
+                throw err;
+            }
+            if (orig.status !== "Rejected") {
+                const err = new Error("Only a rejected request can be resubmitted");
+                err.status = 409;
+                throw err;
+            }
+            const dupe = await query(
+                "SELECT 1 FROM tickets WHERE resubmittedFromId = $1",
+                [resubmittedFromId]
+            );
+            if (dupe.rowCount > 0) {
+                const err = new Error("This request was already resubmitted");
+                err.status = 409;
+                throw err;
+            }
+            resolvedResubmittedFromId = resubmittedFromId;
+        }
+
         // Creator-dependent columns.
         const status = isPM ? "Acknowledged" : "Pending";
         const requestedBudgetValue = isSM && isMaterialReq ? requestedBudget : null;
@@ -278,8 +365,8 @@ async function createTicketRecord(client, user, body) {
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
                     materialType, quantity, unit, vendorName, requestedBudget,
                     bomItemID, notInBom, notInBomReason,
-                    status, assignedTo, acknowledgedBy, approvedBudget, acknowledgedAt)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ${acknowledgedAtSql})
+                    status, assignedTo, acknowledgedBy, approvedBudget, resubmittedFromId, acknowledgedAt)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${acknowledgedAtSql})
                  RETURNING *`,
                 [
                     projectID,
@@ -300,6 +387,7 @@ async function createTicketRecord(client, user, body) {
                     assignedToValue,
                     acknowledgedByValue,
                     approvedBudgetValue,
+                    resolvedResubmittedFromId,
                 ]
             );
             const newTicket = insertResult.rows[0];
@@ -328,7 +416,11 @@ async function createTicketRecord(client, user, body) {
 // POST / — create a single ticket (SM request, or PM direct create).
 router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
-        const ticket = await withTransaction((client) => createTicketRecord(client, req.user, req.body));
+        const ticket = await withTransaction(async (client) => {
+            const created = await createTicketRecord(client, req.user, req.body);
+            await notifySubmission(client, req.user, [created]);
+            return created;
+        });
         res.status(201).json(ticket);
     } catch (err) {
         next(err);
@@ -356,6 +448,8 @@ router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req
             for (const item of items) {
                 out.push(await createTicketRecord(client, req.user, item));
             }
+            // One batch → one "N new requests" notice per project (not N).
+            await notifySubmission(client, req.user, out);
             return out;
         });
         res.status(201).json({ tickets: created });
@@ -382,10 +476,23 @@ router.get("/vendors", requireRole("Site Manager", "Project Manager"), async (re
 // GET /assigned — tickets currently routed to the calling Purchaser.
 // Pending tickets are naturally excluded: assignedTo is NULL until a PM
 // acknowledges and assigns a Purchaser.
+// expenseCount/expenseTotal: same non-blocking double-capture tightening as
+// /submitted (see comment there) — Purchasers can also add more than one
+// expense to a ticket, this just surfaces that one is already captured.
 router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const result = await query(
-            "SELECT * FROM tickets WHERE assignedTo = $1 ORDER BY createdAt DESC",
+            `SELECT t.*,
+                    COALESCE(ec.expenseCount, 0) AS expenseCount,
+                    COALESCE(ec.expenseTotal, 0) AS expenseTotal
+               FROM tickets t
+               LEFT JOIN LATERAL (
+                   SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal
+                     FROM expenses e
+                    WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'
+               ) ec ON TRUE
+              WHERE t.assignedTo = $1
+              ORDER BY t.createdAt DESC`,
             [req.user.id]
         );
         res.json(result.rows);
@@ -447,6 +554,83 @@ router.get("/pending", requireRole("Project Manager"), async (req, res, next) =>
     }
 });
 
+// GET /managed — all tickets on the calling PM's projects, filtered by a
+// status group, with the context the PM needs to act:
+//   ?status=Pending       -> "Needs action" queue (same rows as /pending)
+//   ?status=Acknowledged  -> "With purchaser"
+//   ?status=History       -> Resolved + Rejected (newest first)
+//   &projectId=<id>       -> narrow to one of the PM's projects (optional)
+//
+// For on-BOM Material Requests it also returns BOM context so the PM can judge
+// the budget: the BOM unit cost, BOM quantity, and how much of that BOM item
+// has already been requested on OTHER non-rejected tickets (so "this request"
+// can be compared against what's left). Scope is enforced in SQL.
+router.get("/managed", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const group = req.query.status || "Pending";
+        let statusClause;
+        if (group === "Pending") statusClause = "t.status = 'Pending'";
+        else if (group === "Acknowledged") statusClause = "t.status = 'Acknowledged'";
+        else if (group === "History") statusClause = "t.status IN ('Resolved', 'Rejected')";
+        else {
+            const err = new Error("status must be Pending, Acknowledged, or History");
+            err.status = 400;
+            throw err;
+        }
+
+        const params = [req.user.id];
+        let projectClause = "";
+        if (req.query.projectId) {
+            params.push(req.query.projectId);
+            projectClause = `AND t.projectId = $${params.length}`;
+        }
+
+        // Order: the queue reads oldest-first (act on what's waited longest);
+        // history reads newest-first.
+        const order = group === "History"
+            ? "ORDER BY COALESCE(t.resolvedAt, t.updatedAt) DESC, t.createdAt DESC"
+            : "ORDER BY t.createdAt ASC";
+
+        const result = await query(
+            `SELECT t.*,
+                    p.name AS projectName,
+                    u.name AS submittedByName,
+                    r.name AS resolvedByName,
+                    a.name AS assignedToName,
+                    orig.subject         AS "resubmitOfSubject",
+                    orig.rejectionReason AS "resubmitOfReason",
+                    EXISTS (SELECT 1 FROM tickets n WHERE n.resubmittedFromId = t.ticketId) AS "wasResubmitted",
+                    bi.quantity AS "bomQuantity",
+                    bi.unitCost AS "bomUnitCost",
+                    bi.unit     AS "bomUnit",
+                    COALESCE(agg.alreadyRequested, 0) AS "bomAlreadyRequested"
+               FROM tickets t
+               JOIN projects p ON p.projectId = t.projectId
+               LEFT JOIN users u ON u.userId = t.submittedBy
+               LEFT JOIN users r ON r.userId = t.resolvedBy
+               LEFT JOIN users a ON a.userId = t.assignedTo
+               LEFT JOIN tickets orig ON orig.ticketId = t.resubmittedFromId
+               LEFT JOIN bomItems bi ON bi.bomItemId = t.bomItemId
+               LEFT JOIN LATERAL (
+                   SELECT SUM(o.quantity) AS alreadyRequested
+                     FROM tickets o
+                    WHERE o.bomItemId = t.bomItemId
+                      AND o.bomItemId IS NOT NULL
+                      AND o.ticketId <> t.ticketId
+                      AND o.status <> 'Rejected'
+               ) agg ON TRUE
+              WHERE p.projectManagerId = $1
+                AND ${statusClause}
+                ${projectClause}
+              ${order}`,
+            params
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // GET /purchasers — active Purchasers available to a PM for assignment.
 router.get("/purchasers", requireRole("Project Manager"), async (req, res, next) => {
     try {
@@ -465,12 +649,28 @@ router.get("/purchasers", requireRole("Project Manager"), async (req, res, next)
 // GET /submitted — tickets created by the calling user (Site Manager view).
 // No role gate: the WHERE filter already scopes results to the caller's own
 // tickets, so a PM/Purchaser hitting this just gets an empty list.
+//
+// Also returns, per ticket: resubmittedById (the newer ticket that
+// resubmitted this one, if any — lets My Requests show "Resubmitted ✓"
+// instead of a "Fix & resubmit" button) and expenseCount/expenseTotal
+// (non-rejected expenses already captured against it — a ticket CAN
+// legitimately have more than one, so this is display-only: it flips the
+// card's action from "+ Add Expense" to "+ Add another expense", never a
+// backend block).
 router.get("/submitted", async (req, res, next) => {
     try {
         const result = await query(
-            `SELECT t.*, u.role AS rejectedByRole
+            `SELECT t.*, u.role AS rejectedByRole, n.ticketId AS resubmittedById,
+                    COALESCE(ec.expenseCount, 0) AS expenseCount,
+                    COALESCE(ec.expenseTotal, 0) AS expenseTotal
                FROM tickets t
                LEFT JOIN users u ON u.userId = t.resolvedBy
+               LEFT JOIN tickets n ON n.resubmittedFromId = t.ticketId
+               LEFT JOIN LATERAL (
+                   SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal
+                     FROM expenses e
+                    WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'
+               ) ec ON TRUE
               WHERE t.submittedBy = $1
               ORDER BY t.createdAt DESC`,
             [req.user.id]

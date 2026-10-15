@@ -10,7 +10,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Redirect, router } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
+import type { Href } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import {
@@ -18,9 +19,11 @@ import {
   fetchActiveProjects,
   fetchApprovedVendors,
   fetchBomItems,
+  fetchSubmittedTicket,
   type ApprovedVendor,
   type BomItem,
   type Project,
+  type Ticket,
   type TicketInput,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
@@ -66,13 +69,41 @@ function emptyCard(id: string): Card {
   };
 }
 
+// Build a card prefilled from a rejected ticket, so the SM lands with every
+// field already filled from the original and only has to fix what the PM
+// flagged. BOM linkage is preserved; "not in BOM" too.
+function prefilledCard(id: string, t: Ticket): Card {
+  const tt = (t.tickettype as Card["ticketType"]) || "Material Request";
+  const isReport = tt === "Report";
+  const notInBom = t.notinbom === true;
+  return {
+    id,
+    ticketType: tt,
+    bomItemID: isReport ? "" : (t.bomitemid ? String(t.bomitemid) : (notInBom ? NOT_IN_BOM : "")),
+    materialType: t.materialtype || "",
+    notInBomReason: t.notinbomreason || "",
+    quantity: t.quantity == null ? "" : String(t.quantity),
+    unit: t.unit || "",
+    vendorName: t.vendorname || "",
+    requestedBudget: t.requestedbudget == null ? "" : String(t.requestedbudget),
+    reportText: isReport ? (t.description || t.subject || "") : "",
+  };
+}
+
 export default function TicketRequestScreen() {
   const session = getSession();
+  // Optional query param: when present, this screen is in "fix & resubmit"
+  // mode — one card prefilled from the rejected ticket, project locked,
+  // "+ Add another" hidden, and the ticket id sent back as resubmittedFromId.
+  const { resubmitFrom } = useLocalSearchParams<{ resubmitFrom?: string }>();
+  const resubmitId = typeof resubmitFrom === "string" ? resubmitFrom : null;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [vendors, setVendors] = useState<ApprovedVendor[]>([]);
+  // The rejected ticket we're resubmitting (null in the ordinary flow).
+  const [resubmitOf, setResubmitOf] = useState<Ticket | null>(null);
 
   // step: which stage of the gate we're in.
   const [project, setProject] = useState<Project | null>(null);
@@ -86,16 +117,33 @@ export default function TicketRequestScreen() {
 
   useEffect(() => {
     if (!session || session.user.role !== "Site Manager") return;
-    Promise.all([fetchActiveProjects(), fetchApprovedVendors()])
-      .then(([projectList, vendorList]) => {
+    const loads: Promise<unknown>[] = [fetchActiveProjects(), fetchApprovedVendors()];
+    if (resubmitId) loads.push(fetchSubmittedTicket(resubmitId));
+    Promise.all(loads)
+      .then((results) => {
+        const projectList = results[0] as Project[];
+        const vendorList = results[1] as ApprovedVendor[];
         setProjects(projectList);
         setVendors(vendorList);
-        // Auto-route: exactly one project → skip the chooser.
-        if (projectList.length === 1) setProject(projectList[0]);
+        if (resubmitId) {
+          const orig = results[2] as Ticket;
+          if (orig.status !== "Rejected") {
+            setError("This request has already been handled — only rejected requests can be resubmitted.");
+            return;
+          }
+          setResubmitOf(orig);
+          const origProject = projectList.find((p) => p.projectid === orig.projectid);
+          if (origProject) setProject(origProject);
+          // Prefill one card from the rejected original.
+          setCards([prefilledCard("c1", orig)]);
+        } else if (projectList.length === 1) {
+          // Auto-route: exactly one project → skip the chooser.
+          setProject(projectList[0]);
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load request options."))
       .finally(() => setLoading(false));
-  }, [session?.user.role]);
+  }, [session?.user.role, resubmitId]);
 
   // Load the approved BOM items once a project is chosen (for the item picker).
   useEffect(() => {
@@ -206,6 +254,14 @@ export default function TicketRequestScreen() {
     return base;
   }
 
+  // In resubmit mode, tag the first card with the original ticket's id so the
+  // backend links the two (and the PM sees the resubmission marked).
+  function withResubmitTag(payloads: TicketInput[]): TicketInput[] {
+    if (!resubmitOf) return payloads;
+    const [first, ...rest] = payloads;
+    return [{ ...first, resubmittedFromId: resubmitOf.ticketid }, ...rest];
+  }
+
   const firstInvalid = cards.map(validateCard).findIndex((e) => e !== null);
   const canSubmit = firstInvalid === -1 && !submitting && !!project;
 
@@ -219,11 +275,16 @@ export default function TicketRequestScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      const created = await createTicketsBatch(cards.map(buildPayload));
+      const created = await createTicketsBatch(withResubmitTag(cards.map(buildPayload)));
       Alert.alert(
-        created.length > 1 ? "Tickets submitted" : "Ticket submitted",
-        `${created.length} ${created.length > 1 ? "requests were" : "request was"} sent to your Project Manager.`,
-        [{ text: "Done", onPress: () => router.replace("/site-manager") }]
+        resubmitOf ? "Request resubmitted" : created.length > 1 ? "Tickets submitted" : "Ticket submitted",
+        resubmitOf
+          ? "Your updated request was sent to your Project Manager."
+          : `${created.length} ${created.length > 1 ? "requests were" : "request was"} sent to your Project Manager.`,
+        // A ternary between two route literals widens to plain `string` (not
+        // the literal union typed routes expects — see the comment on
+        // lib/notificationMeta.ts's routeForNotification for the same issue).
+        [{ text: "Done", onPress: () => router.replace((resubmitOf ? "/site-manager/my-requests" : "/site-manager") as Href) }]
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to submit the tickets.");
@@ -271,15 +332,29 @@ export default function TicketRequestScreen() {
   // Form.
   return (
     <Shell>
-      <Text style={styles.title}>Request tickets</Text>
+      <Text style={styles.title}>{resubmitOf ? "Fix & resubmit" : "Request tickets"}</Text>
       <View style={styles.projectBar}>
         <Text style={styles.projectBarName} numberOfLines={1}>{project.name}</Text>
-        {projects.length > 1 && (
+        {!resubmitOf && projects.length > 1 && (
           <Pressable onPress={() => { setProject(null); setCards([emptyCard("c1")]); cardSeq.current = 1; }}>
             <Text style={styles.changeLink}>Change</Text>
           </Pressable>
         )}
       </View>
+
+      {resubmitOf && (
+        <View style={styles.rejectionBanner}>
+          <Text style={styles.rejectionBannerLabel}>
+            Rejected{resubmitOf.rejectedbyrole ? ` by ${resubmitOf.rejectedbyrole}` : ""}
+          </Text>
+          <Text style={styles.rejectionBannerReason}>
+            {resubmitOf.rejectionreason?.trim() || "No reason given."}
+          </Text>
+          <Text style={styles.rejectionBannerHint}>
+            Fix what's needed below, then resubmit — this will replace the rejected request.
+          </Text>
+        </View>
+      )}
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -433,13 +508,19 @@ export default function TicketRequestScreen() {
         );
       })}
 
-      <Pressable onPress={addCard} style={styles.addButton}>
-        <Text style={styles.addButtonText}>＋ Add another ticket</Text>
-      </Pressable>
+      {!resubmitOf && (
+        <Pressable onPress={addCard} style={styles.addButton}>
+          <Text style={styles.addButtonText}>＋ Add another ticket</Text>
+        </Pressable>
+      )}
 
       <Pressable onPress={handleSubmit} disabled={!canSubmit} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
-          {submitting ? "Submitting…" : cards.length > 1 ? `Submit ${cards.length} tickets` : "Submit ticket"}
+          {submitting
+            ? resubmitOf ? "Resubmitting…" : "Submitting…"
+            : resubmitOf
+              ? "Resubmit request"
+              : cards.length > 1 ? `Submit ${cards.length} tickets` : "Submit ticket"}
         </Text>
       </Pressable>
     </Shell>
@@ -496,6 +577,10 @@ const styles = StyleSheet.create({
   title: { color: COLORS.heading, fontSize: 27, fontWeight: "800", marginTop: 7 },
   subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 6 },
   errorText: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 12, borderWidth: 1, color: "#B42318", lineHeight: 19, marginTop: 14, padding: 12 },
+  rejectionBanner: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 14 },
+  rejectionBannerLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
+  rejectionBannerReason: { color: COLORS.heading, fontSize: 14, fontWeight: "600", lineHeight: 20 },
+  rejectionBannerHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
   loadingCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, gap: 10, marginTop: 18, padding: 24 },
   muted: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
 

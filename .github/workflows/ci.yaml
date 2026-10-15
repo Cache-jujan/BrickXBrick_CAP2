@@ -64,3 +64,45 @@ jobs:
           context: ./backend
           push: false
           tags: brickxbrick-backend:ci
+
+  migrations:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: brickxbrick_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/brickxbrick_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply all migrations on a fresh database
+        run: npm run migrate
+
+      - name: Re-run must be a no-op (idempotency + numbering guard)
+        run: |
+          output="$(npm run migrate --silent)"
+          echo "$output"
+          echo "$output" | grep -q "nothing to apply" || { echo "::error::Second migrate run applied changes — a migration is not safe to re-run, or numbering collided."; exit 1; }

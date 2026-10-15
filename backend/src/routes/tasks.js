@@ -323,6 +323,76 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
     }
 });
 
+// --- #5: Planning-phase task completion ----------------------------------
+
+// task + its milestone's phase/project, for the PM-ownership + phase check.
+async function getTaskForCompletion(taskId) {
+    const result = await query(
+        `SELECT t.*, m.phase AS milestonephase, m.milestoneId AS taskmilestoneid,
+                p.projectManagerId
+           FROM tasks t
+           JOIN milestones m ON m.milestoneId = t.milestoneId
+           JOIN projects p ON p.projectId = m.projectId
+          WHERE t.taskId = $1`,
+        [taskId]
+    );
+    if (result.rowCount === 0) {
+        const err = new Error(`Task ${taskId} not found`);
+        err.status = 404;
+        throw err;
+    }
+    return result.rows[0];
+}
+
+// PATCH /:id/complete — PM marks a Planning-phase task done. There's no SM
+// photo-submission/review flow for Planning work (#5) — it's "Handled by:
+// GM/PM" and only the owning PM can close it out, optionally with a note.
+// Construction tasks keep going through POST /:id/progress + the PM
+// Acknowledge/Flag review above; this route refuses them.
+router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const { note } = req.body;
+
+        const task = await getTaskForCompletion(req.params.id);
+
+        if (task.projectmanagerid !== req.user.id) {
+            const err = new Error("You may only complete tasks on a project you are the Project Manager for");
+            err.status = 403;
+            throw err;
+        }
+        if (task.milestonephase !== "Planning") {
+            const err = new Error("Only a Planning-phase task can be completed this way — Construction tasks are completed by acknowledging the Site Manager's photo submission");
+            err.status = 409;
+            throw err;
+        }
+        if (task.status === "Completed") {
+            const err = new Error("This task is already completed");
+            err.status = 409;
+            throw err;
+        }
+
+        const updated = await withTransaction(async (client) => {
+            const taskUpdate = await client.query(
+                `UPDATE tasks
+                    SET status = 'Completed'::varchar,
+                        completionPercentage = 100,
+                        completedBy = $1,
+                        completedAt = NOW(),
+                        completionNote = $2
+                  WHERE taskId = $3
+                  RETURNING *`,
+                [req.user.id, note || null, req.params.id]
+            );
+            await recalcMilestoneProgress(client, task.taskmilestoneid);
+            return taskUpdate.rows[0];
+        });
+
+        res.json(updated);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // multer errors (e.g. file too large) are raised via next(err) before ever
 // reaching the handler above, so they need their own handler here.
 router.use((err, req, res, next) => {

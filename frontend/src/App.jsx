@@ -20,6 +20,7 @@ import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
 import { SubmitExpensePage } from "./pages/Expenses/SubmitExpensePage";
 import { MyExpensesPage } from "./pages/Expenses/MyExpensesPage";
+import { NotificationsPage } from "./pages/Notifications/NotificationsPage";
 import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
 import { SetPasswordPage } from "./pages/Auth/SetPasswordPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
@@ -66,6 +67,10 @@ export default function App() {
             <Route path="/dashboard/sm" element={<DashboardPage />} />
             <Route path="/dashboard/purchaser" element={<DashboardPage />} />
             <Route path="/dashboard/admin" element={<DashboardPage />} />
+
+            {/* Every web role lands here (mobile-only roles never reach
+                AppShell's DashboardLayout at all — see MOBILE_ONLY_ROLES). */}
+            <Route path="/notifications" element={<NotificationsPage />} />
 
             <Route
               path="/tickets/new"
