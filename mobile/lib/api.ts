@@ -365,6 +365,7 @@ export type OpenRequest = {
   projectName: string;
   subject: string;
   materialType: string;
+  bomItemID: string | null;
   vendorName: string | null;
   requestedQuantity: number;
   remainingQuantity: number;
@@ -373,7 +374,7 @@ export type OpenRequest = {
   createdAt: string;
 };
 
-export type SplitLine = { description: string; quantity: number; amount: number };
+export type SplitLine = { description: string; quantity: number; amount: number; bomItemID?: string | null };
 
 export type PlanLine = { lineIndex: number; description: string; quantity: number; amount: string };
 
