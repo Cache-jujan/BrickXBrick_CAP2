@@ -15,11 +15,25 @@ function scheduleText(project) {
   return null;
 }
 
+function ProjectLine({ project }) {
+  const schedule = scheduleText(project);
+  return (
+    <li>
+      {project.name}
+      <span className="manager-picker-meta">
+        {" "}· {project.status} · <span className="manager-picker-progress">{project.progress ?? 0}% complete</span>
+        {schedule ? ` · ${schedule}` : ""}
+      </span>
+    </li>
+  );
+}
+
 /**
  * Manager dropdown that lists only managers who can take one more project
  * (adviser: "GM selection dropdowns must display only eligible managers"),
- * followed by a collapsed list of the busy ones and what they're working on,
- * so the GM can see why they're missing (adviser: consider their schedules).
+ * then a collapsed list of EVERY manager with their current load: each open
+ * project with its status, % complete and schedule, so the GM sees how busy
+ * someone is, not just whether they're at the limit (adviser item 4).
  *
  * managers: rows from /eligible-managers or /eligible-site-managers
  * currentId: the manager already on this project (always selectable)
@@ -37,8 +51,12 @@ export function ManagerPicker({
   disabled,
 }) {
   const selectable = managers.filter((m) => m.available || m.userid === currentId);
-  const busy = managers.filter((m) => !m.available && m.userid !== currentId);
+  const busyCount = managers.filter((m) => !m.available && m.userid !== currentId).length;
   const limit = managers[0]?.maxOpenProjects;
+  // Free managers first, then the least loaded, so the best choices read first.
+  const byLoad = [...managers].sort(
+    (a, b) => Number(b.available) - Number(a.available) || a.openProjectCount - b.openProjectCount
+  );
 
   return (
     <div className="manager-picker">
@@ -54,37 +72,42 @@ export function ManagerPicker({
         <option value="">{loading ? "Loading…" : emptyOptionLabel}</option>
         {selectable.map((m) => (
           <option key={m.userid} value={m.userid}>
-            {m.name.trim()} ({m.email})
-            {m.openProjectCount ? ` · ${m.openProjectCount} of ${m.maxOpenProjects} projects` : ""}
+            {m.name.trim()} ({m.email}) · {m.openProjectCount} of {m.maxOpenProjects} project
+            {m.maxOpenProjects === 1 ? "" : "s"}
           </option>
         ))}
       </Field>
 
-      {!loading && busy.length > 0 && (
+      {!loading && managers.length > 0 && (
         <details className="manager-picker-busy">
           <summary>
-            {busy.length} not available (already at {limit} open project{limit === 1 ? "" : "s"})
+            See each manager&apos;s current load
+            {busyCount > 0 ? ` (${busyCount} at the limit of ${limit})` : ""}
           </summary>
           <ul className="manager-picker-list">
-            {busy.map((m) => {
+            {byLoad.map((m) => {
               const shown = m.openProjects.slice(0, SHOWN_PER_MANAGER);
               const hidden = m.openProjects.length - shown.length;
+              const full = !m.available && m.userid !== currentId;
               return (
                 <li key={m.userid}>
                   <strong>{m.name.trim()}</strong>
-                  <span className="manager-picker-count"> · {m.openProjectCount} open</span>
-                  <ul>
-                    {shown.map((p) => {
-                      const schedule = scheduleText(p);
-                      return (
-                        <li key={p.projectid}>
-                          {p.name}
-                          {schedule ? <span className="manager-picker-meta"> · {schedule}</span> : null}
-                        </li>
-                      );
-                    })}
-                    {hidden > 0 && <li className="manager-picker-meta">+{hidden} more</li>}
-                  </ul>
+                  <span className="manager-picker-count">
+                    {" "}· {m.openProjectCount} of {m.maxOpenProjects} open
+                  </span>
+                  <span className={"manager-picker-tag" + (full ? " is-full" : "")}>
+                    {full ? "At limit" : "Available"}
+                  </span>
+                  {shown.length > 0 ? (
+                    <ul>
+                      {shown.map((p) => (
+                        <ProjectLine key={p.projectid} project={p} />
+                      ))}
+                      {hidden > 0 && <li className="manager-picker-meta">+{hidden} more</li>}
+                    </ul>
+                  ) : (
+                    <p className="manager-picker-meta manager-picker-none">No open projects</p>
+                  )}
                 </li>
               );
             })}

@@ -25,6 +25,8 @@ const {
   loadManagerWorkload,
   assertManagerAvailable,
   notifyProject,
+  validateLimits,
+  saveLimits,
 } = require("../lib/projectRules");
 
 const router = express.Router();
@@ -273,6 +275,30 @@ router.get("/options", requireRole("General Manager"), async (req, res) => {
       pmMaxOpenProjects: settings.pmMaxOpenProjects,
       smMaxOpenProjects: settings.smMaxOpenProjects,
     });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// GET /settings/limits — GM. How many open (Draft/Active) projects a PM and an
+// SM may hold at once (adviser item 4; client policy, editable without a code change).
+router.get("/settings/limits", requireRole("General Manager"), async (req, res) => {
+  try {
+    const settings = await loadProjectSettings(query);
+    res.json({ pm: settings.pmMaxOpenProjects, sm: settings.smMaxOpenProjects });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// PATCH /settings/limits — GM. Body { pm?, sm? }, whole numbers 1–10.
+// Lowering a limit never unassigns anyone; it only blocks new assignments.
+router.patch("/settings/limits", requireRole("General Manager"), async (req, res) => {
+  try {
+    const limits = validateLimits(req.body);
+    await saveLimits(query, limits);
+    const settings = await loadProjectSettings(query);
+    res.json({ pm: settings.pmMaxOpenProjects, sm: settings.smMaxOpenProjects });
   } catch (err) {
     sendError(res, err);
   }
