@@ -5,9 +5,30 @@ import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
+import { EyeIcon, EyeOffIcon } from "../../components/ui/icons";
 import "./AuthPages.css";
 
 const MIN_LENGTH = 8;
+
+// A password field with its own show/hide button (the Field component has none).
+function PasswordField({ label, value, onChange, autoComplete }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="auth-password">
+      <Field label={label} required type={shown ? "text" : "password"} value={value}
+        onChange={onChange} autoComplete={autoComplete} />
+      <button
+        type="button"
+        className="auth-password-toggle"
+        onClick={() => setShown((v) => !v)}
+        aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        aria-pressed={shown}
+      >
+        {shown ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
+    </div>
+  );
+}
 
 export function SetPasswordPage() {
   const navigate = useNavigate();
@@ -68,10 +89,10 @@ export function SetPasswordPage() {
         {showForm && (
           <form onSubmit={handleSubmit} noValidate>
             <p className="auth-simple-sub">Choose a password you'll use to sign in to Brick x Brick.</p>
-            <Field label="New password" required type="password" value={password}
-              onChange={(e) => setPassword(e.target.value)} />
-            <Field label="Confirm password" required type="password" value={confirm}
-              onChange={(e) => setConfirm(e.target.value)} />
+            <PasswordField label="New password" value={password}
+              onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+            <PasswordField label="Confirm password" value={confirm}
+              onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
             {error && <Banner tone="error" title={error} />}
             <Button type="submit" disabled={busy} style={{ width: "100%" }}>
               {busy ? "Saving…" : "Save password"}

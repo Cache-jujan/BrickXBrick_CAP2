@@ -1,6 +1,7 @@
 export type SelectedTicket = { ticketId: string; projectId: string; projectName: string; subject: string; budget?: string };
 // ocr: how sure the scan was about a row it filled in; cleared once the user edits the row.
-export type LineItem = { id: string; name: string; quantity: string; price: string; ocr?: "medium" | "low"; bomItemID?: string | null };
+// scanned: the name the scan read, kept so a renamed row can show the receipt's own text. Never sent.
+export type LineItem = { id: string; name: string; quantity: string; price: string; ocr?: "medium" | "low"; bomItemID?: string | null; scanned?: string };
 export type BackendLineItem = { description: string; amount: number; quantity: number | null; unitPrice: number | null; bomItemID?: string | null };
 export type OcrResult = {
   vendorName: string | null; tin: string | null; birNumber: string | null; birPermitType?: string | null; birPermitNumber?: string | null;

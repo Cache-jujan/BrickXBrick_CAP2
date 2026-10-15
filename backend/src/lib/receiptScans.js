@@ -62,6 +62,17 @@ function createReceiptScans({ query, buildScanDraft }) {
     return result.rows[0];
   }
 
+  // The synchronous POST /receipts/scan keeps its draft too, so F9
+  // can compare the submitted expense with what the OCR read. Stored
+  // already dismissed: the user has the draft, it isn't a pending scan.
+  async function recordScan({ userID, receiptImageURL, mimeType, draft }) {
+    await query(
+      `INSERT INTO ReceiptScans (submittedBy, status, receiptImageURL, mimeType, result, completedAt, dismissedAt)
+       VALUES ($1, 'Ready', $2, $3, $4, NOW(), NOW())`,
+      [userID, receiptImageURL, mimeType, JSON.stringify(draft)]
+    );
+  }
+
   // Never throws: whatever happens, the row leaves 'Scanning'.
   async function runScan(scanID, buffer, mimeType, receiptImageURL) {
     try {
@@ -129,7 +140,7 @@ function createReceiptScans({ query, buildScanDraft }) {
     return result.rowCount > 0;
   }
 
-  return { createScan, runScan, getScan, listScans, dismissScan };
+  return { createScan, recordScan, runScan, getScan, listScans, dismissScan };
 }
 
 module.exports = { createReceiptScans, parseContext, isStale, STALE_AFTER_MS, STALE_MESSAGE, FAILED_MESSAGE };
