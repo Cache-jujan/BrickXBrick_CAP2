@@ -34,6 +34,19 @@ const MAPPING = {
   "person.crop.circle": "account-circle",
   "calendar": "calendar-today",
   "info.circle.fill": "info",
+  "bell.fill": "notifications",
+  // Notification-type icons (see lib/notificationMeta.ts) — mirrors the web
+  // app's per-type icon set so the same event looks the same everywhere.
+  "ticket.fill": "confirmation-number",
+  "checkmark.circle.fill": "check-circle",
+  "xmark.circle.fill": "cancel",
+  "clock.fill": "schedule",
+  "receipt": "receipt-long",
+  "shield.lefthalf.filled": "gpp-maybe",
+  "list.clipboard.fill": "assignment",
+  "folder.fill": "folder",
+  "arrow.up.forward.circle.fill": "rocket-launch",
+  "arrow.triangle.2.circlepath.circle": "sync",
 } satisfies IconMapping;
 
 type IconSymbolName = keyof typeof MAPPING;

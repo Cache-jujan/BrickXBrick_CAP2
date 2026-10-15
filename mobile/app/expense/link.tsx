@@ -6,7 +6,7 @@ import { Redirect, router } from "expo-router";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { dismissScan } from "@/lib/receipt-scans";
 import { getSession } from "@/lib/auth";
-import { resolveTicket, submitExpense } from "@/lib/api";
+import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
@@ -24,9 +24,10 @@ export default function LinkScreen() {
   const busyRef = useRef(false);
 
   // All hooks are above this line. Direct deep link / hot reload with an empty draft lands here.
-  if (!ticket || !ocrResult) return <Redirect href="/" />;
+  // A rejected expense being resubmitted may have no ticket on hand: the server keeps its link.
+  if (!ocrResult || (!ticket && !draft.resubmit)) return <Redirect href="/" />;
 
-  // Arrow function declared AFTER the guard, so ticket/ocrResult stay narrowed inside it.
+  // Arrow function declared AFTER the guard, so ocrResult stays narrowed inside it.
   const handleSubmit = async () => {
     if (busyRef.current) return; // double-tap guard
     if (!category) return Alert.alert("Category required", "Pick a category before submitting.");
@@ -47,6 +48,27 @@ export default function LinkScreen() {
     busyRef.current = true;
     setSubmitting(true);
     try {
+      // Correcting a Rejected expense: update it in place. The receipt, ticket
+      // and project stay as they were, and the server screens it again.
+      if (draft.resubmit) {
+        await resubmitExpense(draft.resubmit.expenseID, {
+          vendorName: ocrResult.vendorName,
+          amount: amountNum,
+          receiptDate: ocrResult.receiptDate,
+          category,
+          birNumber: ocrResult.birNumber,
+          tin: ocrResult.tin,
+          birPermitNumber: ocrResult.birPermitNumber,
+          lineItems,
+        });
+        Alert.alert("Expense resubmitted", "Your Project Manager will review it again.");
+        router.replace("/");
+        reset();
+        return;
+      }
+
+      if (!ticket) throw new Error("This receipt isn't linked to a request. Open the request and try again.");
+
       // 2) Purchasers resolve the ticket after capture. Site Managers arrive
       // only through their own already-resolved Material Request tickets.
       if (getSession()?.user.role !== "Site Manager") {
@@ -89,15 +111,17 @@ export default function LinkScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Link & submit" caption="Step 3 of 3" />
+      <FlowHeader title={draft.resubmit ? "Resubmit expense" : "Link & submit"} caption="Step 3 of 3" />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <View style={styles.ticketCard}>
-            <Text style={styles.ticketBadge}>✓ Linked to this request</Text>
-            <Text style={styles.ticketSubject}>{ticket.subject}</Text>
-            <Text style={styles.ticketMeta}>{ticket.projectName}</Text>
-            {ticket.budget && <Text style={styles.ticketBudget}>Approved budget {formatPeso(ticket.budget)}</Text>}
-          </View>
+          {ticket ? (
+            <View style={styles.ticketCard}>
+              <Text style={styles.ticketBadge}>{draft.resubmit ? "Original request" : "✓ Linked to this request"}</Text>
+              <Text style={styles.ticketSubject}>{ticket.subject}</Text>
+              <Text style={styles.ticketMeta}>{ticket.projectName}</Text>
+              {ticket.budget && <Text style={styles.ticketBudget}>Approved budget {formatPeso(ticket.budget)}</Text>}
+            </View>
+          ) : null}
 
           <View style={styles.receiptCard}>
             <Text style={styles.receiptVendor} numberOfLines={1}>{ocrResult.vendorName || "Vendor"}</Text>
@@ -123,12 +147,12 @@ export default function LinkScreen() {
             <Text style={styles.summaryAmount}>{formatPeso(ocrResult.amount)}</Text>
           </View>
           <Pressable style={[styles.submitButton, (!category || submitting) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={submitting} accessibilityRole="button">
-            <Text style={styles.submitButtonText}>{category ? "Submit for approval" : "Pick a category"}</Text>
+            <Text style={styles.submitButtonText}>{category ? (draft.resubmit ? "Resubmit for approval" : "Submit for approval") : "Pick a category"}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
 
-      <LoadingOverlay visible={submitting} message="Submitting expense…" detail="Running the screening checks." />
+      <LoadingOverlay visible={submitting} message={draft.resubmit ? "Resubmitting expense…" : "Submitting expense…"} detail="Running the screening checks." />
     </SafeAreaView>
   );
 }

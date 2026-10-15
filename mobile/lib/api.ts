@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 
 import { API_URL, authHeaders, getAuthToken } from "../constants/api";
+import type { BackendLineItem } from "./expense-types";
 
 export type Ticket = {
   ticketid: string;
@@ -13,10 +14,28 @@ export type Ticket = {
   description: string | null;
   status: string;
   createdat: string;
+  // Procurement fields — present on Material Request / Work Item tickets,
+  // used by My Requests and the Fix & Resubmit prefill.
+  materialtype?: string | null;
+  quantity?: string | number | null;
+  unit?: string | null;
+  vendorname?: string | null;
+  bomitemid?: string | null;
+  notinbom?: boolean | null;
+  notinbomreason?: string | null;
   // Present on a Rejected ticket (GET /tickets/submitted returns t.* +
   // the rejecting user's role), so the Site Manager can see why.
   rejectionreason?: string | null;
   rejectedbyrole?: string | null;
+  // Resubmission wiring. resubmittedfromid: this ticket replaces that one.
+  // resubmittedbyid: the newer ticket that replaced THIS one (if any) — lets
+  // My Requests show "Resubmitted ✓" instead of a "Fix & resubmit" button.
+  resubmittedfromid?: string | null;
+  resubmittedbyid?: string | null;
+  // Non-blocking double-capture signal (a ticket CAN have more than one
+  // expense): how many non-rejected expenses already exist against it.
+  expensecount?: string | number;
+  expensetotal?: string | number;
 };
 
 export type Project = {
@@ -171,7 +190,22 @@ export type TicketInput = {
   bomItemID?: string;
   notInBom?: boolean;
   notInBomReason?: string;
+  // Fix & resubmit: when the SM is re-sending a request the PM rejected,
+  // this is the rejected ticket's id. The backend validates ownership /
+  // status and links the two so the PM sees the resubmission flagged.
+  resubmittedFromId?: string;
 };
+
+// Load one ticket the caller submitted (any status). Used by the "Fix &
+// resubmit" flow to prefill the form from the rejected original.
+export async function fetchSubmittedTicket(ticketId: string): Promise<Ticket> {
+  // Backend has no single-ticket SM endpoint; /submitted is already scoped to
+  // the caller, so one call is enough.
+  const list = await fetchAllAssignedTickets("Site Manager");
+  const found = list.find((t) => t.ticketid === ticketId);
+  if (!found) throw new Error("The request you're resubmitting is no longer available.");
+  return found;
+}
 
 export async function createTicket(body: TicketInput) {
   const res = await fetch(`${API_URL}/api/tickets`, {
@@ -259,6 +293,50 @@ export async function submitExpense(body: ExpenseSubmission) {
     );
   }
 
+  return data;
+}
+
+// ---- Rejected expenses: correct and resubmit --------------------------------
+
+// One row of GET /api/expenses/mine. amount is a string (Postgres numeric) and
+// receiptDate a full timestamp (Postgres DATE read as midnight server time).
+export type MyExpense = {
+  expenseID: string;
+  ticketID: string | null;
+  projectID: string;
+  vendorName: string | null;
+  amount: string | number;
+  receiptDate: string | null;
+  category: "Materials" | "Equipment" | "Other";
+  status: "Pending" | "Approved" | "Rejected";
+  rejectionReason: string | null;
+  submittedAt: string;
+  receiptImageURL: string;
+  birNumber: string | null;
+  tin: string | null;
+  birPermitNumber: string | null;
+  lineItems: BackendLineItem[] | null;
+};
+
+export async function fetchMyExpenses(): Promise<MyExpense[]> {
+  const res = await fetch(`${API_URL}/api/expenses/mine`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Failed to load your expenses (${res.status})`);
+  return res.json();
+}
+
+// The receipt image, ticket and project stay as they were; only the
+// correctable fields are sent.
+export type ExpenseResubmission = Omit<ExpenseSubmission, "ticketID" | "receiptImageURL">;
+
+export async function resubmitExpense(expenseID: string, body: ExpenseResubmission) {
+  const res = await fetch(`${API_URL}/api/expenses/${expenseID}/resubmit`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to resubmit expense (${res.status})`);
   return data;
 }
 
@@ -369,4 +447,52 @@ export async function submitAllocation(body: AllocationSubmission): Promise<Allo
     body: JSON.stringify(body),
   });
   return readJson(res, "Failed to submit the split");
+}
+
+// ---- Notifications (#6c) ---------------------------------------------------
+
+export type AppNotification = {
+  notificationid: string;
+  type: string;
+  relatedentitytype: string;
+  relatedentityid: string;
+  message: string;
+  isread: boolean;
+  createdat: string;
+  // Present when relatedentitytype === "Ticket" (same join the web app uses).
+  ticket_projectid?: string | null;
+  ticket_status?: string | null;
+  ticket_type?: string | null;
+  ticket_submittedby?: string | null;
+  // Present when relatedentitytype === "Milestone" / "Task".
+  milestone_projectid?: string | null;
+  task_projectid?: string | null;
+};
+
+export async function fetchNotifications(opts?: { before?: string; unreadOnly?: boolean; limit?: number }): Promise<AppNotification[]> {
+  const params = new URLSearchParams();
+  if (opts?.before) params.set("before", opts.before);
+  if (opts?.unreadOnly) params.set("unreadOnly", "true");
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/api/notifications/mine${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
+  return readJson(res, "Failed to load notifications");
+}
+
+export async function fetchUnreadCount(): Promise<number> {
+  const data = await readJson(
+    await fetch(`${API_URL}/api/notifications/unread-count`, { headers: authHeaders() }),
+    "Failed to load unread count"
+  );
+  return data.count;
+}
+
+export async function markNotificationRead(id: string) {
+  const res = await fetch(`${API_URL}/api/notifications/${id}/read`, { method: "PATCH", headers: authHeaders() });
+  return readJson(res, "Failed to mark notification read");
+}
+
+export async function markAllNotificationsRead() {
+  const res = await fetch(`${API_URL}/api/notifications/read-all`, { method: "PATCH", headers: authHeaders() });
+  return readJson(res, "Failed to mark all notifications read");
 }

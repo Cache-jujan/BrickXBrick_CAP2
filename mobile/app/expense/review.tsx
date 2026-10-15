@@ -105,14 +105,15 @@ export default function ReviewScreen() {
     setReceiptDate(result.receiptDate ?? todayIso());
     // OCR never reads line items with certainty: "medium" when they add up
     // to the total, "low" otherwise.
-    const lineItemsOcr = result.confidence?.lineItems === "medium" ? "medium" : "low";
+    // A rejected expense was confirmed once already, so its rows aren't flagged.
+    const lineItemsOcr = draft.resubmit ? undefined : result.confidence?.lineItems === "medium" ? "medium" : "low";
     setItems(
       result.lineItems?.length
         ? result.lineItems.map((li) => ({ id: makeId(), name: li.description ?? "", quantity: li.quantity != null ? String(li.quantity) : "", price: li.amount != null ? groupAmountText(String(li.amount)) : "", ocr: lineItemsOcr }))
         : [{ id: makeId(), name: "", quantity: "", price: result.amount != null ? groupAmountText(String(result.amount)) : "" }]
     );
     setEdited(new Set());
-  }, [result]);
+  }, [result, draft.resubmit]);
 
   if (!result) return <Redirect href="/" />;
 
@@ -230,6 +231,14 @@ export default function ReviewScreen() {
       <FlowHeader title="Review receipt" caption={isSplit ? "Split receipt · Step 2 of 3" : "Step 2 of 3"} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {draft.resubmit && (
+            <View style={styles.rejectBox}>
+              <Text style={styles.rejectTitle}>Your Project Manager rejected this expense</Text>
+              <Text style={styles.rejectReason}>{draft.resubmit.reason ? `"${draft.resubmit.reason}"` : "No reason was given."}</Text>
+              <Text style={styles.rejectHint}>Fix what they pointed out, then resubmit.</Text>
+            </View>
+          )}
+
           {file && (
             <View style={styles.thumbRow}>
               {file.type === "image" ? (
@@ -508,6 +517,10 @@ const styles = StyleSheet.create({
   itemLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemCardOcr: { borderColor: AMBER, backgroundColor: "#FFFBEB" },
   ocrBadge: { fontSize: 10, fontWeight: "700", color: AMBER, backgroundColor: AMBER_BG, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },
+  rejectBox: { backgroundColor: "#FEE2E2", borderRadius: 10, padding: 12, marginBottom: 12, gap: 4 },
+  rejectTitle: { fontSize: 13, fontWeight: "700", color: "#C1121F" },
+  rejectReason: { fontSize: 13, color: "#7F1D1D", fontStyle: "italic" },
+  rejectHint: { fontSize: 12, color: "#7F1D1D" },
   ocrBanner: { backgroundColor: AMBER_BG, borderRadius: 10, padding: 10, marginBottom: 10 },
   ocrBannerText: { fontSize: 12, color: AMBER },
   itemCard: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 10, marginBottom: 10, gap: 8, backgroundColor: COLORS.bg },

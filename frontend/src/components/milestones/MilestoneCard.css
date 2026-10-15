@@ -79,8 +79,39 @@
 .milestone-card-task-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+/* #5: Planning tasks show who it's handled by instead of a Site Manager
+   assignment — sits between the due date and the status badge. */
+.milestone-card-task-handler {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+
+.milestone-card-task-completed-note {
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+  font-style: italic;
+  margin: 0;
+}
+
+.milestone-card-complete-task {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-brick);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+}
+.milestone-card-complete-task:hover {
+  text-decoration: underline;
 }
 
 .milestone-card-task-badges {

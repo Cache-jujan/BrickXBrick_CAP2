@@ -205,9 +205,14 @@
 
 .topbar-notif-menu {
   width: 360px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-notif-scroll {
   max-height: 420px;
   overflow-y: auto;
-  right: 0;
 }
 
 .topbar-notif-header {
@@ -229,10 +234,25 @@
 }
 
 .topbar-notif-empty {
-  padding: var(--space-4);
+  padding: var(--space-6) var(--space-4);
   text-align: center;
-  color: var(--color-ink-faint);
+  color: var(--color-ink-soft);
   font-size: var(--text-sm);
+}
+.topbar-notif-empty-sub {
+  margin-top: 4px;
+  color: var(--color-ink-faint);
+  font-size: var(--text-xs);
+}
+
+.topbar-notif-group-label {
+  padding: var(--space-2) var(--space-4) 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  background: var(--color-surface-muted);
 }
 
 .topbar-notif-list {
@@ -242,6 +262,9 @@
 }
 
 .topbar-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
@@ -257,16 +280,64 @@
 .topbar-notif-item-unread {
   background: var(--color-brick-tint);
 }
+.topbar-notif-item-static {
+  cursor: default;
+}
+
+.topbar-notif-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-notif-body {
+  flex: 1;
+  min-width: 0;
+}
 
 .topbar-notif-message {
   font-size: var(--text-sm);
   color: var(--color-ink);
   margin-bottom: 2px;
+  line-height: 1.4;
+}
+.topbar-notif-item-unread .topbar-notif-message {
+  font-weight: 600;
 }
 
 .topbar-notif-time {
   font-size: var(--text-xs);
   color: var(--color-ink-faint);
+}
+
+.topbar-notif-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-brick);
+  margin-top: 6px;
+}
+
+.topbar-notif-footer {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: none;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-brick);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.topbar-notif-footer:hover {
+  background: var(--color-surface-muted);
 }
 
 .topbar-menu-btn {

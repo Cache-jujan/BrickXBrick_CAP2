@@ -9,7 +9,7 @@ import {
   updateProjectSiteManager,
 } from "../../api/projectsApi";
 import { createMilestone } from "../../api/milestonesApi";
-import { createTask } from "../../api/tasksApi";
+import { createTask, completeTask } from "../../api/tasksApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { getBom } from "../../api/bomApi";
@@ -85,13 +85,27 @@ export function ProjectDetailPage() {
   // F3: milestone/task creation happens in-place via modals (was a separate
   // page). taskDialog carries the milestone it targets so the title can name it.
   const [milestoneDialog, setMilestoneDialog] = useState(false);
-  const [milestoneForm, setMilestoneForm] = useState({ name: "", dueDate: "" });
+  // #5: phase picks how the milestone's tasks get owned — Planning tasks are
+  // "Handled by: GM/PM" with no Site Manager involved, Construction tasks
+  // keep the existing SM-assignment flow. Defaults to Construction so this
+  // form behaves exactly like before unless the PM changes it.
+  const [milestoneForm, setMilestoneForm] = useState({ name: "", dueDate: "", phase: "Construction" });
   const [milestoneBusy, setMilestoneBusy] = useState(false);
   const [milestoneError, setMilestoneError] = useState("");
   const [taskDialog, setTaskDialog] = useState(null); // { milestone } | null
-  const [taskForm, setTaskForm] = useState({ taskName: "", dueDate: "" });
+  const [taskForm, setTaskForm] = useState({ taskName: "", dueDate: "", handledBy: "PM" });
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState("");
+  // #5: the backend never rejects an out-of-phase-window due date, it just
+  // flags it back — surfaced here as a dismissible info banner after a
+  // successful create, not inside the (by-then-closed) modal.
+  const [scheduleWarning, setScheduleWarning] = useState("");
+  // #5: a Planning task has no SM review flow — the owning PM marks it done
+  // directly. { task } while a confirm dialog is open.
+  const [completeDialog, setCompleteDialog] = useState(null);
+  const [completeNote, setCompleteNote] = useState("");
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [completeError, setCompleteError] = useState("");
   // Site Manager assignment moved from an always-open picker into a modal.
   const [smDialog, setSmDialog] = useState(false);
 
@@ -258,7 +272,7 @@ export function ProjectDetailPage() {
 
   function openMilestoneDialog() {
     setMilestoneError("");
-    setMilestoneForm({ name: "", dueDate: "" });
+    setMilestoneForm({ name: "", dueDate: "", phase: "Construction" });
     setMilestoneDialog(true);
   }
 
@@ -277,9 +291,15 @@ export function ProjectDetailPage() {
     setMilestoneError("");
     try {
       // milestones.js destructures projectID (capital ID) off req.body.
-      await createMilestone({ projectID: id, name: milestoneForm.name.trim(), dueDate: milestoneForm.dueDate });
+      const created = await createMilestone({
+        projectID: id,
+        name: milestoneForm.name.trim(),
+        dueDate: milestoneForm.dueDate,
+        phase: milestoneForm.phase,
+      });
       setProject(await getProjectOverview(id));
       setMilestoneDialog(false);
+      setScheduleWarning((created.warnings || [])[0] || "");
     } catch (err) {
       setMilestoneError(extractErrorMessage(err, "Couldn't create the milestone. Please try again."));
     } finally {
@@ -289,7 +309,7 @@ export function ProjectDetailPage() {
 
   function openTaskDialog(milestone) {
     setTaskError("");
-    setTaskForm({ taskName: "", dueDate: "" });
+    setTaskForm({ taskName: "", dueDate: "", handledBy: "PM" });
     setTaskDialog({ milestone });
   }
 
@@ -304,19 +324,48 @@ export function ProjectDetailPage() {
       setTaskError("Task name and due date are required.");
       return;
     }
+    const isPlanning = taskDialog.milestone.phase === "Planning";
     setTaskBusy(true);
     setTaskError("");
     try {
-      await createTask(taskDialog.milestone.milestoneid, {
+      const created = await createTask(taskDialog.milestone.milestoneid, {
         taskName: taskForm.taskName.trim(),
         dueDate: taskForm.dueDate,
+        ...(isPlanning ? { handledBy: taskForm.handledBy } : {}),
       });
       setProject(await getProjectOverview(id));
       setTaskDialog(null);
+      setScheduleWarning((created.warnings || [])[0] || "");
     } catch (err) {
       setTaskError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
     } finally {
       setTaskBusy(false);
+    }
+  }
+
+  function openCompleteDialog(task) {
+    setCompleteError("");
+    setCompleteNote("");
+    setCompleteDialog({ task });
+  }
+
+  function closeCompleteDialog() {
+    if (completeBusy) return;
+    setCompleteDialog(null);
+  }
+
+  async function handleCompleteTask() {
+    if (!completeDialog || completeBusy) return;
+    setCompleteBusy(true);
+    setCompleteError("");
+    try {
+      await completeTask(completeDialog.task.taskid, { note: completeNote.trim() || undefined });
+      setProject(await getProjectOverview(id));
+      setCompleteDialog(null);
+    } catch (err) {
+      setCompleteError(extractErrorMessage(err, "Couldn't mark this task done. Please try again."));
+    } finally {
+      setCompleteBusy(false);
     }
   }
 
@@ -386,6 +435,9 @@ export function ProjectDetailPage() {
   // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   const hasSiteManager = Boolean(project.sitemanagerid);
+  // #5: split for the Pre-construction / Construction bands below.
+  const planningMilestones = project.milestones.filter((m) => m.phase === "Planning");
+  const constructionMilestones = project.milestones.filter((m) => m.phase !== "Planning");
   const bom = bomInfo?.bom || null;
   const bomApproved = project.bomstatus === "Approved";
   const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
@@ -581,9 +633,13 @@ export function ProjectDetailPage() {
 
         {!hasSiteManager && canManage && (
           <Banner tone="info" title="No Site Manager assigned">
-            You can still add milestones, but tasks can't be created until a Site Manager is
-            assigned to this project.
+            You can still add milestones and Planning tasks, but Construction tasks can't be
+            created until a Site Manager is assigned to this project.
           </Banner>
+        )}
+
+        {scheduleWarning && (
+          <Banner tone="warning" title={scheduleWarning} />
         )}
 
         {project.milestones.length === 0 ? (
@@ -593,17 +649,50 @@ export function ProjectDetailPage() {
               : "The Project Manager hasn't added any milestones yet."}
           </Banner>
         ) : (
-          <div className="project-detail-milestone-grid">
-            {project.milestones.map((milestone) => (
-              <MilestoneCard
-                key={milestone.milestoneid}
-                milestone={milestone}
-                canManage={canManage}
-                hasSiteManager={hasSiteManager}
-                onAddTask={openTaskDialog}
-              />
-            ))}
-          </div>
+          <>
+            {/* #5: Planning (pre-construction) and Construction milestones are
+                owned differently — a PM/GM "Handled by" chip vs. a Site
+                Manager assignment — so they're shown as two labeled bands
+                rather than mixed into one grid. */}
+            <div className="project-detail-milestone-band">
+              <h3 className="project-detail-milestone-band-title">Pre-construction</h3>
+              {planningMilestones.length === 0 ? (
+                <p className="project-detail-milestone-band-empty">No Planning milestones yet.</p>
+              ) : (
+                <div className="project-detail-milestone-grid">
+                  {planningMilestones.map((milestone) => (
+                    <MilestoneCard
+                      key={milestone.milestoneid}
+                      milestone={milestone}
+                      canManage={canManage}
+                      hasSiteManager={hasSiteManager}
+                      onAddTask={openTaskDialog}
+                      onCompleteTask={openCompleteDialog}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="project-detail-milestone-band">
+              <h3 className="project-detail-milestone-band-title">Construction</h3>
+              {constructionMilestones.length === 0 ? (
+                <p className="project-detail-milestone-band-empty">No Construction milestones yet.</p>
+              ) : (
+                <div className="project-detail-milestone-grid">
+                  {constructionMilestones.map((milestone) => (
+                    <MilestoneCard
+                      key={milestone.milestoneid}
+                      milestone={milestone}
+                      canManage={canManage}
+                      hasSiteManager={hasSiteManager}
+                      onAddTask={openTaskDialog}
+                      onCompleteTask={openCompleteDialog}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -833,6 +922,20 @@ export function ProjectDetailPage() {
               value={milestoneForm.dueDate}
               onChange={(ev) => setMilestoneForm((f) => ({ ...f, dueDate: ev.target.value }))}
             />
+            <Field
+              as="select"
+              label="Phase"
+              value={milestoneForm.phase}
+              onChange={(ev) => setMilestoneForm((f) => ({ ...f, phase: ev.target.value }))}
+            >
+              <option value="Construction">Construction</option>
+              <option value="Planning">Planning (pre-construction)</option>
+            </Field>
+            <p className="modal-body">
+              {milestoneForm.phase === "Planning"
+                ? "Planning tasks under this milestone are handled by the GM or PM directly — no Site Manager involved."
+                : "Construction tasks under this milestone are assigned to this project's Site Manager."}
+            </p>
             {milestoneError && <Banner tone="error" title={milestoneError} />}
             <div className="modal-actions">
               <Button variant="secondary" onClick={closeMilestoneDialog} disabled={milestoneBusy}>Cancel</Button>
@@ -847,7 +950,11 @@ export function ProjectDetailPage() {
         <div className="modal-overlay" role="presentation" onClick={closeTaskDialog}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-task-title" onClick={(ev) => ev.stopPropagation()}>
             <h2 id="pd-task-title" className="modal-title">Add task to "{taskDialog.milestone.name}"</h2>
-            <p className="modal-body">Assigned automatically to this project's Site Manager.</p>
+            <p className="modal-body">
+              {taskDialog.milestone.phase === "Planning"
+                ? "No Site Manager involved — pick who this is handled by."
+                : "Assigned automatically to this project's Site Manager."}
+            </p>
             <Field
               label="Task name"
               required
@@ -862,11 +969,47 @@ export function ProjectDetailPage() {
               value={taskForm.dueDate}
               onChange={(ev) => setTaskForm((f) => ({ ...f, dueDate: ev.target.value }))}
             />
+            {taskDialog.milestone.phase === "Planning" && (
+              <Field
+                as="select"
+                label="Handled by"
+                required
+                value={taskForm.handledBy}
+                onChange={(ev) => setTaskForm((f) => ({ ...f, handledBy: ev.target.value }))}
+              >
+                <option value="PM">Project Manager</option>
+                <option value="GM">General Manager</option>
+              </Field>
+            )}
             {taskError && <Banner tone="error" title={taskError} />}
             <div className="modal-actions">
               <Button variant="secondary" onClick={closeTaskDialog} disabled={taskBusy}>Cancel</Button>
               <Button onClick={handleCreateTask} disabled={taskBusy || !taskForm.taskName.trim() || !taskForm.dueDate}>
                 {taskBusy ? "Adding…" : "Add Task"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {completeDialog && (
+        <div className="modal-overlay" role="presentation" onClick={closeCompleteDialog}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-complete-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="pd-complete-title" className="modal-title">Mark "{completeDialog.task.taskname}" done?</h2>
+            <p className="modal-body">
+              This closes the task directly — there's no photo or review step for a Planning task.
+            </p>
+            <Field
+              as="textarea"
+              label="Note (optional)"
+              placeholder="Anything worth recording about how this was done"
+              value={completeNote}
+              onChange={(ev) => setCompleteNote(ev.target.value)}
+            />
+            {completeError && <Banner tone="error" title={completeError} />}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={closeCompleteDialog} disabled={completeBusy}>Cancel</Button>
+              <Button onClick={handleCompleteTask} disabled={completeBusy}>
+                {completeBusy ? "Marking done…" : "Mark done"}
               </Button>
             </div>
           </div>

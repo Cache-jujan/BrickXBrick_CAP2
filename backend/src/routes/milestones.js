@@ -4,6 +4,9 @@ const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
+const { dateWindowWarning } = require("../lib/scheduleWindows");
+
+const MILESTONE_PHASES = ["Planning", "Construction"];
 
 // Statuses on which the PM may still plan work (milestones and tasks).
 const PLANNABLE_STATUSES = ["Draft", "Active"];
@@ -13,7 +16,9 @@ router.use(requireAuth);
 
 async function getOwnedProject(projectId, userId) {
     const result = await query(
-        "SELECT projectId, projectManagerId, siteManagerId, status FROM projects WHERE projectId = $1",
+        `SELECT projectId, projectManagerId, siteManagerId, status,
+                startDate, constructionStartDate, endDate
+           FROM projects WHERE projectId = $1`,
         [projectId]
     );
     if (result.rowCount === 0) {
@@ -66,7 +71,8 @@ async function getProjectAccess(projectId) {
 
 async function getMilestoneWithProject(milestoneId) {
     const result = await query(
-        `SELECT m.*, p.projectManagerId, p.siteManagerId, p.status AS projectStatus
+        `SELECT m.*, p.projectManagerId, p.siteManagerId, p.status AS projectStatus,
+                p.startDate, p.constructionStartDate, p.endDate
            FROM milestones m
            JOIN projects p ON p.projectId = m.projectId
           WHERE m.milestoneId = $1`,
@@ -87,21 +93,36 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
         // D-12: the web UI trims before posting, but the API accepted a
         // whitespace-only name directly (e.g. "   ") — trim server-side too.
         const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+        // #5: a milestone's phase decides how its tasks will later be owned
+        // (Planning → Handled by GM/PM, no Site Manager; Construction →
+        // assigned to the project's Site Manager, existing behavior).
+        // Defaults to Construction so every pre-#5 caller keeps working
+        // unchanged.
+        const phase = req.body.phase || "Construction";
 
         if (!projectID || !name || !dueDate) {
             const err = new Error("projectID, name, and dueDate are required");
             err.status = 400;
             throw err;
         }
+        if (!MILESTONE_PHASES.includes(phase)) {
+            const err = new Error(`phase must be one of: ${MILESTONE_PHASES.join(", ")}`);
+            err.status = 400;
+            throw err;
+        }
 
-        await getOwnedProject(projectID, req.user.id);
+        const project = await getOwnedProject(projectID, req.user.id);
+
+        // Non-blocking: the PM is told but never stopped — they may have a
+        // real reason for a date outside the usual window.
+        const warning = dateWindowWarning(phase, dueDate, project);
 
         const milestone = await withTransaction(async (client) => {
             const insertResult = await client.query(
-                `INSERT INTO milestones (projectId, createdBy, name, dueDate)
-                 VALUES ($1, $2, $3, $4)
+                `INSERT INTO milestones (projectId, createdBy, name, dueDate, phase)
+                 VALUES ($1, $2, $3, $4, $5)
                  RETURNING *`,
-                [projectID, req.user.id, name, dueDate]
+                [projectID, req.user.id, name, dueDate, phase]
             );
             const newMilestone = insertResult.rows[0];
 
@@ -117,7 +138,7 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
             return refreshed.rows[0];
         });
 
-        res.status(201).json(milestone);
+        res.status(201).json({ ...milestone, warnings: warning ? [warning] : [] });
     } catch (err) {
         next(err);
     }
@@ -170,11 +191,17 @@ router.get("/attention", requireRole("Project Manager"), async (req, res, next) 
     }
 });
 
-// POST /:id/tasks — PM creates a task under a milestone they own, assigned
-// to that project's Site Manager (schema is 1 SM per project — no open pick).
+const TASK_HANDLERS = ["GM", "PM"];
+
+// POST /:id/tasks — PM creates a task under a milestone they own.
+// Construction milestones: task is assigned to the project's Site Manager
+// (schema is 1 SM per project — no open pick), exactly as before.
+// Planning milestones (#5): there's no Site Manager involvement at all —
+// the task is just "Handled by: GM" or "Handled by: PM" (informational),
+// assignedTo stays NULL, and only a PM can later mark it done.
 router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next) => {
     try {
-        const { taskName, dueDate } = req.body;
+        const { taskName, dueDate, handledBy } = req.body;
 
         if (!taskName || !dueDate) {
             const err = new Error("taskName and dueDate are required");
@@ -196,18 +223,35 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
             err.status = 409;
             throw err;
         }
-        if (!milestone.sitemanagerid) {
+
+        const isPlanning = milestone.phase === "Planning";
+
+        if (isPlanning) {
+            if (!TASK_HANDLERS.includes(handledBy)) {
+                const err = new Error(`handledBy is required for a Planning task and must be one of: ${TASK_HANDLERS.join(", ")}`);
+                err.status = 400;
+                throw err;
+            }
+        } else if (!milestone.sitemanagerid) {
             const err = new Error("This project has no Site Manager assigned yet — assign one before creating tasks");
             err.status = 400;
             throw err;
         }
 
+        const warning = dateWindowWarning(milestone.phase, dueDate, milestone);
+
         const task = await withTransaction(async (client) => {
             const insertResult = await client.query(
-                `INSERT INTO tasks (milestoneId, assignedTo, taskName, dueDate)
-                 VALUES ($1, $2, $3, $4)
+                `INSERT INTO tasks (milestoneId, assignedTo, handledBy, taskName, dueDate)
+                 VALUES ($1, $2, $3, $4, $5)
                  RETURNING *`,
-                [req.params.id, milestone.sitemanagerid, taskName, dueDate]
+                [
+                    req.params.id,
+                    isPlanning ? null : milestone.sitemanagerid,
+                    isPlanning ? handledBy : null,
+                    taskName,
+                    dueDate,
+                ]
             );
             const newTask = insertResult.rows[0];
 
@@ -216,17 +260,20 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
             await recalcMilestoneProgress(client, req.params.id);
 
             // D-16: UC-03-01 step 5 says the system notifies the assigned
-            // SM. Previously the SM only found out by refreshing their list.
-            await client.query(
-                `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
-                 VALUES ($1, 'TaskAssigned', 'Task', $2, $3)`,
-                [milestone.sitemanagerid, newTask.taskid, `You were assigned a new task: "${taskName}" — due ${new Date(dueDate).toDateString()}.`]
-            );
+            // SM. Planning tasks have no SM to notify — PM created it and
+            // the PM handles it, so there's no one else to tell.
+            if (!isPlanning) {
+                await client.query(
+                    `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                     VALUES ($1, 'TaskAssigned', 'Task', $2, $3)`,
+                    [milestone.sitemanagerid, newTask.taskid, `You were assigned a new task: "${taskName}" — due ${new Date(dueDate).toDateString()}.`]
+                );
+            }
 
             return newTask;
         });
 
-        res.status(201).json(task);
+        res.status(201).json({ ...task, warnings: warning ? [warning] : [] });
     } catch (err) {
         next(err);
     }

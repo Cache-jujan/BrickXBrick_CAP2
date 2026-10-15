@@ -15,6 +15,8 @@ import {
   fetchAllAssignedTickets,
   fetchActiveProjects,
   fetchOpenRequests,
+  fetchMyExpenses,
+  type MyExpense,
   type OpenRequest,
   type Ticket,
   type Project,
@@ -24,6 +26,8 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { ScannedReceipts } from "@/components/scanned-receipts";
+import { RejectedExpenses } from "@/components/rejected-expenses";
+import { fileFromExpense, ocrResultFromExpense } from "@/lib/resubmit";
 import { dismissScan, fetchScans, type ReceiptScan } from "@/lib/receipt-scans";
 
 // While a receipt is still being read, refresh the list this often.
@@ -43,7 +47,7 @@ function toBucket(
 }
 
 export default function HomeScreen() {
-  const { setTicket, reset, startSplit } = useExpenseDraft();
+  const { setTicket, reset, startSplit, startResubmit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -55,6 +59,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
   const [scans, setScans] = useState<ReceiptScan[]>([]);
+  const [rejected, setRejected] = useState<MyExpense[]>([]);
   const [focused, setFocused] = useState(false);
 
   // Background scans. A failure here must not hide the tickets.
@@ -90,6 +95,12 @@ export default function HomeScreen() {
           setOpenRequests(await fetchOpenRequests());
         } catch {
           setOpenRequests([]);
+        }
+        // Rejected expenses to correct and resubmit. A failure keeps the last list.
+        try {
+          setRejected((await fetchMyExpenses()).filter((e) => e.status === "Rejected"));
+        } catch {
+          // Shown again on the next refresh.
         }
       }
     } catch (err) {
@@ -151,14 +162,6 @@ export default function HomeScreen() {
     ).length,
   };
 
-  // The Site Manager's rejected requests, surfaced with their reason so they
-  // know what to fix (shown above the list, not mixed into it).
-  const rejected = isSiteManager
-    ? tickets
-        .filter((t) => t.status === "Rejected")
-        .sort((a, b) => new Date(b.createdat).getTime() - new Date(a.createdat).getTime())
-    : [];
-
   // To-buy list: open requests grouped by material (lowercased, trimmed).
   const toBuy = Object.values(
     openRequests.reduce<Record<string, { material: string; total: number; requests: number; projects: string[] }>>(
@@ -178,6 +181,29 @@ export default function HomeScreen() {
   function startSplitReceipt() {
     startSplit();
     router.push("/expense/capture");
+  }
+
+  // A Rejected expense goes back through the review screen, then updates the
+  // same expense (PATCH .../resubmit) instead of creating a new one.
+  function fixRejected(expense: MyExpense) {
+    const ticket = tickets.find((t) => t.ticketid === expense.ticketID);
+    startResubmit({
+      expenseID: expense.expenseID,
+      reason: expense.rejectionReason,
+      ticket: ticket
+        ? {
+            ticketId: ticket.ticketid,
+            projectId: ticket.projectid,
+            projectName: projectsById[ticket.projectid]?.name ?? "Unknown project",
+            subject: ticket.subject,
+            budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
+          }
+        : null,
+      file: fileFromExpense(expense),
+      ocrResult: ocrResultFromExpense(expense),
+      category: expense.category,
+    });
+    router.push("/expense/review");
   }
 
   function openTicket(ticket: Ticket) {
@@ -238,27 +264,9 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <>
+          {isSiteManager ? null : <RejectedExpenses expenses={rejected} onFix={fixRejected} />}
           <ScannedReceipts scans={scans} onDismiss={removeScan} />
-          {isSiteManager ? (
-            rejected.length > 0 ? (
-              <View style={styles.rejectedBox}>
-                <Text style={styles.rejectedTitle}>Rejected — needs another look</Text>
-                {rejected.map((t) => (
-                  <View key={t.ticketid} style={styles.rejectedRow}>
-                    <Text style={styles.rejectedSubject} numberOfLines={2}>{t.subject}</Text>
-                    <Text style={styles.rejectedMeta}>
-                      {t.tickettype} · {projectsById[t.projectid]?.name ?? "Project"}
-                    </Text>
-                    <Text style={styles.rejectedReason}>
-                      {t.rejectionreason
-                        ? `Reason: ${t.rejectionreason}`
-                        : "No reason was given."}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null
-          ) : (
+          {isSiteManager ? null : (
             <View style={styles.toBuyBox}>
               <View style={styles.toBuyHeader}>
                 <Text style={styles.toBuyTitle}>To buy</Text>
@@ -305,6 +313,12 @@ export default function HomeScreen() {
             ? item.status === "Resolved" && item.tickettype === "Material Request"
             : item.status === "Acknowledged";
 
+          // Non-blocking signal only — a ticket CAN have more than one
+          // expense, so this never hides the action, just relabels it so
+          // nobody captures a second one by accident.
+          const expenseCount = Number(item.expensecount || 0);
+          const alreadyCaptured = expenseCount > 0;
+
           const Card = (
             <View style={styles.card}>
               <View style={styles.cardHeaderRow}>
@@ -331,6 +345,12 @@ export default function HomeScreen() {
                 {project?.name ?? "Unknown project"}
               </Text>
 
+              {alreadyCaptured && (
+                <Text style={styles.capturedNote}>
+                  {expenseCount} expense{expenseCount === 1 ? "" : "s"} captured · ₱{Number(item.expensetotal || 0).toLocaleString()}
+                </Text>
+              )}
+
               <View style={styles.cardFooterRow}>
                 <Text style={styles.cardFooterText}>
                   {new Date(
@@ -339,9 +359,9 @@ export default function HomeScreen() {
                 </Text>
 
                 {actionableNow ? (
-                  <View style={styles.addBtn}>
-                    <Text style={styles.addBtnText}>
-                      + Add Expense
+                  <View style={[styles.addBtn, alreadyCaptured && styles.addBtnSecondary]}>
+                    <Text style={[styles.addBtnText, alreadyCaptured && styles.addBtnTextSecondary]}>
+                      {alreadyCaptured ? "+ Add another expense" : "+ Add Expense"}
                     </Text>
                   </View>
                 ) : (
@@ -500,6 +520,22 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
+  addBtnSecondary: {
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+  },
+
+  addBtnTextSecondary: {
+    color: COLORS.muted,
+  },
+
+  capturedNote: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.success,
+    marginBottom: 8,
+  },
+
   toBuyBox: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
@@ -567,47 +603,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: COLORS.success,
-  },
-
-  rejectedBox: {
-    backgroundColor: "#FFF5F3",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#F4C7C3",
-    padding: 14,
-    marginBottom: 6,
-  },
-
-  rejectedTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#B42318",
-    marginBottom: 8,
-  },
-
-  rejectedRow: {
-    paddingTop: 8,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F4C7C3",
-  },
-
-  rejectedSubject: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.heading,
-  },
-
-  rejectedMeta: {
-    fontSize: 11,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-
-  rejectedReason: {
-    fontSize: 13,
-    color: "#B42318",
-    marginTop: 4,
-    lineHeight: 18,
   },
 });

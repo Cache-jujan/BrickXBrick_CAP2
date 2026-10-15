@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { NotificationBell } from "@/components/notification-bell";
 
 const COLORS = {
   bg: "#F8F1E8",
@@ -18,15 +19,18 @@ export function AppHeader() {
         BrickXBrick
       </Text>
 
-      <Pressable
-        style={styles.gear}
-        onPress={() => router.push("/settings")}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Open settings"
-      >
-        <IconSymbol name="gearshape.fill" size={22} color={COLORS.ink} />
-      </Pressable>
+      <View style={styles.actions}>
+        <NotificationBell color={COLORS.ink} />
+        <Pressable
+          style={styles.gear}
+          onPress={() => router.push("/settings")}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Open settings"
+        >
+          <IconSymbol name="gearshape.fill" size={22} color={COLORS.ink} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -46,6 +50,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     color: COLORS.ink,
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   gear: {
     padding: 4,

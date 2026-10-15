@@ -97,6 +97,30 @@
   align-items: start;
 }
 
+/* #5: Pre-construction / Construction milestone bands. */
+.project-detail-milestone-band {
+  margin-bottom: var(--space-6);
+}
+.project-detail-milestone-band:last-child {
+  margin-bottom: 0;
+}
+
+.project-detail-milestone-band-title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-soft);
+  margin: 0 0 var(--space-3);
+}
+
+.project-detail-milestone-band-empty {
+  font-size: var(--text-sm);
+  color: var(--color-ink-faint);
+  font-style: italic;
+  margin: 0;
+}
+
 /* Expense table */
 .project-detail-table {
   min-width: 640px;

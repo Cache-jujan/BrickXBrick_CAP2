@@ -474,10 +474,11 @@ router.patch("/:id/complete", requireRole("General Manager"), async (req, res) =
 // original assignee — the work and photo evidence really are theirs, and
 // the PM review route doesn't key off current assignment anyway.
 //
-// tasks.assignedTo is NOT NULL, so clearing the SM (siteManagerId: null)
-// while open tasks exist would silently leave them with the outgoing SM —
-// that's rejected with 409 instead. Clearing is only allowed once no open
-// tasks remain. An Active project must keep a Site Manager.
+// Only Construction-phase tasks are ever assigned to a Site Manager (see
+// reassignSiteManager.js) — clearing the SM (siteManagerId: null) while open
+// ones exist would silently leave them with the outgoing SM, so that's
+// rejected with 409 instead. Clearing is only allowed once no open
+// Construction tasks remain. An Active project must keep a Site Manager.
 router.patch("/:id/site-manager", requireRole("General Manager", "Project Manager"), async (req, res) => {
   const siteManagerId = req.body.siteManagerId || null;
 
