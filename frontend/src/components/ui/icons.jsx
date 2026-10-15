@@ -99,3 +99,20 @@ export function SearchIcon({ size = 16 }) {
     </svg>
   );
 }
+
+export function EyeIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} {...base}>
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} {...base}>
+      <path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.24 4.24M9.5 5.2A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a17.7 17.7 0 0 1-3.5 4.3M6.2 6.6C3.5 8.3 1 12 1 12a17.5 17.5 0 0 0 5.2 5.6c1.6 1 3.5 1.7 5.8 1.7 1 0 2-.1 2.9-.4" />
+    </svg>
+  );
+}

@@ -4,3 +4,25 @@
 .auth-simple-sub { color: var(--color-ink-soft); margin-bottom: var(--space-5); }
 .auth-simple-card .banner { margin-bottom: var(--space-4); }
 .auth-simple-back { display: block; text-align: center; margin-top: var(--space-4); font-size: var(--text-sm); }
+
+/* Password input with a show/hide button inside its right edge. */
+.auth-password { position: relative; }
+.auth-password .field-control { padding-right: 44px; }
+.auth-password-toggle {
+  position: absolute;
+  right: var(--space-2);
+  /* label text (~20px) + gap sit above the 46px control */
+  top: 27px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-faint);
+  cursor: pointer;
+}
+.auth-password-toggle:hover { color: var(--color-brick); background: var(--color-brick-tint); }
+.auth-password-toggle:focus-visible { outline: 2px solid var(--color-brick); outline-offset: 1px; }
