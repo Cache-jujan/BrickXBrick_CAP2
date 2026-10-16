@@ -8,6 +8,7 @@ const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 const { uploadBuffer } = require("../lib/r2");
 const { hasValidMagicBytes } = require("../lib/photoValidation");
+const { submitTaskProgress } = require("../lib/taskProgress");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -64,16 +65,6 @@ const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_PHOTO_BYTES },
 });
-
-async function getTaskForSubmission(taskId) {
-    const result = await query("SELECT * FROM tasks WHERE taskId = $1", [taskId]);
-    if (result.rowCount === 0) {
-        const err = new Error(`Task ${taskId} not found`);
-        err.status = 404;
-        throw err;
-    }
-    return result.rows[0];
-}
 
 // task + its milestone's project, for the PM-ownership check on review.
 async function getLogForReview(logId) {
@@ -135,78 +126,23 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
             throw err;
         }
 
-        const task = await getTaskForSubmission(req.params.id);
-
-        if (task.assignedto !== req.user.id) {
-            const err = new Error("You may only submit progress on a task assigned to you");
-            err.status = 403;
-            throw err;
-        }
-
-        // D-05/D-15: the idempotency lookup used to run on clientSubmissionId
-        // alone, so a different user's clientSubmissionId (sent deliberately
-        // or copy-pasted) returned THEIR row, and it ran after the Completed
-        // check, so a replay of an already-acknowledged submission 409'd
-        // instead of returning the original row. Scope the match to this
-        // task + this submitter, run it before the Completed check, and
-        // before the R2 upload — a replayed sync call should never re-upload.
-        const existing = await query(
-            "SELECT * FROM task_progress_log WHERE clientSubmissionId = $1",
-            [clientSubmissionId]
-        );
-        if (existing.rowCount > 0) {
-            const existingLog = existing.rows[0];
-            if (existingLog.taskid === req.params.id && existingLog.submittedby === req.user.id) {
-                return res.status(200).json(existingLog);
-            }
-            const err = new Error("clientSubmissionId is already in use by a different task or submitter");
-            err.status = 409;
-            throw err;
-        }
-
-        if (task.status === "Completed") {
-            const err = new Error("This task is already completed and cannot be resubmitted");
-            err.status = 409;
-            throw err;
-        }
-
-        const photoEvidenceURL = await uploadBuffer(req.file.buffer, {
-            contentType: req.file.mimetype,
-            keyPrefix: `tasks/${req.params.id}`,
+        // Task, ownership, idempotency and Completed checks, the R2 upload and
+        // the Pending Review insert all live in lib/taskProgress.js, which the
+        // F10 offline sync calls too.
+        const { log, replayed } = await submitTaskProgress({
+            user: req.user,
+            taskId: req.params.id,
+            clientSubmissionId,
+            note,
+            uploadPhoto: () =>
+                uploadBuffer(req.file.buffer, {
+                    contentType: req.file.mimetype,
+                    keyPrefix: `tasks/${req.params.id}`,
+                }),
         });
 
-        const logEntry = await withTransaction(async (client) => {
-            // D-06: lock the task row so two concurrent submits serialize
-            // instead of both reading "no pending row yet" and both
-            // superseding + inserting. task_progress_log_one_pending_per_task
-            // (migration 021) is the DB-level backstop if they somehow race
-            // past this anyway.
-            await client.query("SELECT taskId FROM tasks WHERE taskId = $1 FOR UPDATE", [req.params.id]);
-
-            // Supersede any prior pending entry rather than blocking —
-            // resubmission mid-review is allowed, not queued.
-            await client.query(
-                `UPDATE task_progress_log
-                    SET reviewStatus = 'Superseded'::varchar
-                  WHERE taskId = $1 AND reviewStatus = 'Pending Review'`,
-                [req.params.id]
-            );
-
-            const insertResult = await client.query(
-                `INSERT INTO task_progress_log
-                    (taskId, submittedBy, clientSubmissionId, photoEvidenceURL, note)
-                 VALUES ($1, $2, $3, $4, $5)
-                 RETURNING *`,
-                [req.params.id, req.user.id, clientSubmissionId, photoEvidenceURL, note || null]
-            );
-            return insertResult.rows[0];
-        });
-
-        res.status(201).json(logEntry);
+        res.status(replayed ? 200 : 201).json(log);
     } catch (err) {
-        if (err.code === "23505") {
-            return res.status(409).json({ error: "A submission is already pending review for this task" });
-        }
         next(err);
     }
 });
