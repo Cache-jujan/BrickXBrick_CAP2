@@ -6,9 +6,28 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import { EyeIcon, EyeOffIcon } from "../../components/ui/icons";
+import { LINK_TYPE_KEY } from "../../auth/authLinkRedirect";
 import "./AuthPages.css";
 
 const MIN_LENGTH = 8;
+
+/** Return the link type saved before Supabase clears the URL, or null if absent or storage is blocked. */
+function readLinkType() {
+  try {
+    return sessionStorage.getItem(LINK_TYPE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Remove the saved link type after password setup, tolerating blocked session storage. */
+function clearLinkType() {
+  try {
+    sessionStorage.removeItem(LINK_TYPE_KEY);
+  } catch {
+    // nothing to clear
+  }
+}
 
 // A password field with its own show/hide button (the Field component has none).
 function PasswordField({ label, value, onChange, autoComplete }) {
@@ -30,6 +49,7 @@ function PasswordField({ label, value, onChange, autoComplete }) {
   );
 }
 
+/** Render invite or recovery password setup after verifying the Supabase session, with invalid-link guidance. */
 export function SetPasswordPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
@@ -38,6 +58,7 @@ export function SetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isInvite] = useState(() => readLinkType() === "invite");
 
   const linkBroken = window.location.hash.includes("error=");
 
@@ -51,6 +72,7 @@ export function SetPasswordPage() {
     return () => { data.subscription.unsubscribe(); clearTimeout(timer); };
   }, [linkBroken]);
 
+  /** Validate and save the password, then sign out, clear the link type, and return to sign in. */
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -64,7 +86,15 @@ export function SetPasswordPage() {
       return setError(err.message);
     }
     await supabase.auth.signOut(); // the app logs in through its own backend
-    navigate("/login", { replace: true, state: { successMessage: "Password set. You can now sign in." } });
+    clearLinkType();
+    navigate("/login", {
+      replace: true,
+      state: {
+        successMessage: isInvite
+          ? "Your account is ready. Sign in with your Gmail and new password."
+          : "Password set. You can now sign in.",
+      },
+    });
   }
 
   const showForm = ready && !linkBroken;
@@ -73,12 +103,13 @@ export function SetPasswordPage() {
   return (
     <div className="auth-simple">
       <Card className="auth-simple-card">
-        <h1>Set your password</h1>
+        <h1>{isInvite ? "Create your password" : "Set your password"}</h1>
 
         {showBroken && (
           <>
             <Banner tone="error" title="This link is invalid or has expired">
-              Ask your System Administrator to resend your invitation, or use Forgot password.
+              Email links work once and expire after a while. Ask your System Administrator to send a new
+              password email, or use Forgot password.
             </Banner>
             <Link to="/forgot-password" className="auth-simple-back">Forgot password</Link>
           </>
@@ -88,7 +119,11 @@ export function SetPasswordPage() {
 
         {showForm && (
           <form onSubmit={handleSubmit} noValidate>
-            <p className="auth-simple-sub">Choose a password you'll use to sign in to Brick x Brick.</p>
+            <p className="auth-simple-sub">
+              {isInvite
+                ? "Welcome to Brick x Brick. Your account was created by your System Administrator. Choose the password you'll use to sign in."
+                : "Choose a password you'll use to sign in to Brick x Brick."}
+            </p>
             <PasswordField label="New password" value={password}
               onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
             <PasswordField label="Confirm password" value={confirm}

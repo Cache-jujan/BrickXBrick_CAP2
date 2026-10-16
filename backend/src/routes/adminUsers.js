@@ -4,6 +4,7 @@ const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { supabaseAnon } = require("../lib/supabaseAnon");
+const { setPasswordUrl } = require("../lib/passwordLink");
 const { findOpenWork, hasOpenWork, describeOpenWork } = require("../lib/userOpenWork");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
@@ -35,7 +36,7 @@ async function loadUser(id) {
   return r.rows[0] || null;
 }
 
-// CREATE
+/** Create an active account and email an invite linking to the password setup page. */
 router.post("/", async (req, res) => {
   const { name, role } = req.body;
   const email = (req.body.email || "").trim().toLowerCase();
@@ -59,7 +60,7 @@ router.post("/", async (req, res) => {
 
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { role },
-      redirectTo: `${process.env.FRONTEND_URL}/set-password`,
+      redirectTo: setPasswordUrl(req),
     });
     if (error) {
       console.error("Invite failed:", error.status, error.message);
@@ -166,6 +167,7 @@ router.post("/:id/unlock", async (req, res) => {
 // compromised), and any login lockout is cleared. A hacked admin account
 // therefore can't take over other accounts: the new password is chosen from
 // the user's own Gmail, and admins can't change a user's email.
+/** Resend an invite or send recovery mail, retiring confirmed users' old passwords and clearing lockouts. */
 router.post("/:id/send-password-email", async (req, res) => {
   try {
     const user = await loadUser(req.params.id);
@@ -173,7 +175,7 @@ router.post("/:id/send-password-email", async (req, res) => {
     if (user.status === "Inactive") {
       return res.status(409).json({ error: "This account is deactivated. Reactivate it before sending a password email." });
     }
-    const redirectTo = `${process.env.FRONTEND_URL}/set-password`;
+    const redirectTo = setPasswordUrl(req);
 
     const { data: authData, error: lookupError } = await supabaseAdmin.auth.admin.getUserById(user.supabaseuserid);
     if (lookupError || !authData?.user) {
