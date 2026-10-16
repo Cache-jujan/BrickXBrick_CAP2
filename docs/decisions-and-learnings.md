@@ -59,3 +59,27 @@ The cloud container has no Docker daemon, so local verification used the
 installed PostgreSQL 16 (database `brickxbrick`, user `brickuser`) instead of
 the Docker Postgres 14 in `docker-compose.yml`. Neon was never touched. Re-run
 the checkpoints on Docker Postgres 14 on your machine if you want exact parity.
+
+### D6. Choices made while building (review at the defense)
+
+- **SUPERSEDED on sync.** A queued task update is rejected (`SUPERSEDED`) when the
+  task already has a Pending Review row, as spec revision 2 says ("server wins").
+  The online route does the opposite (a new submission replaces the pending one).
+  The check runs under the task row lock, so it cannot race.
+- **Replay beats every other check.** A task update whose uuid was already saved
+  reports synced even if the task was since completed or the photo check would
+  now fail (same as expenses).
+- **Could not check is not rejected.** A photo-storage timeout leaves the item out
+  of the sync response so the phone keeps it pending. Only a confirmed-missing
+  file is `MISSING_PHOTO`.
+- **72-hour rule.** Pending offline entries are never deleted for being old (the
+  old code did delete them at app start). Old pending entries block NEW entries
+  with a warning and still sync.
+- **Empty report.** `POST /api/reports/pdf` returns 400 when the period has no
+  approved expenses, so an all-zero report is never anchored.
+- **Money sums.** Report totals are added in whole centavos in JS (exact), not in
+  SQL; the spec said SQL, but its pure builder takes row-level inputs.
+- **Dev DB.** Checkpoints ran on PostgreSQL 16 (no Docker daemon in the cloud
+  session), not the Docker Postgres 14 in `docker-compose.yml`.
+- **Config typo noticed, not changed:** `backend/.env.example` says
+  `R2_PUBLIC__BASE_URL` (two underscores); the code reads `R2_PUBLIC_BASE_URL`.

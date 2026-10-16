@@ -1,0 +1,63 @@
+(node:9948) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/BrickXBrick_CAP2/mobile/lib/sync/db.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/BrickXBrick_CAP2/mobile/package.json.
+✔ with the dev flag set to 3, the 4th entry is blocked (13.129009ms)
+✔ the flag is ignored outside dev builds (limit stays 100) (2.817154ms)
+(node:9949) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/BrickXBrick_CAP2/mobile/lib/sync/db.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/BrickXBrick_CAP2/mobile/package.json.
+✔ evaluateEnqueue: under both limits is allowed (2.836169ms)
+✔ evaluateEnqueue: the 100th is allowed, the 101st is blocked (LIMIT) (0.311304ms)
+✔ evaluateEnqueue: oldest entry just under 72h is fine, just over is STALE (0.298531ms)
+✔ the 101st entry is blocked, counting expenses and task updates together (9.418097ms)
+✔ replacing a task's pending update still works when the queue is full (5.079959ms)
+✔ a newer update for the same task replaces the older one and returns the old photo path (1.437328ms)
+✔ different tasks queue side by side; the pending lookup is per task (0.607106ms)
+✔ an old pending entry blocks NEW entries (STALE) but is never deleted and still syncs (0.82122ms)
+✔ once the old entries have synced, queueing works again (0.689702ms)
+✔ old rejected rows are tidied away after 72h; old pending rows are not (0.929321ms)
+✔ photo URL is remembered, synced rows are purged and their file paths returned (0.749111ms)
+✔ rejected: kept with code and message, not counted as pending, dismissed returns the photo path (0.61395ms)
+✔ a replaced-then-rejected task can be queued again (rejected rows never block) (0.613822ms)
+✔ two people on one phone: pending updates are filtered by user (0.560609ms)
+✔ pending rows survive the app restarting (initDb again on the same file) (0.501932ms)
+✔ old expense behavior is unchanged: pending list is oldest first, synced rows purge (0.542506ms)
+(node:9953) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/BrickXBrick_CAP2/mobile/lib/sync/messages.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/BrickXBrick_CAP2/mobile/package.json.
+✔ the three reasons a user will actually see are in plain words (0.728515ms)
+✔ an unknown code falls back to the server's message, then to a generic line (0.156648ms)
+✔ nothing happened: no message (so no alert) (0.159352ms)
+✔ task updates synced: counted separately from expenses, singular/plural right (1.207455ms)
+✔ rejections list the plain reason for task updates and the code for expenses (0.314981ms)
+✔ at most 3 reasons are listed, then 'and N more' (0.195024ms)
+(node:9971) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/BrickXBrick_CAP2/mobile/lib/sync/db.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/BrickXBrick_CAP2/mobile/package.json.
+[F10 sync] photo upload postponed: Photo upload failed (500)
+[F10 sync] photo upload postponed: Photo upload failed (401)
+[F10 sync] photo upload postponed: Network request failed
+✔ photo is uploaded FIRST, then one batch carries only the URL; synced row is purged and its file deleted (5.633393ms)
+✔ a .png photo is uploaded as image/png; an empty note is left out of the batch (0.927001ms)
+✔ batch fails after the photo uploaded: row stays pending, and the retry does NOT upload again (1.342454ms)
+✔ a server error status on the batch throws and keeps everything pending (0.75878ms)
+✔ rejected items are kept with their code and message, photo file kept; synced ones go (1.050326ms)
+✔ an item the server left out of both lists (could not check) stays pending (0.685502ms)
+✔ photo refused for good (403/404/409/400): rejected without a batch call; error code is the plain one (2.320431ms)
+✔ the photo file is gone from the phone: rejected MISSING_PHOTO, no upload attempted (0.510496ms)
+✔ temporary upload failures (5xx, 401, no network) keep the entry pending and do not block other items (2.960172ms)
+✔ Purchaser and Site Manager items go in ONE batch only when both are allowed; each role sends its own kind (1.377426ms)
+✔ a task update queued by another user on this phone is not sent (0.550146ms)
+✔ signed out: nothing is sent and nothing is lost (0.395922ms)
+✔ nothing pending: no network call at all (0.331823ms)
+✔ expenses still sync exactly as before (response shape unchanged) (0.825383ms)
+✔ role rule on its own: a Purchaser never sends task updates, even ones stored under their own id (0.618018ms)
+✔ rejectedItems lists every rejection with its kind, code and message (server and photo upload) (0.844138ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 275.613979
