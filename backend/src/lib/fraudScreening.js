@@ -91,6 +91,11 @@ function createFraudScreening({ query } = {}) {
   }
 
   // Layer 3: Ticket/receipt mismatch validation
+  //
+  // T2c-L3: when the ticket is BOM-linked (tickets.bomitemid is set), material
+  // matching is BOM-aware — the expense line items are checked for a matching
+  // bomItemID instead of free-text matching. If the ticket has no bomitemid,
+  // we fall back to the original free-text substring match.
   async function checkTicketMismatch(expense) {
     const ticketId =
       expense?.ticketid ?? expense?.ticketID;
@@ -100,7 +105,7 @@ function createFraudScreening({ query } = {}) {
     }
 
     const ticketResult = await runQuery(
-      `SELECT tickettype, materialtype, quantity, vendorname
+      `SELECT tickettype, materialtype, quantity, vendorname, bomitemid
          FROM tickets
         WHERE ticketid = $1`,
       [ticketId]
@@ -120,22 +125,35 @@ function createFraudScreening({ query } = {}) {
     const lineItems =
       expense.lineitems ?? expense.lineItems;
 
-    const items = Array.isArray(lineItems)
-      ? lineItems
-          .map((item) => item.description || "")
-          .join(" ")
-      : String(lineItems || "");
+    const itemsArray = Array.isArray(lineItems) ? lineItems : [];
 
-    const expenseText = `
-      ${expense.category || ""}
-      ${items}
-      ${expense.vendorname || expense.vendorName || ""}
-    `.toLowerCase();
+    let materialMismatch;
 
-    const materialMismatch =
-      !expenseText.includes(
-        String(ticket.materialtype).toLowerCase()
+    if (ticket.bomitemid) {
+      // BOM-aware path: mismatch unless at least one expense line item
+      // carries the same bomItemID as the ticket.
+      const bomMatch = itemsArray.some(
+        (item) => item?.bomItemID === ticket.bomitemid
       );
+
+      materialMismatch = !bomMatch;
+    } else {
+      // Fallback path: ticket has no BOM link, use free-text matching.
+      const items = itemsArray
+        .map((item) => item.description || "")
+        .join(" ");
+
+      const expenseText = `
+        ${expense.category || ""}
+        ${items}
+        ${expense.vendorname || expense.vendorName || ""}
+      `.toLowerCase();
+
+      materialMismatch =
+        !expenseText.includes(
+          String(ticket.materialtype).toLowerCase()
+        );
+    }
 
     const quantityMismatch =
       ticket.quantity != null &&
