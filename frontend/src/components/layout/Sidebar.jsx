@@ -13,6 +13,14 @@ function ReceiptIcon() {
   );
 }
 
+function ChartIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </svg>
+  );
+}
+
 function TicketIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -43,6 +51,7 @@ const NAV_BY_ROLE = {
     { to: "/dashboard/gm", label: "Dashboard", icon: GridIcon },
     { to: "/projects", label: "Projects", icon: FolderIcon },
     { to: "/expenses", label: "Expenses", icon: ReceiptIcon },
+    { to: "/reports", label: "Reports", icon: ChartIcon },
     { to: "/blockchain/alerts", label: "Tamper Alerts", icon: AlertTriangleIcon, alerts: "live" },
   ],
   "Project Manager": [

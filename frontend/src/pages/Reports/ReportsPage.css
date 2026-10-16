@@ -1,0 +1,13 @@
+.reports-page {
+  max-width: var(--content-max);
+}
+
+.reports-stamp {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-4);
+}
+
+.reports-page .banner {
+  margin-bottom: var(--space-4);
+}
