@@ -64,3 +64,15 @@ export async function deleteQueuedPhoto(path) {
     console.warn("[F10] could not delete queued photo:", error?.message ?? error);
   }
 }
+
+// The camera hands back a file in the cache folder, which the phone may clear
+// at any time. Copy it into the app's documents folder (kept until we delete
+// it) and return that path. The queue stores this path, never the image bytes.
+export async function copyPhotoToQueue(sourceUri) {
+  const dir = `${FileSystem.documentDirectory}task-photos/`;
+  await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {}); // already there
+  const ext = /\.png$/i.test(sourceUri) ? "png" : "jpg";
+  const target = `${dir}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  await FileSystem.copyAsync({ from: sourceUri, to: target });
+  return target;
+}

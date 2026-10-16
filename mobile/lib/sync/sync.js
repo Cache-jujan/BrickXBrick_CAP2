@@ -34,7 +34,7 @@ import { PhotoUploadRejected, uploadTaskPhoto, deleteQueuedPhoto } from "@/lib/s
 // rejected; a temporary failure leaves it pending and out of this batch.
 async function uploadPendingPhotos(rows, upload) {
   const ready = [];
-  let rejected = 0;
+  const rejectedItems = [];
   for (const row of rows) {
     if (row.server_photo_url) {
       ready.push(row);
@@ -47,23 +47,30 @@ async function uploadPendingPhotos(rows, upload) {
     } catch (error) {
       if (error instanceof PhotoUploadRejected) {
         markTaskUpdateRejected(row.update_id, error.code, error.message);
-        rejected += 1;
+        rejectedItems.push({ kind: "task_update", id: row.update_id, code: error.code, message: error.message });
       } else {
         console.warn("[F10 sync] photo upload postponed:", error?.message ?? error);
       }
     }
   }
-  return { ready, rejected };
+  return { ready, rejectedItems };
 }
 
-// Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected} }.
+// Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected},
+//           rejectedItems: [{ kind, id, code, message }] }.
 // Throws if the batch request itself fails. `deps` is for tests.
 export async function syncAllPending(deps = {}) {
   const upload = deps.uploadTaskPhoto || uploadTaskPhoto;
   const removeFile = deps.deleteQueuedPhoto || deleteQueuedPhoto;
   const session = (deps.getSession || getSession)();
 
-  const result = { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 } };
+  const result = {
+    synced: 0,
+    rejected: 0,
+    expenses: { synced: 0, rejected: 0 },
+    tasks: { synced: 0, rejected: 0 },
+    rejectedItems: [],
+  };
   if (!session) return result; // signed out: nothing may be sent under another identity
 
   // One phone, possibly two people over time: each role sends only its own kind.
@@ -72,7 +79,8 @@ export async function syncAllPending(deps = {}) {
   const taskRows = role === "Site Manager" ? getPendingTaskUpdates(session.user.id) : [];
 
   const photos = await uploadPendingPhotos(taskRows, upload);
-  result.tasks.rejected += photos.rejected;
+  result.tasks.rejected += photos.rejectedItems.length;
+  result.rejectedItems.push(...photos.rejectedItems);
 
   const items = [
     ...expenseRows.map((row) => ({ uuid: row.uuid, type: "expense", data: JSON.parse(row.payload) })),
@@ -110,9 +118,11 @@ export async function syncAllPending(deps = {}) {
       if (expenseIds.has(r.id)) {
         markRejected(r.id, r.code, r.message);
         result.expenses.rejected += 1;
+        result.rejectedItems.push({ kind: "expense", id: r.id, code: r.code, message: r.message });
       } else if (taskIds.has(r.id)) {
         markTaskUpdateRejected(r.id, r.code, r.message);
         result.tasks.rejected += 1;
+        result.rejectedItems.push({ kind: "task_update", id: r.id, code: r.code, message: r.message });
       }
     }
   }

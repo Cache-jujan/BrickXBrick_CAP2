@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useNetwork } from "@/lib/sync/network-context";
 
-// 10.2 — red banner while offline, with the number of queued expenses.
+// 10.2 — red banner while offline, with the number of queued entries
+// (expenses and task updates together).
 export function OfflineBanner() {
   const { isOnline, pendingCount } = useNetwork();
   const insets = useSafeAreaInsets();
@@ -16,7 +17,7 @@ export function OfflineBanner() {
     <View style={[styles.banner, { paddingTop: insets.top + 6 }]} accessibilityRole="alert">
       <IconSymbol name="wifi.slash" size={16} color="#FFF" />
       <Text style={styles.text}>
-        You're offline{pendingCount > 0 ? ` · ${pendingCount} expense${pendingCount === 1 ? "" : "s"} queued` : ""}
+        You're offline{pendingCount > 0 ? ` · ${pendingCount} queued` : ""}
       </Text>
     </View>
   );

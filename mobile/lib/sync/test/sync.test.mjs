@@ -228,7 +228,7 @@ test("nothing pending: no network call at all", async () => {
   setup();
   const result = await syncAllPending();
   assert.equal(calls.fetches.length, 0);
-  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 } });
+  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, rejectedItems: [] });
 });
 
 test("expenses still sync exactly as before (response shape unchanged)", async () => {
@@ -251,4 +251,18 @@ test("role rule on its own: a Purchaser never sends task updates, even ones stor
   assert.equal(calls.fetches.length, 0);
   assert.equal(fs.uploads.length, 0);
   assert.equal(result.synced, 0);
+});
+
+test("rejectedItems lists every rejection with its kind, code and message (server and photo upload)", async () => {
+  setup();
+  const a = queueTask("t1");
+  queueTask("t2");
+  let first = true;
+  fs.uploadHandler = async () => (first ? ((first = false), { status: 201, body: JSON.stringify({ photoUrl: "https://r2/tasks/t1/a.jpg" }) }) : { status: 409, body: JSON.stringify({ error: "closed" }) });
+  serverReply = async () => ({ body: { syncedIds: [], rejected: [{ id: a.updateId, code: "SUPERSEDED", message: "waiting" }] } });
+  const result = await syncAllPending();
+  assert.deepEqual(
+    result.rejectedItems.map((i) => [i.kind, i.code]).sort(),
+    [["task_update", "SUPERSEDED"], ["task_update", "TASK_CLOSED"]]
+  );
 });
