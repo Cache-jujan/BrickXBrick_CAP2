@@ -12,15 +12,30 @@ function stub(relative, exports) {
 
 const P1 = "11111111-1111-4111-8111-111111111111";
 const P2 = "22222222-2222-4222-8222-222222222222";
-const state = { me: { id: "u1", name: "Test GM", role: "General Manager" }, knownProjects: [P1, P2], calls: [], inserts: [] };
+const state = { chain: async () => ({ txHash: "0xfeed", blockNumber: 12, validatorNodeCount: 3 }), logs: [], stored: new Map(), me: { id: "u1", name: "Test GM", role: "General Manager" }, knownProjects: [P1, P2], calls: [], inserts: [] };
 
 async function fakeQuery(sql, params = []) {
   const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
   state.calls.push(text);
   if (text.startsWith("insert into report_events")) {
     state.inserts.push(params);
+    const [reportid, generatedby, projectids, periodfrom, periodto, generatedat, totals, payloadhash] = params;
+    state.stored.set(reportid, { reportid, generatedby, projectids, periodfrom, periodto, generatedat, totals: JSON.parse(totals), payloadhash, anchorstatus: "Pending" });
     return { rows: [], rowCount: 1 };
   }
+  if (text.startsWith("select * from report_events")) {
+    const row = state.stored.get(params[0]);
+    return { rows: row ? [row] : [] };
+  }
+  if (text.startsWith("insert into blockchainlogs")) {
+    state.logs.push(params);
+    return { rows: [] };
+  }
+  if (text.startsWith("update report_events set anchorstatus = 'confirmed'")) {
+    state.stored.get(params[0]).anchorstatus = "Confirmed";
+    return { rows: [] };
+  }
+  if (text.startsWith("select txhash")) return { rows: state.logs.map((l) => ({ txhash: l[2], blocknumber: l[3], validatornodecount: l[4] })) };
   if (text.includes("from projects")) {
     const rows = params[0]
       .filter((id) => state.knownProjects.includes(id))
@@ -40,7 +55,13 @@ async function fakeQuery(sql, params = []) {
   return { rows: [] };
 }
 
-stub("../src/lib/db", { query: fakeQuery });
+stub("../src/lib/db", {
+  query: fakeQuery,
+  withTransaction: async (fn) => fn({ query: fakeQuery }),
+});
+// reportAnchor calls submitHashWithTimeout on the module object at call time,
+// so a test can switch the "chain" on and off.
+require("../src/lib/blockchainService").submitHashWithTimeout = (hash) => state.chain(hash);
 stub("../src/middleware/auth", {
   requireAuth: (req, _res, next) => {
     req.user = state.me;
@@ -212,4 +233,57 @@ test("PHP formatting: thousands separators, 2 decimals, negatives, no peso glyph
   assert.equal(formatPhp(0), "PHP 0.00");
   assert.equal(formatPhp(-7500), "-PHP 7,500.00");
   assert.equal(formatPhp(1234567.891), "PHP 1,234,567.89");
+});
+
+// ---- anchoring through the routes ------------------------------------------------
+
+const GM = { id: "u1", name: "Test GM", role: "General Manager" };
+const chainDown = async () => { throw new Error("TIMEOUT"); };
+const chainUp = async () => ({ txHash: "0xfeed", blockNumber: 12, validatorNodeCount: 3 });
+
+test("PDF with the chain up: Confirmed header, log row written, tx printed in the footer", async () => {
+  state.me = GM; state.chain = chainUp; state.logs.length = 0;
+  const res = await post("/api/reports/pdf", PDF_BODY);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("x-report-anchor-status"), "Confirmed");
+  assert.equal(state.logs.length, 1);
+  assert.equal(state.stored.get(res.headers.get("x-report-id")).anchorstatus, "Confirmed");
+});
+
+test("PDF with the chain down: still a PDF, status Pending, nothing logged", async () => {
+  state.me = GM; state.chain = chainDown; state.logs.length = 0;
+  const res = await post("/api/reports/pdf", PDF_BODY);
+  assert.equal(res.status, 200);
+  assert.equal(res.buffer.subarray(0, 5).toString(), "%PDF-");
+  assert.equal(res.headers.get("x-report-anchor-status"), "Pending");
+  assert.equal(state.logs.length, 0);
+});
+
+test("retry endpoint: 202 while the chain is down, 200 Confirmed once it is back", async () => {
+  state.me = GM; state.chain = chainDown; state.logs.length = 0;
+  const made = await post("/api/reports/pdf", PDF_BODY);
+  const id = made.headers.get("x-report-id");
+
+  const stillDown = await post(`/api/reports/${id}/anchor`, {});
+  assert.equal(stillDown.status, 202);
+  assert.equal(stillDown.body.anchorStatus, "Pending");
+
+  state.chain = chainUp;
+  const ok = await post(`/api/reports/${id}/anchor`, {});
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.anchorStatus, "Confirmed");
+  assert.equal(ok.body.txHash, "0xfeed");
+  assert.equal(state.logs.length, 1);
+
+  const again = await post(`/api/reports/${id}/anchor`, {}); // idempotent
+  assert.equal(again.status, 200);
+  assert.equal(state.logs.length, 1);
+});
+
+test("retry endpoint: 403 for other roles, 400 for a bad id, 404 for an unknown report", async () => {
+  state.me = { id: "u2", role: "Project Manager" };
+  assert.equal((await post("/api/reports/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/anchor", {})).status, 403);
+  state.me = GM;
+  assert.equal((await post("/api/reports/not-a-uuid/anchor", {})).status, 400);
+  assert.equal((await post("/api/reports/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/anchor", {})).status, 404);
 });

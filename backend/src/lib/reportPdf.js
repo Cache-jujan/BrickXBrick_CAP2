@@ -39,10 +39,11 @@ const right = (text, extra = {}) => ({ text, alignment: "right", ...extra });
 
 /**
  * summary:  the object from buildSummary()
- * options:  { reportId, payloadHash, anchorStatus, chartImage, generatedByName }
+ * options:  { reportId, payloadHash, anchor, chartImage, generatedByName }
+ *            anchor is { status: "Pending" | "Confirmed", txHash?, blockNumber? }
  */
 function buildReportDocDefinition(summary, options) {
-  const { reportId, payloadHash, anchorStatus, chartImage, generatedByName } = options;
+  const { reportId, payloadHash, anchor, chartImage, generatedByName } = options;
   const names = summary.projects.map((p) => p.name).join(", ");
 
   const projectRows = summary.projects.map((p) => [
@@ -141,7 +142,12 @@ function buildReportDocDefinition(summary, options) {
       stack: [
         { text: `Report ID: ${reportId}` },
         { text: `Report hash (SHA-256): ${payloadHash}` },
-        { text: `Blockchain anchor: ${anchorStatus}` },
+        {
+          text:
+            anchor.status === "Confirmed"
+              ? `Blockchain anchor: Confirmed (tx ${anchor.txHash}, block ${anchor.blockNumber})`
+              : "Blockchain anchor: Pending (the network was unavailable; it will be secured on retry)",
+        },
         { text: `Page ${page} of ${pages}`, alignment: "right" },
       ],
     }),
