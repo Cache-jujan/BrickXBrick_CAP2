@@ -1,24 +1,36 @@
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
-import { MAX_PROJECTS } from "../../utils/reportFilters";
+import { MAX_PROJECTS, niceDay, projectSpan, spanOfProjects } from "../../utils/reportFilters";
 import "./ReportFilters.css";
 
-/**
- * Project multi-select (1 to 5), date range and the Generate button.
- * value: { projectIds, from, to }   errors: { projectIds?, from?, to? }
- * Controlled: the page owns the state.
- */
-export function ReportFilters({ projects, projectsLoading, projectsError, value, errors, submitting, onChange, onSubmit }) {
-  const atLimit = value.projectIds.length >= MAX_PROJECTS;
+function spanText(project) {
+  const { start, end } = projectSpan(project);
+  if (!start && !end) return "No dates set";
+  const finish = project.actualcompletiondate ? "finished" : "target finish";
+  return `Starts ${start ? niceDay(start) : "—"} · ${end ? `${finish} ${niceDay(end)}` : "no finish date"}`;
+}
 
-  function toggle(projectId) {
-    const selected = value.projectIds.includes(projectId);
-    onChange({
-      ...value,
-      projectIds: selected ? value.projectIds.filter((id) => id !== projectId) : [...value.projectIds, projectId],
-    });
-  }
+/**
+ * Project multi-select (1 to 5) showing each project's dates, the date range
+ * and the Generate button. Controlled: the page owns the state.
+ * value: { projectIds, from, to }   errors: { projectIds?, from?, to? }
+ */
+export function ReportFilters({
+  projects,
+  projectsLoading,
+  projectsError,
+  value,
+  errors,
+  submitting,
+  onToggleProject,
+  onDateChange,
+  onUseProjectDates,
+  onSubmit,
+}) {
+  const atLimit = value.projectIds.length >= MAX_PROJECTS;
+  const selected = projects.filter((p) => value.projectIds.includes(p.projectid));
+  const span = spanOfProjects(selected);
 
   return (
     <form
@@ -46,8 +58,11 @@ export function ReportFilters({ projects, projectsLoading, projectsError, value,
             return (
               <li key={project.projectid}>
                 <label className={"report-filters-option" + (disabled ? " report-filters-option-disabled" : "")}>
-                  <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggle(project.projectid)} />
-                  <span className="report-filters-name">{project.name}</span>
+                  <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggleProject(project.projectid)} />
+                  <span className="report-filters-text">
+                    <span className="report-filters-name">{project.name}</span>
+                    <span className="report-filters-dates-line">{spanText(project)}</span>
+                  </span>
                   <Badge status={project.status} />
                 </label>
               </li>
@@ -63,23 +78,33 @@ export function ReportFilters({ projects, projectsLoading, projectsError, value,
           type="date"
           required
           value={value.from}
-          max={value.to || undefined}
           error={errors.from}
-          onChange={(event) => onChange({ ...value, from: event.target.value })}
+          onChange={(event) => onDateChange("from", event.target.value)}
         />
         <Field
           label="To"
           type="date"
           required
           value={value.to}
-          min={value.from || undefined}
           error={errors.to}
-          onChange={(event) => onChange({ ...value, to: event.target.value })}
+          onChange={(event) => onDateChange("to", event.target.value)}
         />
+        {span && (
+          <Button type="button" variant="secondary" onClick={onUseProjectDates}>
+            Use project dates
+          </Button>
+        )}
         <Button type="submit" disabled={submitting}>
           {submitting ? "Generating…" : "Generate report"}
         </Button>
       </div>
+
+      {span && (
+        <p className="report-filters-note">
+          The projects you chose run from {niceDay(span.from)} to {niceDay(span.to)}.
+          {span.trimmed ? " A report can cover at most 366 days, so the range was cut there." : ""}
+        </p>
+      )}
     </form>
   );
 }

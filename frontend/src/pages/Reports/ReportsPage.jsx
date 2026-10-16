@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { anchorReport, downloadReportPdf, getReportSummary, saveBlob } from "../../api/reportsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useProjects } from "../../utils/useProjects";
-import { defaultReportRange, validateReportFilters } from "../../utils/reportFilters";
+import { defaultReportRange, explainEmpty, spanOfProjects, validateReportFilters } from "../../utils/reportFilters";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -24,6 +24,10 @@ export function ReportsPage() {
   const { projects, loading: projectsLoading, error: projectsError } = useProjects();
   const [filters, setFilters] = useState(() => ({ projectIds: [], ...defaultReportRange() }));
   const [fieldErrors, setFieldErrors] = useState({});
+  // Until the GM types a date by hand, choosing projects fills the range from
+  // their start and finish dates. Typing a date stops that.
+  const datesTouched = useRef(false);
+  const problemsRef = useRef(null);
   const [summary, setSummary] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -36,6 +40,40 @@ export function ReportsPage() {
   // After an export: { reportId, anchorStatus: "Confirmed" | "Pending", retrying, retryMessage }
   const [exportResult, setExportResult] = useState(null);
   const [exportError, setExportError] = useState("");
+
+  const selectedProjects = projects.filter((p) => filters.projectIds.includes(p.projectid));
+
+  function toggleProject(projectId) {
+    const ids = filters.projectIds.includes(projectId)
+      ? filters.projectIds.filter((id) => id !== projectId)
+      : [...filters.projectIds, projectId];
+    let next = { ...filters, projectIds: ids };
+    if (!datesTouched.current) {
+      const span = spanOfProjects(projects.filter((p) => ids.includes(p.projectid)));
+      if (span) next = { ...next, from: span.from, to: span.to };
+    }
+    setFieldErrors({});
+    setFilters(next);
+  }
+
+  // Picking a start after the end moves the end along (and the other way
+  // round), so a date in another year can be chosen without fiddling.
+  function changeDate(field, day) {
+    datesTouched.current = true;
+    const next = { ...filters, [field]: day };
+    if (field === "from" && day && next.to && day > next.to) next.to = day;
+    if (field === "to" && day && next.from && day < next.from) next.from = day;
+    setFieldErrors({});
+    setFilters(next);
+  }
+
+  function useProjectDates() {
+    const span = spanOfProjects(selectedProjects);
+    if (!span) return;
+    datesTouched.current = false;
+    setFieldErrors({});
+    setFilters({ ...filters, from: span.from, to: span.to });
+  }
 
   async function generate() {
     const errors = validateReportFilters(filters);
@@ -59,6 +97,12 @@ export function ReportsPage() {
   }
 
   const warnings = summary?.warnings;
+  const problems = [...Object.values(fieldErrors), ...(error ? [error] : [])];
+
+  // Bring the problem into view: a small red line under a field is easy to miss.
+  useEffect(() => {
+    if (problems.length > 0) problemsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [problems.length, error, fieldErrors]);
 
   async function exportPdf() {
     const chartImage = chartRef.current?.getImage();
@@ -110,16 +154,46 @@ export function ReportsPage() {
         value={filters}
         errors={fieldErrors}
         submitting={submitting}
-        onChange={setFilters}
+        onToggleProject={toggleProject}
+        onDateChange={changeDate}
+        onUseProjectDates={useProjectDates}
         onSubmit={generate}
       />
 
-      {error && <Banner tone="error" title={error} />}
+      {problems.length > 0 && (
+        <div ref={problemsRef}>
+          <Banner tone="error" title="The report was not generated">
+            <ul className="reports-problems">
+              {problems.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </Banner>
+        </div>
+      )}
 
       {summary && summary.empty && (
-        <Banner tone="empty" title="No approved expenses in this period">
-          Nothing was approved between {summary.period.from} and {summary.period.to} for the projects you chose. Try a wider
-          date range or other projects.
+        <Banner
+          tone="empty"
+          title="No approved expenses in this period"
+          action={
+            selectedProjects.length > 0 && (
+              <Button variant="secondary" onClick={useProjectDates}>
+                Use project dates
+              </Button>
+            )
+          }
+        >
+          <ul className="reports-problems">
+            {explainEmpty({
+              selected: selectedProjects,
+              from: summary.period.from,
+              to: summary.period.to,
+              pendingExpenses: summary.warnings.pendingExpenses,
+            }).map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
         </Banner>
       )}
 

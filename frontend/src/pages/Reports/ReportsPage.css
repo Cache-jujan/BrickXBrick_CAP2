@@ -40,3 +40,10 @@
   color: var(--color-ink-soft);
   font-size: var(--text-sm);
 }
+
+.reports-problems {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: grid;
+  gap: var(--space-1);
+}
