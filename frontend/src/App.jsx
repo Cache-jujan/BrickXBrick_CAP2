@@ -25,6 +25,7 @@ import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
 import { SetPasswordPage } from "./pages/Auth/SetPasswordPage";
 import { LegalPage } from "./pages/Legal/LegalPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
+import { MilestoneTimelinePreviewPage } from "./pages/Projects/MilestoneTimelinePreviewPage";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
@@ -56,6 +57,9 @@ export default function App() {
           <Route path="/set-password" element={<SetPasswordPage />} />
           <Route path="/legal" element={<LegalPage />} />
           <Route path="/not-authorized" element={<NotAuthorizedPage />} />
+          {import.meta.env.DEV && (
+            <Route path="/projects/timeline-preview" element={<MilestoneTimelinePreviewPage />} />
+          )}
 
           <Route
             element={

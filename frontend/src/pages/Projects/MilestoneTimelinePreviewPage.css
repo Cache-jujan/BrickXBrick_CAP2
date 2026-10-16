@@ -1,0 +1,20 @@
+.timeline-preview-page {
+  min-height: 100vh;
+  padding: 32px;
+  background: #f6f4ef;
+}
+.timeline-preview-note {
+  width: min(1180px, 100%);
+  margin: 0 auto 12px;
+  color: #7c7468;
+  font-size: 12px;
+  text-align: right;
+}
+.timeline-preview-page .project-timeline {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+@media (max-width: 720px) {
+  .timeline-preview-page { padding: 16px; }
+  .timeline-preview-note { text-align: left; }
+}

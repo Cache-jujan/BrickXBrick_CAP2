@@ -20,8 +20,8 @@ import { Card } from "../../components/ui/Card";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
-import { MilestoneCard } from "../../components/milestones/MilestoneCard";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
+import { ProjectTimeline } from "../../components/milestones/ProjectTimeline";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
@@ -435,9 +435,6 @@ export function ProjectDetailPage() {
   // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   const hasSiteManager = Boolean(project.sitemanagerid);
-  // #5: split for the Pre-construction / Construction bands below.
-  const planningMilestones = project.milestones.filter((m) => m.phase === "Planning");
-  const constructionMilestones = project.milestones.filter((m) => m.phase !== "Planning");
   const bom = bomInfo?.bom || null;
   const bomApproved = project.bomstatus === "Approved";
   const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
@@ -630,78 +627,20 @@ export function ProjectDetailPage() {
       </section>
 
       <div className="project-detail-milestones">
-        <div className="section-head">
-          <h2>Milestones</h2>
-          {canManage && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={openMilestoneDialog}>
-              Add milestone
-            </button>
-          )}
-        </div>
-
         {!hasSiteManager && canManage && (
           <Banner tone="info" title="No Site Manager assigned">
             You can still add milestones and Planning tasks, but Construction tasks can't be
             created until a Site Manager is assigned to this project.
           </Banner>
         )}
-
-        {scheduleWarning && (
-          <Banner tone="warning" title={scheduleWarning} />
-        )}
-
-        {project.milestones.length === 0 ? (
-          <Banner tone="empty" title="No milestones yet">
-            {canManage
-              ? "Break this project down by adding its first milestone."
-              : "The Project Manager hasn't added any milestones yet."}
-          </Banner>
-        ) : (
-          <>
-            {/* #5: Planning (pre-construction) and Construction milestones are
-                owned differently — a PM/GM "Handled by" chip vs. a Site
-                Manager assignment — so they're shown as two labeled bands
-                rather than mixed into one grid. */}
-            <div className="project-detail-milestone-band">
-              <h3 className="project-detail-milestone-band-title">Pre-construction</h3>
-              {planningMilestones.length === 0 ? (
-                <p className="project-detail-milestone-band-empty">No Planning milestones yet.</p>
-              ) : (
-                <div className="project-detail-milestone-grid">
-                  {planningMilestones.map((milestone) => (
-                    <MilestoneCard
-                      key={milestone.milestoneid}
-                      milestone={milestone}
-                      canManage={canManage}
-                      hasSiteManager={hasSiteManager}
-                      onAddTask={openTaskDialog}
-                      onCompleteTask={openCompleteDialog}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="project-detail-milestone-band">
-              <h3 className="project-detail-milestone-band-title">Construction</h3>
-              {constructionMilestones.length === 0 ? (
-                <p className="project-detail-milestone-band-empty">No Construction milestones yet.</p>
-              ) : (
-                <div className="project-detail-milestone-grid">
-                  {constructionMilestones.map((milestone) => (
-                    <MilestoneCard
-                      key={milestone.milestoneid}
-                      milestone={milestone}
-                      canManage={canManage}
-                      hasSiteManager={hasSiteManager}
-                      onAddTask={openTaskDialog}
-                      onCompleteTask={openCompleteDialog}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
+        {scheduleWarning && <Banner tone="warning" title={scheduleWarning} />}
+        <ProjectTimeline
+          project={project}
+          canManage={canManage}
+          onAddMilestone={openMilestoneDialog}
+          onAddTask={openTaskDialog}
+          onCompleteTask={openCompleteDialog}
+        />
       </div>
 
       <div className="section-head">
