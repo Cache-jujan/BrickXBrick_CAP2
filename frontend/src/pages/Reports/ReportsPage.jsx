@@ -1,9 +1,13 @@
-import { useState } from "react";
-import { getReportSummary } from "../../api/reportsApi";
+import { useRef, useState } from "react";
+import { anchorReport, downloadReportPdf, getReportSummary, saveBlob } from "../../api/reportsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useProjects } from "../../utils/useProjects";
 import { defaultReportRange, validateReportFilters } from "../../utils/reportFilters";
 import { Banner } from "../../components/ui/Banner";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { BirTable } from "../../components/reports/BirTable";
+import { BudgetChart } from "../../components/reports/BudgetChart";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import "./ReportsPage.css";
@@ -24,6 +28,15 @@ export function ReportsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // What the cards and chart on screen were generated from. Export uses THESE,
+  // not whatever is currently typed in the form.
+  const [generated, setGenerated] = useState(null);
+  const chartRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  // After an export: { reportId, anchorStatus: "Confirmed" | "Pending", retrying, retryMessage }
+  const [exportResult, setExportResult] = useState(null);
+  const [exportError, setExportError] = useState("");
+
   async function generate() {
     const errors = validateReportFilters(filters);
     setFieldErrors(errors);
@@ -31,10 +44,14 @@ export function ReportsPage() {
 
     setSubmitting(true);
     setError("");
+    setExportResult(null);
+    setExportError("");
     try {
       setSummary(await getReportSummary(filters));
+      setGenerated({ ...filters });
     } catch (err) {
       setSummary(null);
+      setGenerated(null);
       setError(extractErrorMessage(err, "Couldn't generate the report."));
     } finally {
       setSubmitting(false);
@@ -42,6 +59,40 @@ export function ReportsPage() {
   }
 
   const warnings = summary?.warnings;
+
+  async function exportPdf() {
+    const chartImage = chartRef.current?.getImage();
+    if (!generated || !chartImage) return;
+    setExporting(true);
+    setExportError("");
+    setExportResult(null);
+    try {
+      const result = await downloadReportPdf({ ...generated, chartImage });
+      saveBlob(result.blob, result.filename);
+      setExportResult({ reportId: result.reportId, anchorStatus: result.anchorStatus, retrying: false, retryMessage: "" });
+    } catch (err) {
+      setExportError(extractErrorMessage(err, "Couldn't export the report."));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // The PDF already downloaded with "Pending" in its footer; this only secures
+  // the stored report on the blockchain. It never makes a new PDF.
+  async function retryAnchor() {
+    setExportResult((r) => ({ ...r, retrying: true, retryMessage: "" }));
+    try {
+      const result = await anchorReport(exportResult.reportId);
+      setExportResult((r) => ({
+        ...r,
+        retrying: false,
+        anchorStatus: result.anchorStatus,
+        retryMessage: result.anchorStatus === "Confirmed" ? "" : "The blockchain is still unavailable. Please try again in a few minutes.",
+      }));
+    } catch (err) {
+      setExportResult((r) => ({ ...r, retrying: false, retryMessage: extractErrorMessage(err, "Couldn't reach the blockchain. Please try again.") }));
+    }
+  }
 
   return (
     <div className="reports-page">
@@ -95,6 +146,51 @@ export function ReportsPage() {
           )}
 
           <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
+
+          <div className="reports-grid">
+            <Card>
+              <h2 className="reports-section-title">Budget against spend</h2>
+              <BudgetChart ref={chartRef} projects={summary.projects} />
+            </Card>
+            <Card>
+              <BirTable projects={summary.projects} totals={summary.totals} />
+            </Card>
+          </div>
+
+          <div className="reports-export">
+            <Button onClick={exportPdf} disabled={exporting}>
+              {exporting ? "Preparing PDF…" : "Export PDF"}
+            </Button>
+            <span className="reports-export-note">
+              The PDF is rebuilt from the database and saved as a record, so its figures always match the system.
+            </span>
+          </div>
+
+          {exportError && <Banner tone="error" title={exportError} />}
+
+          {exportResult && exportResult.anchorStatus === "Confirmed" && (
+            <Banner tone="success" title="Report downloaded and secured">
+              A tamper-proof copy of this report's fingerprint is now on the blockchain.
+            </Banner>
+          )}
+
+          {exportResult && exportResult.anchorStatus !== "Confirmed" && (
+            <Banner
+              tone="warning"
+              title="Report downloaded, but not yet secured on the blockchain"
+              action={
+                <Button variant="secondary" onClick={retryAnchor} disabled={exportResult.retrying}>
+                  {exportResult.retrying ? "Trying…" : "Try again"}
+                </Button>
+              }
+            >
+              <p>
+                The blockchain network was unavailable, so this report is saved as Pending. Your PDF is fine and says
+                "Pending" in its footer. Use Try again once the network is back; no new PDF is needed.
+              </p>
+              {exportResult.retryMessage && <p>{exportResult.retryMessage}</p>}
+            </Banner>
+          )}
         </>
       )}
     </div>

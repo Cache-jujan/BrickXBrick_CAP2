@@ -11,3 +11,32 @@
 .reports-page .banner {
   margin-bottom: var(--space-4);
 }
+
+.reports-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+@media (max-width: 1000px) {
+  .reports-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.reports-section-title {
+  font-size: var(--text-md);
+  margin: 0 0 var(--space-3);
+}
+
+.reports-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.reports-export-note {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
