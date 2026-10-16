@@ -118,6 +118,7 @@ export default function ReviewScreen() {
     setEdited(new Set());
   }, [result, draft.resubmit]);
 
+  const shownUri = useReceiptUri(draft.file?.uri ?? "");
   if (!result) return <Redirect href="/" />;
 
   const isSplit = draft.mode === "split";
