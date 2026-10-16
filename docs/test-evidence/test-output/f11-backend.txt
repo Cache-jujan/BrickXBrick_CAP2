@@ -1,0 +1,62 @@
+Report aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa anchor deferred: TIMEOUT
+Report aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa anchor deferred: only 1 validator node(s) online; 2 of 3 are required
+Report aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa anchor deferred: no validators
+✔ success: one ReportGenerated log row with the report id, status becomes Confirmed (3.603654ms)
+✔ the hash sent to the chain is the stored payloadhash (0.522516ms)
+✔ chain down or timeout: stays Pending, writes nothing, does not throw (1.086866ms)
+✔ fewer than 2 validator nodes: stays Pending (0.440914ms)
+✔ retry after a failure gives Confirmed (the R7 checkpoint, with a fake chain) (0.892122ms)
+✔ an already Confirmed report is not sent to the chain again (0.481099ms)
+✔ unknown report id gives 404 (0.622631ms)
+✔ stored content that no longer matches its hash gives 409 and never reaches the chain (0.310539ms)
+✔ two anchors at once: the loser sees the unique-index error and reports Confirmed (1.925896ms)
+✔ a database failure other than the duplicate is not hidden (0.795879ms)
+✔ a duplicate key with NO log row for this report (e.g. same txHash) is an error, not Confirmed (0.462469ms)
+✔ identical input gives an identical 64-char hex hash (1.901422ms)
+✔ project id order does not change the hash (0.242017ms)
+✔ changing any total by 0.01 changes the hash (0.549395ms)
+✔ changing the id, user, period or time changes the hash (0.285382ms)
+✔ 2-decimal formatting: 37000.5 and 37000.50 hash the same, -0 is not special (0.217403ms)
+✔ a report with no per-project totals cannot be hashed (0.40565ms)
+✔ the hash is the same under TZ=UTC and TZ=Asia/Manila (442.029766ms)
+✔ three approved expenses 5000, 7000, 3000 against budget 50000 (UT-C009 style) (1.416165ms)
+✔ overrun: spend above budget gives overrun true and negative net (0.389132ms)
+✔ budget 0 gives null utilization, no crash or Infinity (0.160152ms)
+✔ empty rows gives empty: true and zero figures (0.182049ms)
+✔ only rows outside the period also gives empty: true (1.291397ms)
+✔ BIR total counts only Formal-Tax-Deductible (0.247313ms)
+✔ period spend and cumulative spend differ when expenses fall outside the range (0.15366ms)
+✔ split receipt of 4500 into 2000 and 2500 across two projects counts 4500 once (0.158283ms)
+✔ totals add budgets and spend across projects (0.344961ms)
+✔ centavo sums do not drift (0.10 + 0.20) (0.376765ms)
+✔ rows for projects that were not requested are ignored (0.152536ms)
+✔ warnings count Pending and fraud-flagged expenses in the range (1.274676ms)
+✔ a bad amount throws instead of producing NaN (0.348804ms)
+✔ Project Manager, Site Manager and Purchaser all get 403; General Manager gets 200 (83.100331ms)
+✔ summary returns the computed figures (5.458028ms)
+✔ from after to gives 400 (4.710401ms)
+✔ a range longer than 366 days gives 400; exactly 366 is fine (7.953294ms)
+✔ more than 5 projects, or none, gives 400 (13.396847ms)
+✔ unknown project id gives 400 (3.53585ms)
+✔ bad ids and impossible dates give 400, not a database error (11.56644ms)
+✔ duplicate ids are collapsed (project counted once) (3.21788ms)
+✔ PDF: General Manager gets a real PDF attachment and one Pending report_events row (58.756296ms)
+✔ PDF: Project Manager, Site Manager and Purchaser get 403 (10.277114ms)
+✔ PDF: bad chartImage gives 400 and saves nothing (37.037002ms)
+✔ PDF: filters are validated like the summary route (6.686259ms)
+✔ PHP formatting: thousands separators, 2 decimals, negatives, no peso glyph (0.441885ms)
+✔ PDF with the chain up: Confirmed header, log row written, tx printed in the footer (28.235354ms)
+Report dab289a3-25b8-4537-8ea9-31e88415eb20 anchor deferred: TIMEOUT
+✔ PDF with the chain down: still a PDF, status Pending, nothing logged (18.920071ms)
+Report 09cf9e37-e795-4971-bfd3-2dcf38e114b1 anchor deferred: TIMEOUT
+Report 09cf9e37-e795-4971-bfd3-2dcf38e114b1 anchor deferred: TIMEOUT
+✔ retry endpoint: 202 while the chain is down, 200 Confirmed once it is back (30.521262ms)
+✔ retry endpoint: 403 for other roles, 400 for a bad id, 404 for an unknown report (8.37828ms)
+ℹ tests 48
+ℹ suites 0
+ℹ pass 48
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 836.421904

@@ -15,6 +15,7 @@ import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
+import { ReportsPage } from "./pages/Reports/ReportsPage";
 import { CreateTicketPage } from "./pages/Tickets/CreateTicketPage";
 import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
@@ -180,6 +181,16 @@ export default function App() {
               element={
                 <RoleRoute allow={["System Administrator"]}>
                   <UserManagementPage />
+                </RoleRoute>
+              }
+            />
+
+            {/* F11: financial reports. General Manager only (the API enforces it too). */}
+            <Route
+              path="/reports"
+              element={
+                <RoleRoute allow={["General Manager"]}>
+                  <ReportsPage />
                 </RoleRoute>
               }
             />

@@ -8,7 +8,7 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { dismissScan } from "@/lib/receipt-scans";
 import { getSession } from "@/lib/auth";
 import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
-import { queueExpense } from "@/lib/sync/db";
+import { canEnqueue, queueExpense } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
@@ -63,6 +63,9 @@ export default function LinkScreen() {
       if (!isOnline) {
         if (!ticket) throw new Error("This receipt isn't linked to a request. Open the request and try again.");
 
+        const gate = canEnqueue();
+        if (!gate.allowed) throw new Error(gate.message);
+
         const queued = queueExpense(Crypto.randomUUID(), {
           ticketID: ticket.ticketId,
           vendorName: ocrResult.vendorName,
@@ -76,7 +79,7 @@ export default function LinkScreen() {
           lineItems,
         });
         if (!queued) {
-          throw new Error("Offline queue is full (100 expenses). Reconnect to sync before saving more.");
+          throw new Error("Could not save this expense offline. Reconnect to sync before saving more.");
         }
 
         refreshPendingCount();

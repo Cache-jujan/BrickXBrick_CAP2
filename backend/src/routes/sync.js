@@ -6,9 +6,10 @@
 // exactly like an online one — it is just a delivery delay, never a way to
 // bypass F9 fraud screening.
 //
-// Idempotency: every queued item carries a client-generated `uuid`. We record
-// processed UUIDs in synced_actions, so a batch re-sent after a flaky reconnect
-// cannot create the same expense twice.
+// Idempotency: every queued item carries a client-generated `uuid`. An expense
+// is recorded in synced_actions; a task update uses task_progress_log's own
+// UNIQUE clientSubmissionId (the uuid). A batch re-sent after a flaky reconnect
+// therefore cannot create the same record twice.
 //
 // Per-item isolation: one bad item never blocks the good ones. The response is
 //   { syncedIds: [...], rejected: [ { id, code, message } ] }
@@ -17,7 +18,6 @@
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
-const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const {
   classifyBir,
@@ -26,6 +26,7 @@ const {
   computeQuantityFromLineItems,
 } = require("../lib/receiptFields");
 const { screenExpense } = require("../lib/screenExpense");
+const { submitTaskProgress, taskPhotoExists, TaskProgressError } = require("../lib/taskProgress");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -41,6 +42,16 @@ class SyncReject extends Error {
     this.code = code;
   }
 }
+
+// The storage check (is the photo really there?) could not run: a timeout or a
+// network problem, NOT a missing file. The item is left out of the response, so
+// the phone keeps it pending and retries on the next sync.
+class SyncRetry extends Error {}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// One queue, two kinds of items, each owned by one role.
+const ROLE_FOR_TYPE = { expense: "Purchaser", task_update: "Site Manager" };
 
 // Process ONE queued expense. Returns the new expenseID, or throws SyncReject.
 // Mirrors POST /api/expenses: validate -> normalize -> insert -> screen.
@@ -90,6 +101,7 @@ async function syncExpense(user, uuid, data) {
 
   // When a ticket is given, it is the source of truth for the project.
   let projectID = bodyProjectID;
+  let resolveTicketInTransaction = false;
   if (ticketID) {
     const ticketResult = await query(
       "SELECT projectid, status, assignedto FROM tickets WHERE ticketid = $1",
@@ -102,14 +114,11 @@ async function syncExpense(user, uuid, data) {
     if (ticket.assignedto !== user.id) {
       throw new SyncReject("TICKET_NOT_YOURS", "You may only submit an expense against a ticket assigned to you");
     }
-    if (ticket.status !== "Resolved") {
-      // Auto-resolve: the online path calls resolveTicket before submitting,
-      // but offline queues skip that step, so the sync endpoint does it here.
-      await query(
-        "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
-        [ticketID]
-      );
-    }
+    // Auto-resolve: the online path calls resolveTicket before submitting, but
+    // offline queues skip that step, so the sync endpoint does it. It runs in
+    // the same transaction as the expense insert (below): a failed insert must
+    // not leave the ticket Resolved with no expense.
+    resolveTicketInTransaction = ticket.status !== "Resolved";
     projectID = ticket.projectid;
   }
   if (!projectID) {
@@ -128,6 +137,12 @@ async function syncExpense(user, uuid, data) {
   // crash can't leave an expense without its synced_actions marker (or vice
   // versa). Screening runs AFTER commit (it reads through the pool).
   const expenseID = await withTransaction(async (client) => {
+    if (resolveTicketInTransaction) {
+      await client.query(
+        "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
+        [ticketID]
+      );
+    }
     const result = await client.query(
       `INSERT INTO expenses
          (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
@@ -154,9 +169,86 @@ async function syncExpense(user, uuid, data) {
   return expenseID;
 }
 
+// Why a shared-function failure is rejected, in the sync vocabulary.
+const TASK_REJECT_CODE = {
+  TASK_NOT_FOUND: "TASK_NOT_FOUND",
+  TASK_NOT_YOURS: "TASK_NOT_YOURS",
+  TASK_CLOSED: "TASK_CLOSED",
+  SUPERSEDED: "SUPERSEDED",
+  PENDING_EXISTS: "SUPERSEDED", // lost the race to another pending submission
+  CLIENT_ID_IN_USE: "DUPLICATE_UUID",
+};
+
+// Process ONE queued task submission (F10 item 10.4). `uuid` is the
+// clientSubmissionId, so replaying the same item is the existing idempotency
+// of task_progress_log: the second call finds the first row and reports synced.
+// data = { taskId, photoUrl, note? }; the photo was uploaded first through
+// POST /api/tasks/:id/photo.
+// Returns nothing; throws SyncReject (never retried) or SyncRetry (retried).
+async function syncTaskUpdate(user, uuid, data) {
+  const { taskId, photoUrl, note } = data || {};
+
+  if (!UUID_RE.test(String(uuid))) {
+    throw new SyncReject("INVALID_FIELDS", "uuid must be a UUID");
+  }
+  if (typeof taskId !== "string" || !UUID_RE.test(taskId)) {
+    throw new SyncReject("TASK_NOT_FOUND", "taskId must be the id of a task");
+  }
+  if (typeof photoUrl !== "string" || photoUrl.trim() === "") {
+    throw new SyncReject("MISSING_PHOTO", "photoUrl is required to submit task completion");
+  }
+  if (note !== undefined && note !== null && typeof note !== "string") {
+    throw new SyncReject("INVALID_FIELDS", "note must be text");
+  }
+
+  try {
+    await submitTaskProgress({
+      user,
+      taskId,
+      clientSubmissionId: uuid,
+      note,
+      photoUrl,
+      rejectIfPending: true,
+      // Rules the online route does not have: server wins if the project is no
+      // longer Active, and the photo must be one this server stored for this task.
+      beforeWrite: async (task) => {
+        const project = await query(
+          `SELECT p.status
+             FROM milestones m
+             JOIN projects p ON p.projectid = m.projectid
+            WHERE m.milestoneid = $1`,
+          [task.milestoneid]
+        );
+        const status = project.rows[0] && project.rows[0].status;
+        if (status !== "Active") {
+          throw new SyncReject("PROJECT_NOT_ACTIVE", `This project is ${status || "unavailable"}; task updates can only be recorded on an Active project`);
+        }
+
+        let exists;
+        try {
+          exists = await taskPhotoExists(photoUrl, taskId);
+        } catch (error) {
+          throw new SyncRetry(`could not check the photo: ${error.message}`);
+        }
+        if (!exists) {
+          throw new SyncReject("MISSING_PHOTO", "photoUrl must reference a photo uploaded via POST /api/tasks/:id/photo for this task");
+        }
+      },
+    });
+  } catch (error) {
+    if (error instanceof TaskProgressError) {
+      throw new SyncReject(TASK_REJECT_CODE[error.code] || "SERVER_ERROR", error.message);
+    }
+    throw error;
+  }
+}
+
 // POST /api/sync — batch of queued offline actions.
-// Body: { items: [ { uuid, type: "expense", data: {...} }, ... ] }
-router.post("/", requireRole("Purchaser"), async (req, res, next) => {
+// Body: { items: [ { uuid, type: "expense" | "task_update", data: {...} }, ... ] }
+// Any signed-in user may call it; each item is checked against ITS OWN role
+// (expense: Purchaser, task_update: Site Manager), so one wrong item never
+// blocks the good ones.
+router.post("/", async (req, res, next) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
@@ -174,6 +266,14 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
       }
 
       try {
+        const type = item.type || "expense";
+        if (!ROLE_FOR_TYPE[type]) {
+          throw new SyncReject("UNSUPPORTED_TYPE", `action type '${type}' is not supported yet`);
+        }
+        if (req.user.role !== ROLE_FOR_TYPE[type]) {
+          throw new SyncReject("WRONG_ROLE", `a ${type} can only be synced by a ${ROLE_FOR_TYPE[type]}`);
+        }
+
         // Idempotency: already processed this uuid? Report it synced, do nothing.
         const seen = await query(
           "SELECT action_uuid FROM synced_actions WHERE action_uuid = $1",
@@ -184,15 +284,14 @@ router.post("/", requireRole("Purchaser"), async (req, res, next) => {
           continue;
         }
 
-        const type = item.type || "expense";
-        if (type !== "expense") {
-          throw new SyncReject("UNSUPPORTED_TYPE", `action type '${type}' is not supported yet`);
-        }
-
-        await syncExpense(req.user, uuid, item.data);
+        if (type === "expense") await syncExpense(req.user, uuid, item.data);
+        else await syncTaskUpdate(req.user, uuid, item.data);
         syncedIds.push(uuid);
       } catch (err) {
-        if (err instanceof SyncReject) {
+        if (err instanceof SyncRetry) {
+          // Not synced, not rejected: the phone keeps it pending and tries again.
+          console.warn("SYNC ITEM RETRY LATER:", uuid, err.message);
+        } else if (err instanceof SyncReject) {
           rejected.push({ id: uuid, code: err.code, message: err.message });
         } else {
           // Unexpected server error on THIS item — isolate it, keep going.

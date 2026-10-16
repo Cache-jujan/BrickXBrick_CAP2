@@ -1,0 +1,7 @@
+✔ identical input gives an identical 64-char hex hash (2.065464ms)
+✔ project id order does not change the hash (0.481681ms)
+✔ changing any total by 0.01 changes the hash (0.556121ms)
+✔ changing the id, user, period or time changes the hash (0.292616ms)
+✔ 2-decimal formatting: 37000.5 and 37000.50 hash the same, -0 is not special (0.239898ms)
+✔ a report with no per-project totals cannot be hashed (0.371679ms)
+✔ the hash is the same under TZ=UTC and TZ=Asia/Manila (380.827984ms)

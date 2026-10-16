@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,25 @@ import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "e
 import { COLORS } from "@/constants/expense-flow-colors";
 import { fetchAssignedTasks, submitTaskProgress, type AssignedTask } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import {
+  dismissRejectedTaskUpdate,
+  getPendingTaskUpdateForTask,
+  getRejectedTaskUpdates,
+  queueTaskUpdate,
+} from "@/lib/sync/db";
+import { describeRejection } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
+import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
+
+// A row of offline_task_updates (lib/sync/db.js).
+type QueuedUpdate = {
+  update_id: string;
+  task_id: string;
+  photo_path: string;
+  note: string | null;
+  error_code: string | null;
+  error_message: string | null;
+};
 
 export default function SiteManagerTaskDetailScreen() {
   const session = getSession();
@@ -34,6 +53,19 @@ export default function SiteManagerTaskDetailScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  // F10 — offline queue state for THIS task.
+  const { isOnline, pendingCount, refreshPendingCount } = useNetwork();
+  const [queued, setQueued] = useState<QueuedUpdate | null>(null);
+  const [rejectedHere, setRejectedHere] = useState<QueuedUpdate[]>([]);
+  const [savedOffline, setSavedOffline] = useState(false);
+  const taskRef = useRef<AssignedTask | null>(null);
+  const hadQueuedRef = useRef(false);
+
+  const loadLocal = useCallback(() => {
+    setQueued((getPendingTaskUpdateForTask(id) as QueuedUpdate | null) ?? null);
+    setRejectedHere((getRejectedTaskUpdates() as QueuedUpdate[]).filter((row) => row.task_id === id));
+  }, [id]);
+
   const loadTask = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -45,9 +77,12 @@ export default function SiteManagerTaskDetailScreen() {
       if (!matchingTask) {
         throw new Error("This task is no longer assigned to your account.");
       }
+      taskRef.current = matchingTask;
       setTask(matchingTask);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load this task.");
+      // Offline refresh: keep showing the task that is already on screen, so the
+      // form (and "Queue Update") stays usable. Only a first load shows the error.
+      if (!taskRef.current) setError(err instanceof Error ? err.message : "Unable to load this task.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -56,9 +91,20 @@ export default function SiteManagerTaskDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      loadLocal();
       if (session?.user.role === "Site Manager") loadTask();
-    }, [loadTask, session?.user.role])
+    }, [loadLocal, loadTask, session?.user.role])
   );
+
+  // The queue changed (an entry was added, or a sync finished): re-read it. When
+  // this task's queued update has just been sent, reload the task so the
+  // evidence photo and status show what the server now has.
+  useEffect(() => {
+    const row = getPendingTaskUpdateForTask(id);
+    loadLocal();
+    if (hadQueuedRef.current && !row && isOnline) loadTask(true);
+    hadQueuedRef.current = !!row;
+  }, [pendingCount, id, isOnline, loadLocal, loadTask]);
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
@@ -82,33 +128,60 @@ export default function SiteManagerTaskDetailScreen() {
       setPhoto(result.assets[0]);
       setClientSubmissionId(null);
       setSubmitted(false);
+      setSavedOffline(false);
       setSubmitError(null);
     }
   }
 
-  async function chooseFromGallery() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Photo access needed", "Enable photo access in your phone settings to add task evidence.");
-      return;
+  // F10 — no connection: keep the photo on the phone and queue the update. It is
+  // sent by itself on reconnect (lib/sync/sync.js). One queued update per task:
+  // a newer one replaces the older one.
+  async function queueOffline() {
+    if (!task || !photo || !session) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    let copiedPath: string | null = null;
+    try {
+      copiedPath = await copyPhotoToQueue(photo.uri);
+      const result = queueTaskUpdate({
+        updateId: Crypto.randomUUID(),
+        taskId: task.taskid,
+        userId: session.user.id,
+        photoPath: copiedPath,
+        note: note.trim(),
+      });
+      if (!result.queued) {
+        await deleteQueuedPhoto(copiedPath);
+        setSubmitError(result.message ?? "Could not save this update offline. Reconnect and try again.");
+        return;
+      }
+      if (result.replacedPhotoPath) await deleteQueuedPhoto(result.replacedPhotoPath);
+      refreshPendingCount();
+      loadLocal();
+      setPhoto(null);
+      setNote("");
+      setSavedOffline(true);
+    } catch (err) {
+      if (copiedPath) await deleteQueuedPhoto(copiedPath);
+      setSubmitError(err instanceof Error ? err.message : "Unable to save this update on your phone.");
+    } finally {
+      setSubmitting(false);
     }
+  }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-      selectionLimit: 1,
-    });
-    if (!result.canceled) {
-      setPhoto(result.assets[0]);
-      setClientSubmissionId(null);
-      setSubmitted(false);
-      setSubmitError(null);
-    }
+  async function dismissRejected(row: QueuedUpdate) {
+    const path = dismissRejectedTaskUpdate(row.update_id);
+    await deleteQueuedPhoto(path);
+    loadLocal();
   }
 
   async function handleSubmit() {
     if (!task || !photo) {
       setSubmitError("Choose a photo before submitting progress.");
+      return;
+    }
+    if (!isOnline) {
+      await queueOffline();
       return;
     }
 
@@ -196,19 +269,34 @@ export default function SiteManagerTaskDetailScreen() {
               </View>
             )}
 
+            {rejectedHere.map((row) => (
+              <View key={row.update_id} style={styles.flagCard}>
+                <Text style={styles.flagTitle}>Update not sent</Text>
+                <Text style={styles.flagBody}>{describeRejection(row.error_code ?? "", row.error_message ?? "")}</Text>
+                <Pressable onPress={() => dismissRejected(row)} style={styles.dismissButton}>
+                  <Text style={styles.dismissText}>Dismiss</Text>
+                </Pressable>
+              </View>
+            ))}
+
+            {queued && (
+              <View style={styles.queuedCard}>
+                <Text style={styles.queuedTitle}>Queued — will send when you're back online</Text>
+                <Image source={{ uri: queued.photo_path }} style={styles.queuedImage} />
+                {queued.note ? <Text style={styles.queuedNote}>{queued.note}</Text> : null}
+                <Text style={styles.queuedHint}>Submitting another photo below replaces this queued update.</Text>
+              </View>
+            )}
+
             {task.status !== "Completed" && (
               <View style={styles.submissionSection}>
                 <Text style={styles.sectionTitle}>Progress update</Text>
-                <Text style={styles.sectionSubtitle}>Add one photo as evidence and an optional note.</Text>
+                <Text style={styles.sectionSubtitle}>Take one photo as evidence and add an optional note.</Text>
 
                 <View style={styles.photoActions}>
                   <Pressable onPress={takePhoto} style={styles.photoButton}>
                     <Text style={styles.photoButtonIcon}>⌾</Text>
                     <Text style={styles.photoButtonText}>Take photo</Text>
-                  </Pressable>
-                  <Pressable onPress={chooseFromGallery} style={styles.photoButton}>
-                    <Text style={styles.photoButtonIcon}>▧</Text>
-                    <Text style={styles.photoButtonText}>From gallery</Text>
                   </Pressable>
                 </View>
 
@@ -245,6 +333,14 @@ export default function SiteManagerTaskDetailScreen() {
                 />
 
                 {submitError && <Text style={styles.submitError}>{submitError}</Text>}
+                {savedOffline && !photo ? (
+                  <View style={styles.successCard}>
+                    <Text style={styles.successTitle}>Saved on your phone</Text>
+                    <Text style={styles.successBody}>
+                      It will be sent to your Project Manager automatically when you're back online.
+                    </Text>
+                  </View>
+                ) : null}
                 {submitted ? (
                   <View style={styles.successCard}>
                     <Text style={styles.successTitle}>Submitted for review</Text>
@@ -261,7 +357,7 @@ export default function SiteManagerTaskDetailScreen() {
                     onPress={handleSubmit}
                     style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed, submitting && styles.submitButtonDisabled]}
                   >
-                    {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitButtonText}>Submit for PM review</Text>}
+                    {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitButtonText}>{isOnline ? "Submit for PM review" : "Queue Update"}</Text>}
                   </Pressable>
                 )}
               </View>
@@ -339,6 +435,13 @@ const styles = StyleSheet.create({
   successBody: { color: "#287443", fontSize: 13, lineHeight: 19, marginTop: 6 },
   successBackButton: { alignSelf: "flex-start", borderColor: "#287443", borderRadius: 10, borderWidth: 1, marginTop: 14, paddingHorizontal: 13, paddingVertical: 9 },
   successBackText: { color: "#166534", fontSize: 12, fontWeight: "800" },
+  queuedCard: { backgroundColor: "#FFF8E6", borderColor: "#F0D78C", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 14 },
+  queuedTitle: { color: "#8A5A00", fontSize: 14, fontWeight: "800" },
+  queuedImage: { backgroundColor: "#EEE7DE", borderRadius: 10, height: 160, marginTop: 10, width: "100%" },
+  queuedNote: { color: COLORS.heading, fontSize: 13, lineHeight: 19, marginTop: 10 },
+  queuedHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
+  dismissButton: { alignSelf: "flex-start", borderColor: "#B42318", borderRadius: 10, borderWidth: 1, marginTop: 12, paddingHorizontal: 13, paddingVertical: 8 },
+  dismissText: { color: "#B42318", fontSize: 12, fontWeight: "800" },
   centerState: { alignItems: "center", paddingVertical: 80 },
   stateBody: { color: COLORS.muted, fontSize: 13, marginTop: 10 },
   errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, padding: 16 },

@@ -2,7 +2,8 @@
 //
 // Provides { isOnline, pendingCount, refreshPendingCount }.
 // - 10.1: NetInfo listener flips isOnline automatically.
-// - 10.6: on reconnect (and on app start if already online), sync every queued expense.
+// - 10.6: on reconnect (and on app start if already online), sync everything queued
+//         (expenses and task submissions).
 //         Also re-checks every 15s while online with items queued, so a sync that failed
 //         (server not reachable yet, or user not signed in yet) is picked up later.
 // - 10.7: rejected items are not retried; the alert shows the server's reason.
@@ -12,7 +13,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Alert } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 
-import { initDb, getPendingCount, getRejectedExpenses } from "@/lib/sync/db";
+import { initDb, getPendingCount } from "@/lib/sync/db";
+import { buildSyncSummary } from "@/lib/sync/messages";
 import { syncAllPending } from "@/lib/sync/sync";
 
 const RECHECK_INTERVAL_MS = 15000;
@@ -38,22 +40,14 @@ export function NetworkProvider({ children }) {
     if (getPendingCount() === 0) return;
     syncingRef.current = true;
     try {
-      const { synced, rejected } = await syncAllPending();
+      const result = await syncAllPending();
       refreshPendingCount();
-      if (synced === 0 && rejected === 0) return;
-
-      const lines = [];
-      if (synced > 0) lines.push(`${synced} expense${synced === 1 ? "" : "s"} synced`);
-      if (rejected > 0) {
-        lines.push(`${rejected} rejected`);
-        // Show why (most recent rejections first, max 3).
-        const reasons = getRejectedExpenses()
-          .slice(0, Math.min(rejected, 3))
-          .map((r) => `• ${r.reject_code}: ${r.reject_message}`);
-        lines.push(...reasons);
-        console.warn("[F10 sync] rejected:", reasons.join(" | "));
+      const summary = buildSyncSummary(result); // null when nothing happened
+      if (!summary) return;
+      if (result.rejected > 0) {
+        console.warn("[F10 sync] rejected:", result.rejectedItems.map((i) => `${i.code}: ${i.message}`).join(" | "));
       }
-      Alert.alert("Sync complete", lines.join("\n"));
+      Alert.alert(summary.title, summary.message);
     } catch (err) {
       // Request failed (server unreachable, 401 not signed in, 5xx).
       // Rows stay 'pending'; the 15s re-check below will try again.

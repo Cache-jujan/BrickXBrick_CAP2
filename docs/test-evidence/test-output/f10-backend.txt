@@ -1,0 +1,56 @@
+✔ a good expense resolves its ticket and is saved (54.319829ms)
+SYNC ITEM ERROR: 55555555-5555-4555-8555-555555555555 Error: insert failed
+    at Object.query (/home/user/BrickXBrick_CAP2/backend/test/syncExpenseTicket.test.js:32:35)
+    at /home/user/BrickXBrick_CAP2/backend/src/routes/sync.js:146:33
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async withTransaction (/home/user/BrickXBrick_CAP2/backend/test/syncExpenseTicket.test.js:51:14)
+    at async syncExpense (/home/user/BrickXBrick_CAP2/backend/src/routes/sync.js:139:21)
+    at async /home/user/BrickXBrick_CAP2/backend/src/routes/sync.js:287:33
+✔ a failed expense insert leaves the ticket as it was (not Resolved) (20.977349ms)
+✔ a valid update is synced and creates exactly one Pending Review row (64.531631ms)
+✔ the same uuid sent twice creates one row; the second call still reports synced (24.140491ms)
+✔ replaying an item whose task was since Completed still reports synced (not TASK_CLOSED) (10.115495ms)
+✔ TASK_NOT_FOUND: unknown task, and a taskId that is not an id (5.888988ms)
+✔ TASK_NOT_YOURS: the task was reassigned while the update was queued (8.124073ms)
+✔ TASK_CLOSED: the task is already Completed (4.796228ms)
+✔ PROJECT_NOT_ACTIVE: the project is no longer Active (22.325424ms)
+✔ MISSING_PHOTO: no photoUrl, a confirmed-missing file, another task's photo, or an outside link (16.66074ms)
+✔ SUPERSEDED: the task already has a submission waiting for review (server wins) (12.506808ms)
+✔ DUPLICATE_UUID: the uuid already belongs to someone else's submission (11.2326ms)
+✔ INVALID_FIELDS: uuid not a UUID, or note not text (4.176879ms)
+SYNC ITEM RETRY LATER: aaaaaaaa-0000-4000-8000-000000000001 could not check the photo: timeout
+✔ a storage failure is NOT a rejection: the item is left out so the phone retries, then it syncs (6.76096ms)
+✔ a replay never touches storage (no photo check for an already-saved item) (10.651304ms)
+✔ a Purchaser sending a task_update gets WRONG_ROLE for that item; a valid expense in the same batch still syncs (3.973642ms)
+✔ a Site Manager sending an expense gets WRONG_ROLE; their task_update in the same batch still syncs (3.140944ms)
+✔ Project Manager and General Manager: every item is WRONG_ROLE (200, not a whole-request 403) (5.446518ms)
+✔ one bad item never blocks the good ones; response keeps the { syncedIds, rejected } shape (3.303043ms)
+✔ a missing uuid and an unknown type are rejected per item (3.043866ms)
+✔ an empty batch is still a 400 (2.849713ms)
+✔ assigned Site Manager: 201 with the stored URL under tasks/<id>/ (83.96045ms)
+✔ other roles get 403 and nothing is stored (30.916656ms)
+✔ bad photos give 400: missing, wrong type, content not an image (34.790729ms)
+✔ unknown task 404; someone else's task 403; completed task 409 - nothing stored (21.632512ms)
+✔ keyFromPublicUrl is the inverse of uploadBuffer's URL, and rejects foreign or sneaky URLs (0.496272ms)
+✔ objectExists: true when found, false on NotFound/404, THROWS on anything else (3.654222ms)
+✔ taskPhotoExists: true for this task's stored photo, false for another task's or a foreign URL (0.227346ms)
+✔ taskPhotoExists: confirmed missing is false; a storage failure is thrown, not turned into false (0.5444ms)
+✔ taskPhotoExists does not call storage when the URL is not this task's (0.640178ms)
+✔ online path: uploads once, then locks, supersedes the old pending row and inserts Pending Review (2.514881ms)
+✔ sync path: a photoUrl that is already stored is used and nothing is uploaded (0.35033ms)
+✔ unknown task: 404 TASK_NOT_FOUND (0.533753ms)
+✔ task assigned to someone else: 403 TASK_NOT_YOURS, no upload, no write (0.173432ms)
+✔ same clientSubmissionId, same task and user: returns the original row, no upload, no write (0.193244ms)
+✔ a replay of an already-completed task still returns the original row (not a 409) (0.157729ms)
+✔ clientSubmissionId already used by a different task or user: 409 CLIENT_ID_IN_USE (0.148337ms)
+✔ completed task: 409 TASK_CLOSED, no upload (0.135182ms)
+✔ the unique-index race (23505) becomes 409 PENDING_EXISTS; other DB errors pass through (0.765169ms)
+✔ the note is optional and stored as null (0.479649ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 468.518612

@@ -19,6 +19,7 @@ const syncRoutes = require("./routes/sync");
 const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
+const reportRoutes = require("./routes/reports");
 const { canonicalizeExpense, submitHashWithTimeout } = require("./lib/blockchainService");
 const { runIntegrityScan } = require("./lib/integrityCheck");
 const notificationRoutes = require("./routes/notifications");
@@ -26,6 +27,10 @@ const allocationRoutes = require("./routes/allocations");
 
 const app = express();
 app.use(cors());
+// The report PDF route receives the chart as a base64 PNG (up to ~1.5 MB), far
+// above the 100 kb default. Raise the limit for that one path only; body-parser
+// skips a body it has already read, so the global parser below leaves it alone.
+app.use("/api/reports/pdf", express.json({ limit: "2mb" }));
 app.use(express.json());
 
 // --- Health / session ---
@@ -55,6 +60,7 @@ app.use("/receipts/files", express.static(require("./lib/receiptStorage").STORAG
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
 app.use("/api/blockchain", blockchainRoutes);     // F12 audit trail
+app.use("/api/reports", reportRoutes);            // F11 financial analytics
 
 app.use("/api/notifications", notificationRoutes); // notifications
 

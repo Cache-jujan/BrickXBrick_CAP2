@@ -6,7 +6,7 @@
 // needs to store receipt images too, extend this file rather than writing a
 // second one.
 
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
 const crypto = require("crypto");
 
 const REQUIRED_ENV = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY", "R2_BUCKET", "R2_PUBLIC_BASE_URL"];
@@ -65,4 +65,35 @@ async function uploadBuffer(buffer, { contentType, keyPrefix = "uploads" }) {
     return `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
 }
 
-module.exports = { uploadBuffer };
+// keyFromPublicUrl(url, baseUrl?) -> object key, or null when the URL is not
+// one of ours. uploadBuffer builds URLs as <R2_PUBLIC_BASE_URL>/<key>, so this
+// is its inverse. Anything outside our base URL (or trying to climb out of it)
+// is null: it can never be a photo this server stored.
+function keyFromPublicUrl(url, baseUrl = process.env.R2_PUBLIC_BASE_URL) {
+    if (typeof url !== "string" || !baseUrl) return null;
+    const prefix = `${baseUrl.replace(/\/$/, "")}/`;
+    if (!url.startsWith(prefix)) return null;
+    const key = url.slice(prefix.length);
+    if (!key || key.includes("..") || key.includes("?") || key.includes("#")) return null;
+    return key;
+}
+
+const HEAD_TIMEOUT_MS = 5000;
+
+// objectExists(key, send?) -> true | false. Throws on anything that is not a
+// clear "no such object" (timeout, network, credentials): the caller must
+// treat that as "could not check", never as "missing". `send` is injectable
+// for tests.
+async function objectExists(key, send) {
+    const command = new HeadObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key });
+    try {
+        if (send) await send(command);
+        else await getClient().send(command, { abortSignal: AbortSignal.timeout(HEAD_TIMEOUT_MS) });
+        return true;
+    } catch (error) {
+        if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) return false;
+        throw error;
+    }
+}
+
+module.exports = { uploadBuffer, keyFromPublicUrl, objectExists };
