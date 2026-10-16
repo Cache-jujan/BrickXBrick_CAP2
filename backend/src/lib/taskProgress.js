@@ -10,6 +10,7 @@
 // returns it as is) and a stable `code` (sync maps it to a reject code).
 
 const db = require("./db");
+const r2 = require("./r2");
 
 class TaskProgressError extends Error {
   constructor(status, code, message) {
@@ -17,6 +18,19 @@ class TaskProgressError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+// The task, if it exists and is assigned to this user. 404 / 403 otherwise.
+async function getTaskForUser(user, taskId, query = db.query) {
+  const result = await query("SELECT * FROM tasks WHERE taskId = $1", [taskId]);
+  if (result.rowCount === 0) {
+    throw new TaskProgressError(404, "TASK_NOT_FOUND", `Task ${taskId} not found`);
+  }
+  const task = result.rows[0];
+  if (task.assignedto !== user.id) {
+    throw new TaskProgressError(403, "TASK_NOT_YOURS", "You may only submit progress on a task assigned to you");
+  }
+  return task;
 }
 
 /**
@@ -37,15 +51,7 @@ async function submitTaskProgress(input, deps = {}) {
   const withTransaction = deps.withTransaction || db.withTransaction;
   const { user, taskId, clientSubmissionId, note, photoUrl, uploadPhoto } = input;
 
-  const taskResult = await query("SELECT * FROM tasks WHERE taskId = $1", [taskId]);
-  if (taskResult.rowCount === 0) {
-    throw new TaskProgressError(404, "TASK_NOT_FOUND", `Task ${taskId} not found`);
-  }
-  const task = taskResult.rows[0];
-
-  if (task.assignedto !== user.id) {
-    throw new TaskProgressError(403, "TASK_NOT_YOURS", "You may only submit progress on a task assigned to you");
-  }
+  const task = await getTaskForUser(user, taskId, query);
 
   // D-05/D-15: scope the idempotency match to this task + this submitter, run
   // it before the Completed check (a replay of an already-acknowledged
@@ -100,4 +106,21 @@ async function submitTaskProgress(input, deps = {}) {
   }
 }
 
-module.exports = { submitTaskProgress, TaskProgressError };
+/**
+ * taskPhotoExists(url, taskId, deps?) -> true | false
+ *
+ * Is `url` a photo this server stored for THIS task? Only objects under
+ * tasks/<taskId>/ in our bucket count, so a queued update cannot attach
+ * another task's photo or an outside link. false means "confirmed missing or
+ * not ours". If storage cannot be checked (timeout, network) this THROWS: the
+ * sync keeps the item pending and retries, it never rejects on a failed check.
+ */
+async function taskPhotoExists(url, taskId, deps = {}) {
+  const keyFromUrl = deps.keyFromPublicUrl || r2.keyFromPublicUrl;
+  const objectExists = deps.objectExists || r2.objectExists;
+  const key = keyFromUrl(url);
+  if (!key || !key.startsWith(`tasks/${taskId}/`)) return false;
+  return objectExists(key);
+}
+
+module.exports = { submitTaskProgress, getTaskForUser, taskPhotoExists, TaskProgressError };

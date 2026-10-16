@@ -8,7 +8,7 @@ const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 const { uploadBuffer } = require("../lib/r2");
 const { hasValidMagicBytes } = require("../lib/photoValidation");
-const { submitTaskProgress } = require("../lib/taskProgress");
+const { submitTaskProgress, getTaskForUser } = require("../lib/taskProgress");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -86,6 +86,49 @@ async function getLogForReview(logId) {
     return result.rows[0];
 }
 
+// Same four checks, same messages, for every route that accepts a task photo.
+function assertEvidencePhoto(file) {
+    const fail = (message) => {
+        const err = new Error(message);
+        err.status = 400;
+        throw err;
+    };
+    if (!file) fail("photo is required to submit task completion");
+    if (!ALLOWED_PHOTO_TYPES.includes(file.mimetype)) fail("photo must be JPEG or PNG");
+    if (!hasValidMagicBytes(file.buffer, file.mimetype)) {
+        fail("photo content does not match a valid JPEG or PNG file");
+    }
+}
+
+// POST /:id/photo — F10: store ONE task photo and return its URL, nothing else.
+// An offline-queued submission cannot carry the image inside the JSON sync
+// batch, so on reconnect the phone uploads the photo here first, then sends the
+// URL through POST /api/sync. Same storage (R2, tasks/<id>/) and the same
+// photo checks as POST /:id/progress, which sends its photo in one request.
+//
+// Request: multipart/form-data, field "photo" (JPEG/PNG, <=10MB)
+// Response 201: { photoUrl }
+router.post("/:id/photo", requireRole("Site Manager"), upload.single("photo"), async (req, res, next) => {
+    try {
+        assertEvidencePhoto(req.file);
+
+        const task = await getTaskForUser(req.user, req.params.id);
+        if (task.status === "Completed") {
+            const err = new Error("This task is already completed and cannot be resubmitted");
+            err.status = 409;
+            throw err;
+        }
+
+        const photoUrl = await uploadBuffer(req.file.buffer, {
+            contentType: req.file.mimetype,
+            keyPrefix: `tasks/${req.params.id}`,
+        });
+        res.status(201).json({ photoUrl });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // POST /:id/progress — Site Manager assigned to the task marks it done.
 // Tasks are binary (WBS leaf items) -- no percentage in the payload. Photo
 // is required; the task row is NOT touched here, only on PM Acknowledge.
@@ -110,21 +153,7 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
             err.status = 400;
             throw err;
         }
-        if (!req.file) {
-            const err = new Error("photo is required to submit task completion");
-            err.status = 400;
-            throw err;
-        }
-        if (!ALLOWED_PHOTO_TYPES.includes(req.file.mimetype)) {
-            const err = new Error("photo must be JPEG or PNG");
-            err.status = 400;
-            throw err;
-        }
-        if (!hasValidMagicBytes(req.file.buffer, req.file.mimetype)) {
-            const err = new Error("photo content does not match a valid JPEG or PNG file");
-            err.status = 400;
-            throw err;
-        }
+        assertEvidencePhoto(req.file);
 
         // Task, ownership, idempotency and Completed checks, the R2 upload and
         // the Pending Review insert all live in lib/taskProgress.js, which the
