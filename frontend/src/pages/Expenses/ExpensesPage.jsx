@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { ReceiptLink } from "../../components/ui/ReceiptLink";
 import { Link } from "react-router-dom";
 import {
   listExpenses,
@@ -190,9 +191,14 @@ export function ExpensesPage() {
                 : "Review submitted expenses. Approving one saves a tamper-proof copy, so any later edit gets caught."}
             </p>
         </div>
-        <Link to="/expenses/new" className="btn btn-primary">
-          Submit Expense
-        </Link>
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          <Link to="/expenses/split" className="btn btn-secondary">
+            Split Receipt
+          </Link>
+          <Link to="/expenses/new" className="btn btn-primary">
+            Submit Expense
+          </Link>
+        </div>
       </div>
 
       {error && <Banner tone="error" title={error} />}
@@ -326,7 +332,7 @@ export function ExpensesPage() {
                                   )}
                                   <div className="expenses-detail-links">
                                     {e.receiptimageurl && (
-                                      <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
+                                      <ReceiptLink url={e.receiptimageurl} />
                                     )}
                                     {project && <Link to={`/projects/${project.projectid}`}>Open project</Link>}
                                   </div>

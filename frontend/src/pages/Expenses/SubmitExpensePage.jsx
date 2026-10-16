@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ReceiptLink, useSignedReceiptUrl } from "../../components/ui/ReceiptLink";
 import { scanReceipt, submitExpense } from "../../api/expensesApi";
 import { listExpenseLinkableTickets } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
@@ -11,7 +12,7 @@ import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import "./SubmitExpensePage.css";
 import { BackLink } from "../../components/ui/BackLink";
 
-const EMPTY_DRAFT = {
+export const EMPTY_DRAFT = {
   vendorName: "",
   amount: "",
   receiptDate: "",
@@ -35,7 +36,7 @@ function toDateInput(value) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
 }
 
-function draftFromScan(result) {
+export function draftFromScan(result) {
   const extractedItems = Array.isArray(result.lineItems)
     ? result.lineItems.map((item) => ({
         description: item.description || "",
@@ -66,7 +67,7 @@ function draftFromScan(result) {
   };
 }
 
-function isSupportedReceipt(file) {
+export function isSupportedReceipt(file) {
   const extension = file.name.split(".").pop()?.toLowerCase();
   return ["image/jpeg", "image/jpg", "image/png", "application/pdf"].includes(file.type)
     || ["jpg", "jpeg", "png", "pdf"].includes(extension);
@@ -81,6 +82,7 @@ export function SubmitExpensePage() {
   const [tickets, setTickets] = useState([]);
   const [selectedTicketId, setSelectedTicketId] = useState("");
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const signedReceiptUrl = useSignedReceiptUrl(draft.receiptImageURL);
   const [receiptName, setReceiptName] = useState("");
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -325,18 +327,18 @@ export function SubmitExpensePage() {
                   <iframe
                     className="submit-expense-pdf-preview"
                     title="Uploaded receipt PDF preview"
-                    src={draft.receiptImageURL}
+                    src={signedReceiptUrl}
                   />
                 ) : (
                   <img
                     className="submit-expense-image-preview"
-                    src={draft.receiptImageURL}
+                    src={signedReceiptUrl}
                     alt="Uploaded receipt preview"
                   />
                 )}
-                <a className="submit-expense-receipt-link" href={draft.receiptImageURL} target="_blank" rel="noreferrer">
+                <ReceiptLink className="submit-expense-receipt-link" url={draft.receiptImageURL}>
                   Open the uploaded receipt separately
-                </a>
+                </ReceiptLink>
               </div>
             )}
           </section>

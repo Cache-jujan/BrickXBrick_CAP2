@@ -1,0 +1,91 @@
+.split-portions {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.split-portion {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-surface);
+}
+
+.split-portion-excluded {
+  opacity: 0.6;
+}
+
+.split-portion-head,
+.split-portion-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.split-portion-summary {
+  justify-content: flex-start;
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
+}
+
+.split-muted {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.split-exclude {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.split-done {
+  color: var(--color-success, #1a7f37);
+  font-weight: 600;
+}
+
+.split-open {
+  color: var(--color-ink-soft);
+}
+
+.split-over {
+  color: var(--color-danger, #b42318);
+  font-weight: 600;
+}
+
+.split-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.split-lines th,
+.split-lines td {
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.split-lines th:nth-child(n + 2),
+.split-lines td:nth-child(n + 2) {
+  text-align: right;
+}
+
+.split-uncovered,
+.split-fees {
+  margin-top: var(--space-4);
+}
+
+.split-problems,
+.split-result-list {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.split-totals {
+  margin-top: var(--space-3);
+  font-weight: 600;
+}
