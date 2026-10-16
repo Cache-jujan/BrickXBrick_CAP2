@@ -47,6 +47,18 @@ const EXPENSE_COLUMNS = `
  * description is junk — both get filtered out here. Anything dropped is
  * re-added by the user through the existing "+ Add item" flow.
  */
+// Unit price for a line. Handwritten receipts often leave it blank, so when it
+// is missing (or not a positive number) derive it from the row total:
+// quantity 3, amount 300 -> 100 each. Rounded to centavos. null for qty 0 lines
+// (delivery, VAT, fees), where a unit price means nothing.
+function resolveUnitPrice(item) {
+  if (Number.isFinite(item.unitPrice) && item.unitPrice > 0) return item.unitPrice;
+  if (Number.isFinite(item.quantity) && item.quantity > 0) {
+    return Math.round((item.amount * 100) / item.quantity) / 100;
+  }
+  return Number.isFinite(item.unitPrice) ? item.unitPrice : null;
+}
+
 function normalizeLineItems(rawItems) {
   if (!Array.isArray(rawItems)) return [];
 
@@ -64,7 +76,7 @@ function normalizeLineItems(rawItems) {
       description: item.description.trim(),
       amount: item.amount,
       quantity: Number.isFinite(item.quantity) ? item.quantity : null,
-      unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : null,
+      unitPrice: resolveUnitPrice(item),
             bomItemID: asUUIDOrNull(item.bomItemID),
     }));
 }
@@ -220,6 +232,7 @@ module.exports = {
   isValidPhTin,
   normalizeBirFields,
   normalizeLineItems,
+  resolveUnitPrice,
   computeQuantityFromLineItems,
   applyVendorMaster,
 };

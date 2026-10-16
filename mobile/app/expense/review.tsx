@@ -21,6 +21,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/requested-material-picker";
 import { fetchOpenRequests } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import { useReceiptUri } from "@/lib/receipt-scans";
 import type { LineItem } from "@/lib/expense-types";
 import { COLORS } from "@/constants/expense-flow-colors";
@@ -112,7 +113,7 @@ export default function ReviewScreen() {
     const lineItemsOcr = draft.resubmit ? undefined : result.confidence?.lineItems === "medium" ? "medium" : "low";
     setItems(
       result.lineItems?.length
-        ? result.lineItems.map((li) => ({ id: makeId(), name: li.description ?? "", quantity: li.quantity != null ? String(li.quantity) : "", price: li.amount != null ? groupAmountText(String(li.amount)) : "", ocr: lineItemsOcr, scanned: draft.resubmit ? undefined : li.description || undefined }))
+        ? result.lineItems.map((li) => withUnitPrice({ id: makeId(), name: li.description ?? "", quantity: li.quantity != null ? String(li.quantity) : "", price: li.amount != null ? groupAmountText(String(li.amount)) : "", unitPrice: li.unitPrice != null ? groupAmountText(String(li.unitPrice)) : "", ocr: lineItemsOcr, scanned: draft.resubmit ? undefined : li.description || undefined }))
         : [{ id: makeId(), name: "", quantity: "", price: result.amount != null ? groupAmountText(String(result.amount)) : "" }]
     );
     setEdited(new Set());
@@ -164,6 +165,10 @@ export default function ReviewScreen() {
 
   // Any edit counts as the user checking that row, so its OCR flag goes.
   function updateItem(id: string, patch: Partial<LineItem>) { setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch, ocr: undefined } : it))); }
+  // Qty, unit price and amount move together (lib/line-math.ts).
+  function editItem(id: string, field: "quantity" | "price" | "unitPrice", value: string) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...editLine(it, field, value), ocr: undefined } : it)));
+  }
   function removeItem(id: string) { setItems((prev) => prev.filter((it) => it.id !== id)); }
   function addItem() { setItems((prev) => [...prev, { id: makeId(), name: "", quantity: "", price: "" }]); }
 
@@ -176,7 +181,7 @@ export default function ReviewScreen() {
     // The discount comes off the line; a zero-amount note line records it
     // (and is what flags the expense for PM review).
     setItems((prev) => [
-      ...prev.map((it) => (it.id === fix.itemId ? { ...it, price: formatAmountInput((toCents(it.price) ?? 0) - fix.gapCents) } : it)),
+      ...prev.map((it) => (it.id === fix.itemId ? editLine(it, "price", formatAmountInput((toCents(it.price) ?? 0) - fix.gapCents)) : it)),
       { id: makeId(), name: `${ADJUSTMENT_PREFIX}: ${formatPesoCents(fix.gapCents)} discount taken off ${fix.itemName}`, quantity: "0", price: "0.00" },
     ]);
   }
@@ -223,7 +228,7 @@ export default function ReviewScreen() {
     const clean = (text: string) => Number(text.replace(/,/g, "").trim());
     setOcrResult({
       ...result!, vendorName: vendorName.trim(), tin, birPermitNumber, birNumber, amount: clean(amount), receiptDate: receiptDate.trim(),
-      lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: null, bomItemID: it.bomItemID ?? null })),
+      lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: unitPriceForPayload(it), bomItemID: it.bomItemID ?? null })),
     });
     router.push(isSplit ? "/expense/allocate" : "/expense/link");
   }
@@ -379,11 +384,15 @@ export default function ReviewScreen() {
                   <View style={styles.itemRow}>
                     <View style={styles.itemQty}>
                       <Text style={styles.miniLabel}>Qty</Text>
-                      <TextInput style={[styles.input, qtyBad && styles.inputError]} placeholder="0" placeholderTextColor={COLORS.muted} value={item.quantity} keyboardType="decimal-pad" onChangeText={(v) => updateItem(item.id, { quantity: v })} />
+                      <TextInput style={[styles.input, qtyBad && styles.inputError]} placeholder="0" placeholderTextColor={COLORS.muted} value={item.quantity} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "quantity", v)} />
+                    </View>
+                    <View style={styles.itemAmount}>
+                      <Text style={styles.miniLabel}>Unit price (₱)</Text>
+                      <TextInput style={styles.input} placeholder="Calculated" placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", v)} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
                     </View>
                     <View style={styles.itemAmount}>
                       <Text style={styles.miniLabel}>Line amount (₱)</Text>
-                      <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => updateItem(item.id, { price: v })} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
+                      <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "price", v)} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
                     </View>
                   </View>
                 </View>

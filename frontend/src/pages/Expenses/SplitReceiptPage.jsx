@@ -12,6 +12,7 @@ import { Field } from "../../components/ui/Field";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { ReceiptLink, useSignedReceiptUrl } from "../../components/ui/ReceiptLink";
 import { EMPTY_DRAFT, draftFromScan, isSupportedReceipt } from "./SubmitExpensePage";
+import { editLine } from "../../utils/lineItemMath";
 import "./SubmitExpensePage.css";
 import "./SplitReceiptPage.css";
 
@@ -62,7 +63,10 @@ export function SplitReceiptPage() {
   function updateLineItem(index, name, value) {
     setDraft((current) => ({
       ...current,
-      lineItems: current.lineItems.map((item, i) => (i === index ? { ...item, [name]: value } : item)),
+      lineItems: current.lineItems.map((item, i) => {
+        if (i !== index) return item;
+        return ["quantity", "unitPrice", "amount"].includes(name) ? editLine(item, name, value) : { ...item, [name]: value };
+      }),
     }));
   }
 
@@ -406,6 +410,7 @@ export function SplitReceiptPage() {
                 <Field label={`Item ${index + 1}`} required value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder="Description" />
                 <Field label="Item amount (₱)" required type="number" min="0" step="0.01" value={item.amount} onChange={(e) => updateLineItem(index, "amount", e.target.value)} />
                 <Field label="Quantity (0 for fees)" required type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
+                <Field label="Unit price (₱)" type="number" min="0" step="0.01" placeholder="Calculated" value={item.unitPrice} onChange={(e) => updateLineItem(index, "unitPrice", e.target.value)} />
                 <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={`Remove item ${index + 1}`}>Remove</Button>
               </div>
             ))}

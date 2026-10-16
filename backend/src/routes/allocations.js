@@ -53,7 +53,8 @@ const storedLine = (line) => ({
   description: line.description,
   quantity: line.quantityH / 100,
   amount: line.amountCents / 100,
-  unitPrice: null,
+  // Each portion is a pro-rata slice, so derive its unit price from the slice.
+  unitPrice: line.quantityH > 0 ? Math.round((line.amountCents * 100) / line.quantityH) / 100 : null,
   bomItemID: line.bomItemID ?? null,
 });
 
