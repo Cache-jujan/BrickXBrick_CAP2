@@ -90,6 +90,7 @@ async function syncExpense(user, uuid, data) {
 
   // When a ticket is given, it is the source of truth for the project.
   let projectID = bodyProjectID;
+  let resolveTicketInTransaction = false;
   if (ticketID) {
     const ticketResult = await query(
       "SELECT projectid, status, assignedto FROM tickets WHERE ticketid = $1",
@@ -102,14 +103,11 @@ async function syncExpense(user, uuid, data) {
     if (ticket.assignedto !== user.id) {
       throw new SyncReject("TICKET_NOT_YOURS", "You may only submit an expense against a ticket assigned to you");
     }
-    if (ticket.status !== "Resolved") {
-      // Auto-resolve: the online path calls resolveTicket before submitting,
-      // but offline queues skip that step, so the sync endpoint does it here.
-      await query(
-        "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
-        [ticketID]
-      );
-    }
+    // Auto-resolve: the online path calls resolveTicket before submitting, but
+    // offline queues skip that step, so the sync endpoint does it. It runs in
+    // the same transaction as the expense insert (below): a failed insert must
+    // not leave the ticket Resolved with no expense.
+    resolveTicketInTransaction = ticket.status !== "Resolved";
     projectID = ticket.projectid;
   }
   if (!projectID) {
@@ -128,6 +126,12 @@ async function syncExpense(user, uuid, data) {
   // crash can't leave an expense without its synced_actions marker (or vice
   // versa). Screening runs AFTER commit (it reads through the pool).
   const expenseID = await withTransaction(async (client) => {
+    if (resolveTicketInTransaction) {
+      await client.query(
+        "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
+        [ticketID]
+      );
+    }
     const result = await client.query(
       `INSERT INTO expenses
          (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
