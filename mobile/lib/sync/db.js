@@ -1,18 +1,37 @@
-// F10 — Offline expense queue (SQLite).
+// F10 — Offline queues (SQLite): expenses (Purchaser) and task submissions
+// (Site Manager).
 //
-// Stores expense payloads captured while the device is offline. Each row
-// carries a client-generated UUID for idempotency (the server's synced_actions
-// table deduplicates on it). Rows older than 72 hours or beyond 100 pending
-// are rejected at insert time — the user must be online to submit those.
+// Stores what was captured while the device is offline. Each row carries a
+// client-generated UUID for idempotency (the server deduplicates on it).
+//
+// ONE rule decides whether a new entry may be queued, for both queues together:
+// canEnqueue(). At 100 pending entries, or when the oldest pending entry is
+// older than 72 hours, no NEW entry is accepted — the user must sync first.
+// Pending entries are never deleted for being old: they still sync.
 //
 // Status lifecycle: pending → synced  (purged after sync)
 //                          → rejected (kept so the user sees the reason)
+//
+// Task submissions (offline_task_updates) follow the same life cycle, with
+// upper-case status values. A task has at most ONE pending update: a newer one
+// replaces it (the server allows one pending-review row per task anyway).
+// The photo is a file in the app's documents folder; only its path is stored,
+// never the image bytes (a 10 MB Base64 row would slow every query).
 
 import * as SQLite from "expo-sqlite";
 
 const DB_NAME = "offline_queue.db";
-const MAX_PENDING = 100;
+const DEFAULT_MAX_PENDING = 100;
 const MAX_AGE_MS = 72 * 60 * 60 * 1000; // 72 hours
+
+// Dev-only: EXPO_PUBLIC_QUEUE_LIMIT=3 lowers the limit so the "queue full" path
+// can be tested by hand without queueing 100 entries. Ignored in release builds.
+function resolveMaxPending() {
+  const override = Number(process.env.EXPO_PUBLIC_QUEUE_LIMIT);
+  const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+  return isDev && Number.isInteger(override) && override > 0 ? override : DEFAULT_MAX_PENDING;
+}
+const MAX_PENDING = resolveMaxPending();
 
 let db = null;
 
@@ -29,25 +48,87 @@ export function initDb() {
       reject_message TEXT
     );
   `);
-  // Purge anything older than 72 hours on startup.
+  db.execSync(`
+    CREATE TABLE IF NOT EXISTS offline_task_updates (
+      update_id        TEXT PRIMARY KEY NOT NULL,
+      task_id          TEXT NOT NULL,
+      user_id          TEXT NOT NULL,
+      photo_path       TEXT NOT NULL,
+      server_photo_url TEXT,
+      note             TEXT,
+      created_at       TEXT NOT NULL,
+      sync_status      TEXT NOT NULL DEFAULT 'PENDING',
+      error_code       TEXT,
+      error_message    TEXT
+    );
+  `);
   purgeExpired();
 }
 
-// Purge rows older than 72 hours (pending or rejected).
+// Tidy up finished business older than 72 hours (rejected and synced rows).
+// PENDING rows are never deleted here: dropping someone's unsent work because
+// it is old would lose data, and the server decides what to do with it.
 export function purgeExpired() {
   if (!db) return;
   const cutoff = new Date(Date.now() - MAX_AGE_MS).toISOString();
-  db.runSync("DELETE FROM offline_expenses WHERE created_at < ?;", [cutoff]);
+  db.runSync("DELETE FROM offline_expenses WHERE created_at < ? AND status != 'pending';", [cutoff]);
+  db.runSync("DELETE FROM offline_task_updates WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
+}
+
+// ── the one queue rule ───────────────────────────────────────────────────────
+
+// Pure: decide from three numbers, so it can be tested without a database.
+//   pendingCount    entries already waiting (both queues, minus any entry the
+//                   new one will replace)
+//   oldestCreatedAt ISO time of the oldest of those, or null
+// Returns { allowed, reason: null | "LIMIT" | "STALE", message }.
+export function evaluateEnqueue({
+  pendingCount,
+  oldestCreatedAt,
+  now = Date.now(),
+  maxPending = MAX_PENDING,
+  maxAgeMs = MAX_AGE_MS,
+}) {
+  if (pendingCount >= maxPending) {
+    return {
+      allowed: false,
+      reason: "LIMIT",
+      message: `The offline queue is full (${maxPending} entries). Reconnect to sync before saving more.`,
+    };
+  }
+  if (oldestCreatedAt && now - new Date(oldestCreatedAt).getTime() > maxAgeMs) {
+    return {
+      allowed: false,
+      reason: "STALE",
+      message: "Some saved entries are more than 72 hours old and have not synced. Reconnect to sync them before saving more.",
+    };
+  }
+  return { allowed: true, reason: null, message: "" };
+}
+
+// May one more entry be queued right now? Counts BOTH queues, so the 100-entry
+// and 72-hour rules cannot drift apart. Pass replacingTaskId when a new task
+// submission will replace that task's pending one (so it does not count twice).
+export function canEnqueue({ replacingTaskId = null, now = Date.now() } = {}) {
+  if (!db) return { allowed: false, reason: "NO_DB", message: "Offline storage is not ready yet." };
+  const skip = replacingTaskId ?? "";
+  const row = db.getFirstSync(
+    `SELECT COUNT(*) AS c, MIN(created_at) AS oldest FROM (
+       SELECT created_at FROM offline_expenses WHERE status = 'pending'
+       UNION ALL
+       SELECT created_at FROM offline_task_updates
+        WHERE sync_status = 'PENDING' AND task_id != ?
+     );`,
+    [skip]
+  );
+  return evaluateEnqueue({ pendingCount: row?.c ?? 0, oldestCreatedAt: row?.oldest ?? null, now });
 }
 
 // Queue one expense for later sync. Returns true if queued, false if at limit.
 export function queueExpense(uuid, payload) {
   if (!db) return false;
   purgeExpired();
-  const count = db.getFirstSync(
-    "SELECT COUNT(*) as c FROM offline_expenses WHERE status = 'pending';"
-  );
-  if (count && count.c >= MAX_PENDING) return false;
+  if (!canEnqueue().allowed) return false;
 
   db.runSync(
     `INSERT OR IGNORE INTO offline_expenses (uuid, payload, status, created_at)
@@ -65,13 +146,15 @@ export function getPendingExpenses() {
   );
 }
 
-// Count of pending expenses (for the offline banner).
-export function getPendingCount() {
+export function getPendingExpenseCount() {
   if (!db) return 0;
-  const row = db.getFirstSync(
-    "SELECT COUNT(*) as c FROM offline_expenses WHERE status = 'pending';"
-  );
+  const row = db.getFirstSync("SELECT COUNT(*) as c FROM offline_expenses WHERE status = 'pending';");
   return row ? row.c : 0;
+}
+
+// Everything waiting to sync, both queues (for the offline banner).
+export function getPendingCount() {
+  return getPendingExpenseCount() + getPendingTaskUpdateCount();
 }
 
 // Mark a row as synced and record the timestamp.
@@ -110,4 +193,117 @@ export function getRejectedExpenses() {
 export function dismissRejected(uuid) {
   if (!db) return;
   db.runSync("DELETE FROM offline_expenses WHERE uuid = ? AND status = 'rejected';", [uuid]);
+}
+
+// ── task submissions (Site Manager) ──────────────────────────────────────────
+
+// Queue one task submission. Returns
+//   { queued: true,  replacedPhotoPath }  replacedPhotoPath is the file of the
+//                                         older pending update for this task,
+//                                         or null; the caller deletes that file.
+//   { queued: false, reason, message }    the queue rule said no.
+// photoPath is a file already copied into the app's documents folder.
+export function queueTaskUpdate({ updateId, taskId, userId, photoPath, note }) {
+  if (!db) return { queued: false, reason: "NO_DB", message: "Offline storage is not ready yet." };
+  purgeExpired();
+
+  const gate = canEnqueue({ replacingTaskId: taskId });
+  if (!gate.allowed) return { queued: false, reason: gate.reason, message: gate.message };
+
+  const older = db.getFirstSync(
+    "SELECT photo_path FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';",
+    [taskId]
+  );
+
+  // One transaction: if the app is killed half way, the old entry survives.
+  db.execSync("BEGIN;");
+  try {
+    db.runSync("DELETE FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';", [taskId]);
+    db.runSync(
+      `INSERT INTO offline_task_updates
+         (update_id, task_id, user_id, photo_path, note, created_at, sync_status)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDING');`,
+      [updateId, taskId, userId, photoPath, note ?? null, new Date().toISOString()]
+    );
+    db.execSync("COMMIT;");
+  } catch (error) {
+    db.execSync("ROLLBACK;");
+    throw error;
+  }
+  return { queued: true, replacedPhotoPath: older ? older.photo_path : null };
+}
+
+export function getPendingTaskUpdateCount() {
+  if (!db) return 0;
+  const row = db.getFirstSync("SELECT COUNT(*) as c FROM offline_task_updates WHERE sync_status = 'PENDING';");
+  return row ? row.c : 0;
+}
+
+// Pending task submissions, oldest first. Pass userId so a phone shared by two
+// people only ever sends each person's own entries.
+export function getPendingTaskUpdates(userId = null) {
+  if (!db) return [];
+  return db.getAllSync(
+    `SELECT * FROM offline_task_updates
+      WHERE sync_status = 'PENDING' AND (? IS NULL OR user_id = ?)
+      ORDER BY created_at ASC;`,
+    [userId, userId]
+  );
+}
+
+// The pending submission for one task, if any (the task screen shows "queued").
+export function getPendingTaskUpdateForTask(taskId) {
+  if (!db) return null;
+  return (
+    db.getFirstSync(
+      "SELECT * FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';",
+      [taskId]
+    ) ?? null
+  );
+}
+
+// Remember the URL the photo upload returned, so a failed batch never uploads
+// the same photo twice.
+export function setTaskUpdatePhotoUrl(updateId, url) {
+  if (!db) return;
+  db.runSync("UPDATE offline_task_updates SET server_photo_url = ? WHERE update_id = ?;", [url, updateId]);
+}
+
+export function markTaskUpdateSynced(updateId) {
+  if (!db) return;
+  db.runSync("UPDATE offline_task_updates SET sync_status = 'SYNCED' WHERE update_id = ?;", [updateId]);
+}
+
+export function markTaskUpdateRejected(updateId, code, message) {
+  if (!db) return;
+  db.runSync(
+    "UPDATE offline_task_updates SET sync_status = 'REJECTED', error_code = ?, error_message = ? WHERE update_id = ?;",
+    [code || "UNKNOWN", message || "Rejected by server", updateId]
+  );
+}
+
+// Delete synced rows; returns their photo paths so the caller can delete the files.
+export function purgeSyncedTaskUpdates() {
+  if (!db) return [];
+  const paths = db
+    .getAllSync("SELECT photo_path FROM offline_task_updates WHERE sync_status = 'SYNCED';")
+    .map((row) => row.photo_path);
+  db.runSync("DELETE FROM offline_task_updates WHERE sync_status = 'SYNCED';");
+  return paths;
+}
+
+export function getRejectedTaskUpdates() {
+  if (!db) return [];
+  return db.getAllSync("SELECT * FROM offline_task_updates WHERE sync_status = 'REJECTED' ORDER BY created_at DESC;");
+}
+
+// The user has seen the rejection. Returns the photo path to delete, or null.
+export function dismissRejectedTaskUpdate(updateId) {
+  if (!db) return null;
+  const row = db.getFirstSync(
+    "SELECT photo_path FROM offline_task_updates WHERE update_id = ? AND sync_status = 'REJECTED';",
+    [updateId]
+  );
+  db.runSync("DELETE FROM offline_task_updates WHERE update_id = ? AND sync_status = 'REJECTED';", [updateId]);
+  return row ? row.photo_path : null;
 }
