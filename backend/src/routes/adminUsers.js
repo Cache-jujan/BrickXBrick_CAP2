@@ -36,7 +36,7 @@ async function loadUser(id) {
   return r.rows[0] || null;
 }
 
-// CREATE
+/** Create an active account and email an invite linking to the password setup page. */
 router.post("/", async (req, res) => {
   const { name, role } = req.body;
   const email = (req.body.email || "").trim().toLowerCase();
@@ -167,6 +167,7 @@ router.post("/:id/unlock", async (req, res) => {
 // compromised), and any login lockout is cleared. A hacked admin account
 // therefore can't take over other accounts: the new password is chosen from
 // the user's own Gmail, and admins can't change a user's email.
+/** Resend an invite or send recovery mail, retiring confirmed users' old passwords and clearing lockouts. */
 router.post("/:id/send-password-email", async (req, res) => {
   try {
     const user = await loadUser(req.params.id);

@@ -11,8 +11,7 @@ import "./AuthPages.css";
 
 const MIN_LENGTH = 8;
 
-// "invite" when this page was opened from a new-account email (saved by
-// auth/authLinkRedirect.js before Supabase clears the link from the URL).
+/** Return the link type saved before Supabase clears the URL, or null if absent or storage is blocked. */
 function readLinkType() {
   try {
     return sessionStorage.getItem(LINK_TYPE_KEY);
@@ -21,6 +20,7 @@ function readLinkType() {
   }
 }
 
+/** Remove the saved link type after password setup, tolerating blocked session storage. */
 function clearLinkType() {
   try {
     sessionStorage.removeItem(LINK_TYPE_KEY);
@@ -49,6 +49,7 @@ function PasswordField({ label, value, onChange, autoComplete }) {
   );
 }
 
+/** Render invite or recovery password setup after verifying the Supabase session, with invalid-link guidance. */
 export function SetPasswordPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
@@ -71,6 +72,7 @@ export function SetPasswordPage() {
     return () => { data.subscription.unsubscribe(); clearTimeout(timer); };
   }, [linkBroken]);
 
+  /** Validate and save the password, then sign out, clear the link type, and return to sign in. */
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");

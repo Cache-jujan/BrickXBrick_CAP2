@@ -5,6 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { setPasswordUrl, frontendBase } = require("../src/lib/passwordLink");
 
+/** Build a request stub whose header getter exposes the supplied Origin. */
 const req = (origin) => ({ get: (h) => (h.toLowerCase() === "origin" ? origin : undefined) });
 
 test("FRONTEND_URL is used and a trailing slash does not double up", () => {

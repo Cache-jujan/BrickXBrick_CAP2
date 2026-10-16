@@ -30,6 +30,7 @@ const state = {
   me: { id: "admin-1", role: "System Administrator" },
 };
 
+/** Record SQL calls and return user and open-work fixtures for the admin route tests. */
 async function fakeQuery(sql, params = []) {
   const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
   state.calls.push({ text, params });
@@ -65,6 +66,7 @@ stub("../src/lib/supabaseAdmin", {
     auth: {
       admin: {
         getUserById: async () => ({ data: { user: state.authUser }, error: null }),
+        /** Capture the invite recipient and options, then return a synthetic auth user. */
         inviteUserByEmail: async (email, opts) => {
           supabase.invites.push(email);
           supabase.inviteOpts.push(opts);
@@ -91,6 +93,7 @@ stub("../src/lib/supabaseAnon", {
 
 const adminRouter = require("../src/routes/adminUsers");
 
+/** Restore the user, auth state, open work, and captured calls before each route test. */
 function reset({ confirmed = true, status = "Active" } = {}) {
   state.user = {
     userid: USER_ID,

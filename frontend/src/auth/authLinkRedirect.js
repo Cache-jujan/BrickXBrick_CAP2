@@ -18,6 +18,10 @@
 const LINK_TYPES = ["invite", "recovery", "signup", "magiclink"];
 export const LINK_TYPE_KEY = "bxb_auth_link_type";
 
+/**
+ * Return the destination and link type for a Supabase token or error hash, or null for unrelated hashes.
+ * A null destination path means the browser is already on /set-password.
+ */
 export function authLinkTarget(pathname, hash) {
   if (!hash || hash.length < 2) return null;
   const params = new URLSearchParams(hash.slice(1));
@@ -28,6 +32,7 @@ export function authLinkTarget(pathname, hash) {
   return { path: pathname === "/set-password" ? null : "/set-password", type: isTokenLink ? type : null };
 }
 
+/** Remember the auth link type when storage is available and move to /set-password, preserving the hash. */
 export function redirectAuthLink() {
   if (typeof window === "undefined") return;
   const target = authLinkTarget(window.location.pathname, window.location.hash);

@@ -9,6 +9,7 @@
 // System Administrator is using the web app from (the request's Origin) is
 // used, so a local setup at http://127.0.0.1:5173 still works.
 
+/** Return the configured frontend base or request origin, without trailing slashes, or null if invalid. */
 function frontendBase(env, origin) {
   const raw = (env.FRONTEND_URL || "").trim() || (origin || "").trim();
   if (!/^https?:\/\/[^/\s]+/i.test(raw)) return null;
