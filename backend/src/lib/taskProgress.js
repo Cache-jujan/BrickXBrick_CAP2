@@ -42,6 +42,14 @@ async function getTaskForUser(user, taskId, query = db.query) {
  *   input.photoUrl             already-stored photo URL (sync path), or
  *   input.uploadPhoto          async () => url, called only once every check
  *                              has passed (online path: never uploads a replay)
+ *   input.beforeWrite          optional async (task) => void, run after the
+ *                              checks above and before the photo is resolved.
+ *                              Sync uses it for rules the online route lacks
+ *                              (project active, photo exists). May throw.
+ *   input.rejectIfPending      sync only. If a Pending Review row already
+ *                              exists, throw 409 SUPERSEDED instead of
+ *                              superseding it (the server's newer record wins).
+ *                              Checked under the task lock, so it cannot race.
  *   deps                       { query, withTransaction } for tests
  * Returns { log, replayed }. replayed is true when this clientSubmissionId
  * was already saved by the same user for the same task.
@@ -49,7 +57,7 @@ async function getTaskForUser(user, taskId, query = db.query) {
 async function submitTaskProgress(input, deps = {}) {
   const query = deps.query || db.query;
   const withTransaction = deps.withTransaction || db.withTransaction;
-  const { user, taskId, clientSubmissionId, note, photoUrl, uploadPhoto } = input;
+  const { user, taskId, clientSubmissionId, note, photoUrl, uploadPhoto, beforeWrite, rejectIfPending } = input;
 
   const task = await getTaskForUser(user, taskId, query);
 
@@ -70,6 +78,8 @@ async function submitTaskProgress(input, deps = {}) {
     throw new TaskProgressError(409, "TASK_CLOSED", "This task is already completed and cannot be resubmitted");
   }
 
+  if (beforeWrite) await beforeWrite(task);
+
   const photoEvidenceURL = photoUrl || (await uploadPhoto());
 
   try {
@@ -78,6 +88,16 @@ async function submitTaskProgress(input, deps = {}) {
       // both reading "no pending row yet". task_progress_log_one_pending_per_task
       // (migration 021) is the DB-level backstop if they race past this anyway.
       await client.query("SELECT taskId FROM tasks WHERE taskId = $1 FOR UPDATE", [taskId]);
+
+      if (rejectIfPending) {
+        const pending = await client.query(
+          "SELECT 1 FROM task_progress_log WHERE taskId = $1 AND reviewStatus = 'Pending Review'",
+          [taskId]
+        );
+        if (pending.rowCount > 0) {
+          throw new TaskProgressError(409, "SUPERSEDED", "This task already has a submission waiting for review");
+        }
+      }
 
       // Supersede any prior pending entry rather than blocking: resubmission
       // mid-review is allowed, not queued.
