@@ -86,26 +86,6 @@ export default function SiteManagerTaskDetailScreen() {
     }
   }
 
-  async function chooseFromGallery() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Photo access needed", "Enable photo access in your phone settings to add task evidence.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-      selectionLimit: 1,
-    });
-    if (!result.canceled) {
-      setPhoto(result.assets[0]);
-      setClientSubmissionId(null);
-      setSubmitted(false);
-      setSubmitError(null);
-    }
-  }
-
   async function handleSubmit() {
     if (!task || !photo) {
       setSubmitError("Choose a photo before submitting progress.");
@@ -199,16 +179,12 @@ export default function SiteManagerTaskDetailScreen() {
             {task.status !== "Completed" && (
               <View style={styles.submissionSection}>
                 <Text style={styles.sectionTitle}>Progress update</Text>
-                <Text style={styles.sectionSubtitle}>Add one photo as evidence and an optional note.</Text>
+                <Text style={styles.sectionSubtitle}>Take one photo as evidence and add an optional note.</Text>
 
                 <View style={styles.photoActions}>
                   <Pressable onPress={takePhoto} style={styles.photoButton}>
                     <Text style={styles.photoButtonIcon}>⌾</Text>
                     <Text style={styles.photoButtonText}>Take photo</Text>
-                  </Pressable>
-                  <Pressable onPress={chooseFromGallery} style={styles.photoButton}>
-                    <Text style={styles.photoButtonIcon}>▧</Text>
-                    <Text style={styles.photoButtonText}>From gallery</Text>
                   </Pressable>
                 </View>
 
