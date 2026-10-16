@@ -114,4 +114,87 @@ function buildSummary(projects, spendRows, warningRows, now, period) {
   };
 }
 
-module.exports = { buildSummary, FORMAL };
+// ---------------------------------------------------------------------------
+// SQL loaders. queryFn is (text, params) => { rows }, so tests pass a fake.
+// DECIMAL and DATE columns are cast to text in SQL: amounts arrive exact and
+// dates arrive as YYYY-MM-DD, with no server-timezone Date objects.
+// ---------------------------------------------------------------------------
+
+function httpError(status, message, details) {
+  const error = new Error(message);
+  error.status = status;
+  if (details !== undefined) error.details = details;
+  return error;
+}
+
+async function loadProjects(queryFn, projectIds) {
+  const result = await queryFn(
+    `SELECT projectid AS "projectId", name, budget::text AS budget
+       FROM projects
+      WHERE projectid = ANY($1::uuid[])`,
+    [projectIds]
+  );
+  return result.rows;
+}
+
+// The ONE place that decides what counts as spend (decision D1): approved
+// expenses, one row each. receiptallocations is deliberately not read.
+async function loadSpendRows(queryFn, { projectIds, to }) {
+  const result = await queryFn(
+    `SELECT projectid AS "projectId",
+            amount::text AS amount,
+            receiptdate::text AS "receiptDate",
+            birvalidationstatus AS "birValidationStatus"
+       FROM expenses
+      WHERE status = 'Approved'
+        AND projectid = ANY($1::uuid[])
+        AND receiptdate <= $2::date`,
+    [projectIds, to]
+  );
+  return result.rows;
+}
+
+// Expenses inside the range that the numbers do NOT yet reflect (still
+// Pending) or that carry an unresolved fraud flag.
+async function loadWarningRows(queryFn, { projectIds, from, to }) {
+  const result = await queryFn(
+    `SELECT e.status,
+            EXISTS (SELECT 1 FROM fraudflags f
+                     WHERE f.expenseid = e.expenseid AND f.resolution = 'Pending') AS "fraudFlagged"
+       FROM expenses e
+      WHERE e.projectid = ANY($1::uuid[])
+        AND e.receiptdate BETWEEN $2::date AND $3::date
+        AND e.status <> 'Rejected'`,
+    [projectIds, from, to]
+  );
+  return result.rows.filter((row) => row.status === "Pending" || row.fraudFlagged);
+}
+
+// Load everything and build the summary. Shared by the JSON route and the
+// PDF route, so both always show the same numbers.
+async function getReportSummary(queryFn, { projectIds, from, to }, now = new Date()) {
+  const projects = await loadProjects(queryFn, projectIds);
+  const found = new Set(projects.map((project) => project.projectId));
+  const missing = projectIds.filter((id) => !found.has(id));
+  if (missing.length > 0) {
+    throw httpError(400, `Unknown project id: ${missing.join(", ")}`, {
+      fieldErrors: [{ field: "projectIds", message: `Unknown project id: ${missing.join(", ")}` }],
+    });
+  }
+  // Keep the order the caller asked for.
+  const ordered = projectIds.map((id) => projects.find((project) => project.projectId === id));
+  const [spendRows, warningRows] = await Promise.all([
+    loadSpendRows(queryFn, { projectIds, to }),
+    loadWarningRows(queryFn, { projectIds, from, to }),
+  ]);
+  return buildSummary(ordered, spendRows, warningRows, now, { from, to });
+}
+
+module.exports = {
+  buildSummary,
+  getReportSummary,
+  loadProjects,
+  loadSpendRows,
+  loadWarningRows,
+  FORMAL,
+};
