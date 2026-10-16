@@ -151,6 +151,16 @@ export default function AllocateScreen() {
     }
   }
 
+  // Nothing matched an open request (or the preview failed): the Site Manager
+  // may have filed one since, so re-run the preview instead of rescanning.
+  const needsRetry =
+    !!error || (!!plan && (plan.uncovered.length + plan.unmatched.length > 0 || plan.portions.length === 0));
+
+  function retryPreview() {
+    setSubmitProblems([]);
+    setRefreshKey((k) => k + 1);
+  }
+
   function finish() {
     router.replace("/");
     reset();
@@ -219,7 +229,13 @@ export default function AllocateScreen() {
           </View>
         ))}
 
-                {plan && !plan.ok && excluded.length > 0 && (
+        {needsRetry && !loading && (
+          <TouchableOpacity style={styles.retryButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel="Check for open requests again">
+            <Text style={styles.retryButtonText}>Retry · check for new requests</Text>
+          </TouchableOpacity>
+        )}
+
+        {plan && !plan.ok && excluded.length > 0 && (
           <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
             <Text style={{ color: AMBER, fontSize: 12 }}>
               You switched off {excluded.length} request{excluded.length === 1 ? "" : "s"} below. Turn one back on if it should cover these lines.
@@ -340,6 +356,8 @@ export default function AllocateScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   container: { paddingHorizontal: 16, paddingBottom: 40 },
+  retryButton: { borderWidth: 1, borderColor: COLORS.primary, borderRadius: 8, paddingVertical: 10, alignItems: "center", marginBottom: 12 },
+  retryButtonText: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: COLORS.heading, marginTop: 12, marginBottom: 8 },
   body: { fontSize: 13, color: COLORS.heading, marginBottom: 4 },
   muted: { fontSize: 12, color: COLORS.muted },

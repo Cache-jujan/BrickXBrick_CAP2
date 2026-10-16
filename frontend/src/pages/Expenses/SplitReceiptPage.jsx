@@ -191,6 +191,13 @@ export function SplitReceiptPage() {
     };
   }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, refreshKey]);
 
+  // Nothing matched an open request: the Site Manager may have filed one since,
+  // so re-run the preview instead of making the user rescan the receipt.
+  function retryPreview() {
+    setSubmitProblems([]);
+    setRefreshKey((k) => k + 1);
+  }
+
   function toggleExcluded(ticketID, value) {
     setSubmitProblems([]);
     setExcluded((prev) => (value ? [...prev, ticketID] : prev.filter((id) => id !== ticketID)));
@@ -295,6 +302,7 @@ export function SplitReceiptPage() {
     );
   }
 
+  const needsRetry = Boolean(plan && (plan.uncovered.length + plan.unmatched.length > 0 || plan.portions.length === 0));
   const portionByTicket = new Map((plan?.portions ?? []).map((p) => [p.ticketID, p]));
   const requestIDs = [
     ...(plan?.portions ?? []).map((p) => p.ticketID),
@@ -429,15 +437,32 @@ export function SplitReceiptPage() {
               {previewing && <span className="submit-expense-progress" role="status">Updating…</span>}
             </div>
 
-            {previewError && <Banner tone="error" title="Couldn't preview the split">{previewError}</Banner>}
+            {previewError && (
+              <Banner
+                tone="error"
+                title="Couldn't preview the split"
+                action={<Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>Retry</Button>}
+              >
+                {previewError}
+              </Banner>
+            )}
             {submitProblems.length > 0 && (
               <Banner tone="warning" title="The open requests changed since the preview">
                 {submitProblems.join(" ")} The preview has been refreshed.
               </Banner>
             )}
             {plan && !plan.ok && plan.problems.length > 0 && (
-              <Banner tone="error" title="This receipt can't be submitted yet">
+              <Banner
+                tone="error"
+                title="This receipt can't be submitted yet"
+                action={needsRetry ? (
+                  <Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>
+                    {previewing ? "Checking…" : "Retry"}
+                  </Button>
+                ) : undefined}
+              >
                 <ul className="split-problems">{plan.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                {needsRetry && <p className="split-muted">If a Site Manager just filed the missing request, retry to pick it up. No need to rescan.</p>}
               </Banner>
             )}
             {plan?.warnings?.length > 0 && (
@@ -492,8 +517,12 @@ export function SplitReceiptPage() {
                 );
               })}
               {plan && requestIDs.length === 0 && (
-                <Banner tone="info" title="No open requests match this receipt">
-                  Ask the Site Manager to file a Material Request for these materials.
+                <Banner
+                  tone="info"
+                  title="No open requests match this receipt"
+                  action={<Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>{previewing ? "Checking…" : "Retry"}</Button>}
+                >
+                  Ask the Site Manager to file a Material Request for these materials, then retry.
                 </Banner>
               )}
             </div>
