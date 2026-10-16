@@ -84,9 +84,17 @@ async function syncExpense(user, uuid, data) {
   }
   // The mobile app must upload the receipt image on reconnect BEFORE syncing,
   // so this URL points at a receipt this server stored.
-  if (!(await receiptImageExists(receiptImageURL))) {
+    let receiptExists;
+  try {
+    receiptExists = await receiptImageExists(receiptImageURL);
+  } catch (error) {
+    // R2 could not be reached: not the same as "missing". Keep the item pending.
+    throw new SyncRetry(`could not check the receipt: ${error.message}`);
+  }
+  if (!receiptExists) {
     throw new SyncReject("MISSING_RECEIPT", "receiptImageURL must reference a receipt uploaded via POST /receipts/scan");
   }
+  
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     throw new SyncReject("INVALID_LINE_ITEMS", "lineItems must include at least one item");
   }

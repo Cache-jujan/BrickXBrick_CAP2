@@ -6,20 +6,14 @@
 // receipt that doesn't exist), the image is stored server-side during
 // /receipts/scan and the route returns the URL it produced.
 //
-// Local disk now, Cloudflare R2 later: swapping backends is a change to
-// this file only, because every caller sees the same
-// storeReceiptImage(buffer, mimeType) -> url contract.
+// Receipts live in Cloudflare R2 under the `receipts/` prefix of the bucket
+// (R2_BUCKET). Every caller still sees the same
+// storeReceiptImage(buffer, mimeType) -> url contract as before.
 
-const fs = require("fs/promises");
-const path = require("path");
 const crypto = require("crypto");
+const r2 = require("./r2");
 
-const STORAGE_DIR = path.resolve(
-  process.env.RECEIPT_STORAGE_DIR || path.join(__dirname, "../../storage/receipts")
-);
-
-// Used to build an absolute URL. In dev: http://localhost:3000
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+const KEY_PREFIX = "receipts";
 
 const EXTENSION_BY_MIME = {
   "image/jpeg": ".jpg",
@@ -27,6 +21,18 @@ const EXTENSION_BY_MIME = {
   "image/png": ".png",
   "application/pdf": ".pdf",
 };
+
+// What we store in the bucket. image/jpg is not a real MIME type, so it is
+// saved as image/jpeg.
+const CONTENT_TYPE_BY_MIME = {
+  "image/jpeg": "image/jpeg",
+  "image/jpg": "image/jpeg",
+  "image/png": "image/png",
+  "application/pdf": "application/pdf",
+};
+
+// receipts/<uuid>.<jpg|png|pdf> — the only key shape this module ever writes.
+const RECEIPT_KEY_RE = /^receipts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|pdf)$/i;
 
 function isAllowedMime(mimeType) {
   return Object.prototype.hasOwnProperty.call(EXTENSION_BY_MIME, mimeType);
@@ -36,8 +42,8 @@ function isAllowedMime(mimeType) {
  * Persist a receipt image and return the URL to store in
  * expenses.receiptimageurl.
  *
- * Filename is a random UUID, never the client-supplied name — an uploaded
- * filename is attacker-controlled and would otherwise allow path traversal.
+ * The object name is a random UUID, never the client-supplied name — an
+ * uploaded filename is attacker-controlled.
  */
 async function storeReceiptImage(buffer, mimeType) {
   if (!isAllowedMime(mimeType)) {
@@ -46,12 +52,8 @@ async function storeReceiptImage(buffer, mimeType) {
     throw err;
   }
 
-  await fs.mkdir(STORAGE_DIR, { recursive: true });
-
-  const filename = `${crypto.randomUUID()}${EXTENSION_BY_MIME[mimeType]}`;
-  await fs.writeFile(path.join(STORAGE_DIR, filename), buffer);
-
-  return `${PUBLIC_BASE_URL}/receipts/files/${filename}`;
+  const key = `${KEY_PREFIX}/${crypto.randomUUID()}${EXTENSION_BY_MIME[mimeType]}`;
+  return r2.putObject(key, buffer, CONTENT_TYPE_BY_MIME[mimeType]);
 }
 
 /**
@@ -59,23 +61,14 @@ async function storeReceiptImage(buffer, mimeType) {
  * one this server actually issued, so the NOT NULL column can't be
  * satisfied with an arbitrary string.
  *
- * When this moves to R2, replace the fs.access call with a HEAD on the
- * object; the signature and the callers stay the same.
+ * Returns true/false for "the receipt is / is not there". If R2 itself can't
+ * be reached (timeout, network, credentials) this THROWS instead of returning
+ * false, so callers never mistake "could not check" for "missing".
  */
 async function receiptImageExists(url) {
-  if (typeof url !== "string") return false;
-  if (!url.startsWith(`${PUBLIC_BASE_URL}/receipts/files/`)) return false;
-
-  const filename = path.basename(url);
-  // basename() strips any traversal, but re-check the shape anyway.
-  if (!/^[0-9a-f-]{36}\.(jpg|png|pdf)$/i.test(filename)) return false;
-
-  try {
-    await fs.access(path.join(STORAGE_DIR, filename));
-    return true;
-  } catch {
-    return false;
-  }
+  const key = r2.keyFromPublicUrl(url);
+  if (!key || !RECEIPT_KEY_RE.test(key)) return false;
+  return r2.objectExists(key);
 }
 
-module.exports = { storeReceiptImage, receiptImageExists, STORAGE_DIR, isAllowedMime };
+module.exports = { storeReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX };
