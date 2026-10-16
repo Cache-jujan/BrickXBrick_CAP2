@@ -48,6 +48,57 @@ function canonicalizeExpense(expense) {
     return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
+// --- F11: report hash ----------------------------------------------------
+// A report is hashed from the report_events row, so the hash can be
+// recomputed later from what is stored. Same lessons as the expense hash:
+// fixed key order, sorted ids, and no value that depends on server timezone.
+
+// pg returns a DATE as a Date at the server's local midnight, so read the
+// local calendar fields (the same day on any server). Strings pass through.
+function canonicalDay(value) {
+    if (value instanceof Date) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    }
+    return String(value).slice(0, 10);
+}
+
+// 37000.5 -> "37000.50". Whole centavos, so -0 and float noise cannot leak in.
+function money2(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) throw new Error("report total is not a number");
+    const cents = Math.round(number * 100) + 0;
+    const sign = cents < 0 ? "-" : "";
+    const abs = Math.abs(cents);
+    return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+}
+
+// row: a report_events row (lower-case pg column names). row.totals holds the
+// summary figures that were shown and exported (see lib/reportSummary.js).
+function canonicalizeReport(row) {
+    const projects = (row.totals && row.totals.projects) || [];
+    if (projects.length === 0) throw new Error("report has no per-project totals to hash");
+
+    const canonical = {
+        reportId: row.reportid,
+        generatedBy: row.generatedby,
+        projectIds: [...row.projectids].map((id) => String(id).toLowerCase()).sort(),
+        from: canonicalDay(row.periodfrom),
+        to: canonicalDay(row.periodto),
+        generatedAt: new Date(row.generatedat).toISOString(),
+        projects: projects
+            .map((project) => ({
+                projectId: String(project.projectId).toLowerCase(),
+                budget: money2(project.budget),
+                periodSpend: money2(project.periodSpend),
+                cumulativeSpend: money2(project.cumulativeSpend),
+                birDeductibleSpend: money2(project.birDeductibleSpend),
+            }))
+            .sort((a, b) => (a.projectId < b.projectId ? -1 : a.projectId > b.projectId ? 1 : 0)),
+    };
+    return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
 async function submitHashWithTimeout(hash) {
     const web3 = new Web3(RPC_URL);
     const [fromAddress] = await web3.eth.getAccounts();
@@ -84,4 +135,4 @@ async function getOnChainHash(txHash) {
 }
 
 
-module.exports = { canonicalizeExpense, submitHashWithTimeout, getOnChainHash };
+module.exports = { canonicalizeExpense, canonicalizeReport, submitHashWithTimeout, getOnChainHash };
