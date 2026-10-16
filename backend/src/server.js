@@ -56,7 +56,7 @@ app.use("/api/tasks", taskRoutes);                // F3 tasks
 app.use("/api/tickets", ticketRoutes);            // F4 tickets
 app.use("/api/expenses", expenseRoutes);          // F6 expenses
 app.use("/api/allocations", allocationRoutes);     // F8 split receipt allocation
-app.use("/receipts/files", express.static(require("./lib/receiptStorage").STORAGE_DIR));
+app.use("/receipts/files", require("./routes/receiptFiles")); // signed links only
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
 app.use("/api/blockchain", blockchainRoutes);     // F12 audit trail

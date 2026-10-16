@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
+import { ReceiptLink } from "../../components/ui/ReceiptLink";
 import { useParams, Link } from "react-router-dom";
 import {
   activateProject,
@@ -705,7 +706,7 @@ export function ProjectDetailPage() {
                               </ul>
                             )}
                             {e.receiptimageurl && (
-                              <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
+                              <ReceiptLink url={e.receiptimageurl} />
                             )}
 
                             {e.submittedby === user.id && user.role === "General Manager" && (

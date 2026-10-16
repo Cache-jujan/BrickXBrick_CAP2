@@ -21,6 +21,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/requested-material-picker";
 import { fetchOpenRequests } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { useReceiptUri } from "@/lib/receipt-scans";
 import type { LineItem } from "@/lib/expense-types";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { formatAmountInput, formatPesoCents, groupAmountText, toCents, toHundredths } from "@/lib/money";
@@ -245,7 +246,7 @@ export default function ReviewScreen() {
             <View style={styles.thumbRow}>
               {file.type === "image" ? (
                 <Pressable onPress={() => setZoomOpen(true)} accessibilityRole="imagebutton" accessibilityLabel="Enlarge the receipt photo">
-                  <Image source={{ uri: file.uri }} style={styles.thumb} resizeMode="cover" />
+                  <Image source={{ uri: shownUri }} style={styles.thumb} resizeMode="cover" />
                 </Pressable>
               ) : (
                 <View style={[styles.thumb, styles.thumbPdf]}><IconSymbol name="doc.fill" size={26} color={COLORS.muted} /></View>
@@ -420,7 +421,7 @@ export default function ReviewScreen() {
       {file?.type === "image" && (
         <Modal visible={zoomOpen} transparent animationType="fade" onRequestClose={() => setZoomOpen(false)}>
           <Pressable style={styles.zoomBackdrop} onPress={() => setZoomOpen(false)} accessibilityLabel="Close the enlarged photo">
-            <Image source={{ uri: file.uri }} style={styles.zoomImage} resizeMode="contain" />
+            <Image source={{ uri: shownUri }} style={styles.zoomImage} resizeMode="contain" />
             <Text style={styles.zoomHint}>Tap anywhere to close</Text>
           </Pressable>
         </Modal>

@@ -16,9 +16,14 @@ function getLocalApiUrl() {
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-export const API_URL = configuredApiUrl || (__DEV__
-  ? getLocalApiUrl()
-  : "https://YOUR-RAILWAY-BACKEND-URL");
+function resolveApiUrl() {
+  if (configuredApiUrl) return configuredApiUrl;
+  if (__DEV__) return getLocalApiUrl();
+  // A release build must never ship pointing at a placeholder.
+  throw new Error("EXPO_PUBLIC_API_URL is not set. Set it before building a release.");
+}
+
+export const API_URL = resolveApiUrl();
 
 // The token must come only from the current login session.
 // Do not use EXPO_PUBLIC_DEV_TOKEN here.

@@ -1,6 +1,7 @@
 // Background receipt scanning (backend routes/receipts.js, POST /scans).
 // The upload returns a scanID straight away; OCR keeps running on the server
 // even if the user leaves the screen or closes the app.
+import { useEffect, useState } from "react";
 import * as FileSystem from "expo-file-system/legacy";
 
 import { API_URL, authHeaders } from "@/constants/api";
@@ -72,6 +73,25 @@ export function phoneReachableUrl(url: string): string {
   const marker = "/receipts/files/";
   const at = url.indexOf(marker);
   return at >= 0 ? `${API_URL}${url.slice(at)}` : url;
+}
+
+// Stored receipts are private: the image URL only loads with a short-lived
+// signed link from the API. Returns the uri to show (the plain one until the
+// link arrives, or if it can't be fetched). Local files pass straight through.
+export function useReceiptUri(uri: string): string {
+  const [signed, setSigned] = useState<{ for: string; uri: string } | null>(null);
+  useEffect(() => {
+    if (!uri.includes("/receipts/files/") || uri.includes("sig=")) return;
+    let cancelled = false;
+    fetch(`${API_URL}/api/receipts/link?url=${encodeURIComponent(uri)}`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (!cancelled && body?.url) setSigned({ for: uri, uri: phoneReachableUrl(body.url) });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [uri]);
+  return signed?.for === uri ? signed.uri : uri;
 }
 
 // The FileState the review screen shows for a scan picked up later.

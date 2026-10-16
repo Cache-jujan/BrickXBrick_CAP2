@@ -1,6 +1,8 @@
 import React from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
+import { useReceiptUri } from "@/lib/receipt-scans";
+
 // Shared file-state shape — imported by index.tsx too, so it only lives here.
 export type FileState =
   | { type: "image"; name: string; uri: string; mimeType?: string }
@@ -14,6 +16,7 @@ export type FileState =
  * pdf picked -> file icon + name/size row
  */
 export function FilePreview({ file }: { file: FileState }) {
+  const shownUri = useReceiptUri(file?.uri ?? "");
   if (!file) {
     return (
       <View style={styles.emptyState}>
@@ -30,7 +33,7 @@ export function FilePreview({ file }: { file: FileState }) {
     return (
       <View style={styles.imageWrapper}>
         <Image
-          source={{ uri: file.uri }}
+          source={{ uri: shownUri }}
           style={styles.image}
           resizeMode="cover"
         />
