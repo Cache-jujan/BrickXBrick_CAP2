@@ -3,7 +3,7 @@
 // needed. This route just exposes it.
 
 const express = require("express");
-const { query } = require("../lib/db");
+const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
@@ -153,6 +153,11 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
 
         if (req.user.role === "Site Manager" && !ticketID) {
             throw httpError(400, "Site Managers must link expenses to their own resolved Material Request ticket");
+        }
+        // Without a ticket, Layer 3 and the assignment check are skipped and a
+        // Purchaser could bill any Active project.
+        if (req.user.role === "Purchaser" && !ticketID) {
+            throw httpError(400, "Purchasers must link expenses to a Resolved ticket assigned to them");
         }
         if (!projectID) {
             throw httpError(400, "projectID is required when no ticketID is provided");
@@ -334,15 +339,20 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             throw httpError(403, "You can't approve an expense you submitted");
         }
 
-        await query(
-            "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2",
-            [req.user.id, req.params.id]
-        );
-
-        await query(
-            "UPDATE FraudFlags SET resolution = 'Approved', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
-            [req.user.id, req.params.id]
-        );
+        // Claim the row atomically so a concurrent approve/reject can't both win.
+        await withTransaction(async (client) => {
+            const claimed = await client.query(
+                "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2 AND status = 'Pending'",
+                [req.user.id, req.params.id]
+            );
+            if (claimed.rowCount === 0) {
+                throw httpError(409, "This expense was already reviewed");
+            }
+            await client.query(
+                "UPDATE FraudFlags SET resolution = 'Approved', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
+                [req.user.id, req.params.id]
+            );
+        });
 
         const hash = canonicalizeExpense(expense);
 
@@ -397,23 +407,28 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
             throw httpError(403, "You can't reject an expense you submitted");
         }
 
-        const result = await query(
-            "UPDATE Expenses SET status = 'Rejected', approvedBy = $1, rejectionReason = $2 WHERE expenseID = $3 RETURNING *",
-            [req.user.id, reason.trim(), req.params.id]
-        );
+        // Atomic claim: only one of a racing approve/reject can win.
+        const rejected = await withTransaction(async (client) => {
+            const result = await client.query(
+                "UPDATE Expenses SET status = 'Rejected', approvedBy = $1, rejectionReason = $2 WHERE expenseID = $3 AND status = 'Pending' RETURNING *",
+                [req.user.id, reason.trim(), req.params.id]
+            );
+            if (result.rowCount === 0) {
+                throw httpError(409, "This expense was already reviewed");
+            }
+            await client.query(
+                "UPDATE FraudFlags SET resolution = 'Rejected', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
+                [req.user.id, req.params.id]
+            );
+            await client.query(
+                `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                 VALUES ($1, 'ExpenseRejected', 'Expense', $2, $3)`,
+                [expense.submittedby, req.params.id, `Your expense was rejected: ${reason.trim()}`]
+            );
+            return result.rows[0];
+        });
 
-        await query(
-            "UPDATE FraudFlags SET resolution = 'Rejected', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
-            [req.user.id, req.params.id]
-        );
-
-        await query(
-            `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
-             VALUES ($1, 'ExpenseRejected', 'Expense', $2, $3)`,
-            [expense.submittedby, req.params.id, `Your expense was rejected: ${reason.trim()}`]
-        );
-
-        res.json(result.rows[0]);
+        res.json(rejected);
     } catch (err) {
         next(err);
     }

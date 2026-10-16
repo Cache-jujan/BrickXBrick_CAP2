@@ -108,6 +108,9 @@ let currentUser = { id: "user-1", role: "Purchaser" };
 async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
+  if (text.startsWith("select ticketid, projectid, status, assignedto")) {
+    return { rowCount: 1, rows: [{ ticketid: "ticket-1", projectid: "project-1", status: "Resolved", assignedto: "user-1", submittedby: "sm-1", tickettype: "Material Request" }] };
+  }
   if (text.startsWith("insert into expenses")) return { rowCount: 1, rows: [{ expenseID: "new-expense" }] };
   if (text.startsWith("select * from expenses where expenseid")) {
     return db.rejectedRow ? { rowCount: 1, rows: [db.rejectedRow] } : { rowCount: 0, rows: [] };
@@ -147,6 +150,7 @@ async function send(server, method, url, body) {
 function submission(overrides = {}) {
   return {
     projectID: "project-1",
+    ticketID: "ticket-1", // a Purchaser must link a Resolved ticket assigned to them
     vendorName: "Cebu Builders Supply",
     amount: 500,
     receiptDate: "2026-10-09",
