@@ -1,42 +1,69 @@
-// Receipt storage: byte check, canonical URL, and signed expiring links.
+// receiptStorage.js against a fake R2: no network, no credentials.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const os = require("node:os");
-const path = require("node:path");
+const { S3Client } = require("@aws-sdk/client-s3");
 
-process.env.RECEIPT_STORAGE_DIR = path.join(os.tmpdir(), `receipts-${process.pid}`);
-process.env.PUBLIC_BASE_URL = "http://api.test";
-const rs = require("../src/lib/receiptStorage");
+process.env.R2_ACCOUNT_ID = "acct";
+process.env.R2_ACCESS_KEY = "key";
+process.env.R2_SECRET_KEY = "secret";
+process.env.R2_BUCKET = "bucket";
+process.env.R2_PUBLIC_BASE_URL = "https://files.example.com";
 
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
+const { storeReceiptImage, receiptImageExists } = require("../src/lib/receiptStorage");
 
-test("a file whose bytes don't match its declared type is refused", async () => {
-  await assert.rejects(rs.storeReceiptImage(Buffer.from("<html><script>"), "image/png"), { status: 400 });
-  await assert.rejects(rs.storeReceiptImage(JPEG, "application/pdf"), { status: 400 });
+const sent = [];
+let headBehaviour = () => ({});
+S3Client.prototype.send = async function fakeSend(command) {
+  sent.push(command);
+  if (command.constructor.name === "HeadObjectCommand") return headBehaviour(command);
+  return {};
+};
+
+test("storeReceiptImage writes receipts/<uuid>.<ext> and returns the public URL", async () => {
+  sent.length = 0;
+  const url = await storeReceiptImage(Buffer.from("x"), "image/jpeg");
+  assert.match(url, /^https:\/\/files\.example\.com\/receipts\/[0-9a-f-]{36}\.jpg$/);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].input.Bucket, "bucket");
+  assert.equal(sent[0].input.Key, url.replace("https://files.example.com/", ""));
+  assert.equal(sent[0].input.ContentType, "image/jpeg");
 });
 
-test("a real JPEG is stored and can be opened", async () => {
-  const url = await rs.storeReceiptImage(JPEG, "image/jpeg");
-  assert.match(url, /^http:\/\/api\.test\/receipts\/files\/[0-9a-f-]{36}\.jpg$/);
-  assert.equal(await rs.receiptImageExists(url), true);
-  const file = await rs.openReceipt(rs.receiptFilename(url));
-  assert.equal(file.contentType, "image/jpeg");
+test("PDF and PNG receipts are accepted, other types are rejected with 400", async () => {
+  assert.match(await storeReceiptImage(Buffer.from("x"), "application/pdf"), /\.pdf$/);
+  assert.match(await storeReceiptImage(Buffer.from("x"), "image/png"), /\.png$/);
+  await assert.rejects(() => storeReceiptImage(Buffer.from("x"), "text/html"), (e) => e.status === 400);
 });
 
-test("canonicalReceiptUrl re-bases a URL held under another host", () => {
-  const name = "00000000-0000-4000-8000-000000000000.png";
-  assert.equal(rs.canonicalReceiptUrl(`http://192.168.1.5:3000/receipts/files/${name}?exp=1&sig=x`), `http://api.test/receipts/files/${name}`);
-  assert.equal(rs.canonicalReceiptUrl("http://x/receipts/files/../../etc/passwd"), null);
+test("receiptImageExists is true only for our receipt keys that are really in R2", async () => {
+  const good = "https://files.example.com/receipts/11111111-2222-3333-4444-555555555555.png";
+  headBehaviour = () => ({});
+  assert.equal(await receiptImageExists(good), true);
+
+  headBehaviour = () => { const e = new Error("nf"); e.name = "NotFound"; throw e; };
+  assert.equal(await receiptImageExists(good), false);
 });
 
-test("signed links verify, expire, and can't be reused for another file", () => {
-  const url = "http://api.test/receipts/files/00000000-0000-4000-8000-000000000000.png";
-  const now = Date.now();
-  const q = new URL(rs.signReceiptUrl(url, now)).searchParams;
-  const name = "00000000-0000-4000-8000-000000000000.png";
-  assert.equal(rs.verifyReceiptSignature(name, q.get("exp"), q.get("sig"), now), true);
-  assert.equal(rs.verifyReceiptSignature(name, q.get("exp"), q.get("sig"), now + 301_000), false);
-  assert.equal(rs.verifyReceiptSignature("11111111-1111-4111-8111-111111111111.png", q.get("exp"), q.get("sig"), now), false);
-  assert.equal(rs.verifyReceiptSignature(name, q.get("exp"), "0".repeat(64), now), false);
-  assert.equal(rs.verifyReceiptSignature(name, undefined, undefined, now), false);
+test("receiptImageExists rejects foreign hosts, other prefixes and traversal without calling R2", async () => {
+  sent.length = 0;
+  for (const url of [
+    "https://evil.example.com/receipts/11111111-2222-3333-4444-555555555555.png",
+    "https://files.example.com/tasks/t1/11111111-2222-3333-4444-555555555555.png",
+    "https://files.example.com/receipts/../secret.png",
+    "https://files.example.com/receipts/not-a-uuid.png",
+    "http://localhost:3000/receipts/files/11111111-2222-3333-4444-555555555555.png",
+    null,
+    undefined,
+  ]) {
+    assert.equal(await receiptImageExists(url), false, String(url));
+  }
+  assert.equal(sent.length, 0);
+});
+
+test("receiptImageExists throws (not false) when R2 cannot be checked", async () => {
+  headBehaviour = () => { throw new Error("socket hang up"); };
+  await assert.rejects(
+    () => receiptImageExists("https://files.example.com/receipts/11111111-2222-3333-4444-555555555555.jpg"),
+    /socket hang up/
+  );
 });

@@ -96,4 +96,27 @@ async function objectExists(key, send) {
     }
 }
 
-module.exports = { uploadBuffer, keyFromPublicUrl, objectExists };
+// publicUrlForKey(key) -> the URL a browser/app uses to fetch the object.
+// Same shape uploadBuffer returns: <R2_PUBLIC_BASE_URL>/<key>.
+function publicUrlForKey(key) {
+    return `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
+}
+
+// putObject(key, buffer, contentType) -> Promise<string URL>
+//
+// Like uploadBuffer, but the caller chooses the exact key and content type.
+// Used for receipts (which can be PDFs, unlike task photos). Callers must
+// validate the type themselves.
+async function putObject(key, buffer, contentType) {
+    await getClient().send(
+        new PutObjectCommand({
+            Bucket: process.env.R2_BUCKET,
+            Key: key,
+            Body: buffer,
+            ContentType: contentType,
+        })
+    );
+    return publicUrlForKey(key);
+}
+
+module.exports = { uploadBuffer, putObject, publicUrlForKey, keyFromPublicUrl, objectExists, getClient };
