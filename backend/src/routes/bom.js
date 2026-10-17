@@ -1,22 +1,3 @@
-// F2: the project's Bill of Materials. Mounted at /api/projects/:projectId/bom
-//
-// Client (Oct 2026): the signed and sealed BOM is "the basis for every purchase
-// and mobilization"; it always comes as an Excel file in the company format,
-// and the price given to the client is the BOM total.
-//
-//   GET    /          GM, owning PM     the BOM with totals and review warnings
-//   POST   /import    GM                upload the .xlsx; replaces the Draft
-//   PUT    /          GM                save the edited Draft (or start one by hand)
-//   PATCH  /approve   GM                body { clientAgreedOn, clientAgreedBy, agreementRef? }:
-//                                      record the client's agreement (adviser item 5) and
-//                                      lock it; the project budget becomes the signed
-//                                      total from the file (or the computed total)
-//   PATCH  /reopen    GM                back to Draft for a correction, with a reason
-//   DELETE /          GM                remove a Draft BOM (e.g. the wrong file)
-//   GET    /items     GM, PM, SM, Purchaser   approved items for Material Requests
-//                                      (unit costs only for GM and PM)
-//
-// Approving the BOM is required before the GM can activate the project.
 const express = require("express");
 const multer = require("multer");
 const { query, withTransaction } = require("../lib/db");
@@ -307,7 +288,14 @@ router.get("/", requireRole(GM, PM), async (req, res) => {
   try {
     const project = await loadProject(query, req.params.projectId);
     assertCanView(project, req.user);
-    res.json(await buildResponse(query, project));
+    const payload = await buildResponse(query, project);
+    // The GM prepares the BOM and the client agrees to it first; the owning PM
+    // sees it once it is approved (and not while it is reopened for a revision).
+    if (req.user.role === PM && payload.bom && payload.bom.status !== "Approved") {
+      const { bom: _hidden, ...base } = payload;
+      return res.json({ ...base, bom: null, bomPending: true });
+    }
+    res.json(payload);
   } catch (err) {
     sendError(res, err);
   }
