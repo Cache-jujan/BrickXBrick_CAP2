@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ReceiptLink } from "../../components/ui/ReceiptLink";
 import { Link } from "react-router-dom";
 import {
   listExpenses,
@@ -332,7 +331,7 @@ export function ExpensesPage() {
                                   )}
                                   <div className="expenses-detail-links">
                                     {e.receiptimageurl && (
-                                      <ReceiptLink url={e.receiptimageurl} />
+                                      <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
                                     )}
                                     {project && <Link to={`/projects/${project.projectid}`}>Open project</Link>}
                                   </div>

@@ -16,7 +16,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { query } = require("../lib/db");
 const rateLimit = require("express-rate-limit");
-const { storeReceiptImage, isAllowedMime, receiptFilename, canonicalReceiptUrl, signReceiptUrl } = require("../lib/receiptStorage");
+const { storeReceiptImage, isAllowedMime } = require("../lib/receiptStorage");
 const { buildScanDraft } = require("../lib/scanDraft");
 const { createReceiptScans, parseContext } = require("../lib/receiptScans");
 
@@ -41,40 +41,6 @@ const scanLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many receipt scans. Wait a minute and try again." },
-});
-
-// GET /link?url=<receiptImageURL> — a 5-minute signed link to a stored receipt,
-// for <img>/<a>/<iframe>, which can't send an Authorization header. Allowed for
-// the person who uploaded or submitted it, a GM, and the PM of its project.
-router.get("/link", async (req, res, next) => {
-  try {
-    const canonical = canonicalReceiptUrl(req.query.url);
-    const filename = receiptFilename(canonical);
-    if (!filename) throw notFound();
-    const like = `%/receipts/files/${filename}`;
-    const { id, role } = req.user;
-
-    const scan = await query(
-      "SELECT 1 FROM ReceiptScans WHERE receiptImageURL LIKE $1 AND submittedBy = $2 LIMIT 1",
-      [like, id]
-    );
-    let allowed = scan.rowCount > 0;
-    if (!allowed) {
-      const exp = await query(
-        `SELECT e.submittedby, p.projectmanagerid
-           FROM expenses e JOIN projects p ON p.projectid = e.projectid
-          WHERE e.receiptimageurl LIKE $1`,
-        [like]
-      );
-      allowed = exp.rows.some((r) =>
-        r.submittedby === id || role === "General Manager" || (role === "Project Manager" && r.projectmanagerid === id)
-      );
-    }
-    if (!allowed) throw notFound(); // same answer as "no such receipt"
-    res.json({ url: signReceiptUrl(canonical) });
-  } catch (err) {
-    next(err);
-  }
 });
 
 // memoryStorage keeps the upload in RAM as req.file.buffer. The buffer goes

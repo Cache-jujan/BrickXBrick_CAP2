@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ReceiptLink, useSignedReceiptUrl } from "../../components/ui/ReceiptLink";
 import { scanReceipt, submitExpense } from "../../api/expensesApi";
 import { listExpenseLinkableTickets } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
@@ -83,7 +82,6 @@ export function SubmitExpensePage() {
   const [tickets, setTickets] = useState([]);
   const [selectedTicketId, setSelectedTicketId] = useState("");
   const [draft, setDraft] = useState(EMPTY_DRAFT);
-  const signedReceiptUrl = useSignedReceiptUrl(draft.receiptImageURL);
   const [receiptName, setReceiptName] = useState("");
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -328,18 +326,18 @@ export function SubmitExpensePage() {
                   <iframe
                     className="submit-expense-pdf-preview"
                     title="Uploaded receipt PDF preview"
-                    src={signedReceiptUrl}
+                    src={draft.receiptImageURL}
                   />
                 ) : (
                   <img
                     className="submit-expense-image-preview"
-                    src={signedReceiptUrl}
+                    src={draft.receiptImageURL}
                     alt="Uploaded receipt preview"
                   />
                 )}
-                <ReceiptLink className="submit-expense-receipt-link" url={draft.receiptImageURL}>
+                <a className="submit-expense-receipt-link" href={draft.receiptImageURL} target="_blank" rel="noreferrer">
                   Open the uploaded receipt separately
-                </ReceiptLink>
+                </a>
               </div>
             )}
           </section>

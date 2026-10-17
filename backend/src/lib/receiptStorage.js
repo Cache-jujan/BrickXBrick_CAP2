@@ -21,15 +21,12 @@ const EXTENSION_BY_MIME = {
   "image/png": ".png",
   "application/pdf": ".pdf",
 };
-const MIME_BY_EXTENSION = { ".jpg": "image/jpeg", ".png": "image/png", ".pdf": "application/pdf" };
 
 const MAGIC = {
   ".jpg": [0xff, 0xd8, 0xff],
   ".png": [0x89, 0x50, 0x4e, 0x47],
   ".pdf": [0x25, 0x50, 0x44, 0x46, 0x2d], // %PDF-
 };
-
-const FILENAME_SHAPE = /^[0-9a-f-]{36}\.(jpg|png|pdf)$/i;
 
 // What we store in the bucket. image/jpg is not a real MIME type, so it is
 // saved as image/jpeg.
@@ -75,23 +72,6 @@ async function storeReceiptImage(buffer, mimeType) {
 
   const key = `${KEY_PREFIX}/${crypto.randomUUID()}${EXTENSION_BY_MIME[mimeType]}`;
   return r2.putObject(key, buffer, CONTENT_TYPE_BY_MIME[mimeType]);
-}
-
-// The stored file name for a URL this server issued, or null.
-function receiptFilename(url) {
-  if (typeof url !== "string") return null;
-  if (!url.startsWith(`${PUBLIC_BASE_URL}/receipts/files/`)) return null;
-  const filename = path.basename(url);
-  return FILENAME_SHAPE.test(filename) ? filename : null;
-}
-
-// Clients may hold the URL under a different host (the phone re-points it at the
-// API address it uses). Rebuild the canonical URL from the file name alone.
-function canonicalReceiptUrl(url) {
-  if (typeof url !== "string") return null;
-  const m = /\/receipts\/files\/([^/?#]+)(?:[?#].*)?$/.exec(url);
-  if (!m || !FILENAME_SHAPE.test(m[1])) return null;
-  return `${PUBLIC_BASE_URL}/receipts/files/${m[1]}`;
 }
 
 /**

@@ -10,7 +10,6 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
-import { ReceiptLink, useSignedReceiptUrl } from "../../components/ui/ReceiptLink";
 import { EMPTY_DRAFT, draftFromScan, isSupportedReceipt } from "./SubmitExpensePage";
 import { editLine } from "../../utils/lineItemMath";
 import "./SubmitExpensePage.css";
@@ -36,7 +35,6 @@ export function SplitReceiptPage() {
   const busyRef = useRef(false);
 
   const [draft, setDraft] = useState(blankDraft);
-  const signedReceiptUrl = useSignedReceiptUrl(draft.receiptImageURL);
   const [receiptName, setReceiptName] = useState("");
   const [scanning, setScanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -362,13 +360,13 @@ export function SplitReceiptPage() {
           {draft.receiptImageURL && (
             <div className="submit-expense-receipt-preview">
               {receiptName.toLowerCase().endsWith(".pdf") ? (
-                <iframe className="submit-expense-pdf-preview" title="Uploaded receipt PDF preview" src={signedReceiptUrl} />
+                <iframe className="submit-expense-pdf-preview" title="Uploaded receipt PDF preview" src={draft.receiptImageURL} />
               ) : (
-                <img className="submit-expense-image-preview" src={signedReceiptUrl} alt="Uploaded receipt preview" />
+                <img className="submit-expense-image-preview" src={draft.receiptImageURL} alt="Uploaded receipt preview" />
               )}
-              <ReceiptLink className="submit-expense-receipt-link" url={draft.receiptImageURL}>
+              <a className="submit-expense-receipt-link" href={draft.receiptImageURL} target="_blank" rel="noreferrer">
                 Open the uploaded receipt separately
-              </ReceiptLink>
+              </a>
             </div>
           )}
         </section>
