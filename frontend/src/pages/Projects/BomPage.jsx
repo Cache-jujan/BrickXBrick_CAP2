@@ -502,7 +502,7 @@ export function BomPage() {
 
       {!draft && (
         <div className="bom-empty">
-          <h2>No Bill of Materials yet</h2>
+          <h2>{data?.bomPending ? "Bill of Materials not approved yet" : "No Bill of Materials yet"}</h2>
           {isGM && !projectClosed ? (
             <>
               <p>
@@ -517,7 +517,11 @@ export function BomPage() {
               </div>
             </>
           ) : (
-            <p>The General Manager hasn't added this project's BOM yet.</p>
+            <p>
+              {data?.bomPending
+                ? "The General Manager is still preparing this BOM. You can open it here once it is approved."
+                : "The General Manager hasn't added this project's BOM yet."}
+            </p>
           )}
         </div>
       )}

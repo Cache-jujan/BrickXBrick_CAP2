@@ -563,7 +563,9 @@ export function ProjectDetailPage() {
             <p>
               {isGM && !isClosed
                 ? "Add the signed BOM. It is the basis for every purchase and is required before activation."
-                : "The General Manager hasn't added the BOM yet."}
+                : bomInfo.bomPending
+                  ? "The General Manager is still preparing the BOM. You can open it here once it is approved."
+                  : "The General Manager hasn't added the BOM yet."}
             </p>
             {isGM && !isClosed && (
               <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">Add BOM</Link>
