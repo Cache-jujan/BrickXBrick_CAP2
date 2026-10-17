@@ -113,7 +113,7 @@ function TaskTooltip({ task }) {
   );
 }
 
-function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask }) {
+function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask, onOpenDocuments }) {
   const meta = statusMeta(milestone.status);
   return (
     <div className={`timeline-popover timeline-popover-${meta.className}`} role="dialog" aria-label={`${milestone.name} details`}>
@@ -135,7 +135,12 @@ function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask }) {
             <div className="timeline-popover-task" key={task.taskid || task.taskname}>
               <strong>{task.taskname}</strong>
               <span>Due {DATE.format(asDate(task.duedate) || new Date())} · {task.handledby ? `Handled by: ${task.handledby}` : task.assignedtoname || "Unassigned"}</span>
-              {canManage && task.status !== "Completed" && <button type="button" className="timeline-task-action" onClick={() => onCompleteTask?.(task)}>Mark done</button>}
+              {((canManage && task.status !== "Completed") || (milestone.phase === "Planning" && onOpenDocuments)) && (
+                <div className="timeline-task-actions">
+                  {canManage && task.status !== "Completed" && <button type="button" className="timeline-task-action" onClick={() => onCompleteTask?.(task)}>Mark done</button>}
+                  {milestone.phase === "Planning" && onOpenDocuments && <button type="button" className="timeline-task-action" onClick={() => onOpenDocuments(task)}>Documents</button>}
+                </div>
+              )}
             </div>
           ))
         )}
@@ -145,7 +150,7 @@ function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask }) {
   );
 }
 
-export const ProjectTimeline = memo(function ProjectTimeline({ project, canManage = false, onAddMilestone, onAddTask, onCompleteTask }) {
+export const ProjectTimeline = memo(function ProjectTimeline({ project, canManage = false, onAddMilestone, onAddTask, onCompleteTask, onOpenDocuments }) {
   const milestones = Array.isArray(project?.milestones) ? project.milestones : [];
   const [hovered, setHovered] = useState(null);
   const range = useMemo(() => getRange(project, milestones), [project, milestones]);
@@ -214,7 +219,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
                         <Bar item={milestone} range={range} kind="milestone" onHover={setHovered} onLeave={leaveBar} />
                         {hovered?.type === "milestone" && hovered.item === milestone && (
                           <div className="timeline-overlay-popover" style={overlayStyle(hovered.anchor, 286)} onMouseEnter={enterPopover} onMouseLeave={leaveBar}>
-                            <MilestonePopover milestone={milestone} canManage={canManage} onAddTask={onAddTask} onCompleteTask={onCompleteTask} />
+                            <MilestonePopover milestone={milestone} canManage={canManage} onAddTask={onAddTask} onCompleteTask={onCompleteTask} onOpenDocuments={onOpenDocuments} />
                           </div>
                         )}
                       </div>

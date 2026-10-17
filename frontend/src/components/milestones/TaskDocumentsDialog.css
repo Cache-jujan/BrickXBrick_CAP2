@@ -1,0 +1,11 @@
+.task-docs { max-width: 520px; }
+.task-docs-list { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.task-docs-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08)); }
+.task-docs-info { display: flex; flex-direction: column; min-width: 0; }
+.task-docs-name { background: none; border: none; padding: 0; text-align: left; font: inherit; font-weight: 600; color: var(--color-brick); cursor: pointer; overflow-wrap: anywhere; }
+.task-docs-name:hover { text-decoration: underline; }
+.task-docs-meta { font-size: var(--text-sm); color: var(--color-ink-soft); }
+.task-docs-remove { background: none; border: none; padding: 0; font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-danger); cursor: pointer; flex-shrink: 0; }
+.task-docs-remove:hover { text-decoration: underline; }
+.task-docs-remove:disabled { color: var(--color-ink-faint); cursor: default; text-decoration: none; }
+.task-docs-locked, .task-docs-hint { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--color-ink-soft); }
