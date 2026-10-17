@@ -29,6 +29,7 @@ const PAGE_LABELS = [
   { test: (p) => /^\/projects\/[^/]+$/.test(p), trail: ["Projects", "Project"] },
   { test: (p) => p === "/expenses", trail: ["Finance", "Expenses"] },
   { test: (p) => p === "/expenses/new", trail: ["Finance", "Submit expense"] },
+  { test: (p) => p === "/expenses/split", trail: ["Finance", "Split receipt"] },
   { test: (p) => p === "/expenses/mine", trail: ["Finance", "My expenses"] },
   { test: (p) => p.startsWith("/tickets/new"), trail: ["Tickets", "New ticket"] },
   { test: (p) => p.startsWith("/tickets"), trail: ["Tickets"] },

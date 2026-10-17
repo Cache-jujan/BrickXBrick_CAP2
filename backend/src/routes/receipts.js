@@ -15,6 +15,7 @@ const multer = require("multer");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { query } = require("../lib/db");
+const rateLimit = require("express-rate-limit");
 const { storeReceiptImage, isAllowedMime } = require("../lib/receiptStorage");
 const { buildScanDraft } = require("../lib/scanDraft");
 const { createReceiptScans, parseContext } = require("../lib/receiptScans");
@@ -31,6 +32,16 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Every route here touches OCR quota and writes files to disk — none of it
 // should be reachable unauthenticated.
 router.use(requireAuth);
+
+// Each scan costs a Gemini call and stores a file, so cap them per user.
+const scanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  keyGenerator: (req) => req.user.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many receipt scans. Wait a minute and try again." },
+});
 
 // memoryStorage keeps the upload in RAM as req.file.buffer. The buffer goes
 // to two places: Gemini (for OCR) and storeReceiptImage (for the URL that
@@ -63,7 +74,7 @@ function notFound() {
 }
 
 // POST /scan — upload a receipt, get back an expense draft.
-router.post("/scan", requireRole(...SCAN_ROLES), upload.single("file"), async (req, res, next) => {
+router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, upload.single("file"), async (req, res, next) => {
   try {
     requireFile(req);
     // Store first: if OCR fails, the image is still on disk and the user can
@@ -87,7 +98,7 @@ router.post("/scan", requireRole(...SCAN_ROLES), upload.single("file"), async (r
 // POST /scans — upload a receipt and return at once. The draft is fetched
 // later from GET /scans/:id, even if the app was closed in between.
 // Optional multipart field `context`: JSON the app needs to resume.
-router.post("/scans", requireRole(...SCAN_ROLES), upload.single("file"), async (req, res, next) => {
+router.post("/scans", requireRole(...SCAN_ROLES), scanLimiter, upload.single("file"), async (req, res, next) => {
   try {
     requireFile(req);
     const { buffer, mimetype } = req.file;

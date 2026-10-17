@@ -190,9 +190,14 @@ export function ExpensesPage() {
                 : "Review submitted expenses. Approving one saves a tamper-proof copy, so any later edit gets caught."}
             </p>
         </div>
-        <Link to="/expenses/new" className="btn btn-primary">
-          Submit Expense
-        </Link>
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          <Link to="/expenses/split" className="btn btn-secondary">
+            Split Receipt
+          </Link>
+          <Link to="/expenses/new" className="btn btn-primary">
+            Submit Expense
+          </Link>
+        </div>
       </div>
 
       {error && <Banner tone="error" title={error} />}

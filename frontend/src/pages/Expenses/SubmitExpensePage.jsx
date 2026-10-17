@@ -8,10 +8,11 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
+import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
 import "./SubmitExpensePage.css";
 import { BackLink } from "../../components/ui/BackLink";
 
-const EMPTY_DRAFT = {
+export const EMPTY_DRAFT = {
   vendorName: "",
   amount: "",
   receiptDate: "",
@@ -35,9 +36,9 @@ function toDateInput(value) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
 }
 
-function draftFromScan(result) {
+export function draftFromScan(result) {
   const extractedItems = Array.isArray(result.lineItems)
-    ? result.lineItems.map((item) => ({
+    ? result.lineItems.map((item) => withUnitPrice({
         description: item.description || "",
         amount: item.amount == null ? "" : String(item.amount),
         quantity: item.quantity == null ? "" : String(item.quantity),
@@ -66,7 +67,7 @@ function draftFromScan(result) {
   };
 }
 
-function isSupportedReceipt(file) {
+export function isSupportedReceipt(file) {
   const extension = file.name.split(".").pop()?.toLowerCase();
   return ["image/jpeg", "image/jpg", "image/png", "application/pdf"].includes(file.type)
     || ["jpg", "jpeg", "png", "pdf"].includes(extension);
@@ -168,7 +169,9 @@ export function SubmitExpensePage() {
     setDraft((current) => ({
       ...current,
       lineItems: current.lineItems.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [name]: value } : item
+        itemIndex === index
+          ? (["quantity", "unitPrice", "amount"].includes(name) ? editLine(item, name, value) : { ...item, [name]: value })
+          : item
       ),
     }));
   }
@@ -241,9 +244,7 @@ export function SubmitExpensePage() {
           description: item.description.trim(),
           amount: Number(item.amount),
           quantity: Number(item.quantity),
-          ...(item.unitPrice !== "" && Number.isFinite(Number(item.unitPrice))
-            ? { unitPrice: Number(item.unitPrice) }
-            : {}),
+          unitPrice: unitPriceForPayload(item),
         })),
       };
       const expense = await submitExpense(payload);
@@ -416,7 +417,7 @@ export function SubmitExpensePage() {
                   <Field label={`Item ${index + 1}`} required value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder="Description" />
                   <Field label="Item amount (₱)" required type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
                   <Field label="Quantity (0 for delivery, VAT, fees)" required type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
-                  <Field label="Unit price (₱)" type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
+                  <Field label="Unit price (₱)" type="number" min="0" step="0.01" placeholder="Calculated" value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
                   <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={`Remove item ${index + 1}`}>Remove</Button>
                 </div>
               ))}

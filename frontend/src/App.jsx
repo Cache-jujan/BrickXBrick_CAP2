@@ -20,6 +20,7 @@ import { CreateTicketPage } from "./pages/Tickets/CreateTicketPage";
 import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
 import { SubmitExpensePage } from "./pages/Expenses/SubmitExpensePage";
+import { SplitReceiptPage } from "./pages/Expenses/SplitReceiptPage";
 import { MyExpensesPage } from "./pages/Expenses/MyExpensesPage";
 import { NotificationsPage } from "./pages/Notifications/NotificationsPage";
 import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
@@ -172,6 +173,15 @@ export default function App() {
               element={
                 <RoleRoute allow={WEB_BROADCAST_ROLES}>
                   <SubmitExpensePage />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/expenses/split"
+              element={
+                <RoleRoute allow={WEB_BROADCAST_ROLES}>
+                  <SplitReceiptPage />
                 </RoleRoute>
               }
             />

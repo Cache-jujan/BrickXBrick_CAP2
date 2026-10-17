@@ -11,6 +11,11 @@ process.env.R2_PUBLIC_BASE_URL = "https://files.example.com";
 
 const { storeReceiptImage, receiptImageExists } = require("../src/lib/receiptStorage");
 
+// Real file headers: storeReceiptImage checks the bytes, not just the declared type.
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
+const PDF = Buffer.from("%PDF-1.4");
+
 const sent = [];
 let headBehaviour = () => ({});
 S3Client.prototype.send = async function fakeSend(command) {
@@ -21,7 +26,7 @@ S3Client.prototype.send = async function fakeSend(command) {
 
 test("storeReceiptImage writes receipts/<uuid>.<ext> and returns the public URL", async () => {
   sent.length = 0;
-  const url = await storeReceiptImage(Buffer.from("x"), "image/jpeg");
+  const url = await storeReceiptImage(JPEG, "image/jpeg");
   assert.match(url, /^https:\/\/files\.example\.com\/receipts\/[0-9a-f-]{36}\.jpg$/);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].input.Bucket, "bucket");
@@ -30,9 +35,17 @@ test("storeReceiptImage writes receipts/<uuid>.<ext> and returns the public URL"
 });
 
 test("PDF and PNG receipts are accepted, other types are rejected with 400", async () => {
-  assert.match(await storeReceiptImage(Buffer.from("x"), "application/pdf"), /\.pdf$/);
-  assert.match(await storeReceiptImage(Buffer.from("x"), "image/png"), /\.png$/);
-  await assert.rejects(() => storeReceiptImage(Buffer.from("x"), "text/html"), (e) => e.status === 400);
+  assert.match(await storeReceiptImage(PDF, "application/pdf"), /\.pdf$/);
+  assert.match(await storeReceiptImage(PNG, "image/png"), /\.png$/);
+  await assert.rejects(() => storeReceiptImage(JPEG, "text/html"), (e) => e.status === 400);
+});
+
+test("a file whose bytes don't match its declared type is refused before it reaches R2", async () => {
+  sent.length = 0;
+  await assert.rejects(() => storeReceiptImage(Buffer.from("<html><script>"), "image/png"), (e) => e.status === 400);
+  await assert.rejects(() => storeReceiptImage(JPEG, "application/pdf"), (e) => e.status === 400);
+  await assert.rejects(() => storeReceiptImage(Buffer.from("x"), "image/jpeg"), (e) => e.status === 400);
+  assert.equal(sent.length, 0);
 });
 
 test("receiptImageExists is true only for our receipt keys that are really in R2", async () => {

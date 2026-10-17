@@ -22,6 +22,12 @@ const EXTENSION_BY_MIME = {
   "application/pdf": ".pdf",
 };
 
+const MAGIC = {
+  ".jpg": [0xff, 0xd8, 0xff],
+  ".png": [0x89, 0x50, 0x4e, 0x47],
+  ".pdf": [0x25, 0x50, 0x44, 0x46, 0x2d], // %PDF-
+};
+
 // What we store in the bucket. image/jpg is not a real MIME type, so it is
 // saved as image/jpeg.
 const CONTENT_TYPE_BY_MIME = {
@@ -38,6 +44,13 @@ function isAllowedMime(mimeType) {
   return Object.prototype.hasOwnProperty.call(EXTENSION_BY_MIME, mimeType);
 }
 
+// The declared MIME type is client-controlled; check the real bytes too.
+function hasValidReceiptBytes(buffer, mimeType) {
+  const signature = MAGIC[EXTENSION_BY_MIME[mimeType]];
+  if (!signature || !buffer || buffer.length < signature.length) return false;
+  return signature.every((byte, i) => buffer[i] === byte);
+}
+
 /**
  * Persist a receipt image and return the URL to store in
  * expenses.receiptimageurl.
@@ -48,6 +61,11 @@ function isAllowedMime(mimeType) {
 async function storeReceiptImage(buffer, mimeType) {
   if (!isAllowedMime(mimeType)) {
     const err = new Error(`Unsupported receipt file type: ${mimeType}`);
+    err.status = 400;
+    throw err;
+  }
+  if (!hasValidReceiptBytes(buffer, mimeType)) {
+    const err = new Error("The file contents don't match its type. Upload a real JPEG, PNG or PDF.");
     err.status = 400;
     throw err;
   }
