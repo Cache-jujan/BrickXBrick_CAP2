@@ -22,6 +22,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { ProjectTimeline } from "../../components/milestones/ProjectTimeline";
+import { TaskDocumentsDialog } from "../../components/milestones/TaskDocumentsDialog";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
@@ -102,6 +103,8 @@ export function ProjectDetailPage() {
   const [scheduleWarning, setScheduleWarning] = useState("");
   // #5: a Planning task has no SM review flow — the owning PM marks it done
   // directly. { task } while a confirm dialog is open.
+  // Planning-task documents dialog: the task whose files are open, or null.
+  const [docsTask, setDocsTask] = useState(null);
   const [completeDialog, setCompleteDialog] = useState(null);
   const [completeNote, setCompleteNote] = useState("");
   const [completeBusy, setCompleteBusy] = useState(false);
@@ -434,6 +437,10 @@ export function ProjectDetailPage() {
   // Only the owning Project Manager may add milestones/tasks — mirrors
   // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
+  // Planning-task documents: the GM (any project) or the owning PM may open
+  // them (the backend enforces the same); changing them stops once the
+  // project is closed or the task is completed.
+  const canViewTaskDocuments = isGM || (user.role === "Project Manager" && project.projectmanagerid === user.id);
   const hasSiteManager = Boolean(project.sitemanagerid);
   const bom = bomInfo?.bom || null;
   const bomApproved = project.bomstatus === "Approved";
@@ -563,9 +570,7 @@ export function ProjectDetailPage() {
             <p>
               {isGM && !isClosed
                 ? "Add the signed BOM. It is the basis for every purchase and is required before activation."
-                : bomInfo.bomPending
-                  ? "The General Manager is still preparing the BOM. You can open it here once it is approved."
-                  : "The General Manager hasn't added the BOM yet."}
+                : "The General Manager hasn't added the BOM yet."}
             </p>
             {isGM && !isClosed && (
               <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">Add BOM</Link>
@@ -642,6 +647,7 @@ export function ProjectDetailPage() {
           onAddMilestone={openMilestoneDialog}
           onAddTask={openTaskDialog}
           onCompleteTask={openCompleteDialog}
+          onOpenDocuments={canViewTaskDocuments ? setDocsTask : undefined}
         />
       </div>
 
@@ -939,6 +945,13 @@ export function ProjectDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {docsTask && (
+        <TaskDocumentsDialog
+          task={docsTask}
+          canEdit={canViewTaskDocuments && !isClosed && docsTask.status !== "Completed"}
+          onClose={() => setDocsTask(null)}
+        />
       )}
       {completeDialog && (
         <div className="modal-overlay" role="presentation" onClick={closeCompleteDialog}>

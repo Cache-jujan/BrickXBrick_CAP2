@@ -6,8 +6,18 @@ const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
-const { uploadBuffer } = require("../lib/r2");
+const { uploadBuffer, putObject } = require("../lib/r2");
 const { hasValidMagicBytes } = require("../lib/photoValidation");
+const { isUUID } = require("../lib/uuid");
+const {
+    MAX_DOCUMENT_BYTES,
+    MAX_DOCUMENTS_PER_TASK,
+    validateDocumentFile,
+    sanitizeFileName,
+    sha256Hex,
+    buildStorageKey,
+    documentUrl,
+} = require("../lib/taskDocuments");
 const { submitTaskProgress, getTaskForUser } = require("../lib/taskProgress");
 
 const router = express.Router();
@@ -353,6 +363,224 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
         });
 
         res.json(updated);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// --- Planning-task documents ----------------------------------------------
+//
+// A Planning task is "Handled by GM/PM" and has no photo flow, so the only way
+// to show real work was a note. These routes let the GM (any project) or the
+// owning PM attach PDF/JPEG/PNG files to a Planning task: a title, a permit, a
+// soil report, approved plans. Files live in R2; task_documents holds the
+// metadata (migration 042). Completion rules are unchanged: still PM-only.
+
+const documentUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 },
+});
+
+// Own multer wrapper so a too-big file says "file", not "photo" (the handler
+// at the bottom of this file is worded for task photos).
+function receiveDocument(req, res, next) {
+    documentUpload.single("file")(req, res, (err) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError) {
+            const message = err.code === "LIMIT_FILE_SIZE" ? "file must be 10MB or smaller" : err.message;
+            return res.status(400).json({ error: message });
+        }
+        return next(err);
+    });
+}
+
+async function getPlanningTaskContext(taskId) {
+    if (!isUUID(taskId)) {
+        const err = new Error(`Task ${taskId} not found`);
+        err.status = 404;
+        throw err;
+    }
+    const result = await query(
+        `SELECT t.taskId, t.taskName, t.status,
+                m.phase AS milestonephase,
+                p.projectManagerId, p.status AS projectstatus
+           FROM tasks t
+           JOIN milestones m ON m.milestoneId = t.milestoneId
+           JOIN projects p ON p.projectId = m.projectId
+          WHERE t.taskId = $1`,
+        [taskId]
+    );
+    if (result.rowCount === 0) {
+        const err = new Error(`Task ${taskId} not found`);
+        err.status = 404;
+        throw err;
+    }
+    return result.rows[0];
+}
+
+// GM: any project. PM: only the project they manage.
+function assertDocumentAccess(task, user) {
+    if (user.role === "General Manager") return;
+    if (user.role === "Project Manager" && task.projectmanagerid === user.id) return;
+    const err = new Error("You do not have access to this task's documents");
+    err.status = 403;
+    throw err;
+}
+
+function assertPlanningTask(task) {
+    if (task.milestonephase !== "Planning") {
+        const err = new Error("Documents can only be attached to Planning-phase tasks");
+        err.status = 409;
+        throw err;
+    }
+}
+
+// Adding or removing is only allowed while the task is open on a live
+// project. Reading is always allowed.
+function assertDocumentsEditable(task) {
+    if (!["Draft", "Active"].includes(task.projectstatus)) {
+        const err = new Error(`This project is ${task.projectstatus} — its documents can no longer be changed`);
+        err.status = 409;
+        throw err;
+    }
+    if (task.status === "Completed") {
+        const err = new Error("This task is already completed — its documents are locked");
+        err.status = 409;
+        throw err;
+    }
+}
+
+const DOCUMENT_COLUMNS = `d.documentId   AS "documentID",
+                    d.taskId       AS "taskID",
+                    d.fileName     AS "fileName",
+                    d.contentType  AS "contentType",
+                    d.sizeBytes    AS "sizeBytes",
+                    d.uploadedAt   AS "uploadedAt",
+                    d.uploadedBy   AS "uploadedBy",
+                    u.name         AS "uploadedByName"`;
+
+// GET /:id/documents — the task's live documents, oldest first.
+router.get("/:id/documents", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const task = await getPlanningTaskContext(req.params.id);
+        assertDocumentAccess(task, req.user);
+        assertPlanningTask(task);
+
+        const result = await query(
+            `SELECT ${DOCUMENT_COLUMNS}
+               FROM task_documents d
+               LEFT JOIN users u ON u.userId = d.uploadedBy
+              WHERE d.taskId = $1 AND d.deletedAt IS NULL
+              ORDER BY d.uploadedAt ASC, d.documentId ASC`,
+            [req.params.id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// POST /:id/documents — attach one file (form field "file").
+router.post("/:id/documents", requireRole("General Manager", "Project Manager"), receiveDocument, async (req, res, next) => {
+    try {
+        const task = await getPlanningTaskContext(req.params.id);
+        assertDocumentAccess(task, req.user);
+        assertPlanningTask(task);
+        assertDocumentsEditable(task);
+
+        const { contentType, ext } = validateDocumentFile(req.file);
+
+        const count = await query(
+            "SELECT COUNT(*) AS n FROM task_documents WHERE taskId = $1 AND deletedAt IS NULL",
+            [req.params.id]
+        );
+        if (Number(count.rows[0].n) >= MAX_DOCUMENTS_PER_TASK) {
+            const err = new Error(`A task can hold at most ${MAX_DOCUMENTS_PER_TASK} documents — remove one first`);
+            err.status = 409;
+            throw err;
+        }
+
+        const storageKey = buildStorageKey(req.params.id, ext);
+        await putObject(storageKey, req.file.buffer, contentType);
+
+        const inserted = await query(
+            `INSERT INTO task_documents (taskId, uploadedBy, fileName, contentType, sizeBytes, sha256, storageKey)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING documentId AS "documentID", taskId AS "taskID", fileName AS "fileName",
+                       contentType AS "contentType", sizeBytes AS "sizeBytes",
+                       uploadedAt AS "uploadedAt", uploadedBy AS "uploadedBy"`,
+            [
+                req.params.id,
+                req.user.id,
+                sanitizeFileName(req.file.originalname, ext),
+                contentType,
+                req.file.buffer.length,
+                sha256Hex(req.file.buffer),
+                storageKey,
+            ]
+        );
+        res.status(201).json({ ...inserted.rows[0], uploadedByName: req.user.name });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /:id/documents/:docId/download — { url, fileName }. The client opens
+// the url. Returned from an authenticated call so that making the bucket
+// private later only changes documentUrl() in lib/taskDocuments.js.
+router.get("/:id/documents/:docId/download", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const task = await getPlanningTaskContext(req.params.id);
+        assertDocumentAccess(task, req.user);
+        assertPlanningTask(task);
+
+        const notFound = () => {
+            const err = new Error("Document not found");
+            err.status = 404;
+            return err;
+        };
+        if (!isUUID(req.params.docId)) throw notFound();
+
+        const result = await query(
+            `SELECT fileName, storageKey
+               FROM task_documents
+              WHERE documentId = $1 AND taskId = $2 AND deletedAt IS NULL`,
+            [req.params.docId, req.params.id]
+        );
+        if (result.rowCount === 0) throw notFound();
+
+        const row = result.rows[0];
+        res.json({ url: documentUrl(row.storagekey), fileName: row.filename });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// DELETE /:id/documents/:docId — soft delete (the row stays, marked deleted).
+router.delete("/:id/documents/:docId", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
+    try {
+        const task = await getPlanningTaskContext(req.params.id);
+        assertDocumentAccess(task, req.user);
+        assertPlanningTask(task);
+        assertDocumentsEditable(task);
+
+        const notFound = () => {
+            const err = new Error("Document not found");
+            err.status = 404;
+            return err;
+        };
+        if (!isUUID(req.params.docId)) throw notFound();
+
+        const result = await query(
+            `UPDATE task_documents
+                SET deletedAt = NOW(), deletedBy = $3
+              WHERE documentId = $1 AND taskId = $2 AND deletedAt IS NULL
+              RETURNING documentId`,
+            [req.params.docId, req.params.id, req.user.id]
+        );
+        if (result.rowCount === 0) throw notFound();
+
+        res.status(204).end();
     } catch (err) {
         next(err);
     }

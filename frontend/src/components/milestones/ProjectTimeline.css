@@ -128,3 +128,5 @@
   .timeline-task-label { padding-left: 28px; }
   .project-timeline-footer { padding: 0 16px; }
 }
+.timeline-task-actions { display: flex; gap: 12px; margin-top: 7px; }
+.timeline-task-actions .timeline-task-action { margin-top: 0; }
