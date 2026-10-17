@@ -16,7 +16,7 @@ import { formatAmountInput, toCents, toHundredths } from "@/lib/money";
 // `price` is the LINE AMOUNT (the review screen's historical name for it).
 export type LineMath = { quantity: string; price: string; unitPrice?: string; unitEntered?: boolean };
 
-// Unit price text for a quantity and a line amount, or "" when it can't be derived.
+/** Derive unit price text from quantity and line amount, or return an empty string if unavailable. */
 export function derivedUnitPrice(quantity: string, amount: string): string {
   const qtyH = toHundredths(quantity);
   const cents = toCents(amount);
@@ -24,8 +24,14 @@ export function derivedUnitPrice(quantity: string, amount: string): string {
   return formatAmountInput(Math.round((cents * 100) / qtyH));
 }
 
+/** Multiply quantity hundredths by unit centavos and format the rounded line amount. */
 const amountFrom = (qtyH: number, unitCents: number) => formatAmountInput(Math.round((qtyH * unitCents) / 100));
 
+/**
+ * Return an edited row with quantity, unit price and line amount (`price`) synchronized.
+ * Amount edits derive the unit price; quantity edits preserve a manually entered
+ * unit price and recalculate the amount, otherwise preserving the amount.
+ */
 export function editLine<T extends LineMath>(row: T, field: "quantity" | "price" | "unitPrice", value: string): T {
   const next: T = { ...row, [field]: value };
   const qtyH = toHundredths(next.quantity);
@@ -47,13 +53,13 @@ export function editLine<T extends LineMath>(row: T, field: "quantity" | "price"
   return next;
 }
 
-// A row that came from a scan: use the unit price it read, else derive one.
+/** Keep a scanned unit price, deriving one from quantity and line amount when blank. */
 export function withUnitPrice<T extends LineMath>(row: T): T {
   if ((row.unitPrice ?? "").trim() !== "") return row;
   return { ...row, unitPrice: derivedUnitPrice(row.quantity, row.price) };
 }
 
-// The unit price to send: what is in the box, else derived, else null (fee rows).
+/** Return a positive entered unit price, a derived price, or null when neither is available. */
 export function unitPriceForPayload(row: LineMath): number | null {
   const typed = toCents(row.unitPrice ?? "");
   if (typed !== null && typed > 0) return typed / 100;

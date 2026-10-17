@@ -49,6 +49,7 @@ function AppShell() {
 
 // Password recovery: users can self-serve via /forgot-password (Gmail link),
 // and a System Administrator can still set a password from User Accounts.
+/** Render the application routes with authentication, role guards and shared providers. */
 export default function App() {
   return (
     <BrowserRouter>

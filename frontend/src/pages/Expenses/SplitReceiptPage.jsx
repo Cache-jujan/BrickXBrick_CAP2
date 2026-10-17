@@ -21,12 +21,17 @@ import "./SplitReceiptPage.css";
 // collects the receipt, shows the server's preview, and lets the actor exclude
 // a request ("Not for this request") or move a fee/VAT line to another portion.
 
+/** Create an empty receipt draft with its own editable line item. */
 const blankDraft = () => ({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
+/** Format a numeric amount as Philippine pesos with two decimal places. */
 const peso = (value) =>
   `₱${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** Return whether a nonempty field converts to a finite, nonnegative number. */
 const isNonNegativeNumber = (value) => value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
+/** Round a numeric peso amount to integer centavos for total comparisons. */
 const toCents = (value) => Math.round(Number(value) * 100);
 
+/** Render the managers' receipt scan, correction, split preview and submission flow. */
 export function SplitReceiptPage() {
   const { user } = useAuth();
   const cameraInput = useRef(null);
@@ -54,10 +59,12 @@ export function SplitReceiptPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [result, setResult] = useState(null);
 
+  /** Replace one receipt field while preserving the rest of the draft. */
   function setField(name, value) {
     setDraft((current) => ({ ...current, [name]: value }));
   }
 
+  /** Update one line field, synchronizing quantity, unit price and amount for numeric edits. */
   function updateLineItem(index, name, value) {
     setDraft((current) => ({
       ...current,
@@ -68,6 +75,7 @@ export function SplitReceiptPage() {
     }));
   }
 
+  /** Append a blank editable receipt line. */
   function addLineItem() {
     setDraft((current) => ({
       ...current,
@@ -75,6 +83,7 @@ export function SplitReceiptPage() {
     }));
   }
 
+  /** Remove the indexed line while keeping at least one editable row. */
   function removeLineItem(index) {
     setDraft((current) => ({
       ...current,
@@ -108,7 +117,7 @@ export function SplitReceiptPage() {
     draft.receiptImageURL && draft.vendorName.trim() && draft.receiptDate && amountIsValid && allLinesValid && totalMatches
   );
 
-  // Editing the receipt or choosing a new one invalidates the old preview.
+  /** Clear allocation choices, preview results and errors for a fresh preview. */
   function resetAllocation() {
     setAllocating(false);
     setExcluded([]);
@@ -119,6 +128,7 @@ export function SplitReceiptPage() {
     setSubmitProblems([]);
   }
 
+  /** Validate and scan a selected receipt, replacing the draft and clearing its old allocation. */
   async function handleReceiptPick(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -193,18 +203,19 @@ export function SplitReceiptPage() {
     };
   }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, refreshKey]);
 
-  // Nothing matched an open request: the Site Manager may have filed one since,
-  // so re-run the preview instead of making the user rescan the receipt.
+  /** Clear submission problems and refresh the preview to include newly opened requests. */
   function retryPreview() {
     setSubmitProblems([]);
     setRefreshKey((k) => k + 1);
   }
 
+  /** Exclude or restore a request and clear problems from the previous submission. */
   function toggleExcluded(ticketID, value) {
     setSubmitProblems([]);
     setExcluded((prev) => (value ? [...prev, ticketID] : prev.filter((id) => id !== ticketID)));
   }
 
+  /** Assign a fee line to the selected request for the next preview and submission. */
   function moveFee(lineIndex, ticketID) {
     setFeeTargets((prev) => ({ ...prev, [String(lineIndex)]: ticketID }));
   }
@@ -213,6 +224,7 @@ export function SplitReceiptPage() {
     plan?.ok && draft.category && readyToPreview && !previewing && !scanning && !submitting && !result
   );
 
+  /** Submit a valid split once, displaying saved results or refreshing stale request capacity. */
   async function handleSubmit() {
     if (!canSubmit || busyRef.current) return;
     busyRef.current = true;
@@ -249,6 +261,7 @@ export function SplitReceiptPage() {
     }
   }
 
+  /** Clear the completed result, receipt draft, allocation state and notices for another receipt. */
   function startOver() {
     setResult(null);
     resetAllocation();
@@ -264,6 +277,7 @@ export function SplitReceiptPage() {
 
   // ---- After a successful submit ------------------------------------------
   if (result) {
+    /** Resolve a saved request's project name, using a fallback if it is unknown. */
     const name = (id) => known[id]?.projectName ?? "Request";
     const screening = Object.values(result.screening ?? {});
     const flagged = screening.filter((s) => (s.flagTypes ?? []).length > 0).length;
@@ -313,6 +327,7 @@ export function SplitReceiptPage() {
   const feeLines = (plan?.portions ?? []).flatMap((p) =>
     p.lines.filter((line) => Number(line.quantity) === 0).map((line) => ({ ...line, ticketID: p.ticketID }))
   );
+  /** Find the current plan's budget warning for a request, if any. */
   const warningFor = (ticketID) => plan?.warnings?.find((w) => w.type === "OVER_BUDGET" && w.ticketID === ticketID);
 
   return (

@@ -41,16 +41,9 @@ const EXPENSE_COLUMNS = `
 // use integer centavos if you ever need arithmetic (F11).
 
 /**
- * Drop line items the expenses validator would reject, rather than handing
- * the client a draft that 400s on submit. normalizeAmount() returns null on
- * a value it couldn't read, and the four-column regex can match a row whose
- * description is junk — both get filtered out here. Anything dropped is
- * re-added by the user through the existing "+ Add item" flow.
+ * Keep a positive unit price or derive one from amount / quantity, rounded to
+ * centavos. Without a positive quantity, return the finite supplied price or null.
  */
-// Unit price for a line. Handwritten receipts often leave it blank, so when it
-// is missing (or not a positive number) derive it from the row total:
-// quantity 3, amount 300 -> 100 each. Rounded to centavos. null for qty 0 lines
-// (delivery, VAT, fees), where a unit price means nothing.
 function resolveUnitPrice(item) {
   if (Number.isFinite(item.unitPrice) && item.unitPrice > 0) return item.unitPrice;
   if (Number.isFinite(item.quantity) && item.quantity > 0) {
@@ -59,6 +52,13 @@ function resolveUnitPrice(item) {
   return Number.isFinite(item.unitPrice) ? item.unitPrice : null;
 }
 
+/**
+ * Drop line items the expenses validator would reject, rather than handing
+ * the client a draft that 400s on submit. normalizeAmount() returns null on
+ * a value it couldn't read, and the four-column regex can match a row whose
+ * description is junk — both get filtered out here. Anything dropped is
+ * re-added by the user through the existing "+ Add item" flow.
+ */
 function normalizeLineItems(rawItems) {
   if (!Array.isArray(rawItems)) return [];
 

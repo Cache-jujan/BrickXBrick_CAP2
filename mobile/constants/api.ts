@@ -16,6 +16,7 @@ function getLocalApiUrl() {
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
+/** Use the configured API URL or a development host; throw if a release has no API URL. */
 function resolveApiUrl() {
   if (configuredApiUrl) return configuredApiUrl;
   if (__DEV__) return getLocalApiUrl();

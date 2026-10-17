@@ -24,8 +24,10 @@ const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short",
 const STATUS_TABS = ["All", "Pending", "Flagged", "Approved", "Rejected"];
 const PAGE_SIZE = 10;
 
-// Expense review queue for GM and PM. The backend scopes PM results to their
-// own projects; the client filter below is a second, cosmetic layer.
+/**
+ * Render the GM/PM expense review queue with status filters and review actions.
+ * The backend scopes PM results to their projects; the client also filters them.
+ */
 export function ExpensesPage() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState([]);
