@@ -57,8 +57,11 @@ async function assertSiteManagerProject(user, projectId) {
     }
 }
 
-// POST / — Purchaser submits assigned resolved tickets; Site Manager submits
-// only their own resolved Material Requests; GM/PM use accessible resolved MR tickets.
+/**
+ * Submit an expense after validating receipt, project access and ticket rules.
+ * Purchasers need assigned resolved tickets; Site Managers need their own resolved
+ * Material Requests. Managers may use accessible resolved Material Requests.
+ */
 router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const {
@@ -315,11 +318,11 @@ router.get("/:id", async (req, res, next) => {
     }
 });
 
-// PATCH /:id/approve — PM (own projects) or GM. Only a Pending expense can be
-// approved. Marks Approved, then submits the SHA-256 hash to the Geth PoA
-// cluster and persists the confirmed tx to BlockchainLogs. If nodes are
-// insufficient, blockchainStatus stays "Pending" so a scheduled retry (see
-// server.js) can pick it up later.
+/**
+ * Approve a Pending expense as its project's PM or a GM, atomically resolving flags.
+ * Then submit its SHA-256 hash to the Geth PoA cluster and log the confirmed
+ * transaction. Insufficient nodes leave blockchainStatus Pending for retry.
+ */
 router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const result = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
@@ -339,7 +342,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             throw httpError(403, "You can't approve an expense you submitted");
         }
 
-        // Claim the row atomically so a concurrent approve/reject can't both win.
+        /** Atomically approve a Pending expense and its flags; throw 409 if already reviewed. */
         await withTransaction(async (client) => {
             const claimed = await client.query(
                 "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2 AND status = 'Pending'",
@@ -383,8 +386,10 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
     }
 });
 
-// PATCH /:id/reject — PM (own projects) or GM. Requires a `reason` in the body.
-// Only a Pending expense can be rejected. No blockchain write on reject.
+/**
+ * Reject a Pending expense as its project's PM or a GM, requiring a body reason.
+ * Resolve flags and notify the submitter in the same transaction; no blockchain write.
+ */
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const { reason } = req.body;
@@ -407,7 +412,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
             throw httpError(403, "You can't reject an expense you submitted");
         }
 
-        // Atomic claim: only one of a racing approve/reject can win.
+        /** Reject a Pending expense, resolve its flags and notify its submitter in one transaction. */
         const rejected = await withTransaction(async (client) => {
             const result = await client.query(
                 "UPDATE Expenses SET status = 'Rejected', approvedBy = $1, rejectionReason = $2 WHERE expenseID = $3 AND status = 'Pending' RETURNING *",

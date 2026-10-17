@@ -49,6 +49,7 @@ async function screen(expenseID) {
 
 // Peso / quantity strings for Postgres DECIMAL columns (no floats).
 const qtyString = (quantityH) => formatMoney(quantityH); // same 2-decimal format
+/** Convert an allocated line to stored units, deriving its unit price unless quantity is zero. */
 const storedLine = (line) => ({
   description: line.description,
   quantity: line.quantityH / 100,
