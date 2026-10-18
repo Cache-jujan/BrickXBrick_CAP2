@@ -35,9 +35,37 @@ const MAX_PENDING = resolveMaxPending();
 
 let db = null;
 
+// ── one connection, kept for the life of the app ─────────────────────────────
+// expo-sqlite shares ONE native connection per database file. Opening the file
+// again hands back that same connection, and when an older JavaScript handle
+// to it is garbage-collected it CLOSES the shared connection. Every later query
+// then fails with "NativeDatabase.prepareSync ... NullPointerException" (seen
+// on a phone when tapping "Save offline"). So the file is opened once and the
+// handle is never replaced. If the connection is closed anyway, reopen a
+// fresh, private one and retry the query once.
+function isClosedConnectionError(error) {
+  return /NativeDatabase|NullPointerException|closed database|database is closed/i.test(String(error?.message ?? error));
+}
+
+function guarded(call) {
+  try {
+    return call(db);
+  } catch (error) {
+    if (!isClosedConnectionError(error)) throw error;
+    console.log("[F10] offline storage connection was closed; reopening it");
+    db = SQLite.openDatabaseSync(DB_NAME, { useNewConnection: true });
+    return call(db);
+  }
+}
+
+const run = (sql, params = []) => guarded((d) => d.runSync(sql, params));
+const first = (sql, params = []) => guarded((d) => d.getFirstSync(sql, params));
+const all = (sql, params = []) => guarded((d) => d.getAllSync(sql, params));
+const exec = (sql) => guarded((d) => d.execSync(sql));
+
 export function initDb() {
-  db = SQLite.openDatabaseSync(DB_NAME);
-  db.execSync(`
+  if (!db) db = SQLite.openDatabaseSync(DB_NAME); // never re-opened: see above
+  exec(`
     CREATE TABLE IF NOT EXISTS offline_expenses (
       uuid          TEXT PRIMARY KEY NOT NULL,
       payload       TEXT NOT NULL,
@@ -48,7 +76,7 @@ export function initDb() {
       reject_message TEXT
     );
   `);
-  db.execSync(`
+  exec(`
     CREATE TABLE IF NOT EXISTS offline_task_updates (
       update_id        TEXT PRIMARY KEY NOT NULL,
       task_id          TEXT NOT NULL,
@@ -71,8 +99,8 @@ export function initDb() {
 export function purgeExpired() {
   if (!db) return;
   const cutoff = new Date(Date.now() - MAX_AGE_MS).toISOString();
-  db.runSync("DELETE FROM offline_expenses WHERE created_at < ? AND status != 'pending';", [cutoff]);
-  db.runSync("DELETE FROM offline_task_updates WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
+  run("DELETE FROM offline_expenses WHERE created_at < ? AND status != 'pending';", [cutoff]);
+  run("DELETE FROM offline_task_updates WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
 }
 
 // ── the one queue rule ───────────────────────────────────────────────────────
@@ -112,7 +140,7 @@ export function evaluateEnqueue({
 export function canEnqueue({ replacingTaskId = null, now = Date.now() } = {}) {
   if (!db) return { allowed: false, reason: "NO_DB", message: "Offline storage is not ready yet." };
   const skip = replacingTaskId ?? "";
-  const row = db.getFirstSync(
+  const row = first(
     `SELECT COUNT(*) AS c, MIN(created_at) AS oldest FROM (
        SELECT created_at FROM offline_expenses WHERE status = 'pending'
        UNION ALL
@@ -130,7 +158,7 @@ export function queueExpense(uuid, payload) {
   purgeExpired();
   if (!canEnqueue().allowed) return false;
 
-  db.runSync(
+  run(
     `INSERT OR IGNORE INTO offline_expenses (uuid, payload, status, created_at)
      VALUES (?, ?, 'pending', ?);`,
     [uuid, JSON.stringify(payload), new Date().toISOString()]
@@ -141,14 +169,14 @@ export function queueExpense(uuid, payload) {
 // All pending (not yet synced, not rejected) expenses, oldest first.
 export function getPendingExpenses() {
   if (!db) return [];
-  return db.getAllSync(
+  return all(
     "SELECT * FROM offline_expenses WHERE status = 'pending' ORDER BY created_at ASC;"
   );
 }
 
 export function getPendingExpenseCount() {
   if (!db) return 0;
-  const row = db.getFirstSync("SELECT COUNT(*) as c FROM offline_expenses WHERE status = 'pending';");
+  const row = first("SELECT COUNT(*) as c FROM offline_expenses WHERE status = 'pending';");
   return row ? row.c : 0;
 }
 
@@ -160,7 +188,7 @@ export function getPendingCount() {
 // Mark a row as synced and record the timestamp.
 export function markSynced(uuid) {
   if (!db) return;
-  db.runSync(
+  run(
     "UPDATE offline_expenses SET status = 'synced', synced_at = ? WHERE uuid = ?;",
     [new Date().toISOString(), uuid]
   );
@@ -169,7 +197,7 @@ export function markSynced(uuid) {
 // Mark a row as rejected (server said don't retry).
 export function markRejected(uuid, code, message) {
   if (!db) return;
-  db.runSync(
+  run(
     "UPDATE offline_expenses SET status = 'rejected', reject_code = ?, reject_message = ? WHERE uuid = ?;",
     [code || "UNKNOWN", message || "Rejected by server", uuid]
   );
@@ -178,13 +206,13 @@ export function markRejected(uuid, code, message) {
 // Purge all synced rows (called after a successful sync batch).
 export function purgeSynced() {
   if (!db) return;
-  db.runSync("DELETE FROM offline_expenses WHERE status = 'synced';");
+  run("DELETE FROM offline_expenses WHERE status = 'synced';");
 }
 
 // Get rejected rows so the user can see what failed.
 export function getRejectedExpenses() {
   if (!db) return [];
-  return db.getAllSync(
+  return all(
     "SELECT * FROM offline_expenses WHERE status = 'rejected' ORDER BY created_at DESC;"
   );
 }
@@ -192,7 +220,7 @@ export function getRejectedExpenses() {
 // Clear a specific rejected row (user acknowledged it).
 export function dismissRejected(uuid) {
   if (!db) return;
-  db.runSync("DELETE FROM offline_expenses WHERE uuid = ? AND status = 'rejected';", [uuid]);
+  run("DELETE FROM offline_expenses WHERE uuid = ? AND status = 'rejected';", [uuid]);
 }
 
 // ── task submissions (Site Manager) ──────────────────────────────────────────
@@ -210,32 +238,39 @@ export function queueTaskUpdate({ updateId, taskId, userId, photoPath, note }) {
   const gate = canEnqueue({ replacingTaskId: taskId });
   if (!gate.allowed) return { queued: false, reason: gate.reason, message: gate.message };
 
-  const older = db.getFirstSync(
+  const older = first(
     "SELECT photo_path FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';",
     [taskId]
   );
 
   // One transaction: if the app is killed half way, the old entry survives.
-  db.execSync("BEGIN;");
-  try {
-    db.runSync("DELETE FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';", [taskId]);
-    db.runSync(
-      `INSERT INTO offline_task_updates
-         (update_id, task_id, user_id, photo_path, note, created_at, sync_status)
-       VALUES (?, ?, ?, ?, ?, ?, 'PENDING');`,
-      [updateId, taskId, userId, photoPath, note ?? null, new Date().toISOString()]
-    );
-    db.execSync("COMMIT;");
-  } catch (error) {
-    db.execSync("ROLLBACK;");
-    throw error;
-  }
+  // guarded() reruns the whole transaction if the connection had been closed.
+  guarded((d) => {
+    d.execSync("BEGIN;");
+    try {
+      d.runSync("DELETE FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';", [taskId]);
+      d.runSync(
+        `INSERT INTO offline_task_updates
+           (update_id, task_id, user_id, photo_path, note, created_at, sync_status)
+         VALUES (?, ?, ?, ?, ?, ?, 'PENDING');`,
+        [updateId, taskId, userId, photoPath, note ?? null, new Date().toISOString()]
+      );
+      d.execSync("COMMIT;");
+    } catch (error) {
+      try {
+        d.execSync("ROLLBACK;");
+      } catch {
+        // the connection itself is gone; nothing to roll back
+      }
+      throw error;
+    }
+  });
   return { queued: true, replacedPhotoPath: older ? older.photo_path : null };
 }
 
 export function getPendingTaskUpdateCount() {
   if (!db) return 0;
-  const row = db.getFirstSync("SELECT COUNT(*) as c FROM offline_task_updates WHERE sync_status = 'PENDING';");
+  const row = first("SELECT COUNT(*) as c FROM offline_task_updates WHERE sync_status = 'PENDING';");
   return row ? row.c : 0;
 }
 
@@ -243,7 +278,7 @@ export function getPendingTaskUpdateCount() {
 // people only ever sends each person's own entries.
 export function getPendingTaskUpdates(userId = null) {
   if (!db) return [];
-  return db.getAllSync(
+  return all(
     `SELECT * FROM offline_task_updates
       WHERE sync_status = 'PENDING' AND (? IS NULL OR user_id = ?)
       ORDER BY created_at ASC;`,
@@ -255,7 +290,7 @@ export function getPendingTaskUpdates(userId = null) {
 export function getPendingTaskUpdateForTask(taskId) {
   if (!db) return null;
   return (
-    db.getFirstSync(
+    first(
       "SELECT * FROM offline_task_updates WHERE task_id = ? AND sync_status = 'PENDING';",
       [taskId]
     ) ?? null
@@ -266,17 +301,17 @@ export function getPendingTaskUpdateForTask(taskId) {
 // the same photo twice.
 export function setTaskUpdatePhotoUrl(updateId, url) {
   if (!db) return;
-  db.runSync("UPDATE offline_task_updates SET server_photo_url = ? WHERE update_id = ?;", [url, updateId]);
+  run("UPDATE offline_task_updates SET server_photo_url = ? WHERE update_id = ?;", [url, updateId]);
 }
 
 export function markTaskUpdateSynced(updateId) {
   if (!db) return;
-  db.runSync("UPDATE offline_task_updates SET sync_status = 'SYNCED' WHERE update_id = ?;", [updateId]);
+  run("UPDATE offline_task_updates SET sync_status = 'SYNCED' WHERE update_id = ?;", [updateId]);
 }
 
 export function markTaskUpdateRejected(updateId, code, message) {
   if (!db) return;
-  db.runSync(
+  run(
     "UPDATE offline_task_updates SET sync_status = 'REJECTED', error_code = ?, error_message = ? WHERE update_id = ?;",
     [code || "UNKNOWN", message || "Rejected by server", updateId]
   );
@@ -288,22 +323,22 @@ export function purgeSyncedTaskUpdates() {
   const paths = db
     .getAllSync("SELECT photo_path FROM offline_task_updates WHERE sync_status = 'SYNCED';")
     .map((row) => row.photo_path);
-  db.runSync("DELETE FROM offline_task_updates WHERE sync_status = 'SYNCED';");
+  run("DELETE FROM offline_task_updates WHERE sync_status = 'SYNCED';");
   return paths;
 }
 
 export function getRejectedTaskUpdates() {
   if (!db) return [];
-  return db.getAllSync("SELECT * FROM offline_task_updates WHERE sync_status = 'REJECTED' ORDER BY created_at DESC;");
+  return all("SELECT * FROM offline_task_updates WHERE sync_status = 'REJECTED' ORDER BY created_at DESC;");
 }
 
 // The user has seen the rejection. Returns the photo path to delete, or null.
 export function dismissRejectedTaskUpdate(updateId) {
   if (!db) return null;
-  const row = db.getFirstSync(
+  const row = first(
     "SELECT photo_path FROM offline_task_updates WHERE update_id = ? AND sync_status = 'REJECTED';",
     [updateId]
   );
-  db.runSync("DELETE FROM offline_task_updates WHERE update_id = ? AND sync_status = 'REJECTED';", [updateId]);
+  run("DELETE FROM offline_task_updates WHERE update_id = ? AND sync_status = 'REJECTED';", [updateId]);
   return row ? row.photo_path : null;
 }
