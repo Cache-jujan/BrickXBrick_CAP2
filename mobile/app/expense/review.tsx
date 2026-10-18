@@ -25,6 +25,7 @@ import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { formatAmountInput, formatPesoCents, groupAmountText, toCents, toHundredths } from "@/lib/money";
+import { devLog } from "@/lib/sync/log";
 import {
   ADJUSTMENT_PREFIX,
   birStatusPreview,
@@ -90,7 +91,7 @@ export default function ReviewScreen() {
         );
       })
       // The picker is a shortcut; without it the user types the names.
-      .catch((err) => console.warn("Couldn't load requested materials:", err));
+      .catch((err) => devLog("Couldn't load requested materials:", err?.message ?? err));
     return () => {
       cancelled = true;
     };

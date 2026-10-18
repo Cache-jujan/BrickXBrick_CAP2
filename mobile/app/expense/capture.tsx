@@ -9,6 +9,7 @@ import { FilePreview, type FileState } from "@/components/file-preview";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useNetwork } from "@/lib/sync/network-context";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { compressReceiptImage } from "@/lib/compress-image";
@@ -50,6 +51,7 @@ export default function CaptureScreen() {
   const [file, setLocalFile] = useState<FileState>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { isOnline } = useNetwork();
 
   const isSplit = draft.mode === "split";
   // Single mode needs a ticket; split mode has none (the server picks the requests).
@@ -101,6 +103,9 @@ export default function CaptureScreen() {
   // so the user can leave the scanning screen or close the app.
   async function handleSubmit() {
     if (!file || status === "uploading") return;
+    // Reading a receipt happens on the server, so it needs a connection. Don't
+    // try (and fail with a server error); the note above the button explains.
+    if (!isOnline) return;
     setStatus("uploading"); setErrorMessage(null);
     try {
       const scan = await startScan(file, { mode: draft.mode, ticket: draft.ticket, fileName: file.name, fileType: file.type });
@@ -111,6 +116,11 @@ export default function CaptureScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const isNetworkError = /network|connect|timed out|unreachable/i.test(message);
+      if (isNetworkError && !isOnline) {
+        // The connection dropped mid-upload: no error, the offline note shows.
+        setStatus("idle");
+        return;
+      }
       setErrorMessage(isNetworkError ? "Can't reach the server. Check your connection." : "Something went wrong while uploading. Please try again.");
       setStatus("error");
     }
@@ -173,11 +183,18 @@ export default function CaptureScreen() {
 
       {file && (
         <View style={styles.footer}>
-          {status === "error" && errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+          {!isOnline ? (
+            <Text style={styles.offlineText}>
+              You're offline. Reading a receipt needs a connection. Your photo stays here; tap Scan receipt when
+              you're back online.
+            </Text>
+          ) : status === "error" && errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : null}
           <Pressable
-            style={({ pressed }) => [styles.submitButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.submitButton, pressed && styles.pressed, !isOnline && styles.submitDisabled]}
             onPress={handleSubmit}
-            disabled={status === "uploading"}
+            disabled={status === "uploading" || !isOnline}
             accessibilityRole="button"
           >
             <Text style={styles.submitButtonText}>{status === "error" ? "Try again" : "Scan receipt"}</Text>
@@ -212,4 +229,6 @@ const styles = StyleSheet.create({
   submitButton: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
   submitButtonText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
   errorText: { color: "#C1121F", textAlign: "center", marginBottom: 8, fontSize: 13 },
+  offlineText: { color: "#7A4B00", textAlign: "center", marginBottom: 8, fontSize: 13, lineHeight: 18 },
+  submitDisabled: { opacity: 0.5 },
 });

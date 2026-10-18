@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,9 @@ import { Redirect, router, useFocusEffect } from "expo-router";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { fetchAssignedTasks, type AssignedTask } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { describeLoadError } from "@/lib/sync/messages";
+import { getPendingTaskUpdateForTask } from "@/lib/sync/db";
+import { useNetwork } from "@/lib/sync/network-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -44,6 +47,16 @@ export default function SiteManagerHomeScreen() {
       if (session?.user.role === "Site Manager") loadTasks();
     }, [loadTasks, session?.user.role])
   );
+
+  // Offline: keep the list that was loaded last and never show a server error
+  // (the banner already says "offline"). Reload by itself on reconnect.
+  const { isOnline, pendingCount } = useNetwork(); // pendingCount: re-render the labels when the queue changes
+  const wasOnline = useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current && session?.user.role === "Site Manager") loadTasks(true);
+    wasOnline.current = isOnline;
+  }, [isOnline, loadTasks, session?.user.role]);
+  const shownError = describeLoadError(error, isOnline);
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
@@ -128,10 +141,18 @@ export default function SiteManagerHomeScreen() {
           <Text style={styles.sectionMeta}>{tasks.length} total</Text>
         </View>
 
-        {error ? (
+        {!isOnline && (
+          <Text style={styles.offlineNote}>
+            {tasks.length > 0
+              ? "You're offline. Showing your tasks as last loaded. You can still open a task and queue an update."
+              : "You're offline. Your tasks will load when you're back online."}
+          </Text>
+        )}
+
+        {shownError ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>Couldn’t load tasks</Text>
-            <Text style={styles.errorBody}>{error}</Text>
+            <Text style={styles.errorBody}>{shownError}</Text>
             <Pressable onPress={() => loadTasks()} style={styles.retryButton}>
               <Text style={styles.retryText}>Try again</Text>
             </Pressable>
@@ -174,6 +195,8 @@ function TaskCard({ task }: { task: AssignedTask }) {
   // A submission is waiting for the PM: the task status itself does not
   // change until the PM acknowledges, so show it here.
   const awaitingReview = !completed && !!task.pendingphotoevidenceurl;
+  // F10: an update saved on this phone and not sent yet.
+  const queuedOnPhone = !completed && !!getPendingTaskUpdateForTask(task.taskid);
   const dueDate = new Date(task.duedate);
   const formattedDueDate = Number.isNaN(dueDate.getTime())
     ? task.duedate
@@ -201,7 +224,7 @@ function TaskCard({ task }: { task: AssignedTask }) {
         <Text style={styles.taskProgress}>{Number(task.completionpercentage || 0)}% complete</Text>
         <View style={[styles.statusPill, completed && styles.statusPillCompleted]}>
           <Text style={[styles.statusPillText, completed && styles.statusPillTextCompleted]}>
-            {awaitingReview ? "Awaiting PM review" : task.status}
+            {queuedOnPhone ? "Queued on phone" : awaitingReview ? "Awaiting PM review" : task.status}
           </Text>
         </View>
       </View>
@@ -249,6 +272,7 @@ const styles = StyleSheet.create({
   emptyIconText: { color: COLORS.success, fontSize: 23, fontWeight: "800" },
   emptyTitle: { color: COLORS.heading, fontSize: 16, fontWeight: "800", marginTop: 14 },
   emptyBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7, textAlign: "center" },
+  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginBottom: 12, padding: 12 },
   errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, padding: 16 },
   errorTitle: { color: "#B42318", fontSize: 15, fontWeight: "800" },
   errorBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
