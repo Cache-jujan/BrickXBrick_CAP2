@@ -161,6 +161,8 @@ export default function SiteManagerTaskDetailScreen() {
       setPhoto(null);
       setNote("");
       setSavedOffline(true);
+      Alert.alert("Saved on your phone", "It will be sent to your Project Manager automatically when you're back online.");
+      router.replace("/site-manager");
     } catch (err) {
       if (copiedPath) await deleteQueuedPhoto(copiedPath);
       setSubmitError(err instanceof Error ? err.message : "Unable to save this update on your phone.");
@@ -192,7 +194,14 @@ export default function SiteManagerTaskDetailScreen() {
       if (!clientSubmissionId) setClientSubmissionId(submissionId);
 
       await submitTaskProgress(task.taskid, photo, note, submissionId);
-      setSubmitted(true);
+      // Clear the form so it doesn't look unsent, then go back to the task
+      // list. The list reloads on focus and shows this task as awaiting review.
+      setPhoto(null);
+      setNote("");
+      setClientSubmissionId(null);
+      setSubmitted(false);
+      Alert.alert("Submitted for review", "Your Project Manager can now review this progress update.");
+      router.replace("/site-manager");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Unable to submit task progress.");
     } finally {
@@ -257,6 +266,15 @@ export default function SiteManagerTaskDetailScreen() {
               <View style={styles.flagCard}>
                 <Text style={styles.flagTitle}>Flagged — resubmission needed</Text>
                 {task.latestreviewreason && <Text style={styles.flagBody}>{task.latestreviewreason}</Text>}
+              </View>
+            )}
+
+            {task.pendingphotoevidenceurl && task.status !== "Completed" && (
+              <View style={styles.queuedCard}>
+                <Text style={styles.queuedTitle}>Awaiting PM review</Text>
+                <Text style={styles.queuedHint}>
+                  Your latest update was sent. Submitting a new photo below replaces it.
+                </Text>
               </View>
             )}
 

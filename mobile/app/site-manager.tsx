@@ -171,6 +171,9 @@ function TaskCard({ task }: { task: AssignedTask }) {
   // D-04: the SM previously had no way to see that a submission was
   // flagged — a flag only lived in the log row, never surfaced here.
   const flagged = task.latestreviewstatus === "Flagged";
+  // A submission is waiting for the PM: the task status itself does not
+  // change until the PM acknowledges, so show it here.
+  const awaitingReview = !completed && !!task.pendingphotoevidenceurl;
   const dueDate = new Date(task.duedate);
   const formattedDueDate = Number.isNaN(dueDate.getTime())
     ? task.duedate
@@ -198,7 +201,7 @@ function TaskCard({ task }: { task: AssignedTask }) {
         <Text style={styles.taskProgress}>{Number(task.completionpercentage || 0)}% complete</Text>
         <View style={[styles.statusPill, completed && styles.statusPillCompleted]}>
           <Text style={[styles.statusPillText, completed && styles.statusPillTextCompleted]}>
-            {task.status}
+            {awaitingReview ? "Awaiting PM review" : task.status}
           </Text>
         </View>
       </View>
