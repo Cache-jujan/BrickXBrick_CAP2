@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { createProject } from "../../api/projectsApi";
-import { Card } from "../../components/ui/Card";
 import { BackLink } from "../../components/ui/BackLink";
 import { ProjectForm, EMPTY_PROJECT_FORM } from "../../components/projects/ProjectForm";
 import "./CreateProjectPage.css";
@@ -20,7 +19,7 @@ export function CreateProjectPage() {
       <BackLink to="/projects">Back to Projects</BackLink>
       <h1 className="create-project-title">Create New Project</h1>
 
-      <Card className="create-project-card">
+      <div className="create-project-card">
         <ProjectForm
           mode="create"
           initialValues={EMPTY_PROJECT_FORM}
@@ -29,7 +28,7 @@ export function CreateProjectPage() {
           busyLabel="Creating…"
           cancelTo="/projects"
         />
-      </Card>
+      </div>
     </div>
   );
 }

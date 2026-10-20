@@ -71,11 +71,106 @@
   color: var(--color-ink-soft);
 }
 
-.report-filters-dates {
+.report-filters-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: var(--space-6);
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .report-filters-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.report-filters-count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+.report-filters-clear {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-brick-dark);
+  cursor: pointer;
+}
+.report-filters-clear:hover {
+  text-decoration: underline;
+}
+
+.report-filters-side {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+@media (max-width: 1000px) {
+  .report-filters-side {
+    padding-left: 0;
+    border-left: none;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+  }
+}
+.report-filters-side-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.report-filters-quick {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-4);
+  gap: var(--space-2);
+}
+.report-filters-chip {
+  font: inherit;
+  font-size: var(--text-xs);
+  padding: 4px var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.report-filters-chip:hover {
+  background: var(--color-surface-muted);
+}
+.report-filters-chip-active {
+  border-color: var(--color-brick);
+  background: var(--color-brick-tint);
+  color: var(--color-brick-darker);
+  font-weight: 600;
+}
+
+.report-filters-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.report-filters-dates .field,
+.report-filters-dates .field-control {
+  min-width: 0;
+  width: 100%;
+}
+.report-filters-dates input[type="date"].field-control {
+  padding: 0 var(--space-2);
+}
+
+.report-filters-submit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.report-filters-submit .btn:last-child {
+  margin-left: auto;
 }
 
 .report-filters-note {
