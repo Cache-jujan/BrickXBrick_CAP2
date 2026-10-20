@@ -17,9 +17,10 @@ import {
   type SplitLine,
 } from "@/lib/api";
 import { formatPeso, formatQty } from "@/lib/money";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
-import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
+import { fieldErrorStyle } from "@/components/blocked-reasons";
+import { IconSymbol } from "@/components/ui/icon-symbol";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -28,10 +29,10 @@ const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 type Category = (typeof CATEGORIES)[number];
 type KnownTicket = { ticketID: string; projectName: string; materialType: string };
 
-const RED = "#C1121F";
-const RED_BG = "#FDECEC";
-const AMBER = "#B45309";
-const AMBER_BG = "#FEF3C7";
+const RED = COLORS.errorText;
+const RED_BG = COLORS.errorFill;
+const AMBER = COLORS.amberText;
+const AMBER_BG = COLORS.amberBannerFill;
 
 /** Preview and submit a split receipt with request exclusions, fee moves and retry support. */
 export default function AllocateScreen() {
@@ -112,15 +113,6 @@ export default function AllocateScreen() {
     ...excluded.filter((id) => !portionByTicket.has(id)),
   ];
   const canSubmit = !!plan?.ok && !!category && !loading && !submitting;
-  // Why the Submit button is disabled, shown right above it.
-  const blockedReasons = submitting
-    ? []
-    : [
-        loading && "Still working out how this receipt splits across your requests…",
-        !loading && !!error && "The split couldn't be worked out. See the message at the top and tap Try again.",
-        !loading && !error && plan && !plan.ok && "Some receipt lines aren't covered by a request. Fix the problems listed at the top.",
-        !category && "Pick a category: Materials, Equipment or Other.",
-      ];
 
   function toggleExcluded(ticketID: string, value: boolean) {
     setSubmitProblems([]);
@@ -190,6 +182,26 @@ export default function AllocateScreen() {
     reset();
   }
 
+  // Receipt lines no open request covers, counted once per line.
+  const uncoveredLines = new Set([...(plan?.uncovered ?? []), ...(plan?.unmatched ?? [])].map((l) => l.lineIndex));
+  const otherProblems = [...submitProblems, ...(plan && !plan.ok && uncoveredLines.size === 0 ? plan.problems : [])];
+  // Allocated vs the receipt's lines, for the footer bar.
+  const allocatedNumber = Number(plan?.allocated ?? 0);
+  const linesTotalNumber = Number(plan?.linesTotal ?? 0);
+  const progress = linesTotalNumber > 0 ? Math.min(1, allocatedNumber / linesTotalNumber) : 0;
+  // One short line under the button saying what is still blocking it.
+  const helperText = submitting
+    ? null
+    : loading
+      ? "Working out how this receipt splits…"
+      : !!error || !plan
+        ? "The split couldn't be worked out. Tap Check for new requests."
+        : !plan.ok
+          ? "Match every line to a request to submit."
+          : !category
+            ? "Pick a category to submit."
+            : null;
+
   // ---- After a successful submit -----------------------------------------
   if (result) {
     const name = (id: string) => known[id]?.projectName ?? "Request";
@@ -216,12 +228,12 @@ export default function AllocateScreen() {
 
           {flagged > 0 && (
             <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
-              <Text style={{ color: AMBER, fontSize: 12 }}>{flagged} portion(s) were flagged for PM review.</Text>
+              <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>{flagged} portion(s) were flagged for PM review.</Text>
             </View>
           )}
           {notScreened > 0 && (
             <View style={[styles.notice, { backgroundColor: RED_BG }]}>
-              <Text style={{ color: RED, fontSize: 12 }}>Screening didn't run for {notScreened} portion(s). Tell the PM.</Text>
+              <Text style={{ color: RED, fontSize: 12, fontFamily: FONT.regular }}>Screening didn't run for {notScreened} portion(s). Tell the PM.</Text>
             </View>
           )}
 
@@ -236,39 +248,52 @@ export default function AllocateScreen() {
   // ---- Preview -------------------------------------------------------------
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Allocate to requests" caption="Split receipt · Step 3 of 3" />
-      <ScrollView contentContainerStyle={styles.container}>
+      <FlowHeader title="Allocate to requests" caption="Split receipt · Step 3 of 3" step={{ current: 3, total: 3 }} />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
 
         {loading && <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 12 }} />}
         {!isOnline ? (
-          <View style={[styles.notice, { backgroundColor: "#FFF4E5" }]}>
-            <Text style={{ color: "#7A4B00", fontSize: 12 }}>
+          <View style={[styles.notice, { backgroundColor: COLORS.amberBannerFill }]}>
+            <Text style={{ color: COLORS.amberText, fontSize: 12, fontFamily: FONT.regular }}>
               You're offline. Splitting a receipt needs a connection to check the open requests. This page refreshes
               by itself when you're back online.
             </Text>
           </View>
         ) : error ? (
           <View style={[styles.notice, { backgroundColor: RED_BG }]}>
-            <Text style={{ color: RED, fontSize: 12 }}>{describeLoadError(error, true)}</Text>
+            <Text style={{ color: RED, fontSize: 12, fontFamily: FONT.regular }}>{describeLoadError(error, true)}</Text>
           </View>
         ) : null}
 
-        {/* E3: anything no open request covers blocks the submit. */}
-        {[...submitProblems, ...(plan && !plan.ok ? plan.problems : [])].map((problem, index) => (
-          <View key={`problem-${index}`} style={[styles.notice, { backgroundColor: RED_BG }]}>
-            <Text style={{ color: RED, fontSize: 12 }}>{problem}</Text>
+        {/* E3: anything no open request covers blocks the submit. One box, not one per line. */}
+        {uncoveredLines.size > 0 && !loading && (
+          <View style={styles.errorBox} accessibilityRole="alert">
+            <Text style={styles.errorBoxText}>
+              No open request for these {uncoveredLines.size} {uncoveredLines.size === 1 ? "item" : "items"}. Ask the Site Manager to file one. Then check again.
+            </Text>
+            <TouchableOpacity style={styles.checkButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel="Check for new requests">
+              <Text style={styles.checkButtonText}>Check for new requests</Text>
+            </TouchableOpacity>
           </View>
-        ))}
+        )}
 
-        {needsRetry && !loading && (
-          <TouchableOpacity style={styles.retryButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel="Check for open requests again">
-            <Text style={styles.retryButtonText}>Retry · check for new requests</Text>
+        {otherProblems.length > 0 && (
+          <View style={styles.errorBox} accessibilityRole="alert">
+            {otherProblems.map((problem, index) => (
+              <Text key={`problem-${index}`} style={styles.errorBoxText}>{problem}</Text>
+            ))}
+          </View>
+        )}
+
+        {needsRetry && !loading && uncoveredLines.size === 0 && (
+          <TouchableOpacity style={styles.retryButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel="Check for new requests">
+            <Text style={styles.retryButtonText}>Check for new requests</Text>
           </TouchableOpacity>
         )}
 
         {plan && !plan.ok && excluded.length > 0 && (
           <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
-            <Text style={{ color: AMBER, fontSize: 12 }}>
+            <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>
               You switched off {excluded.length} request{excluded.length === 1 ? "" : "s"} below. Turn one back on if it should cover these lines.
             </Text>
           </View>
@@ -282,12 +307,15 @@ export default function AllocateScreen() {
           const missing = [...(plan?.uncovered ?? []), ...(plan?.unmatched ?? [])].filter((l) => l.lineIndex === lineIndex);
           const isFee = line.quantity === 0;
           return (
-            <View key={`line-${lineIndex}`} style={styles.card}>
+            <View key={`line-${lineIndex}`} style={[styles.card, missing.length > 0 && styles.cardMissing]}>
               <View style={styles.rowBetween}>
                 <Text style={styles.lineTitle} numberOfLines={2}>{line.description}</Text>
                 <Text style={styles.lineAmount}>{formatPeso(line.amount)}</Text>
               </View>
-              <Text style={styles.muted}>{isFee ? "Fee / VAT / delivery (qty 0)" : `Qty ${formatQty(line.quantity)}`}</Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.muted}>{isFee ? "Fee / VAT / delivery (qty 0)" : `Qty ${formatQty(line.quantity)}`}</Text>
+                {missing.length > 0 && <Text style={styles.notCoveredTag}>Not covered</Text>}
+              </View>
 
               {pieces.map(({ portion, line: piece }) => (
                 <Text key={`${portion.ticketID}-${lineIndex}`} style={styles.piece}>
@@ -301,12 +329,12 @@ export default function AllocateScreen() {
 
               {missing.map((piece, index) => (
                 <Text key={`missing-${index}`} style={[styles.piece, { color: RED }]}>
-                  {piece.quantity > 0 ? `Not covered: ${formatQty(piece.quantity)} · ${formatPeso(piece.amount)}` : `No request to ride on · ${formatPeso(piece.amount)}`}
+                  {piece.quantity > 0 ? `${formatQty(piece.quantity)} · ${formatPeso(piece.amount)} left over` : `No request to ride on · ${formatPeso(piece.amount)}`}
                 </Text>
               ))}
 
               {isFee && (plan?.portions.length ?? 0) > 1 && (
-                <TouchableOpacity onPress={() => setMovingLine(movingLine === lineIndex ? null : lineIndex)}>
+                <TouchableOpacity style={styles.linkButton} onPress={() => setMovingLine(movingLine === lineIndex ? null : lineIndex)}>
                   <Text style={styles.link}>{movingLine === lineIndex ? "Cancel" : "Move"}</Text>
                 </TouchableOpacity>
               )}
@@ -324,7 +352,11 @@ export default function AllocateScreen() {
         })}
 
         <Text style={styles.sectionTitle}>Requests on this receipt</Text>
-        {requestIDs.length === 0 && !loading && <Text style={styles.muted}>No open request matches these lines.</Text>}
+        {requestIDs.length === 0 && !loading && (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No open request matches these lines yet.</Text>
+          </View>
+        )}
         {requestIDs.map((ticketID) => {
           const portion = portionByTicket.get(ticketID);
           const info = known[ticketID];
@@ -340,12 +372,12 @@ export default function AllocateScreen() {
               </View>
               {portion?.overBudget && (
                 <View style={[styles.notice, { backgroundColor: AMBER_BG, marginTop: 6, marginBottom: 0 }]}>
-                  <Text style={{ color: AMBER, fontSize: 12 }}>
+                  <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>
                     Over budget: {formatPeso(portion.amount)} vs {formatPeso(portion.remainingBudget)} left
                   </Text>
                 </View>
               )}
-              <View style={[styles.rowBetween, { marginTop: 8 }]}>
+              <View style={[styles.rowBetween, styles.switchRow]}>
                 <Text style={styles.muted}>Not for this request</Text>
                 <Switch value={isExcluded} onValueChange={(value) => toggleExcluded(ticketID, value)} />
               </View>
@@ -366,20 +398,21 @@ export default function AllocateScreen() {
           ))}
         </View>
 
-        {plan && (
-          <View style={styles.rowBetween}>
-            <Text style={styles.muted}>Allocated</Text>
-            <Text style={styles.total}>{formatPeso(plan.allocated)} of {formatPeso(plan.linesTotal)}</Text>
-          </View>
-        )}
-
-        <BlockedReasons reasons={blockedReasons} />
-        <TouchableOpacity style={[styles.submitButton, !canSubmit && { opacity: 0.5 }]} onPress={handleSubmit} disabled={!canSubmit}>
-          <Text style={styles.submitButtonText}>
-            {submitting ? "Submitting…" : !category && plan?.ok ? "Pick a category" : "Submit Split for Approval"}
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
+
+      <View style={styles.footer}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.footerLabel}>Allocated {formatPeso(allocatedNumber)} of {formatPeso(linesTotalNumber)}</Text>
+          {plan?.ok && progress >= 1 && <IconSymbol name="checkmark.circle.fill" size={18} color={COLORS.success} />}
+        </View>
+        <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}>
+          <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
+        </View>
+        <TouchableOpacity style={[styles.submitButton, !canSubmit && { opacity: 0.5 }]} onPress={handleSubmit} disabled={!canSubmit} accessibilityRole="button" accessibilityState={{ disabled: !canSubmit }}>
+          <Text style={styles.submitButtonText}>{submitting ? "Submitting…" : "Submit split for approval"}</Text>
+        </TouchableOpacity>
+        {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
+      </View>
       <LoadingOverlay visible={submitting} message="Submitting split…" detail="Creating one expense per request." />
     </SafeAreaView>
   );
@@ -387,24 +420,39 @@ export default function AllocateScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  container: { paddingHorizontal: 16, paddingBottom: 40 },
-  retryButton: { borderWidth: 1, borderColor: COLORS.primary, borderRadius: 8, paddingVertical: 10, alignItems: "center", marginBottom: 12 },
-  retryButtonText: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
-  sectionTitle: { fontSize: 14, fontWeight: "700", color: COLORS.heading, marginTop: 12, marginBottom: 8 },
-  body: { fontSize: 13, color: COLORS.heading, marginBottom: 4 },
-  muted: { fontSize: 12, color: COLORS.muted },
-  card: { backgroundColor: COLORS.card, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, padding: 12, marginBottom: 8 },
+  flex: { flex: 1 },
+  container: { paddingHorizontal: 16, paddingBottom: 24 },
+  retryButton: { minHeight: 44, justifyContent: "center", borderWidth: 1, borderColor: COLORS.primary, borderRadius: 8, paddingVertical: 10, alignItems: "center", marginBottom: 12 },
+  retryButtonText: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
+  sectionTitle: { fontSize: 15, fontFamily: FONT.extrabold, color: COLORS.heading, marginTop: 14, marginBottom: 8 },
+  body: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.heading, marginBottom: 4 },
+  muted: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
+  card: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 12, marginBottom: 8 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  lineTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: COLORS.heading },
-  lineAmount: { fontSize: 14, fontWeight: "700", color: COLORS.heading },
-  piece: { fontSize: 12, color: COLORS.heading, marginTop: 6 },
-  link: { fontSize: 12, fontWeight: "700", color: COLORS.primary, marginTop: 8 },
+  lineTitle: { flex: 1, fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
+  lineAmount: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
+  piece: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.heading, marginTop: 6 },
+  link: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.primary },
+  linkButton: { minHeight: MIN_TAP, justifyContent: "center", alignSelf: "flex-start" },
+  switchRow: { minHeight: MIN_TAP, marginTop: 4 },
+  cardMissing: { borderColor: COLORS.errorBorder },
+  notCoveredTag: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.errorText, backgroundColor: COLORS.errorFill, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },
+  errorBox: { backgroundColor: COLORS.errorFill, borderWidth: 1, borderColor: COLORS.errorBorder, borderRadius: 14, padding: 12, marginBottom: 10, gap: 10 },
+  errorBoxText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 19 },
+  checkButton: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: COLORS.errorBorder, borderRadius: 12, backgroundColor: COLORS.card },
+  checkButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.errorText },
+  emptyBox: { minHeight: 64, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderStyle: "dashed", borderColor: COLORS.inputBorder, borderRadius: 14, padding: 14 },
+  emptyText: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center" },
+  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
+  footerLabel: { fontSize: 14, fontFamily: FONT.extrabold, color: COLORS.heading },
+  track: { height: 6, borderRadius: 3, backgroundColor: COLORS.border, overflow: "hidden" },
+  fill: { height: 6, borderRadius: 3, backgroundColor: COLORS.primary },
+  helper: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center" },
   notice: { borderRadius: 10, padding: 10, marginBottom: 8 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8, marginBottom: 8 },
-  chip: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: COLORS.card },
-  chipActive: { borderColor: COLORS.primary, backgroundColor: "#FDECE1" },
-  chipText: { fontSize: 12, fontWeight: "600", color: COLORS.heading },
-  total: { fontSize: 16, fontWeight: "800", color: COLORS.heading },
-  submitButton: { marginTop: 14, backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 16, alignItems: "center" },
-  submitButtonText: { color: "#FFF", fontWeight: "700", fontSize: 15 },
+  chip: { minHeight: 44, justifyContent: "center", borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 22, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: COLORS.card },
+  chipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryTint },
+  chipText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.heading },
+  submitButton: { minHeight: 48, backgroundColor: COLORS.primary, borderRadius: 12, justifyContent: "center", alignItems: "center", marginTop: 4 },
+  submitButtonText: { color: "#FFF", fontFamily: FONT.bold, fontSize: 15 },
 });
