@@ -20,7 +20,7 @@ const taskRoutes = require("./routes/tasks");
 const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
 const reportRoutes = require("./routes/reports");
-const { canonicalizeExpense, submitHashWithTimeout } = require("./lib/blockchainService");
+const { canonicalizeExpenseV2, submitHashWithTimeout } = require("./lib/blockchainService");
 const { runIntegrityScan } = require("./lib/integrityCheck");
 const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
@@ -109,7 +109,7 @@ async function retryPendingBlockchainWrites() {
         );
         for (const expense of pending.rows) {
             try {
-                const hash = canonicalizeExpense(expense);
+                const hash = canonicalizeExpenseV2(expense);
                 const { txHash, blockNumber, validatorNodeCount } = await submitHashWithTimeout(hash);
                 await query(
                     `INSERT INTO BlockchainLogs (expenseID, actorID, txHash, blockNumber, eventType, validatorNodeCount, consensusType)
