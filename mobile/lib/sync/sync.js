@@ -28,13 +28,16 @@ import {
   purgeSyncedTaskUpdates,
 } from "@/lib/sync/db";
 import { PhotoUploadRejected, uploadTaskPhoto, deleteQueuedPhoto } from "@/lib/sync/task-photo";
+import { devLog } from "@/lib/sync/log";
 
 // Step 1 for the task updates: make sure each has a server photo URL.
 // Returns the rows that are ready to be sent. A permanent refusal marks the row
-// rejected; a temporary failure leaves it pending and out of this batch.
+// rejected; a temporary failure leaves it pending and out of this batch, and is
+// reported in postponedItems so the screens can say "not sent yet".
 async function uploadPendingPhotos(rows, upload) {
   const ready = [];
   const rejectedItems = [];
+  const postponedItems = [];
   for (const row of rows) {
     if (row.server_photo_url) {
       ready.push(row);
@@ -49,15 +52,17 @@ async function uploadPendingPhotos(rows, upload) {
         markTaskUpdateRejected(row.update_id, error.code, error.message);
         rejectedItems.push({ kind: "task_update", id: row.update_id, code: error.code, message: error.message });
       } else {
-        console.warn("[F10 sync] photo upload postponed:", error?.message ?? error);
+        devLog("[F10 sync] photo upload postponed:", error?.message ?? error);
+        postponedItems.push({ kind: "task_update", id: row.update_id, message: error?.message ?? String(error) });
       }
     }
   }
-  return { ready, rejectedItems };
+  return { ready, rejectedItems, postponedItems };
 }
 
 // Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected},
-//           rejectedItems: [{ kind, id, code, message }] }.
+//           rejectedItems: [{ kind, id, code, message }],
+//           postponedItems: [{ kind, id, message }] }  (not sent yet, will retry)
 // Throws if the batch request itself fails. `deps` is for tests.
 export async function syncAllPending(deps = {}) {
   const upload = deps.uploadTaskPhoto || uploadTaskPhoto;
@@ -70,6 +75,7 @@ export async function syncAllPending(deps = {}) {
     expenses: { synced: 0, rejected: 0 },
     tasks: { synced: 0, rejected: 0 },
     rejectedItems: [],
+    postponedItems: [],
   };
   if (!session) return result; // signed out: nothing may be sent under another identity
 
@@ -81,6 +87,7 @@ export async function syncAllPending(deps = {}) {
   const photos = await uploadPendingPhotos(taskRows, upload);
   result.tasks.rejected += photos.rejectedItems.length;
   result.rejectedItems.push(...photos.rejectedItems);
+  result.postponedItems.push(...photos.postponedItems);
 
   const items = [
     ...expenseRows.map((row) => ({ uuid: row.uuid, type: "expense", data: JSON.parse(row.payload) })),
@@ -112,6 +119,12 @@ export async function syncAllPending(deps = {}) {
       } else if (taskIds.has(id)) {
         markTaskUpdateSynced(id);
         result.tasks.synced += 1;
+      }
+    }
+    const answered = new Set([...syncedIds, ...rejected.map((r) => r.id)]);
+    for (const row of photos.ready) {
+      if (!answered.has(row.update_id)) {
+        result.postponedItems.push({ kind: "task_update", id: row.update_id, message: "The server could not check this update yet." });
       }
     }
     for (const r of rejected) {

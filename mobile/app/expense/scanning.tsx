@@ -8,6 +8,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { dismissScan, fetchScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
+import { useNetwork } from "@/lib/sync/network-context";
 
 const POLL_MS = 2000;
 // Past this the user is offered to type it in instead of waiting.
@@ -22,6 +23,7 @@ export default function ScanningScreen() {
   const { openReady, openManual } = useOpenScan();
   const [scan, setScan] = useState<ReceiptScan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const { isOnline } = useNetwork();
   const [now, setNow] = useState(() => Date.now());
   const opened = useRef(false);
 
@@ -103,7 +105,13 @@ export default function ScanningScreen() {
         )}
 
         {slow && <Text style={styles.slowText}>Taking longer than usual. You can wait, or type the details in now.</Text>}
-        {loadError && !failed && <Text style={styles.slowText}>Can&apos;t reach the server right now. Still trying…</Text>}
+        {loadError && !failed && (
+          <Text style={styles.slowText}>
+            {isOnline
+              ? "Can't reach the server right now. Still trying…"
+              : "You're offline. Your receipt is already uploaded and keeps being read on the server; this screen updates when you're back online."}
+          </Text>
+        )}
       </View>
 
       <View style={styles.footer}>

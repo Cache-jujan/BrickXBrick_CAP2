@@ -20,6 +20,8 @@ import { formatPeso, formatQty } from "@/lib/money";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { describeLoadError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -42,6 +44,13 @@ export default function AllocateScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { isOnline } = useNetwork();
+  // Back online: run the preview again.
+  const wasOnline = React.useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current) setRefreshKey((k) => k + 1);
+    wasOnline.current = isOnline;
+  }, [isOnline]);
   const [movingLine, setMovingLine] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitProblems, setSubmitProblems] = useState<string[]>([]);
@@ -114,6 +123,9 @@ export default function AllocateScreen() {
 
   async function handleSubmit() {
     if (!canSubmit || !category) return;
+    if (!isOnline) {
+      return Alert.alert("You're offline", "A split receipt needs a connection to save. Reconnect and tap the button again; nothing is lost.");
+    }
     if (!receipt.receiptImageURL) return Alert.alert("Missing receipt image", "Please rescan the receipt.");
     const receiptTotal = Number(receipt.amount);
     if (!Number.isFinite(receiptTotal)) return Alert.alert("Invalid total", "Go back and check the receipt total.");
@@ -144,7 +156,7 @@ export default function AllocateScreen() {
         setSubmitProblems(err.details.problems);
         setRefreshKey((k) => k + 1);
       } else {
-        Alert.alert("Submission failed", err instanceof Error ? err.message : String(err));
+        Alert.alert("Submission failed", describeLoadError(err, true) ?? "Something went wrong. Please try again.");
       }
     } finally {
       setSubmitting(false);
@@ -216,11 +228,18 @@ export default function AllocateScreen() {
       <ScrollView contentContainerStyle={styles.container}>
 
         {loading && <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 12 }} />}
-        {error && (
-          <View style={[styles.notice, { backgroundColor: RED_BG }]}>
-            <Text style={{ color: RED, fontSize: 12 }}>{error}</Text>
+        {!isOnline ? (
+          <View style={[styles.notice, { backgroundColor: "#FFF4E5" }]}>
+            <Text style={{ color: "#7A4B00", fontSize: 12 }}>
+              You're offline. Splitting a receipt needs a connection to check the open requests. This page refreshes
+              by itself when you're back online.
+            </Text>
           </View>
-        )}
+        ) : error ? (
+          <View style={[styles.notice, { backgroundColor: RED_BG }]}>
+            <Text style={{ color: RED, fontSize: 12 }}>{describeLoadError(error, true)}</Text>
+          </View>
+        ) : null}
 
         {/* E3: anything no open request covers blocks the submit. */}
         {[...submitProblems, ...(plan && !plan.ok ? plan.problems : [])].map((problem, index) => (

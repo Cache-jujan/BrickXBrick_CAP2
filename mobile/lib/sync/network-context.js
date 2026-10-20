@@ -1,6 +1,9 @@
 // F10 — Network + offline-queue state for the whole app.
 //
-// Provides { isOnline, pendingCount, refreshPendingCount }.
+// Provides { isOnline, pendingCount, refreshPendingCount, syncing, lastSync, syncNow }.
+// - syncing:  a sync run is in progress (the banner says "sending…")
+// - lastSync: { at, result } or { at, error } of the last run, so screens can say
+//             "sent", "not sent yet, will retry" or "not sent: reason".
 // - 10.1: NetInfo listener flips isOnline automatically.
 // - 10.6: on reconnect (and on app start if already online), sync everything queued
 //         (expenses and task submissions).
@@ -15,6 +18,7 @@ import NetInfo from "@react-native-community/netinfo";
 
 import { initDb, getPendingCount } from "@/lib/sync/db";
 import { buildSyncSummary } from "@/lib/sync/messages";
+import { devLog } from "@/lib/sync/log";
 import { syncAllPending } from "@/lib/sync/sync";
 
 const RECHECK_INTERVAL_MS = 15000;
@@ -23,11 +27,16 @@ const NetworkContext = createContext({
   isOnline: true,
   pendingCount: 0,
   refreshPendingCount: () => {},
+  syncing: false,
+  lastSync: /** @type {null | { at: number, result?: any, error?: string }} */ (null),
+  syncNow: () => {},
 });
 
 export function NetworkProvider({ children }) {
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState(/** @type {null | { at: number, result?: any, error?: string }} */ (null));
   const syncingRef = useRef(false);
   const onlineRef = useRef(true);
 
@@ -39,21 +48,26 @@ export function NetworkProvider({ children }) {
     if (syncingRef.current) return; // never run two syncs at once
     if (getPendingCount() === 0) return;
     syncingRef.current = true;
+    setSyncing(true);
     try {
       const result = await syncAllPending();
       refreshPendingCount();
-      const summary = buildSyncSummary(result); // null when nothing happened
+      setLastSync({ at: Date.now(), result });
+      const summary = buildSyncSummary(result); // null when nothing was sent or rejected
       if (!summary) return;
       if (result.rejected > 0) {
-        console.warn("[F10 sync] rejected:", result.rejectedItems.map((i) => `${i.code}: ${i.message}`).join(" | "));
+        devLog("[F10 sync] rejected:", result.rejectedItems.map((i) => `${i.code}: ${i.message}`).join(" | "));
       }
       Alert.alert(summary.title, summary.message);
     } catch (err) {
-      // Request failed (server unreachable, 401 not signed in, 5xx).
-      // Rows stay 'pending'; the 15s re-check below will try again.
-      console.warn("[F10 sync] failed:", err?.message ?? err);
+      // Request failed (server unreachable, 401 not signed in, 5xx). Rows stay
+      // pending; the 15s re-check tries again. Never a toast: on a building
+      // site this happens all the time, and the banner already says "waiting".
+      setLastSync({ at: Date.now(), error: err?.message ?? String(err) });
+      devLog("[F10 sync] failed:", err?.message ?? err);
     } finally {
       syncingRef.current = false;
+      setSyncing(false);
     }
   }, [refreshPendingCount]);
 
@@ -79,7 +93,7 @@ export function NetworkProvider({ children }) {
   }, [refreshPendingCount, runSync]);
 
   return (
-    <NetworkContext.Provider value={{ isOnline, pendingCount, refreshPendingCount }}>
+    <NetworkContext.Provider value={{ isOnline, pendingCount, refreshPendingCount, syncing, lastSync, syncNow: runSync }}>
       {children}
     </NetworkContext.Provider>
   );

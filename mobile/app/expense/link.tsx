@@ -10,6 +10,7 @@ import { getSession } from "@/lib/auth";
 import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
 import { canEnqueue, queueExpense } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
+import { isNetworkError } from "@/lib/sync/messages";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
@@ -142,7 +143,17 @@ export default function LinkScreen() {
       router.replace("/");
       reset();
     } catch (err) {
-      Alert.alert("Submission failed", err instanceof Error ? err.message : String(err));
+      if (isNetworkError(err)) {
+        // The connection dropped mid-submit. Don't show the raw server error.
+        // It may or may not have reached the server, so don't save a second copy
+        // offline either (that could create a duplicate expense).
+        Alert.alert(
+          "Connection lost",
+          "We couldn't reach the server, so we can't confirm this expense went through. Check your connection, then look in your expenses before trying again."
+        );
+      } else {
+        Alert.alert("Submission failed", err instanceof Error ? err.message : String(err));
+      }
     } finally {
       busyRef.current = false;
       setSubmitting(false);

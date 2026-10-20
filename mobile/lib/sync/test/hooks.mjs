@@ -8,6 +8,7 @@ const MAP = {
   "@/lib/auth": here("./auth-shim.mjs"),
   "@/lib/sync/db": here("../db.js"),
   "@/lib/sync/task-photo": here("../task-photo.js"),
+  "@/lib/sync/log": here("../log.js"),
 };
 
 export async function resolve(specifier, context, nextResolve) {

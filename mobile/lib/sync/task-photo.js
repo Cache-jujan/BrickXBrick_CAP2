@@ -7,6 +7,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 
 import { API_URL, authHeaders } from "@/constants/api";
+import { devLog } from "@/lib/sync/log";
 
 // The server said no for a reason that will not change by retrying (not your
 // task, task closed, bad photo). The sync turns this into a REJECTED row.
@@ -61,7 +62,7 @@ export async function deleteQueuedPhoto(path) {
   try {
     await FileSystem.deleteAsync(path, { idempotent: true });
   } catch (error) {
-    console.warn("[F10] could not delete queued photo:", error?.message ?? error);
+    devLog("[F10] could not delete queued photo:", error?.message ?? error);
   }
 }
 

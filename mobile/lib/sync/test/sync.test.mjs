@@ -228,7 +228,7 @@ test("nothing pending: no network call at all", async () => {
   setup();
   const result = await syncAllPending();
   assert.equal(calls.fetches.length, 0);
-  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, rejectedItems: [] });
+  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, rejectedItems: [], postponedItems: [] });
 });
 
 test("expenses still sync exactly as before (response shape unchanged)", async () => {
@@ -265,4 +265,25 @@ test("rejectedItems lists every rejection with its kind, code and message (serve
     result.rejectedItems.map((i) => [i.kind, i.code]).sort(),
     [["task_update", "SUPERSEDED"], ["task_update", "TASK_CLOSED"]]
   );
+});
+
+test("postponedItems: a photo that could not upload yet, and an item the server left unanswered, are reported (so the screen can say 'not sent yet')", async () => {
+  setup();
+  const a = queueTask("t1");
+  const b = queueTask("t2");
+  fs.uploadHandler = async (url) =>
+    url.includes("/t1/") ? { status: 503, body: "{}" } : { status: 201, body: JSON.stringify({ photoUrl: "https://r2/tasks/t2/b.jpg" }) };
+  serverReply = async () => ({ body: { syncedIds: [], rejected: [] } }); // server could not check t2 yet
+  const result = await syncAllPending();
+  assert.deepEqual(result.postponedItems.map((p) => p.id).sort(), [a.updateId, b.updateId].sort());
+  assert.equal(result.synced + result.rejected, 0);
+  assert.equal(q.getPendingTaskUpdateCount(), 2); // both still queued, will retry
+});
+
+test("a fully sent batch has no postponedItems", async () => {
+  setup();
+  queueTask("t1");
+  const result = await syncAllPending();
+  assert.deepEqual(result.postponedItems, []);
+  assert.equal(result.tasks.synced, 1);
 });

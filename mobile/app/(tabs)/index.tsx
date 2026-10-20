@@ -24,6 +24,8 @@ import {
 import { formatQty } from "@/lib/money";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
+import { describeLoadError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { ScannedReceipts } from "@/components/scanned-receipts";
 import { RejectedExpenses } from "@/components/rejected-expenses";
@@ -122,6 +124,19 @@ export default function HomeScreen() {
       return () => setFocused(false);
     }, [load, loadScans])
   );
+
+  // Offline: keep what was loaded last and never show a server error (the banner
+  // already says "offline"). Reload by itself on reconnect.
+  const { isOnline } = useNetwork();
+  const wasOnline = React.useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current) {
+      load();
+      loadScans();
+    }
+    wasOnline.current = isOnline;
+  }, [isOnline, load, loadScans]);
+  const shownError = describeLoadError(error, isOnline);
 
   // Keep "Reading…" rows moving to "Review" without a manual pull-to-refresh.
   const anyScanning = scans.some((scan) => scan.status === "Scanning");
@@ -254,8 +269,15 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {error && (
-        <Text style={styles.errorText}>{error}</Text>
+      {!isOnline && (
+        <Text style={styles.offlineNote}>
+          You're offline. Showing requests as last loaded. Scanning a receipt needs a connection; it will work again
+          when you're back online.
+        </Text>
+      )}
+
+      {shownError && (
+        <Text style={styles.errorText}>{shownError}</Text>
       )}
 
       <FlatList
@@ -437,6 +459,7 @@ const styles = StyleSheet.create({
     color: "#FFF",
   },
 
+  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginBottom: 8, marginHorizontal: 16, padding: 12 },
   errorText: {
     color: "#C1121F",
     paddingHorizontal: 16,

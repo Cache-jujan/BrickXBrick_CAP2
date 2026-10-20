@@ -20,6 +20,8 @@ import {
 } from "@/lib/api";
 import { metaFor, relativeTime, groupByDay, routeForNotification } from "@/lib/notificationMeta";
 import { getSession } from "@/lib/auth";
+import { describeLoadError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 
 const PAGE_SIZE = 30;
@@ -35,6 +37,7 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isOnline } = useNetwork();
   const [hasMore, setHasMore] = useState(true);
 
   const load = useCallback((which: Tab, isRefresh = false) => {
@@ -121,10 +124,15 @@ export default function NotificationsScreen() {
         ))}
       </View>
 
-      {error ? (
+      {error && !isOnline ? (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>You're offline</Text>
+          <Text style={styles.errorBody}>Your notifications will load when you're back online.</Text>
+        </View>
+      ) : error ? (
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>Couldn't load your notifications</Text>
-          <Text style={styles.errorBody}>{error}</Text>
+          <Text style={styles.errorBody}>{describeLoadError(error, true)}</Text>
           <Pressable onPress={() => load(tab)} style={styles.retryButton}>
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>

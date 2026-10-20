@@ -51,3 +51,56 @@ export function buildSyncSummary(result) {
   }
   return { title: "Sync complete", message: lines.join("\n") };
 }
+
+// ---- loading errors -------------------------------------------------------------
+
+const NETWORK_ERROR = /network request failed|failed to fetch|network ?error|timed? ?out|unreachable|could not connect|econn|enotfound/i;
+
+export function isNetworkError(error) {
+  const message = typeof error === "string" ? error : error?.message ?? "";
+  return NETWORK_ERROR.test(message);
+}
+
+/**
+ * What a screen should show when loading from the server failed.
+ * - Offline: nothing. The red banner already says so, and the screen keeps
+ *   whatever it loaded last.
+ * - Online, but the server can't be reached: one plain sentence, never the raw
+ *   "Network request failed".
+ * - Anything else: the server's own message.
+ */
+export function describeLoadError(error, isOnline) {
+  if (!error || !isOnline) return null;
+  if (isNetworkError(error)) return "Can't reach the server right now. Pull down to try again.";
+  return typeof error === "string" ? error : error.message || "Something went wrong.";
+}
+
+// ---- the status strip at the top of the app -------------------------------------
+
+export const SENT_SHOW_MS = 5000;
+
+/**
+ * Which strip to show, or null for none.
+ *   offline  red    no connection (with the queued count)
+ *   waiting  amber  we tried and something is still queued (will retry)
+ *   sending  blue   back online and a sync is running
+ *   sent     green  a sync just sent everything (shown for SENT_SHOW_MS)
+ * lastSync: { at, result } or { at, error } from the last sync run.
+ */
+export function bannerState({ isOnline, pendingCount, syncing, lastSync, now = Date.now() }) {
+  if (!isOnline) {
+    return { tone: "offline", text: pendingCount > 0 ? `You're offline · ${pendingCount} queued` : "You're offline" };
+  }
+  const stuck = !!lastSync && (!!lastSync.error || (lastSync.result?.postponedItems?.length ?? 0) > 0);
+  if (pendingCount > 0 && stuck) {
+    return { tone: "waiting", text: `${plural(pendingCount, "update", "updates")} waiting to send · will retry automatically` };
+  }
+  if (pendingCount > 0 && syncing) {
+    return { tone: "sending", text: `Back online · sending ${pendingCount} queued…` };
+  }
+  const sent = lastSync?.result?.synced ?? 0;
+  if (sent > 0 && pendingCount === 0 && now - lastSync.at < SENT_SHOW_MS) {
+    return { tone: "sent", text: `All caught up · ${plural(sent, "update", "updates")} sent` };
+  }
+  return null;
+}
