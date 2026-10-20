@@ -248,3 +248,13 @@ test("the open-work message lists at most three projects and joins the parts", (
   );
   assert.equal(hasOpenWork({ projects: [], openTasks: 0, openRequests: 0 }), false);
 });
+
+test("PATCH refuses a status other than Active or Inactive", async () => {
+  reset();
+  for (const bad of ["Suspended", "", null, 5]) {
+    const res = await call("PATCH", `/api/admin/users/${USER_ID}`, { status: bad });
+    assert.equal(res.status, 400, `status ${JSON.stringify(bad)} refused`);
+    assert.match(res.body.error, /Active or Inactive/);
+  }
+  assert.ok(!state.calls.some((c) => c.text.startsWith("update users")), "nothing written");
+});
