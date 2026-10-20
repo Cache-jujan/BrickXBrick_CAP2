@@ -276,6 +276,7 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
                             status = 'Completed'::varchar,
                             photoEvidenceURL = $1,
                             updatedBy = $2,
+                            completedAt = NOW(),
                             lastUpdatedAt = NOW()
                       WHERE taskId = $3
                       RETURNING *`,

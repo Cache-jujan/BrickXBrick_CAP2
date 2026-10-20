@@ -63,6 +63,10 @@ export type AssignedTask = {
   pendingphotoevidenceurl?: string | null;
   latestreviewstatus?: string | null;
   latestreviewreason?: string | null;
+  // When the task was completed. Older acknowledged tasks have no completedat,
+  // so the app falls back to lastupdatedat to decide when to archive them.
+  completedat?: string | null;
+  lastupdatedat?: string | null;
 };
 
 export async function fetchAssignedTasks(): Promise<AssignedTask[]> {

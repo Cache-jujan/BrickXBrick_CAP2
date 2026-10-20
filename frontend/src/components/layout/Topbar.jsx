@@ -8,6 +8,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "../../api/notificationsApi";
+import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
 import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
 import "./Topbar.css";
@@ -93,6 +94,29 @@ export function Topbar({ onMenuClick }) {
     return () => {
       cancelled = true;
       clearInterval(interval);
+    };
+  }, []);
+
+  // Another tab marked notifications read, or this tab was just switched back
+  // to: refetch the badge, and the list too if the dropdown is open.
+  const notifOpenRef = useRef(false);
+  useEffect(() => { notifOpenRef.current = notifOpen; }, [notifOpen]);
+  useEffect(() => {
+    let cancelled = false;
+    function refresh() {
+      getUnreadCount()
+        .then((count) => { if (!cancelled) setUnreadCount(count); })
+        .catch(() => {});
+      if (notifOpenRef.current) {
+        listMyNotifications({ limit: DROPDOWN_LIMIT })
+          .then((rows) => { if (!cancelled) setNotifications(rows); })
+          .catch(() => {});
+      }
+    }
+    const unsubscribe = subscribeNotificationsRefresh(refresh);
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, []);
 
