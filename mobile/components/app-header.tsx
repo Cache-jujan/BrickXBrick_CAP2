@@ -17,7 +17,7 @@ export function AppHeader() {
   return (
     <View style={styles.bar}>
       <Text style={styles.brand} numberOfLines={1}>
-        BrickXBrick
+        BxB
       </Text>
 
       <View style={styles.actions}>
