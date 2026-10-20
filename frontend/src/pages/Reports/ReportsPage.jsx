@@ -7,6 +7,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { BudgetChart } from "../../components/reports/BudgetChart";
+import { BudgetStands, ProjectHero } from "../../components/reports/ProjectReport";
 import { ProjectsTable } from "../../components/reports/ProjectsTable";
 import { SpendShare } from "../../components/reports/SpendShare";
 import { ReportFilters } from "../../components/reports/ReportFilters";
@@ -110,6 +111,7 @@ export function ReportsPage() {
   }
 
   const warnings = summary?.warnings;
+  const singleProject = summary?.projects?.length === 1;
   const problems = [...Object.values(fieldErrors), ...(error ? [error] : [])];
 
   // Bring the problem into view: a small red line under a field is easy to miss.
@@ -223,7 +225,7 @@ export function ReportsPage() {
         <section className="reports-results" aria-label="Report results">
           <div className="reports-results-head">
             <div>
-              <h2 className="reports-results-title">Report results</h2>
+              <h2 className="reports-results-title">{singleProject ? "Project report" : "Report results"}</h2>
               <p className="reports-stamp">
                 {summary.period.from} to {summary.period.to} · figures as of {STAMP.format(new Date(summary.generatedAt))} (Manila time)
               </p>
@@ -250,26 +252,46 @@ export function ReportsPage() {
             </Banner>
           )}
 
-          <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
+          {singleProject ? (
+            <>
+              <ProjectHero project={summary.projects[0]} info={projects.find((p) => p.projectid === summary.projects[0].projectId)} period={summary.period} />
+              <div className="reports-grid">
+                <Card>
+                  <h3 className="reports-section-title">Where the budget stands</h3>
+                  <p className="reports-chart-note">Spend before and during the period against what is left.</p>
+                  <BudgetStands project={summary.projects[0]} />
+                </Card>
+                <Card>
+                  <h3 className="reports-section-title">Budget used to date</h3>
+                  <p className="reports-chart-note">Also printed in the PDF.</p>
+                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                </Card>
+              </div>
+            </>
+          ) : (
+            <>
+              <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
 
-          <div className="reports-grid">
-            <Card>
-              <h3 className="reports-section-title">Budget used to date</h3>
-              <p className="reports-chart-note">Each bar fills as a project spends its budget. Red means over budget. Also printed in the PDF.</p>
-              <BudgetChart ref={chartRef} projects={summary.projects} />
-            </Card>
-            <Card>
-              <h3 className="reports-section-title">Where this period's spend went</h3>
-              <p className="reports-chart-note">Share of the period spend by project.</p>
-              <SpendShare projects={summary.projects} total={summary.totals.periodSpend} />
-            </Card>
-          </div>
+              <div className="reports-grid">
+                <Card>
+                  <h3 className="reports-section-title">Budget used to date</h3>
+                  <p className="reports-chart-note">Each bar fills as a project spends its budget. Red means over budget. Also printed in the PDF.</p>
+                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                </Card>
+                <Card>
+                  <h3 className="reports-section-title">Where this period's spend went</h3>
+                  <p className="reports-chart-note">Share of the period spend by project.</p>
+                  <SpendShare projects={summary.projects} total={summary.totals.periodSpend} />
+                </Card>
+              </div>
 
-          <Card>
-            <h3 className="reports-section-title">Project breakdown</h3>
-            <p className="reports-chart-note">Tax-deductible counts only receipts classed Formal-Tax-Deductible, within the chosen dates.</p>
-            <ProjectsTable projects={summary.projects} totals={summary.totals} />
-          </Card>
+              <Card>
+                <h3 className="reports-section-title">Project breakdown</h3>
+                <p className="reports-chart-note">Tax-deductible counts only receipts classed Formal-Tax-Deductible, within the chosen dates.</p>
+                <ProjectsTable projects={summary.projects} totals={summary.totals} />
+              </Card>
+            </>
+          )}
 
           {exportError && <Banner tone="error" title={exportError} />}
 
