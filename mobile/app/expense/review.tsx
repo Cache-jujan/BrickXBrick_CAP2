@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -12,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from "@react-native-community/datetimepicker";
@@ -22,7 +24,7 @@ import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/re
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { formatAmountInput, formatPesoCents, groupAmountText, toCents, toHundredths } from "@/lib/money";
 import { devLog } from "@/lib/sync/log";
 import {
@@ -37,11 +39,11 @@ import {
 } from "@/lib/receipt-checks";
 import { loadOpenRequests } from "@/lib/cached-api";
 import { BlockedReasons } from "@/components/blocked-reasons";
+import { phoneReachableUrl } from "@/lib/receipt-scans";
 
-const RED = "#C1121F";
-const AMBER = "#B45309";
-const AMBER_BG = "#FEF3C7";
-const MEDIUM_OCR_HINT = "Read by the scan, which isn't always right. Check it against the receipt.";
+const RED = COLORS.errorText;
+const AMBER = COLORS.amberText;
+const AMBER_BG = COLORS.amberBannerFill;
 
 // Our field name -> the key the parser uses in `confidence`.
 const CONFIDENCE_KEY: Record<string, string> = {
@@ -250,9 +252,27 @@ export default function ReviewScreen() {
 
   const file = draft.file;
 
+  // Anything the scan wasn't sure about. One banner covers all of it, so no
+  // field repeats a warning of its own: each just gets a small "Check" tag.
+  const readNoItems = !result.ocrError && !result.lineItems?.length;
+  const hasChecks = readNoItems
+    || ocrCheck("amount") !== null
+    || ["vendorName", "tin", "birPermitNumber", "birNumber", "receiptDate"].some((f) => isLowConfidence(f))
+    || items.some((it) => it.ocr);
+
+  // A photo opens in the viewer. A PDF opens from its uploaded link, since the
+  // phone's PDF apps can't read our private cache file.
+  function openReceiptFile() {
+    if (!file) return;
+    if (file.type === "image") return setZoomOpen(true);
+    const url = result?.receiptImageURL ? phoneReachableUrl(result.receiptImageURL) : null;
+    if (!url) return Alert.alert("Can't open the PDF", "The file isn't uploaded yet. Go back and scan it again.");
+    Linking.openURL(url).catch(() => Alert.alert("Can't open the PDF", "No app on this phone could open it."));
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Review receipt" caption={isSplit ? "Split receipt · Step 2 of 3" : "Step 2 of 3"} />
+      <FlowHeader title="Review receipt" caption={isSplit ? "Split receipt · Step 2 of 3" : "Step 2 of 3"} step={{ current: 2, total: 3 }} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft.resubmit && (
@@ -264,31 +284,49 @@ export default function ReviewScreen() {
           )}
 
           {file && (
-            <View style={styles.thumbRow}>
+            <Pressable
+              onPress={openReceiptFile}
+              style={({ pressed }) => [styles.thumbRow, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={file.type === "image" ? "Receipt file. Tap to enlarge the photo." : "Receipt file. Tap to open the PDF."}
+            >
               {file.type === "image" ? (
-                <Pressable onPress={() => setZoomOpen(true)} accessibilityRole="imagebutton" accessibilityLabel="Enlarge the receipt photo">
-                  <Image source={{ uri: file.uri }} style={styles.thumb} resizeMode="cover" />
-                </Pressable>
+                <Image source={{ uri: file.uri }} style={styles.thumb} resizeMode="cover" />
               ) : (
-                <View style={[styles.thumb, styles.thumbPdf]}><IconSymbol name="doc.fill" size={26} color={COLORS.muted} /></View>
+                <View style={[styles.thumb, styles.thumbPdf]}><IconSymbol name="doc.fill" size={26} color={COLORS.errorText} /></View>
               )}
               <View style={styles.flex}>
-                <Text style={styles.thumbName} numberOfLines={1}>{file.name}</Text>
-                <Text style={styles.thumbHint}>{file.type === "image" ? "Tap the photo to enlarge it. " : ""}Compare each value with the paper receipt.</Text>
+                <Text style={styles.thumbTitle}>Receipt file</Text>
+                <Text style={styles.thumbName} numberOfLines={1}>{file.name}{file.type === "pdf" && file.size ? ` · ${file.size}` : ""}</Text>
+                <Text style={styles.thumbHint}>Tap to open. Compare each value with the paper receipt.</Text>
               </View>
-            </View>
+            </Pressable>
           )}
 
-          <View style={[styles.birBadge, bir.formal ? styles.birFormal : styles.birInformal]}>
-            <IconSymbol name={bir.formal ? "checkmark.seal.fill" : "info.circle.fill"} size={16} color={bir.formal ? COLORS.success : AMBER} />
-            <Text style={[styles.birText, { color: bir.formal ? COLORS.success : AMBER }]}>
-              {bir.formal ? "Formal · tax-deductible" : "Informal receipt · still OK to submit"}
-            </Text>
-          </View>
-          {!bir.formal && (
-            <Text style={styles.birNote}>
-              No {bir.missing.join(", ")} entered, so it won&apos;t count as tax-deductible. Fill them in if the paper shows them.
-            </Text>
+          {hasChecks || !bir.formal ? (
+            <View style={styles.banner}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={18} color={COLORS.amberText} />
+              <View style={styles.flex}>
+                <Text style={styles.bannerTitle}>{hasChecks ? "Check the amber fields" : "Informal receipt"}</Text>
+                {hasChecks && (
+                  <Text style={styles.bannerText}>
+                    {readNoItems
+                      ? "The scan couldn't read the line items, so type each one from the receipt. "
+                      : "The scan was not sure about these. Compare each one with the paper receipt. "}
+                  </Text>
+                )}
+                {!bir.formal && (
+                  <Text style={styles.bannerText}>
+                    No {bir.missing.join(" or ")} entered. It is an informal receipt: still OK to submit, but it won&apos;t count as tax-deductible. Fill them in if the paper shows them.
+                  </Text>
+                )}
+              </View>
+            </View>
+          ) : (
+            <View style={[styles.birBadge, styles.birFormal]}>
+              <IconSymbol name="checkmark.seal.fill" size={16} color={COLORS.success} />
+              <Text style={[styles.birText, { color: COLORS.success }]}>Formal · tax-deductible</Text>
+            </View>
           )}
 
           {conflicts.length > 0 && (
@@ -304,72 +342,61 @@ export default function ReviewScreen() {
           )}
 
           <Section title="Vendor & tax">
-            <Field label="Vendor" value={vendorName} onChangeText={edit("vendorName", setVendorName)} lowConfidence={isLowConfidence("vendorName")} error={vendorMissing ? "Required" : null} />
-            <Field label="TIN" value={tin} onChangeText={edit("tin", setTin)} keyboardType="numbers-and-punctuation" lowConfidence={isLowConfidence("tin")} fromVendorList={autoFilled.includes("tin")} />
-            <Field label="BIR permit number" value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" lowConfidence={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
-            <Field label="OR / SI number" value={birNumber} onChangeText={edit("birNumber", setBirNumber)} autoCapitalize="characters" lowConfidence={isLowConfidence("birNumber")} />
+            <Field label="Vendor" value={vendorName} onChangeText={edit("vendorName", setVendorName)} check={isLowConfidence("vendorName")} error={vendorMissing ? "Required" : null} />
+            <View style={styles.pair}>
+              <Field style={styles.half} label="TIN" value={tin} onChangeText={edit("tin", setTin)} keyboardType="numbers-and-punctuation" check={isLowConfidence("tin")} fromVendorList={autoFilled.includes("tin")} />
+              <Field style={styles.half} label="BIR permit" value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" check={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
+            </View>
+            <Field label="OR / SI number" value={birNumber} onChangeText={edit("birNumber", setBirNumber)} autoCapitalize="characters" check={isLowConfidence("birNumber")} />
           </Section>
 
           <Section title="Amount & date">
-            <Field label="Receipt total (₱)" value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" lowConfidence={ocrCheck("amount") !== null} lowHint={ocrCheck("amount") === "medium" ? MEDIUM_OCR_HINT : undefined} error={totalCents === null ? "Enter the total, e.g. 1,250.00" : null} />
-            {Platform.OS === "web" ? (
-              // The native picker has no web build, so the web preview keeps a typed date.
-              <Field label="Receipt date" value={receiptDate} onChangeText={edit("receiptDate", setReceiptDate)} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" lowConfidence={isLowConfidence("receiptDate")} error={dateProblem} />
-            ) : (
-              <View style={styles.field}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.fieldLabel}>Receipt date</Text>
+            <View style={styles.pair}>
+              <Field style={styles.half} label="Total (₱)" value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? "Enter the total" : null} />
+              {Platform.OS === "web" ? (
+                // The native picker has no web build, so the web preview keeps a typed date.
+                <Field style={styles.half} label="Date" value={receiptDate} onChangeText={edit("receiptDate", setReceiptDate)} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" check={isLowConfidence("receiptDate")} error={dateProblem} />
+              ) : (
+                <View style={[styles.field, styles.half]}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.fieldLabel}>Date</Text>
+                    {isLowConfidence("receiptDate") && <Text style={styles.checkTag}>Check</Text>}
+                  </View>
+                  <Pressable
+                    onPress={openDatePicker}
+                    style={[styles.input, styles.dateInput, isLowConfidence("receiptDate") && styles.inputLow, !!dateProblem && styles.inputError]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Receipt date, ${formatReceiptDate(receiptDate)}. Tap to change.`}
+                  >
+                    <Text style={styles.dateText} numberOfLines={1}>{formatReceiptDate(receiptDate)}</Text>
+                    <IconSymbol name="calendar" size={18} color={COLORS.muted} />
+                  </Pressable>
                 </View>
-                <Pressable
-                  onPress={openDatePicker}
-                  style={[styles.input, styles.dateInput, isLowConfidence("receiptDate") && styles.inputLow, !!dateProblem && styles.inputError]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Receipt date, ${formatReceiptDate(receiptDate)}. Tap to change.`}
-                >
-                  <Text style={styles.dateText}>{formatReceiptDate(receiptDate)}</Text>
-                  <IconSymbol name="calendar" size={18} color={COLORS.muted} />
-                </Pressable>
-                {iosDateOpen && (
-                  <DateTimePicker
-                    value={isoToDate(receiptDate)}
-                    mode="date"
-                    display="inline"
-                    maximumDate={new Date()}
-                    onChange={(_event: DateTimePickerEvent, date?: Date) => {
-                      if (date) setDate(date);
-                      setIosDateOpen(false);
-                    }}
-                  />
-                )}
-                {dateProblem ? (
-                  <Text style={styles.errorHint}>{dateProblem}</Text>
-                ) : isLowConfidence("receiptDate") ? (
-                  <Text style={styles.lowHint}>
-                    {result.receiptDate ? "Low OCR confidence — check this against the receipt." : "Couldn't read the date, so it's set to today. Tap to change."}
-                  </Text>
-                ) : null}
-              </View>
+              )}
+            </View>
+            {iosDateOpen && Platform.OS !== "web" && (
+              <DateTimePicker
+                value={isoToDate(receiptDate)}
+                mode="date"
+                display="inline"
+                maximumDate={new Date()}
+                onChange={(_event: DateTimePickerEvent, date?: Date) => {
+                  if (date) setDate(date);
+                  setIosDateOpen(false);
+                }}
+              />
             )}
+            {dateProblem && Platform.OS !== "web" ? <Text style={styles.errorHint}>{dateProblem}</Text> : null}
+            {!result.receiptDate && isLowConfidence("receiptDate") && Platform.OS !== "web" ? (
+              <Text style={styles.lowHint}>No date was read, so it is set to today. Tap to change it.</Text>
+            ) : null}
           </Section>
 
           <Section
             title={`Line items (${items.length})`}
-            action={<Pressable onPress={addItem} hitSlop={8}><Text style={styles.addLink}>+ Add item</Text></Pressable>}
+            action={<Pressable onPress={addItem} hitSlop={8} style={styles.addButton} accessibilityRole="button"><Text style={styles.addLink}>+ Add item</Text></Pressable>}
           >
             <Text style={styles.hint}>Qty is required. Use 0 for delivery, VAT and fees.</Text>
-            {!result.ocrError && !result.lineItems?.length ? (
-              <View style={styles.ocrBanner}>
-                <Text style={styles.ocrBannerText}>The scan couldn&apos;t read the line items. Type each item from the receipt.</Text>
-              </View>
-            ) : items.some((it) => it.ocr === "low") ? (
-              <View style={styles.ocrBanner}>
-                <Text style={styles.ocrBannerText}>Low OCR confidence: these items don&apos;t add up to the total. Check each one against the receipt.</Text>
-              </View>
-            ) : items.some((it) => it.ocr) ? (
-              <View style={styles.ocrBanner}>
-                <Text style={styles.ocrBannerText}>Read by the scan, which isn&apos;t always right. Check each item against the receipt.</Text>
-              </View>
-            ) : null}
             {items.map((item, index) => {
               const named = item.name.trim().length > 0;
               const qtyBad = named && toHundredths(item.quantity) === null;
@@ -379,9 +406,9 @@ export default function ReviewScreen() {
                   <View style={styles.itemTop}>
                     <View style={styles.itemLabelRow}>
                       <Text style={styles.itemIndex}>Item {index + 1}</Text>
-                      {item.ocr && <Text style={styles.ocrBadge}>{item.ocr === "low" ? "Check — unsure" : "Check"}</Text>}
+                      {item.ocr && <Text style={styles.checkTag}>Check</Text>}
                     </View>
-                    <Pressable onPress={() => removeItem(item.id)} hitSlop={8} accessibilityLabel={`Remove item ${index + 1}`}>
+                    <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={`Remove item ${index + 1}`}>
                       <Text style={styles.removeText}>Remove</Text>
                     </Pressable>
                   </View>
@@ -393,7 +420,8 @@ export default function ReviewScreen() {
                   )}
                   {materials.length > 0 && (
                     <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Choose a requested material for item ${index + 1}`}>
-                      <Text style={styles.pickButtonText}>Choose from requested materials ▾</Text>
+                      <Text style={styles.pickButtonText}>Match to a requested material</Text>
+                      <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
                     </Pressable>
                   )}
                   <View style={styles.itemRow}>
@@ -417,10 +445,12 @@ export default function ReviewScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          <Text style={[styles.totalsLine, { color: totalsMatch ? COLORS.success : RED }]}>
-            Lines {formatPesoCents(linesCents)} of {totalCents === null ? "—" : formatPesoCents(totalCents)}
-            {totalsMatch ? "  ✓" : ""}
-          </Text>
+          <View style={styles.totalsRow}>
+            {totalsMatch && <IconSymbol name="checkmark.circle.fill" size={16} color={COLORS.success} />}
+            <Text style={[styles.totalsLine, { color: totalsMatch ? COLORS.success : RED }]}>
+              Lines {formatPesoCents(linesCents)} of {totalCents === null ? "—" : formatPesoCents(totalCents)}
+            </Text>
+          </View>
           {fix && (
             <Pressable onPress={applyFix} style={({ pressed }) => [styles.fixButton, pressed && styles.pressed]} accessibilityRole="button">
               <Text style={styles.fixButtonText}>{fixLabel()}</Text>
@@ -429,7 +459,7 @@ export default function ReviewScreen() {
           )}
           {triedContinue && <BlockedReasons reasons={blockedReasons} />}
           <Pressable style={[styles.submitButton, !canContinue && styles.submitButtonDisabled]} onPress={handleContinue} accessibilityRole="button" accessibilityState={{ disabled: !canContinue }}>
-            <Text style={styles.submitButtonText}>Looks correct — Continue</Text>
+            <Text style={styles.submitButtonText}>Looks correct, continue</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -480,21 +510,23 @@ type FieldProps = {
   keyboardType?: "default" | "decimal-pad" | "numeric" | "numbers-and-punctuation";
   autoCapitalize?: "none" | "characters" | "words" | "sentences";
   placeholder?: string;
-  lowConfidence?: boolean;
-  lowHint?: string;
+  // The scan wasn't sure about this value: amber field and a "Check" tag.
+  check?: boolean;
   fromVendorList?: boolean;
   error?: string | null;
+  style?: StyleProp<ViewStyle>;
 };
 
-function Field({ label, value, onChangeText, onBlur, keyboardType, autoCapitalize, placeholder, lowConfidence, lowHint, fromVendorList, error }: FieldProps) {
+function Field({ label, value, onChangeText, onBlur, keyboardType, autoCapitalize, placeholder, check, fromVendorList, error, style }: FieldProps) {
+  const required = error === "Required";
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, style]}>
       <View style={styles.labelRow}>
         <Text style={styles.fieldLabel}>{label}</Text>
-        {fromVendorList && <VendorListBadge />}
+        {required ? <Text style={styles.requiredTag}>Required</Text> : fromVendorList ? <VendorListBadge /> : check ? <Text style={styles.checkTag}>Check</Text> : null}
       </View>
       <TextInput
-        style={[styles.input, lowConfidence && styles.inputLow, !!error && styles.inputError]}
+        style={[styles.input, check && !error && styles.inputLow, !!error && styles.inputError, required && styles.inputRequired]}
         value={value}
         onChangeText={onChangeText}
         onBlur={onBlur}
@@ -504,11 +536,7 @@ function Field({ label, value, onChangeText, onBlur, keyboardType, autoCapitaliz
         placeholder={placeholder ?? "—"}
         placeholderTextColor={COLORS.muted}
       />
-      {error ? (
-        <Text style={styles.errorHint}>{error}</Text>
-      ) : lowConfidence ? (
-        <Text style={styles.lowHint}>{lowHint ?? "Low OCR confidence — check this against the receipt."}</Text>
-      ) : null}
+      {error && !required ? <Text style={styles.errorHint}>{error}</Text> : null}
     </View>
   );
 }
@@ -520,62 +548,74 @@ const styles = StyleSheet.create({
   thumbRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 10, marginBottom: 10 },
   thumb: { width: 56, height: 72, borderRadius: 8, backgroundColor: COLORS.bg },
   thumbPdf: { alignItems: "center", justifyContent: "center" },
-  thumbName: { fontSize: 14, fontWeight: "700", color: COLORS.heading },
-  thumbHint: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
+  thumbTitle: { fontSize: 14, fontFamily: FONT.extrabold, color: COLORS.heading },
+  thumbName: { fontSize: 12, fontFamily: FONT.medium, color: COLORS.heading, marginTop: 1 },
+  thumbHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+  banner: { flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: COLORS.amberBannerFill, borderWidth: 1, borderColor: COLORS.amberBorder, borderRadius: 14, padding: 12, marginBottom: 10 },
+  bannerTitle: { fontSize: 14, fontFamily: FONT.extrabold, color: COLORS.amberBannerText },
+  bannerText: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.amberBannerText, lineHeight: 18, marginTop: 2 },
+  pair: { flexDirection: "row", gap: 10 },
+  half: { flex: 1 },
+  checkTag: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.amberText, backgroundColor: COLORS.amberBannerFill, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },
+  requiredTag: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.errorText },
+  inputRequired: { backgroundColor: COLORS.errorFill, borderWidth: 1.5 },
+  addButton: { minHeight: 44, justifyContent: "center", paddingLeft: 8 },
+  removeButton: { minHeight: 44, justifyContent: "center", paddingLeft: 12 },
+  totalsRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8 },
   birBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, marginBottom: 10 },
   birFormal: { backgroundColor: COLORS.successBg },
   birInformal: { backgroundColor: AMBER_BG },
-  birText: { fontSize: 12, fontWeight: "700" },
-  birNote: { fontSize: 12, color: COLORS.muted, marginTop: -4, marginBottom: 10 },
+  birText: { fontSize: 12, fontFamily: FONT.bold },
+  birNote: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: -4, marginBottom: 10 },
   warnBox: { backgroundColor: AMBER_BG, borderRadius: 12, padding: 12, marginBottom: 10, gap: 4 },
-  warnTitle: { fontSize: 13, fontWeight: "800", color: AMBER },
-  warnLine: { fontSize: 12, color: AMBER },
+  warnTitle: { fontSize: 13, fontFamily: FONT.extrabold, color: AMBER },
+  warnLine: { fontSize: 12, fontFamily: FONT.regular, color: AMBER },
   section: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 14, marginBottom: 12 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  sectionTitle: { fontSize: 15, fontWeight: "800", color: COLORS.heading },
+  sectionTitle: { fontSize: 15, fontFamily: FONT.extrabold, color: COLORS.heading },
   field: { marginBottom: 12 },
   labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  fieldLabel: { fontSize: 12, fontWeight: "600", color: COLORS.muted },
-  vendorBadge: { fontSize: 11, fontWeight: "700", color: COLORS.success, backgroundColor: COLORS.successBg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
-  input: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: COLORS.heading },
+  fieldLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
+  vendorBadge: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.success, backgroundColor: COLORS.successBg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
+  input: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 12, paddingHorizontal: 12, minHeight: 44, paddingVertical: 10, fontSize: 15, fontFamily: FONT.regular, color: COLORS.heading },
   dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  dateText: { fontSize: 15, color: COLORS.heading },
-  inputLow: { borderColor: AMBER, backgroundColor: "#FFFBEB" },
+  dateText: { fontSize: 15, fontFamily: FONT.regular, color: COLORS.heading },
+  inputLow: { borderColor: COLORS.amberBorder, backgroundColor: COLORS.amberFill },
   inputError: { borderColor: RED },
-  lowHint: { fontSize: 11, color: AMBER, marginTop: 4 },
-  errorHint: { fontSize: 11, color: RED, marginTop: 4 },
-  addLink: { fontSize: 13, fontWeight: "700", color: COLORS.success },
-  hint: { fontSize: 11, color: COLORS.muted, marginBottom: 8 },
-  pickButton: { alignSelf: "flex-start", borderWidth: 1, borderColor: COLORS.primary, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
-  pickButtonText: { fontSize: 12, fontWeight: "600", color: COLORS.primary },
-  scannedNote: { fontSize: 12, color: AMBER, marginTop: 4 },
+  lowHint: { fontSize: 11, fontFamily: FONT.regular, color: AMBER, marginTop: 4 },
+  errorHint: { fontSize: 11, fontFamily: FONT.regular, color: RED, marginTop: 4 },
+  addLink: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.success },
+  hint: { fontSize: 11, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 8 },
+  pickButton: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 12, paddingHorizontal: 12, backgroundColor: COLORS.card },
+  pickButtonText: { fontSize: 14, fontFamily: FONT.medium, color: COLORS.muted },
+  scannedNote: { fontSize: 12, fontFamily: FONT.regular, color: AMBER, marginTop: 4 },
   itemLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  itemCardOcr: { borderColor: AMBER, backgroundColor: "#FFFBEB" },
-  ocrBadge: { fontSize: 10, fontWeight: "700", color: AMBER, backgroundColor: AMBER_BG, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },
-  rejectBox: { backgroundColor: "#FEE2E2", borderRadius: 10, padding: 12, marginBottom: 12, gap: 4 },
-  rejectTitle: { fontSize: 13, fontWeight: "700", color: "#C1121F" },
-  rejectReason: { fontSize: 13, color: "#7F1D1D", fontStyle: "italic" },
-  rejectHint: { fontSize: 12, color: "#7F1D1D" },
+  itemCardOcr: { borderColor: COLORS.amberBorder, backgroundColor: COLORS.amberFill },
+  ocrBadge: { fontSize: 10, fontFamily: FONT.bold, color: AMBER, backgroundColor: AMBER_BG, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },
+  rejectBox: { backgroundColor: COLORS.errorFill, borderRadius: 10, padding: 12, marginBottom: 12, gap: 4 },
+  rejectTitle: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.errorText },
+  rejectReason: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.errorText, fontStyle: "italic" },
+  rejectHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.errorText },
   ocrBanner: { backgroundColor: AMBER_BG, borderRadius: 10, padding: 10, marginBottom: 10 },
-  ocrBannerText: { fontSize: 12, color: AMBER },
+  ocrBannerText: { fontSize: 12, fontFamily: FONT.regular, color: AMBER },
   itemCard: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 10, marginBottom: 10, gap: 8, backgroundColor: COLORS.bg },
   itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  itemIndex: { fontSize: 12, fontWeight: "700", color: COLORS.muted },
-  removeText: { fontSize: 12, fontWeight: "700", color: RED },
+  itemIndex: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted },
+  removeText: { fontSize: 12, fontFamily: FONT.bold, color: RED },
   itemRow: { flexDirection: "row", gap: 10 },
   itemQty: { flex: 1 },
   itemAmount: { flex: 2 },
-  miniLabel: { fontSize: 11, color: COLORS.muted, marginBottom: 4 },
+  miniLabel: { fontSize: 11, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 4 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
-  totalsLine: { fontSize: 13, fontWeight: "700", textAlign: "center", marginBottom: 8 },
-  fixButton: { borderWidth: 1, borderColor: AMBER, backgroundColor: AMBER_BG, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, alignItems: "center", marginBottom: 8 },
-  fixButtonText: { fontSize: 14, fontWeight: "700", color: AMBER },
-  fixButtonHint: { fontSize: 11, color: AMBER, marginTop: 2 },
+  totalsLine: { fontSize: 13, fontFamily: FONT.bold, textAlign: "center" },
+  fixButton: { minHeight: 44, justifyContent: "center", borderWidth: 1, borderColor: AMBER, backgroundColor: AMBER_BG, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, alignItems: "center", marginBottom: 8 },
+  fixButtonText: { fontSize: 14, fontFamily: FONT.bold, color: AMBER },
+  fixButtonHint: { fontSize: 11, fontFamily: FONT.regular, color: AMBER, marginTop: 2 },
   pressed: { opacity: 0.85 },
   zoomBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 12 },
   zoomImage: { width: "100%", height: "88%" },
-  zoomHint: { color: "rgba(255,255,255,0.8)", fontSize: 13, marginTop: 10 },
-  submitButton: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
+  zoomHint: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontFamily: FONT.regular, marginTop: 10 },
+  submitButton: { minHeight: 48, backgroundColor: COLORS.primary, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
+  submitButtonText: { color: "#FFF", fontFamily: FONT.bold, fontSize: 16 },
 });
