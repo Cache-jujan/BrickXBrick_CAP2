@@ -67,6 +67,18 @@ export function ReportsPage() {
     setFilters(next);
   }
 
+  // One-click period (This month, Last 3 months, ...).
+  function chooseRange(from, to) {
+    datesTouched.current = true;
+    setFieldErrors({});
+    setFilters({ ...filters, from, to });
+  }
+
+  function clearProjects() {
+    setFieldErrors({});
+    setFilters({ ...filters, projectIds: [] });
+  }
+
   function useProjectDates() {
     const span = spanOfProjects(selectedProjects);
     if (!span) return;
@@ -156,9 +168,18 @@ export function ReportsPage() {
         submitting={submitting}
         onToggleProject={toggleProject}
         onDateChange={changeDate}
+        onRangeChange={chooseRange}
+        onClearProjects={clearProjects}
         onUseProjectDates={useProjectDates}
         onSubmit={generate}
       />
+
+      {!summary && !submitting && problems.length === 0 && (
+        <div className="reports-placeholder">
+          <p className="reports-placeholder-title">Your report will appear here</p>
+          <p>Choose one or more projects and a period, then select Generate report. You will see the budget against spend, a chart and the BIR-deductible spending, and you can export it as a PDF.</p>
+        </div>
+      )}
 
       {problems.length > 0 && (
         <div ref={problemsRef}>

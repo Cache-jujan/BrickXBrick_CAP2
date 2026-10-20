@@ -1,7 +1,7 @@
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
-import { MAX_PROJECTS, niceDay, projectSpan, spanOfProjects } from "../../utils/reportFilters";
+import { MAX_PROJECTS, niceDay, projectSpan, quickRanges, spanOfProjects } from "../../utils/reportFilters";
 import "./ReportFilters.css";
 
 function spanText(project) {
@@ -25,6 +25,8 @@ export function ReportFilters({
   submitting,
   onToggleProject,
   onDateChange,
+  onRangeChange,
+  onClearProjects,
   onUseProjectDates,
   onSubmit,
 }) {
@@ -40,10 +42,17 @@ export function ReportFilters({
         onSubmit();
       }}
     >
+      <div className="report-filters-layout">
       <fieldset className="report-filters-projects">
         <legend>
           Projects <span className="report-filters-hint">(choose 1 to {MAX_PROJECTS})</span>
         </legend>
+        <div className="report-filters-count">
+          <span>{value.projectIds.length} of {MAX_PROJECTS} selected</span>
+          {value.projectIds.length > 0 && (
+            <button type="button" className="report-filters-clear" onClick={onClearProjects}>Clear</button>
+          )}
+        </div>
 
         {projectsLoading && <p className="report-filters-note">Loading projects…</p>}
         {projectsError && <p className="report-filters-error">{projectsError}</p>}
@@ -72,6 +81,23 @@ export function ReportFilters({
         {errors.projectIds && <p className="report-filters-error">{errors.projectIds}</p>}
       </fieldset>
 
+      <div className="report-filters-side">
+      <p className="report-filters-side-title">Period</p>
+      <div className="report-filters-quick" role="group" aria-label="Quick periods">
+        {quickRanges().map((range) => {
+          const active = value.from === range.from && value.to === range.to;
+          return (
+            <button
+              key={range.label}
+              type="button"
+              className={"report-filters-chip" + (active ? " report-filters-chip-active" : "")}
+              onClick={() => onRangeChange(range.from, range.to)}
+            >
+              {range.label}
+            </button>
+          );
+        })}
+      </div>
       <div className="report-filters-dates">
         <Field
           label="From"
@@ -89,6 +115,14 @@ export function ReportFilters({
           error={errors.to}
           onChange={(event) => onDateChange("to", event.target.value)}
         />
+      </div>
+      {span && (
+        <p className="report-filters-note">
+          The projects you chose run from {niceDay(span.from)} to {niceDay(span.to)}.
+          {span.trimmed ? " A report can cover at most 366 days, so the range was cut there." : ""}
+        </p>
+      )}
+      <div className="report-filters-submit">
         {span && (
           <Button type="button" variant="secondary" onClick={onUseProjectDates}>
             Use project dates
@@ -98,13 +132,8 @@ export function ReportFilters({
           {submitting ? "Generating…" : "Generate report"}
         </Button>
       </div>
-
-      {span && (
-        <p className="report-filters-note">
-          The projects you chose run from {niceDay(span.from)} to {niceDay(span.to)}.
-          {span.trimmed ? " A report can cover at most 366 days, so the range was cut there." : ""}
-        </p>
-      )}
+      </div>
+      </div>
     </form>
   );
 }
