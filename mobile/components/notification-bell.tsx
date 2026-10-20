@@ -60,7 +60,7 @@ export function NotificationBell({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
-  bell: { padding: 4, position: "relative" },
+  bell: { width: 44, height: 44, alignItems: "center", justifyContent: "center", position: "relative" },
   badge: {
     position: "absolute",
     top: 0,

@@ -7,8 +7,24 @@ import { NetworkProvider } from "@/lib/sync/network-context";
 import { OfflineBanner } from "@/components/offline-banner";
 import { NotificationToast } from "@/components/notification-toast";
 import { nextRouteAfterLogin, restoreSession } from "@/lib/auth";
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+  useFonts,
+} from "@expo-google-fonts/plus-jakarta-sans";
 
 export default function RootLayout() {
+  // Redesigned screens use Plus Jakarta Sans (see FONT in constants/expense-flow-colors).
+  const [fontsLoaded, fontError] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
   // Offline-first: bring back the saved sign-in before any screen checks it,
   // so the app opens straight to your work even with no connection.
   const [restored] = useState(() => restoreSession());
@@ -22,6 +38,9 @@ export default function RootLayout() {
     sentHome.current = true;
     router.replace(nextRouteAfterLogin(restored.user));
   }, [navReady, restored]);
+  // Wait for the fonts. If they fail to load, carry on with the system font.
+  if (!fontsLoaded && !fontError) return null;
+
   return (
     <ExpenseDraftProvider>
       <NetworkProvider>

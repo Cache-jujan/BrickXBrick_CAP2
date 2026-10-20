@@ -1,8 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
 
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { BackButton } from "@/components/back-button";
+import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 
 type Props = {
   title: string;
@@ -11,38 +10,39 @@ type Props = {
   // Hide the back chevron on a screen the user must not leave mid-action.
   hideBack?: boolean;
   onBack?: () => void;
+  // Filled bars under the header for a multi-step flow (e.g. step 2 of 3).
+  step?: { current: number; total: number };
 };
 
 // One header for every pushed screen: back chevron, title, step caption.
-export function FlowHeader({ title, caption, hideBack, onBack }: Props) {
-  function goBack() {
-    if (onBack) return onBack();
-    if (router.canGoBack()) router.back();
-    else router.replace("/");
-  }
-
+export function FlowHeader({ title, caption, hideBack, onBack, step }: Props) {
   return (
-    <View style={styles.row}>
-      {hideBack ? (
-        <View style={styles.backSpacer} />
-      ) : (
-        <Pressable onPress={goBack} hitSlop={10} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
-          <IconSymbol name="chevron.left" size={26} color={COLORS.heading} />
-        </Pressable>
-      )}
-      <View style={styles.text}>
-        {caption ? <Text style={styles.caption} numberOfLines={1}>{caption}</Text> : null}
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+    <View>
+      <View style={styles.row}>
+        {hideBack ? <View style={styles.backSpacer} /> : <BackButton onPress={onBack} />}
+        <View style={styles.text}>
+          {caption ? <Text style={styles.caption} numberOfLines={1}>{caption}</Text> : null}
+          <Text style={styles.title} numberOfLines={2}>{title}</Text>
+        </View>
       </View>
+      {step ? (
+        <View style={styles.progress} accessibilityLabel={`Step ${step.current} of ${step.total}`}>
+          {Array.from({ length: step.total }, (_, i) => (
+            <View key={i} style={[styles.bar, i < step.current && styles.barFilled]} />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 10 },
-  back: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18 },
+  row: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 8, minHeight: MIN_TAP + 12 },
   backSpacer: { width: 8 },
   text: { flex: 1 },
-  caption: { fontSize: 12, color: COLORS.muted },
-  title: { fontSize: 20, fontWeight: "800", color: COLORS.heading },
+  caption: { fontSize: 12, fontFamily: FONT.medium, color: COLORS.muted },
+  title: { fontSize: 22, fontFamily: FONT.extrabold, color: COLORS.heading },
+  progress: { flexDirection: "row", gap: 6, paddingHorizontal: 16, paddingBottom: 10 },
+  bar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: COLORS.border },
+  barFilled: { backgroundColor: COLORS.primary },
 });
