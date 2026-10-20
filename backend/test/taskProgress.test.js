@@ -2,7 +2,7 @@
 // the transaction are fakes, so each rule is checked on its own.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { submitTaskProgress, TaskProgressError } = require("../src/lib/taskProgress");
+const { submitTaskProgress, TaskProgressError, taskReviewNotice } = require("../src/lib/taskProgress");
 
 const SM = { id: "sm-1" };
 const TASK_ID = "task-1";
@@ -148,4 +148,16 @@ test("a replay of the submission that is waiting still returns it (not blocked b
   const t = makeDeps({ existing: original, pending: true });
   const { replayed } = await submitTaskProgress(input({ uploadPhoto: t.uploadPhoto }), t.deps);
   assert.equal(replayed, true);
+});
+
+test("review notice: accepted says the task is complete", () => {
+  const n = taskReviewNotice({ decision: "Acknowledge", taskName: "Gather stone" });
+  assert.equal(n.type, "TaskAcknowledged");
+  assert.match(n.message, /"Gather stone" was accepted/);
+});
+
+test("review notice: flagged carries the PM's reason", () => {
+  const n = taskReviewNotice({ decision: "Flag", taskName: "Gather stone", reason: " Photo is blurry " });
+  assert.equal(n.type, "TaskFlagged");
+  assert.equal(n.message, 'Your photo for "Gather stone" was flagged: Photo is blurry. Please submit a new photo.');
 });

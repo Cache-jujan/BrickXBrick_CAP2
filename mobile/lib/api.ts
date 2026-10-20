@@ -68,6 +68,13 @@ export type AssignedTask = {
   pendingnote?: string | null;
   latestreviewstatus?: string | null;
   latestreviewreason?: string | null;
+  // Dashboard: project dates, the milestone deadline, and when it was completed.
+  projectid?: string;
+  projectstartdate?: string | null;
+  projectenddate?: string | null;
+  milestoneduedate?: string | null;
+  completedat?: string | null;
+  lastupdatedat?: string | null;
 };
 
 export async function fetchAssignedTasks(): Promise<AssignedTask[]> {

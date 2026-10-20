@@ -4,11 +4,11 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";

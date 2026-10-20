@@ -3,14 +3,16 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { Redirect, router, useFocusEffect } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useOnNewNotifications } from "@/lib/notification-events";
+import { dueLabel, projectSummaries, splitTasks, toDay } from "@/lib/sm-dashboard";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { type AssignedTask } from "@/lib/api";
 import { loadAssignedTasks } from "@/lib/cached-api";
@@ -30,6 +32,7 @@ export default function SiteManagerHomeScreen() {
   const [error, setError] = useState<string | null>(null);
   // Set when the list on screen is the copy saved on this phone (offline).
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadTasks = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -47,6 +50,9 @@ export default function SiteManagerHomeScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  // A pop-up just announced something new (e.g. the PM reviewed a task).
+  useOnNewNotifications(() => { loadTasks(true); });
 
   useFocusEffect(
     useCallback(() => {
@@ -67,8 +73,13 @@ export default function SiteManagerHomeScreen() {
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
   const firstName = session.user.name.split(" ")[0] || "there";
-  const pendingTasks = tasks.filter((task) => task.status !== "Completed");
-  const completedTasks = tasks.filter((task) => task.status === "Completed");
+  // Open work nearest-deadline first; completed tasks move to "Archived"
+  // 7 days after completion (lib/sm-dashboard.js).
+  const { open: openTasks, recent: recentCompleted, archived } = splitTasks(tasks);
+  const nextUp = openTasks.slice(0, 3);
+  const dueToday = openTasks.filter((t) => dueLabel(t.duedate).tone === "today").length;
+  const overdue = openTasks.filter((t) => dueLabel(t.duedate).tone === "late").length;
+  const projects = projectSummaries(tasks);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -96,8 +107,6 @@ export default function SiteManagerHomeScreen() {
             </Pressable>
           </View>
         </View>
-
-        <Text style={styles.subtitle}>Keep your site work moving and up to date.</Text>
 
         <View style={styles.actionGrid}>
           <Pressable
@@ -130,21 +139,86 @@ export default function SiteManagerHomeScreen() {
         </View>
 
         <View style={styles.summaryCard}>
-          <View>
-            <Text style={styles.summaryLabel}>MY TASKS</Text>
-            <Text style={styles.summaryTitle}>Stay on top of today’s work</Text>
-            <Text style={styles.summaryBody}>
-              {loading ? "Checking your assigned tasks…" : `${pendingTasks.length} task${pendingTasks.length === 1 ? "" : "s"} need your attention.`}
-            </Text>
+          <View style={styles.summaryHead}>
+            <View style={styles.flex}>
+              <Text style={styles.summaryLabel}>MY TASKS</Text>
+              <Text style={styles.summaryTitle}>
+                {loading
+                  ? "Checking your tasks…"
+                  : openTasks.length === 0
+                    ? "All caught up"
+                    : `${openTasks.length} open task${openTasks.length === 1 ? "" : "s"}`}
+              </Text>
+              {!loading && (dueToday > 0 || overdue > 0) && (
+                <Text style={styles.summaryAlert}>
+                  {[overdue > 0 && `${overdue} overdue`, dueToday > 0 && `${dueToday} due today`].filter(Boolean).join(" · ")}
+                </Text>
+              )}
+            </View>
+            <View style={styles.summaryIcon}>
+              <IconSymbol name="list.clipboard.fill" size={26} color="#FFFFFF" />
+            </View>
           </View>
-          <View style={styles.summaryIcon}>
-            <View style={styles.checkLine} />
-          </View>
+
+          {nextUp.map((task) => {
+            const due = dueLabel(task.duedate);
+            return (
+              <Pressable
+                key={task.taskid}
+                onPress={() => router.push(`/site-manager/task/${task.taskid}`)}
+                style={({ pressed }) => [styles.summaryRow, pressed && styles.taskCardPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${task.taskname}, ${due.text}`}
+              >
+                <Text style={styles.summaryRowName} numberOfLines={1}>{task.taskname}</Text>
+                <Text style={[styles.summaryRowDue, DUE_TONE[due.tone]]}>{due.text}</Text>
+              </Pressable>
+            );
+          })}
+          {openTasks.length > nextUp.length && (
+            <Text style={styles.summaryMore}>+{openTasks.length - nextUp.length} more below</Text>
+          )}
         </View>
+
+        {projects.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>My projects</Text>
+              <Text style={styles.sectionMeta}>{projects.length}</Text>
+            </View>
+            <View style={styles.taskList}>
+              {projects.map((p) => {
+                const next = p.next ? dueLabel(p.next.date) : null;
+                return (
+                  <View key={p.projectId} style={styles.projectCard}>
+                    <View style={styles.projectTop}>
+                      <IconSymbol name="folder.fill" size={16} color={COLORS.primary} />
+                      <Text style={styles.projectName} numberOfLines={2}>{p.name}</Text>
+                    </View>
+                    <View style={styles.projectDates}>
+                      <IconSymbol name="calendar" size={13} color={COLORS.muted} />
+                      <Text style={styles.projectDateText}>
+                        {formatDay(p.startDate)} – {p.endDate ? formatDay(p.endDate) : "no end date"}
+                      </Text>
+                    </View>
+                    <Text style={styles.projectMeta}>
+                      {p.openCount === 0 ? "No open tasks" : `${p.openCount} open task${p.openCount === 1 ? "" : "s"}`}
+                    </Text>
+                    {p.next && next && (
+                      <Text style={[styles.projectNext, DUE_TONE[next.tone]]} numberOfLines={2}>
+                        Nearest deadline: {p.next.label} · {next.text}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Assigned tasks</Text>
-          <Text style={styles.sectionMeta}>{tasks.length} total</Text>
+          <Text style={styles.sectionMeta}>{openTasks.length} open</Text>
         </View>
 
         {(!isOnline || savedAt) && (
@@ -182,11 +256,20 @@ export default function SiteManagerHomeScreen() {
           </View>
         ) : (
           <View style={styles.taskList}>
-            {pendingTasks.map((task) => <TaskCard key={task.taskid} task={task} />)}
-            {completedTasks.length > 0 && (
-              <Text style={styles.completedHeading}>Completed</Text>
+            {openTasks.map((task) => <TaskCard key={task.taskid} task={task} />)}
+            {recentCompleted.length > 0 && (
+              <Text style={styles.completedHeading}>Completed this week</Text>
             )}
-            {completedTasks.map((task) => <TaskCard key={task.taskid} task={task} />)}
+            {recentCompleted.map((task) => <TaskCard key={task.taskid} task={task} />)}
+            {archived.length > 0 && (
+              <Pressable onPress={() => setShowArchived((v) => !v)} style={styles.archiveToggle} accessibilityRole="button">
+                <Text style={styles.archiveToggleText}>
+                  {showArchived ? "Hide archived" : `Show archived (${archived.length})`}
+                </Text>
+                <Text style={styles.archiveHint}>Completed more than 7 days ago</Text>
+              </Pressable>
+            )}
+            {showArchived && archived.map((task) => <TaskCard key={task.taskid} task={task} />)}
           </View>
         )}
 
@@ -205,10 +288,7 @@ function TaskCard({ task }: { task: AssignedTask }) {
   const awaitingReview = !completed && !!task.pendingphotoevidenceurl;
   // F10: an update saved on this phone and not sent yet.
   const queuedOnPhone = !completed && !!getPendingTaskUpdateForTask(task.taskid);
-  const dueDate = new Date(task.duedate);
-  const formattedDueDate = Number.isNaN(dueDate.getTime())
-    ? task.duedate
-    : dueDate.toLocaleDateString();
+  const due = dueLabel(task.duedate);
 
   return (
     <Pressable
@@ -216,8 +296,13 @@ function TaskCard({ task }: { task: AssignedTask }) {
       style={({ pressed }) => [styles.taskCard, pressed && styles.taskCardPressed]}
     >
       <View style={styles.taskTopRow}>
-        <Text style={styles.taskStatus}>{completed ? "COMPLETED" : "ASSIGNED"}</Text>
-        <Text style={styles.taskDue}>Due {formattedDueDate}</Text>
+        <View style={styles.taskStatusRow}>
+          {completed && <IconSymbol name="checkmark.circle.fill" size={14} color={COLORS.success} />}
+          <Text style={[styles.taskStatus, completed && styles.taskStatusDone]}>{completed ? "COMPLETED" : "ASSIGNED"}</Text>
+        </View>
+        <Text style={[styles.taskDue, !completed && DUE_TONE[due.tone]]}>
+          {completed ? `Due ${formatDay(task.duedate)}` : due.text}
+        </Text>
       </View>
       <Text style={styles.taskName}>{task.taskname}</Text>
       {task.projectname && (
@@ -240,21 +325,49 @@ function TaskCard({ task }: { task: AssignedTask }) {
   );
 }
 
+function formatDay(value?: string | null) {
+  const day = toDay(value);
+  return day ? day.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+}
+
+const DUE_TONE = StyleSheet.create({
+  late: { color: "#D92D20", fontWeight: "800" },
+  today: { color: "#E85D0C", fontWeight: "800" },
+  soon: { color: "#B45309", fontWeight: "700" },
+  normal: {},
+});
+
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
   content: { padding: 20, paddingBottom: 36 },
   headerRow: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 },
   title: { color: "#1A1A1A", fontSize: 25, fontWeight: "800", letterSpacing: -0.4, maxWidth: 250 },
-  subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   settingsButton: { borderColor: "#D8CDBD", borderRadius: 10, borderWidth: 1, padding: 7 },
-  summaryCard: { backgroundColor: "#1A1A1A", borderRadius: 18, flexDirection: "row", justifyContent: "space-between", marginTop: 24, minHeight: 160, overflow: "hidden", padding: 20 },
+  summaryCard: { backgroundColor: "#1A1A1A", borderRadius: 18, marginTop: 20, overflow: "hidden", padding: 20 },
+  summaryHead: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 6 },
   summaryLabel: { color: "#D8C7AA", fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
-  summaryTitle: { color: "#FFFFFF", fontSize: 21, fontWeight: "800", lineHeight: 27, marginTop: 12, maxWidth: 230 },
-  summaryBody: { color: "#C9C0B3", fontSize: 13, lineHeight: 19, marginTop: 10, maxWidth: 230 },
+  summaryTitle: { color: "#FFFFFF", fontSize: 21, fontWeight: "800", lineHeight: 27, marginTop: 10 },
+  summaryAlert: { color: "#FFB27A", fontSize: 13, fontWeight: "700", marginTop: 6 },
   summaryIcon: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 28, height: 56, justifyContent: "center", width: 56 },
-  checkLine: { borderBottomColor: "#FFFFFF", borderBottomWidth: 3, borderRightColor: "#FFFFFF", borderRightWidth: 3, height: 19, transform: [{ rotate: "45deg" }], width: 11 },
+  summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, borderTopColor: "#333", borderTopWidth: 1, paddingVertical: 11 },
+  summaryRowName: { color: "#FFFFFF", flex: 1, fontSize: 14, fontWeight: "700" },
+  summaryRowDue: { color: "#C9C0B3", fontSize: 12 },
+  summaryMore: { color: "#C9C0B3", fontSize: 12, marginTop: 4 },
+  projectCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, padding: 14, gap: 6 },
+  projectTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  projectName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "800" },
+  projectDates: { flexDirection: "row", alignItems: "center", gap: 6 },
+  projectDateText: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
+  projectMeta: { color: COLORS.heading, fontSize: 12, fontWeight: "600" },
+  projectNext: { color: COLORS.muted, fontSize: 12, lineHeight: 17 },
+  taskStatusRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  taskStatusDone: { color: COLORS.success },
+  archiveToggle: { alignItems: "center", borderColor: "#E7DDCF", borderRadius: 12, borderStyle: "dashed", borderWidth: 1, paddingVertical: 12, marginTop: 4 },
+  archiveToggleText: { color: COLORS.primary, fontSize: 13, fontWeight: "800" },
+  archiveHint: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 26 },
   sectionTitle: { color: COLORS.heading, fontSize: 17, fontWeight: "800" },
   sectionMeta: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },

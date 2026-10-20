@@ -148,4 +148,21 @@ async function taskPhotoExists(url, taskId, deps = {}) {
   return objectExists(key);
 }
 
-module.exports = { submitTaskProgress, getTaskForUser, taskPhotoExists, hasPendingReview, awaitingReview, TaskProgressError };
+/**
+ * The notification the Site Manager gets when their photo is reviewed
+ * (migration 043). Acknowledge = accepted, task Completed; Flag = they need to
+ * send a new photo, so the PM's reason is part of the message.
+ */
+function taskReviewNotice({ decision, taskName, reason }) {
+    const name = taskName ? `"${taskName}"` : "your task";
+    if (decision === "Acknowledge") {
+        return { type: "TaskAcknowledged", message: `Your photo for ${name} was accepted. The task is complete.` };
+    }
+    const why = String(reason || "").trim();
+    return {
+        type: "TaskFlagged",
+        message: `Your photo for ${name} was flagged${why ? `: ${why}` : ""}. Please submit a new photo.`,
+    };
+}
+
+module.exports = { submitTaskProgress, getTaskForUser, taskPhotoExists, hasPendingReview, awaitingReview, taskReviewNotice, TaskProgressError };

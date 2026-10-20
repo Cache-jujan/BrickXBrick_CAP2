@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useOnNewNotifications } from "@/lib/notification-events";
 import { useFocusEffect } from "expo-router";
 
 import {
@@ -133,6 +134,9 @@ export default function HomeScreen() {
       setLoading(false);
     }
   }, [isSiteManager]);
+
+  // A pop-up just announced something new (e.g. the PM reviewed a task).
+  useOnNewNotifications(() => { load(); });
 
   useFocusEffect(
     useCallback(() => {

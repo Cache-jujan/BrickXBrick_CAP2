@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { metaFor, routeForNotification } from "@/lib/notificationMeta";
+import { emitNewNotifications } from "@/lib/notification-events";
 import { kvGet, kvSet } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { pickNewNotifications } from "@/lib/sync/new-notifications";
@@ -42,6 +43,7 @@ export function NotificationToast() {
       const { fresh, newestAt } = pickNewNotifications(rows, kvGet(key));
       if (newestAt) kvSet(key, newestAt);
       if (fresh.length === 0) return;
+      emitNewNotifications(); // screens on show reload (task status, bell count)
       setShown({ n: fresh[0], more: fresh.length - 1, role });
       slide.setValue(-160);
       Animated.timing(slide, { toValue: 0, duration: 250, useNativeDriver: true }).start();

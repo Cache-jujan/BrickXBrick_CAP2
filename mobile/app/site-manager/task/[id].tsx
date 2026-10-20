@@ -5,16 +5,17 @@ import {
   Image,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useOnNewNotifications } from "@/lib/notification-events";
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import { submitTaskProgress, type AssignedTask } from "@/lib/api";
@@ -110,6 +111,9 @@ export default function SiteManagerTaskDetailScreen() {
       setRefreshing(false);
     }
   }, [id]);
+
+  // A pop-up just announced something new (e.g. the PM reviewed a task).
+  useOnNewNotifications(() => { loadTask(true); });
 
   useFocusEffect(
     useCallback(() => {

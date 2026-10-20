@@ -4,13 +4,14 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useOnNewNotifications } from "@/lib/notification-events";
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import { formatPeso, formatQty } from "@/lib/money";
@@ -68,6 +69,9 @@ export default function MyRequestsScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  // A pop-up just announced something new (e.g. the PM reviewed a task).
+  useOnNewNotifications(() => { load(true); });
 
   useFocusEffect(
     useCallback(() => {
@@ -145,7 +149,7 @@ export default function MyRequestsScreen() {
         <Text style={styles.title}>My requests</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chipsRow}>
         {FILTERS.map((key) => (
           <Pressable
             key={key}
@@ -307,7 +311,10 @@ const styles = StyleSheet.create({
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 25, fontWeight: "800", marginTop: 6, marginBottom: 12 },
 
-  chipsRow: { paddingHorizontal: 20, gap: 8, paddingBottom: 14 },
+  // flexGrow 0: a horizontal ScrollView otherwise stretches to fill the
+  // screen's height, which made the filter chips huge.
+  chipsScroll: { flexGrow: 0 },
+  chipsRow: { paddingHorizontal: 20, gap: 8, paddingBottom: 14, alignItems: "center" },
   chip: {
     alignItems: "center",
     justifyContent: "center",
