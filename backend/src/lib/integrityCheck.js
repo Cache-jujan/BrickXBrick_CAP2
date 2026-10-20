@@ -12,7 +12,7 @@
 // that matches the approved hash again does (the alert is then stamped
 // restoredAt but stays on record).
 const { query: defaultQuery } = require("./db");
-const { canonicalizeExpense, getOnChainHash: defaultGetHash } = require("./blockchainService");
+const { canonicalizeExpenseV2, matchesApprovedHash, getOnChainHash: defaultGetHash } = require("./blockchainService");
 const { raiseTamperAlert } = require("./tamperAlerts");
 
 const SCAN_BATCH = 100;
@@ -44,7 +44,8 @@ async function checkExpenseIntegrity(expense, deps = {}) {
   const log = await firstChainRecord(runQuery, expense.expenseid);
   if (!log) return { state: "NotSecured", log: null };
 
-  const recomputedHash = canonicalizeExpense(expense);
+  // Shown in alerts: the current format. Old (version 1) approvals still match below.
+  const recomputedHash = canonicalizeExpenseV2(expense);
   let onChainHash;
   try {
     onChainHash = await getHash(log.txhash);
@@ -52,7 +53,7 @@ async function checkExpenseIntegrity(expense, deps = {}) {
     return { state: "Unreachable", log };
   }
 
-  if (onChainHash !== null && onChainHash === recomputedHash) {
+  if (matchesApprovedHash(expense, onChainHash)) {
     await runQuery(
       `UPDATE Expenses SET blockchainStatus = 'Confirmed', lastIntegrityCheckAt = NOW()
         WHERE expenseID = $1::uuid`,

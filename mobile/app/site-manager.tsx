@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,14 +12,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, useFocusEffect } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
-import { fetchAssignedTasks, type AssignedTask } from "@/lib/api";
+import { type AssignedTask } from "@/lib/api";
+import { loadAssignedTasks } from "@/lib/cached-api";
 import { getSession } from "@/lib/auth";
+import { useOnNewNotifications } from "@/lib/notification-events";
+import { ARCHIVE_AFTER_DAYS, dueLabel, projectSummaries, splitTasks, toDay } from "@/lib/sm-dashboard";
+import { getPendingTaskUpdateForTask } from "@/lib/sync/db";
+import { describeLoadError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { NotificationBell } from "@/components/notification-bell";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 
 type FilterKey = "Today" | "Upcoming" | "Past due" | "Completed";
 type CompletedView = "Recent" | "Archive";
+type DueTone = "late" | "today" | "soon" | "normal";
 
 const FILTERS: { key: FilterKey; label: string; icon: "calendar" | "clock.arrow.circlepath" | "exclamationmark.triangle.fill" | "checkmark.circle.fill"; tint: string; countBg: string }[] = [
   { key: "Today", label: "Today", icon: "calendar", tint: COLORS.primary, countBg: "#FFE3D1" },
@@ -35,9 +43,6 @@ const LIST_TITLES: Record<FilterKey, string> = {
   Completed: "Completed Tasks",
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-// A completed task moves to the Archive this many days after it was completed.
-const ARCHIVE_AFTER_DAYS = 7;
 const PROJECTS_PREVIEW = 3;
 const TASKS_PREVIEW = 5;
 
@@ -46,28 +51,19 @@ function startOfDay(date: Date) {
 }
 
 function dueDay(task: AssignedTask): number | null {
-  const due = new Date(task.duedate);
-  return Number.isNaN(due.getTime()) ? null : startOfDay(due);
+  return toDay(task.duedate)?.getTime() ?? null;
 }
 
 function isDone(task: AssignedTask) {
   return task.status === "Completed";
 }
 
-// completedat is only filled in for tasks acknowledged after the backend change;
-// older ones fall back to lastupdatedat (the time the PM acknowledged them).
-function completedAtOf(task: AssignedTask): Date | null {
+// When a task was completed (completedat; older ones fall back to lastupdatedat).
+function completedOn(task: AssignedTask): Date | null {
   const raw = task.completedat || task.lastupdatedat;
   if (!raw) return null;
   const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isArchived(task: AssignedTask, today: number) {
-  if (!isDone(task)) return false;
-  const completed = completedAtOf(task);
-  if (!completed) return false;
-  return today - startOfDay(completed) >= ARCHIVE_AFTER_DAYS * DAY_MS;
 }
 
 // Today / Upcoming / Past due only look at tasks that are not completed yet.
@@ -93,31 +89,26 @@ function initialsOf(name: string) {
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "SM";
 }
 
-function shortDate(date: Date) {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function formatDay(value?: string | null) {
+  const day = toDay(value);
+  return day ? day.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
 }
 
-function dueLabel(task: AssignedTask, today: number) {
-  const due = dueDay(task);
-  if (due === null) return task.duedate;
-  if (due === today) return "Today";
-  if (due === today + DAY_MS) return "Tomorrow";
-  return shortDate(new Date(task.duedate));
-}
-
-// Completed tasks show when they were finished instead of when they were due.
-function rightLabel(task: AssignedTask, today: number) {
+// Right-hand label of a task row: when it was finished, or how close the deadline is.
+function rightLabel(task: AssignedTask): { text: string; tone: DueTone } {
   if (isDone(task)) {
-    const completed = completedAtOf(task);
-    if (completed) return `Done ${shortDate(completed)}`;
+    const done = completedOn(task);
+    if (done) return { text: `Done ${done.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "normal" };
   }
-  return dueLabel(task, today);
+  return dueLabel(task.duedate);
 }
 
 type Badge = { label: string; bg: string; fg: string; tone: "done" | "late" | "active" | "review" | "idle" };
 
 function badgeFor(task: AssignedTask, today: number): Badge {
   if (isDone(task)) return { label: "Completed", bg: COLORS.successBg, fg: "#166534", tone: "done" };
+  // F10: an update saved on this phone and not sent yet.
+  if (getPendingTaskUpdateForTask(task.taskid)) return { label: "Queued on phone", bg: "#FFF8E6", fg: "#8A5A00", tone: "review" };
   // A submission is waiting for the PM; the task status itself does not
   // change until the PM acknowledges, so show it here.
   if (task.pendingphotoevidenceurl) return { label: "In Review", bg: "#EAF2FF", fg: "#2563EB", tone: "review" };
@@ -149,6 +140,8 @@ export default function SiteManagerHomeScreen() {
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [showAllProjects, setShowAllProjects] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  // Set when the list on screen is the copy saved on this phone (offline).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   const loadTasks = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -156,7 +149,9 @@ export default function SiteManagerHomeScreen() {
     setError(null);
 
     try {
-      setTasks(await fetchAssignedTasks());
+      const result = await loadAssignedTasks();
+      setTasks(result.data);
+      setSavedAt(result.fromCache ? result.savedAt : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load assigned tasks.");
     } finally {
@@ -165,33 +160,50 @@ export default function SiteManagerHomeScreen() {
     }
   }, []);
 
+  // A pop-up just announced something new (e.g. the PM reviewed a task).
+  useOnNewNotifications(() => { loadTasks(true); });
+
   useFocusEffect(
     useCallback(() => {
       if (session?.user.role === "Site Manager") loadTasks();
     }, [loadTasks, session?.user.role])
   );
 
+  // Offline: keep the list that was loaded last and never show a server error
+  // (the banner already says "offline"). Reload by itself on reconnect.
+  const { isOnline } = useNetwork(); // any queue change re-renders the list, so the labels stay current
+  const wasOnline = useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current && session?.user.role === "Site Manager") loadTasks(true);
+    wasOnline.current = isOnline;
+  }, [isOnline, loadTasks, session?.user.role]);
+  const shownError = describeLoadError(error, isOnline);
+
   const today = startOfDay(new Date());
 
-  // Completed tasks older than ARCHIVE_AFTER_DAYS leave the working views (counts,
-  // progress, project cards) and live in the Archive instead.
-  const { activeTasks, archivedTasks } = useMemo(() => {
-    const active: AssignedTask[] = [];
-    const archived: AssignedTask[] = [];
-    tasks.forEach((task) => (isArchived(task, today) ? archived : active).push(task));
-    archived.sort((a, b) => (completedAtOf(b)?.getTime() ?? 0) - (completedAtOf(a)?.getTime() ?? 0));
-    return { activeTasks: active, archivedTasks: archived };
-  }, [tasks, today]);
+  // open: not completed. recent: completed in the last 7 days. archived: older
+  // (lib/sm-dashboard.js). Counts, progress and project cards use open + recent.
+  const { open, recent, archived } = useMemo(() => splitTasks(tasks), [tasks]);
+  const activeTasks = useMemo(() => [...open, ...recent], [open, recent]);
 
   const counts = useMemo(() => {
     const result = {} as Record<FilterKey, number>;
     FILTERS.forEach(({ key }) => {
-      result[key] = activeTasks.filter((task) => matchesFilter(task, key, today)).length;
+      result[key] = key === "Completed" ? recent.length : open.filter((task) => matchesFilter(task, key, today)).length;
     });
     return result;
-  }, [activeTasks, today]);
+  }, [open, recent, today]);
 
-  const doneCount = useMemo(() => activeTasks.filter(isDone).length, [activeTasks]);
+  const dueToday = open.filter((task) => dueLabel(task.duedate).tone === "today").length;
+  const overdue = open.filter((task) => dueLabel(task.duedate).tone === "late").length;
+  const doneCount = recent.length;
+
+  // Project dates and the nearest open deadline, shown on each project card.
+  const projectInfo = useMemo(() => {
+    const byName = new Map<string, ReturnType<typeof projectSummaries>[number]>();
+    projectSummaries(activeTasks).forEach((p) => byName.set(p.name, p));
+    return byName;
+  }, [activeTasks]);
 
   const projects = useMemo(() => {
     const byName = new Map<string, ProjectSummary>();
@@ -217,22 +229,20 @@ export default function SiteManagerHomeScreen() {
 
   const showingArchive = filter === "Completed" && completedView === "Archive";
 
-  const visibleTasks = useMemo(
-    () =>
-      showingArchive
-        ? archivedTasks.filter(inProject)
-        : activeTasks.filter((task) => matchesFilter(task, filter, today) && inProject(task)),
-    [showingArchive, archivedTasks, activeTasks, filter, today, inProject]
-  );
+  const visibleTasks = useMemo(() => {
+    const base =
+      filter === "Completed"
+        ? (completedView === "Archive" ? archived : recent)
+        : open.filter((task) => matchesFilter(task, filter, today));
+    return base.filter(inProject);
+  }, [filter, completedView, archived, recent, open, today, inProject]);
 
   // Archive grouped by the month the task was completed, newest first.
   const archiveGroups = useMemo(() => {
     const groups: { label: string; tasks: AssignedTask[] }[] = [];
     visibleTasks.forEach((task) => {
-      const completed = completedAtOf(task);
-      const label = completed
-        ? completed.toLocaleDateString(undefined, { month: "long", year: "numeric" })
-        : "Earlier";
+      const done = completedOn(task);
+      const label = done ? done.toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "Earlier";
       const last = groups[groups.length - 1];
       if (last && last.label === label) last.tasks.push(task);
       else groups.push({ label, tasks: [task] });
@@ -284,6 +294,16 @@ export default function SiteManagerHomeScreen() {
         <Text style={styles.title}>{greeting()}, {firstName}.</Text>
         <Text style={styles.subtitle}>Here’s your task progress.</Text>
 
+        {(!isOnline || savedAt) && (
+          <Text style={styles.offlineNote}>
+            {savedAt
+              ? `${isOnline ? "Can't reach the server" : "You're offline"} · showing your tasks ${savedAtLabel(savedAt)}. You can open a task and queue an update; it is sent when you're back online.`
+              : tasks.length > 0
+                ? "You're offline. Showing your tasks as last loaded. You can still open a task and queue an update."
+                : "You're offline, and your tasks haven't been saved on this phone yet. Open the app once with a connection; after that it works offline."}
+          </Text>
+        )}
+
         {/* Date + progress card */}
         <View style={styles.progressCard}>
           <View style={styles.dateTile} accessibilityLabel={now.toDateString()}>
@@ -300,6 +320,11 @@ export default function SiteManagerHomeScreen() {
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${percent}%` }]} />
             </View>
+            {!loading && (dueToday > 0 || overdue > 0) && (
+              <Text style={styles.progressAlert}>
+                {[overdue > 0 && `${overdue} overdue`, dueToday > 0 && `${dueToday} due today`].filter(Boolean).join(" · ")}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -336,10 +361,10 @@ export default function SiteManagerHomeScreen() {
           })}
         </View>
 
-        {error ? (
+        {shownError ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>Couldn’t load tasks</Text>
-            <Text style={styles.errorBody}>{error}</Text>
+            <Text style={styles.errorBody}>{shownError}</Text>
             <Pressable onPress={() => loadTasks()} style={styles.retryButton}>
               <Text style={styles.retryText}>Try again</Text>
             </Pressable>
@@ -375,6 +400,8 @@ export default function SiteManagerHomeScreen() {
                     const selected = projectFilter === project.name;
                     const finished = project.pending === 0;
                     const pct = project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
+                    const info = projectInfo.get(project.name);
+                    const next = info?.next ? dueLabel(info.next.date) : null;
                     const tone = finished
                       ? { label: "Done", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
                       : project.atRisk
@@ -408,6 +435,16 @@ export default function SiteManagerHomeScreen() {
                           <Text style={styles.projectPending}>
                             {project.pending === 0 ? "No pending tasks" : `${project.pending} pending`}
                           </Text>
+                          {info?.startDate && (
+                            <Text style={styles.projectMeta}>
+                              {formatDay(info.startDate)} – {info.endDate ? formatDay(info.endDate) : "no end date"}
+                            </Text>
+                          )}
+                          {info?.next && next && (
+                            <Text style={[styles.projectMeta, DUE_TONE[next.tone]]} numberOfLines={2}>
+                              Nearest deadline: {info.next.label} · {next.text}
+                            </Text>
+                          )}
                         </View>
                       </Pressable>
                     );
@@ -430,7 +467,7 @@ export default function SiteManagerHomeScreen() {
               <View style={styles.segment}>
                 {(["Recent", "Archive"] as CompletedView[]).map((view) => {
                   const active = completedView === view;
-                  const count = view === "Recent" ? counts.Completed : archivedTasks.length;
+                  const count = view === "Recent" ? recent.length : archived.length;
                   return (
                     <Pressable
                       key={view}
@@ -440,7 +477,7 @@ export default function SiteManagerHomeScreen() {
                       accessibilityState={{ selected: active }}
                     >
                       <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                        {view === "Recent" ? "Last 7 days" : "Archive"} ({count})
+                        {view === "Recent" ? `Last ${ARCHIVE_AFTER_DAYS} days` : "Archive"} ({count})
                       </Text>
                     </Pressable>
                   );
@@ -508,6 +545,7 @@ function BrickLogo() {
 
 function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
   const badge = badgeFor(task, today);
+  const right = rightLabel(task);
   const lead =
     badge.tone === "done"
       ? { bg: COLORS.success, border: COLORS.success, glyph: "✓", color: "#FFFFFF" }
@@ -534,7 +572,7 @@ function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
         ) : null}
       </View>
       <View style={styles.taskRight}>
-        <Text style={styles.taskDue}>{rightLabel(task, today)}</Text>
+        <Text style={[styles.taskDue, DUE_TONE[right.tone]]}>{right.text}</Text>
         <View style={[styles.pill, { backgroundColor: badge.bg }]}>
           <Text style={[styles.pillText, { color: badge.fg }]}>{badge.label}</Text>
         </View>
@@ -542,6 +580,13 @@ function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
     </Pressable>
   );
 }
+
+const DUE_TONE = StyleSheet.create({
+  late: { color: "#D92D20", fontWeight: "800" },
+  today: { color: "#E85D0C", fontWeight: "800" },
+  soon: { color: "#B45309", fontWeight: "700" },
+  normal: {},
+});
 
 const CARD = { backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1 } as const;
 
@@ -564,6 +609,7 @@ const styles = StyleSheet.create({
 
   title: { color: "#111827", fontSize: 30, fontWeight: "800", letterSpacing: -0.5, marginTop: 22 },
   subtitle: { color: COLORS.muted, fontSize: 15, marginTop: 6 },
+  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
 
   progressCard: { ...CARD, alignItems: "center", flexDirection: "row", gap: 16, marginTop: 18, padding: 16 },
   dateTile: { alignItems: "center", backgroundColor: "#FFF3EA", borderColor: "#F8D3B8", borderRadius: 16, borderWidth: 1, justifyContent: "center", paddingVertical: 10, width: 88 },
@@ -576,6 +622,7 @@ const styles = StyleSheet.create({
   progressValue: { color: COLORS.heading, fontSize: 21, fontWeight: "800", marginTop: 4 },
   progressTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, height: 8, marginTop: 12, overflow: "hidden" },
   progressFill: { backgroundColor: COLORS.success, borderRadius: 4, height: 8 },
+  progressAlert: { color: "#D92D20", fontSize: 12, fontWeight: "700", marginTop: 8 },
 
   ticketButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderWidth: 1.5, marginTop: 12, paddingVertical: 11 },
   ticketButtonText: { color: COLORS.primary, fontSize: 13, fontWeight: "800" },
@@ -615,6 +662,7 @@ const styles = StyleSheet.create({
   projectFill: { borderRadius: 4, height: 7 },
   projectCount: { color: COLORS.muted, fontSize: 11, fontWeight: "600" },
   projectPending: { color: COLORS.muted, fontSize: 11, marginTop: 6 },
+  projectMeta: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   projectChip: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 16, marginBottom: 10, maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 6 },
   projectChipText: { color: COLORS.primary, fontSize: 12, fontWeight: "800" },
 

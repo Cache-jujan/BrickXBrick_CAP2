@@ -352,7 +352,28 @@ async function assertProjectActive(runQuery, projectId, action = "This action") 
   }
 }
 
+/**
+ * What the project list may contain for this user (adviser audit S12).
+ * - Site Manager: only the project assigned to them.
+ * - Project Manager: only the projects they manage (same rule as opening one).
+ * - GM and Purchaser: all projects.
+ * Returns { column, value } to add to the WHERE clause, or null for no limit.
+ */
+function projectListScope(user) {
+  if (user.role === "Site Manager") return { column: "siteManagerId", value: user.id };
+  if (user.role === "Project Manager") return { column: "projectManagerId", value: user.id };
+  return null;
+}
+
+/** The Purchaser buys for projects but does not see their budget. */
+function hideBudgetFrom(user, rows) {
+  if (user.role !== "Purchaser") return rows;
+  return rows.map((row) => ({ ...row, budget: null }));
+}
+
 module.exports = {
+  projectListScope,
+  hideBudgetFrom,
   LIMIT_MIN,
   LIMIT_MAX,
   validateLimits,

@@ -8,6 +8,7 @@ import { FlowHeader } from "@/components/flow-header";
 import { API_URL, authHeaders } from "@/constants/api";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { getSession, homeRouteFor, logout, setTermsAccepted } from "@/lib/auth";
+import { plainError } from "@/lib/sync/messages";
 
 type Section = { heading: string; paragraphs?: string[]; bullets?: string[] };
 type LegalDoc = { id: string; title: string; sections: Section[] };
@@ -102,7 +103,7 @@ export default function TermsScreen() {
       setTermsAccepted(data.version);
       router.replace(homeRouteFor(session.user.role));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save your acceptance. Please try again.");
+      setError(plainError(err, "Couldn't save your acceptance. Please try again."));
     } finally {
       setBusy(false);
     }

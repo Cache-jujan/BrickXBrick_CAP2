@@ -11,7 +11,7 @@ const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { assertProjectActive } = require("../lib/projectRules");
 const { screenExpense } = require("../lib/screenExpense");
-const { canonicalizeExpense, submitHashWithTimeout } = require("../lib/blockchainService");
+const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -363,7 +363,9 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             );
         });
 
-        const hash = canonicalizeExpense(expense);
+        // Read the row again so the fingerprint includes who approved it.
+        const approved = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
+        const hash = canonicalizeExpenseV2(approved.rows[0]);
 
         try {
             const { txHash, blockNumber, validatorNodeCount } =

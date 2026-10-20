@@ -5,7 +5,32 @@
 .reports-stamp {
   color: var(--color-ink-soft);
   font-size: var(--text-sm);
-  margin: 0 0 var(--space-4);
+  margin: var(--space-1) 0 0;
+}
+
+/* Every block of the results sits in one column with the same gap, so nothing touches. */
+.reports-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+  padding-bottom: var(--space-6);
+}
+.reports-results .banner,
+.reports-results .summary-cards,
+.reports-results .reports-grid {
+  margin: 0;
+}
+.reports-results-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.reports-results-title {
+  font-size: var(--text-lg);
+  margin: 0;
 }
 
 .reports-page .banner {
@@ -15,8 +40,7 @@
 .reports-grid {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
+  gap: var(--space-5);
 }
 @media (max-width: 1000px) {
   .reports-grid {
@@ -26,15 +50,14 @@
 
 .reports-section-title {
   font-size: var(--text-md);
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-1);
 }
 
 .reports-export {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  gap: var(--space-3);
 }
 .reports-export-note {
   color: var(--color-ink-soft);
@@ -46,4 +69,31 @@
   padding-left: var(--space-5);
   display: grid;
   gap: var(--space-1);
+}
+
+.reports-placeholder {
+  text-align: center;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  padding: var(--space-6) var(--space-5);
+  margin-bottom: var(--space-5);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.reports-placeholder p {
+  max-width: 560px;
+  margin: 0 auto;
+}
+.reports-placeholder-title {
+  font-size: var(--text-base);
+  font-weight: 650;
+  color: var(--color-ink);
+  margin-bottom: var(--space-2) !important;
+}
+
+.reports-chart-note {
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
 }

@@ -19,7 +19,10 @@ import {
 import { formatPeso, formatQty } from "@/lib/money";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
+import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { describeLoadError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -43,6 +46,13 @@ export default function AllocateScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { isOnline } = useNetwork();
+  // Back online: run the preview again.
+  const wasOnline = React.useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current) setRefreshKey((k) => k + 1);
+    wasOnline.current = isOnline;
+  }, [isOnline]);
   const [movingLine, setMovingLine] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitProblems, setSubmitProblems] = useState<string[]>([]);
@@ -102,6 +112,15 @@ export default function AllocateScreen() {
     ...excluded.filter((id) => !portionByTicket.has(id)),
   ];
   const canSubmit = !!plan?.ok && !!category && !loading && !submitting;
+  // Why the Submit button is disabled, shown right above it.
+  const blockedReasons = submitting
+    ? []
+    : [
+        loading && "Still working out how this receipt splits across your requests…",
+        !loading && !!error && "The split couldn't be worked out. See the message at the top and tap Try again.",
+        !loading && !error && plan && !plan.ok && "Some receipt lines aren't covered by a request. Fix the problems listed at the top.",
+        !category && "Pick a category: Materials, Equipment or Other.",
+      ];
 
   function toggleExcluded(ticketID: string, value: boolean) {
     setSubmitProblems([]);
@@ -115,6 +134,9 @@ export default function AllocateScreen() {
 
   async function handleSubmit() {
     if (!canSubmit || !category) return;
+    if (!isOnline) {
+      return Alert.alert("You're offline", "A split receipt needs a connection to save. Reconnect and tap the button again; nothing is lost.");
+    }
     if (!receipt.receiptImageURL) return Alert.alert("Missing receipt image", "Please rescan the receipt.");
     const receiptTotal = Number(receipt.amount);
     if (!Number.isFinite(receiptTotal)) return Alert.alert("Invalid total", "Go back and check the receipt total.");
@@ -145,7 +167,7 @@ export default function AllocateScreen() {
         setSubmitProblems(err.details.problems);
         setRefreshKey((k) => k + 1);
       } else {
-        Alert.alert("Submission failed", err instanceof Error ? err.message : String(err));
+        Alert.alert("Submission failed", describeLoadError(err, true) ?? "Something went wrong. Please try again.");
       }
     } finally {
       setSubmitting(false);
@@ -218,11 +240,18 @@ export default function AllocateScreen() {
       <ScrollView contentContainerStyle={styles.container}>
 
         {loading && <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 12 }} />}
-        {error && (
-          <View style={[styles.notice, { backgroundColor: RED_BG }]}>
-            <Text style={{ color: RED, fontSize: 12 }}>{error}</Text>
+        {!isOnline ? (
+          <View style={[styles.notice, { backgroundColor: "#FFF4E5" }]}>
+            <Text style={{ color: "#7A4B00", fontSize: 12 }}>
+              You're offline. Splitting a receipt needs a connection to check the open requests. This page refreshes
+              by itself when you're back online.
+            </Text>
           </View>
-        )}
+        ) : error ? (
+          <View style={[styles.notice, { backgroundColor: RED_BG }]}>
+            <Text style={{ color: RED, fontSize: 12 }}>{describeLoadError(error, true)}</Text>
+          </View>
+        ) : null}
 
         {/* E3: anything no open request covers blocks the submit. */}
         {[...submitProblems, ...(plan && !plan.ok ? plan.problems : [])].map((problem, index) => (
@@ -329,7 +358,7 @@ export default function AllocateScreen() {
           {CATEGORIES.map((c) => (
             <TouchableOpacity
               key={c}
-              style={[styles.chip, category === c && styles.chipActive]}
+              style={[styles.chip, !category && fieldErrorStyle, category === c && styles.chipActive]}
               onPress={() => { setCategory(c); setDraftCategory(c); }}
             >
               <Text style={[styles.chipText, category === c && { color: COLORS.primary }]}>{c}</Text>
@@ -344,6 +373,7 @@ export default function AllocateScreen() {
           </View>
         )}
 
+        <BlockedReasons reasons={blockedReasons} />
         <TouchableOpacity style={[styles.submitButton, !canSubmit && { opacity: 0.5 }]} onPress={handleSubmit} disabled={!canSubmit}>
           <Text style={styles.submitButtonText}>
             {submitting ? "Submitting…" : !category && plan?.ok ? "Pick a category" : "Submit Split for Approval"}

@@ -38,6 +38,21 @@ export function defaultReportRange(now = new Date()) {
   return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) };
 }
 
+// One-click periods for the Reports screen, as the GM's local calendar dates.
+// "Last 3 months" runs from the first of the month two months ago to today.
+export function quickRanges(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  return [
+    { label: "This month", from: iso(new Date(y, m, 1)), to: iso(now) },
+    { label: "Last month", from: iso(new Date(y, m - 1, 1)), to: iso(new Date(y, m, 0)) },
+    { label: "Last 3 months", from: iso(new Date(y, m - 2, 1)), to: iso(now) },
+    { label: "This year", from: iso(new Date(y, 0, 1)), to: iso(now) },
+  ];
+}
+
 // ---- project dates -------------------------------------------------------------
 // The projects list returns DATE columns as ISO timestamps. Read the local
 // calendar day, the same way the Projects pages do.

@@ -14,8 +14,11 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { login, nextRouteAfterLogin } from "@/lib/auth";
+import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { fieldErrorStyle } from "@/components/blocked-reasons";
+import { isNetworkError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
@@ -23,13 +26,29 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  // Shown once when we got here because the saved sign-in expired.
+  const [error, setError] = useState(() =>
+    consumeSessionExpired()
+      ? "Your sign-in expired. Please sign in again. Anything saved on your phone is kept and will be sent after you sign in."
+      : ""
+  );
+  const { isOnline } = useNetwork();
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
+  // Which fields were empty on the last attempt; they get a red outline.
+  const [missing, setMissing] = useState({ email: false, password: false });
 
   async function handleLogin() {
-    if (!email.trim() || !password) {
-      setError("Enter your email and password to continue.");
+    const nextMissing = { email: !email.trim(), password: !password };
+    setMissing(nextMissing);
+    if (nextMissing.email || nextMissing.password) {
+      setError(
+        nextMissing.email && nextMissing.password
+          ? "Enter your email and password to continue."
+          : nextMissing.email
+            ? "Enter your email address to continue."
+            : "Enter your password to continue."
+      );
       return;
     }
 
@@ -40,7 +59,16 @@ export default function LoginScreen() {
       // Terms of Use / Privacy Notice first if not yet accepted (app/terms.tsx).
       router.replace(nextRouteAfterLogin(session.user));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in right now.");
+      // Never show the phone's raw network error ("fetch failed: java.net...").
+      if (isNetworkError(err)) {
+        setError(
+          isOnline
+            ? "Can't reach the Brick x Brick server. Check your internet connection and try again."
+            : "You're offline. Connect to the internet to sign in."
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Unable to sign in right now.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -88,7 +116,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 placeholder="you@gmail.com"
                 placeholderTextColor={COLORS.muted}
-                style={styles.input}
+                style={[styles.input, missing.email && !email.trim() && fieldErrorStyle]}
                 value={email}
                 onChangeText={setEmail}
                 returnKeyType="next"
@@ -112,7 +140,7 @@ export default function LoginScreen() {
                 placeholder="Enter your password"
                 placeholderTextColor={COLORS.muted}
                 secureTextEntry={!showPassword}
-                style={styles.input}
+                style={[styles.input, missing.password && !password && fieldErrorStyle]}
                 value={password}
                 onChangeText={setPassword}
                 onSubmitEditing={handleLogin}
@@ -128,7 +156,11 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
             </Pressable>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                {error}
+              </Text>
+            ) : null}
 
             <Pressable
               accessibilityRole="button"

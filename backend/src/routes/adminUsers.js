@@ -17,6 +17,7 @@ const VALID_ROLES = [
   "General Manager", "Project Manager", "Site Manager",
   "Purchaser", "System Administrator"
 ];
+const VALID_STATUSES = ["Active", "Inactive"];
 
 // Refuse a role change or deactivation that would leave work stuck: a person
 // who still manages an open project, has unfinished tasks or has material
@@ -95,6 +96,9 @@ router.patch("/:id", async (req, res) => {
   const { role, status } = req.body;
   if (role && !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: "Invalid role" });
+  }
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: "Status must be Active or Inactive" });
   }
   // An administrator must not be able to lock themselves out of the system.
   if (req.params.id === req.user.id && (role || status === "Inactive")) {

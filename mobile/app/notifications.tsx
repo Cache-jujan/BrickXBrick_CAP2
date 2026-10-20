@@ -4,11 +4,11 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
@@ -20,7 +20,10 @@ import {
 } from "@/lib/api";
 import { metaFor, relativeTime, groupByDay, routeForNotification } from "@/lib/notificationMeta";
 import { getSession } from "@/lib/auth";
+import { describeLoadError, plainError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { loadNotifications } from "@/lib/cached-api";
 
 const PAGE_SIZE = 30;
 type Tab = "Unread" | "All";
@@ -35,14 +38,17 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isOnline } = useNetwork();
   const [hasMore, setHasMore] = useState(true);
+  // A tap that failed (mark all read, load more), shown under the tabs.
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback((which: Tab, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    fetchNotifications({ unreadOnly: which === "Unread", limit: PAGE_SIZE })
-      .then((rows) => {
+    loadNotifications(which === "Unread", PAGE_SIZE)
+      .then(({ data: rows }) => {
         setItems(rows);
         setHasMore(rows.length === PAGE_SIZE);
       })
@@ -68,12 +74,20 @@ export default function NotificationsScreen() {
         setItems((prev) => [...prev, ...rows]);
         setHasMore(rows.length === PAGE_SIZE);
       })
-      .catch(() => {})
+      .catch((err) =>
+        setActionError(isOnline ? plainError(err, "Couldn't load older notifications.") : "You're offline. Older notifications will load when you're back online.")
+      )
       .finally(() => setLoadingMore(false));
   }
 
   async function handleMarkAllRead() {
-    await markAllNotificationsRead();
+    setActionError(null);
+    try {
+      await markAllNotificationsRead();
+    } catch (err) {
+      setActionError(isOnline ? plainError(err, "Couldn't mark your notifications as read.") : "You're offline. Connect to mark notifications as read.");
+      return;
+    }
     if (tab === "Unread") setItems([]);
     else setItems((prev) => prev.map((n) => ({ ...n, isread: true })));
   }
@@ -121,10 +135,21 @@ export default function NotificationsScreen() {
         ))}
       </View>
 
-      {error ? (
+      {actionError && (
+        <View style={styles.errorCard} accessibilityLiveRegion="polite">
+          <Text style={styles.errorBody}>{actionError}</Text>
+        </View>
+      )}
+
+      {error && !isOnline ? (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>You're offline</Text>
+          <Text style={styles.errorBody}>Your notifications will load when you're back online.</Text>
+        </View>
+      ) : error ? (
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>Couldn't load your notifications</Text>
-          <Text style={styles.errorBody}>{error}</Text>
+          <Text style={styles.errorBody}>{describeLoadError(error, true)}</Text>
           <Pressable onPress={() => load(tab)} style={styles.retryButton}>
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
