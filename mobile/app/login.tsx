@@ -16,6 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { isNetworkError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
@@ -24,6 +26,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const { isOnline } = useNetwork();
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
 
@@ -40,7 +43,16 @@ export default function LoginScreen() {
       // Terms of Use / Privacy Notice first if not yet accepted (app/terms.tsx).
       router.replace(nextRouteAfterLogin(session.user));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in right now.");
+      // Never show the phone's raw network error ("fetch failed: java.net...").
+      if (isNetworkError(err)) {
+        setError(
+          isOnline
+            ? "Can't reach the Brick x Brick server. Check your internet connection and try again."
+            : "You're offline. Connect to the internet to sign in."
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Unable to sign in right now.");
+      }
     } finally {
       setSubmitting(false);
     }

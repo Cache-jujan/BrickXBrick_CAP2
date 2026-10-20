@@ -17,6 +17,7 @@ import { formatPeso, formatQty } from "@/lib/money";
 import { fetchActiveProjects, fetchAllAssignedTickets, type Project, type Ticket } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
+import { plainError } from "@/lib/sync/messages";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -58,7 +59,7 @@ export default function MyRequestsScreen() {
       setProjectsById(byId);
       setTickets(ticketList);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load your requests.");
+      setError(plainError(err, "Unable to load your requests."));
     } finally {
       setLoading(false);
       setRefreshing(false);

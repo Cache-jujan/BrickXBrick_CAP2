@@ -27,6 +27,7 @@ import {
   type TicketInput,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { plainError } from "@/lib/sync/messages";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -141,7 +142,7 @@ export default function TicketRequestScreen() {
           setProject(projectList[0]);
         }
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load request options."))
+      .catch((err) => setError(plainError(err, "Unable to load request options.")))
       .finally(() => setLoading(false));
   }, [session?.user.role, resubmitId]);
 
@@ -287,7 +288,7 @@ export default function TicketRequestScreen() {
         [{ text: "Done", onPress: () => router.replace((resubmitOf ? "/site-manager/my-requests" : "/site-manager") as Href) }]
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to submit the tickets.");
+      setError(plainError(err, "Unable to submit the tickets."));
     } finally {
       setSubmitting(false);
     }

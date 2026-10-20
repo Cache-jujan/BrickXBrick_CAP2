@@ -54,7 +54,28 @@ export function buildSyncSummary(result) {
 
 // ---- loading errors -------------------------------------------------------------
 
-const NETWORK_ERROR = /network request failed|failed to fetch|network ?error|timed? ?out|unreachable|could not connect|econn|enotfound/i;
+// iOS says "Network request failed"; Android (expo/fetch, OkHttp) says things like
+// "fetch failed: java.net.SocketException: Connection reset"; browsers say
+// "Failed to fetch". All of them mean "couldn't reach the server".
+const NETWORK_ERROR = new RegExp(
+  [
+    "network request failed",
+    "failed to fetch",
+    "fetch failed",
+    "network ?error",
+    "timed? ?out",
+    "unreachable",
+    "could not connect",
+    "connection (reset|refused|abort|closed)",
+    "socket ?exception",
+    "connect ?exception",
+    "unknown ?host",
+    "socket ?timeout",
+    "econn",
+    "enotfound",
+  ].join("|"),
+  "i"
+);
 
 export function isNetworkError(error) {
   const message = typeof error === "string" ? error : error?.message ?? "";
@@ -73,6 +94,16 @@ export function describeLoadError(error, isOnline) {
   if (!error || !isOnline) return null;
   if (isNetworkError(error)) return "Can't reach the server right now. Pull down to try again.";
   return typeof error === "string" ? error : error.message || "Something went wrong.";
+}
+
+/**
+ * The message for a failed ACTION (submit, save): a connection problem becomes
+ * one plain sentence; anything else keeps the server's own message.
+ */
+export function plainError(error, fallback) {
+  if (isNetworkError(error)) return "Can't reach the server. Check your connection and try again.";
+  if (error instanceof Error && error.message) return error.message;
+  return typeof error === "string" && error ? error : fallback;
 }
 
 // ---- the status strip at the top of the app -------------------------------------
