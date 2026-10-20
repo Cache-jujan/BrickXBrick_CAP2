@@ -16,7 +16,8 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { query } = require("../lib/db");
 const rateLimit = require("express-rate-limit");
-const { storeReceiptImage, isAllowedMime } = require("../lib/receiptStorage");
+const { storeReceiptImage, isAllowedMime, MAX_RECEIPT_BYTES } = require("../lib/receiptStorage");
+const { preparePdfForOcr } = require("../lib/pdfReceipt");
 const { buildScanDraft } = require("../lib/scanDraft");
 const { createReceiptScans, parseContext } = require("../lib/receiptScans");
 
@@ -49,16 +50,37 @@ const scanLimiter = rateLimit({
 // satisfies expenses.receiptimageurl NOT NULL).
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: MAX_RECEIPT_BYTES },
   fileFilter: (req, file, cb) => {
     if (!isAllowedMime(file.mimetype)) {
-      const err = new Error(`Unsupported file type: ${file.mimetype}. Use JPEG, PNG, or PDF.`);
+      const err = new Error(`Unsupported file type: ${file.mimetype}. Use JPEG, PNG, WebP, or PDF.`);
       err.status = 400;
       return cb(err);
     }
     cb(null, true);
   },
 });
+
+// multer reports an oversize file as a MulterError with no HTTP status, which
+// would surface as a 500. Turn it into a clear 413.
+function receiptUpload(req, res, next) {
+  upload.single("file")(req, res, (err) => {
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      const tooBig = new Error(`That file is larger than ${MAX_RECEIPT_BYTES / (1024 * 1024)} MB. Choose a smaller one.`);
+      tooBig.status = 413;
+      return next(tooBig);
+    }
+    next(err);
+  });
+}
+
+// What OCR reads. An image goes as it is. A PDF is checked first (encrypted,
+// unreadable or empty -> 400) and cut to its first pages. The stored file is
+// always the original upload.
+async function bytesForOcr(file) {
+  if (file.mimetype !== "application/pdf") return file.buffer;
+  return (await preparePdfForOcr(file.buffer)).buffer;
+}
 
 function requireFile(req) {
   if (!req.file) {
@@ -75,14 +97,15 @@ function notFound() {
 }
 
 /** Upload a receipt and return its OCR draft, recording the scan when possible. */
-router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, upload.single("file"), async (req, res, next) => {
+router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, receiptUpload, async (req, res, next) => {
   try {
     requireFile(req);
+    const ocrBytes = await bytesForOcr(req.file);
     // Store first: if OCR fails, the image is still on disk and the user can
     // fall back to manual entry against a real receiptImageURL rather than
     // re-uploading.
     const receiptImageURL = await storeReceiptImage(req.file.buffer, req.file.mimetype);
-    const draft = await buildScanDraft(req.file.buffer, req.file.mimetype, receiptImageURL);
+    const draft = await buildScanDraft(ocrBytes, req.file.mimetype, receiptImageURL);
     // Saved so F9 can tell what the submitter changed. Without it
     // the expense is flagged Manual_Entry, so a failure here is logged, not fatal.
     try {
@@ -100,10 +123,11 @@ router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, upload.single("fil
  * Upload a receipt and return a scan ID before starting OCR in the background.
  * Accept optional multipart JSON context; GET /scans/:id retrieves the draft later.
  */
-router.post("/scans", requireRole(...SCAN_ROLES), scanLimiter, upload.single("file"), async (req, res, next) => {
+router.post("/scans", requireRole(...SCAN_ROLES), scanLimiter, receiptUpload, async (req, res, next) => {
   try {
     requireFile(req);
     const { buffer, mimetype } = req.file;
+    const ocrBytes = await bytesForOcr(req.file);
     const receiptImageURL = await storeReceiptImage(buffer, mimetype);
     const scan = await scans.createScan({
       userID: req.user.id,
@@ -116,7 +140,7 @@ router.post("/scans", requireRole(...SCAN_ROLES), scanLimiter, upload.single("fi
 
     // After the response on purpose: the user doesn't wait for OCR.
     // runScan never throws.
-    scans.runScan(scan.scanID, buffer, mimetype, receiptImageURL);
+    scans.runScan(scan.scanID, ocrBytes, mimetype, receiptImageURL);
   } catch (err) {
     next(err);
   }

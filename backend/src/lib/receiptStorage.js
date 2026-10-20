@@ -19,12 +19,18 @@ const EXTENSION_BY_MIME = {
   "image/jpeg": ".jpg",
   "image/jpg": ".jpg",
   "image/png": ".png",
+  "image/webp": ".webp",
   "application/pdf": ".pdf",
 };
+
+// The one size limit for a receipt upload. The mobile app checks the same
+// number before uploading (mobile/lib/receipt-file.ts); keep them in step.
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 
 const MAGIC = {
   ".jpg": [0xff, 0xd8, 0xff],
   ".png": [0x89, 0x50, 0x4e, 0x47],
+  ".webp": [0x52, 0x49, 0x46, 0x46], // "RIFF"; "WEBP" at byte 8 is checked separately
   ".pdf": [0x25, 0x50, 0x44, 0x46, 0x2d], // %PDF-
 };
 
@@ -34,11 +40,12 @@ const CONTENT_TYPE_BY_MIME = {
   "image/jpeg": "image/jpeg",
   "image/jpg": "image/jpeg",
   "image/png": "image/png",
+  "image/webp": "image/webp",
   "application/pdf": "application/pdf",
 };
 
-// receipts/<uuid>.<jpg|png|pdf> — the only key shape this module ever writes.
-const RECEIPT_KEY_RE = /^receipts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|pdf)$/i;
+// receipts/<uuid>.<jpg|png|webp|pdf> — the only key shape this module ever writes.
+const RECEIPT_KEY_RE = /^receipts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|pdf)$/i;
 
 function isAllowedMime(mimeType) {
   return Object.prototype.hasOwnProperty.call(EXTENSION_BY_MIME, mimeType);
@@ -48,7 +55,10 @@ function isAllowedMime(mimeType) {
 function hasValidReceiptBytes(buffer, mimeType) {
   const signature = MAGIC[EXTENSION_BY_MIME[mimeType]];
   if (!signature || !buffer || buffer.length < signature.length) return false;
-  return signature.every((byte, i) => buffer[i] === byte);
+  if (!signature.every((byte, i) => buffer[i] === byte)) return false;
+  // A WebP file is a RIFF container: bytes 8-11 must spell "WEBP".
+  if (mimeType === "image/webp") return buffer.length >= 12 && buffer.toString("latin1", 8, 12) === "WEBP";
+  return true;
 }
 
 /**
@@ -65,7 +75,7 @@ async function storeReceiptImage(buffer, mimeType) {
     throw err;
   }
   if (!hasValidReceiptBytes(buffer, mimeType)) {
-    const err = new Error("The file contents don't match its type. Upload a real JPEG, PNG or PDF.");
+    const err = new Error("The file contents don't match its type. Upload a real JPEG, PNG, WebP or PDF.");
     err.status = 400;
     throw err;
   }
@@ -89,4 +99,4 @@ async function receiptImageExists(url) {
   return r2.objectExists(key);
 }
 
-module.exports = { storeReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX };
+module.exports = { storeReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX, MAX_RECEIPT_BYTES };

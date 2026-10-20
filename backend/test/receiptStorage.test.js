@@ -15,6 +15,7 @@ const { storeReceiptImage, receiptImageExists } = require("../src/lib/receiptSto
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
 const PDF = Buffer.from("%PDF-1.4");
+const WEBP = Buffer.concat([Buffer.from("RIFF"), Buffer.from([0, 0, 0, 0]), Buffer.from("WEBP")]);
 
 const sent = [];
 let headBehaviour = () => ({});
@@ -79,4 +80,10 @@ test("receiptImageExists throws (not false) when R2 cannot be checked", async ()
     () => receiptImageExists("https://files.example.com/receipts/11111111-2222-3333-4444-555555555555.jpg"),
     /socket hang up/
   );
+});
+
+test("a WebP receipt is stored as .webp, and a RIFF file that is not WebP is refused", async () => {
+  assert.match(await storeReceiptImage(WEBP, "image/webp"), /\.webp$/);
+  const wave = Buffer.concat([Buffer.from("RIFF"), Buffer.from([0, 0, 0, 0]), Buffer.from("WAVE")]);
+  await assert.rejects(() => storeReceiptImage(wave, "image/webp"), (e) => e.status === 400);
 });
