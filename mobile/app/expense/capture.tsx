@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -12,49 +12,21 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useNetwork } from "@/lib/sync/network-context";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { compressReceiptImage } from "@/lib/compress-image";
 import { startScan } from "@/lib/receipt-scans";
+import { PDF_MIME_TYPE, formatBytes, receiptFileProblem, receiptMimeType } from "@/lib/receipt-file";
 import { getSession } from "@/lib/auth";
 import { queueScan } from "@/lib/sync/db";
 import { copyFileToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
-
-function formatBytes(bytes?: number) {
-  if (!bytes) return "";
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
-}
-
-function imageFileFromAsset(asset: { fileName?: string | null; mimeType?: string | null; uri: string }) {
-  const inputMime = asset.mimeType?.toLowerCase();
-  const extension = asset.fileName?.split(".").pop()?.toLowerCase();
-  let mimeType: string | null = null;
-  if (inputMime === "image/png" || (!inputMime && extension === "png")) {
-    mimeType = "image/png";
-  } else if (
-    inputMime === "image/jpeg"
-    || inputMime === "image/jpg"
-    || (!inputMime && (extension === "jpg" || extension === "jpeg"))
-  ) {
-    mimeType = "image/jpeg";
-  } else if (!inputMime && !extension) {
-    mimeType = "image/jpeg";
-  }
-
-  if (!mimeType) return null;
-  return {
-    type: "image" as const,
-    name: asset.fileName ?? `photo.${mimeType === "image/png" ? "png" : "jpg"}`,
-    uri: asset.uri,
-    mimeType,
-  };
-}
 
 export default function CaptureScreen() {
   const { draft, setFile, setScanID, reset } = useExpenseDraft();
   const [file, setLocalFile] = useState<FileState>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Why the last picked file was refused (wrong type, too big).
+  const [pickError, setPickError] = useState<string | null>(null);
   const { isOnline, refreshPendingCount } = useNetwork();
   // The server couldn't be reached on the last try: offer to keep it on the phone.
   const [unreachable, setUnreachable] = useState(false);
@@ -69,41 +41,53 @@ export default function CaptureScreen() {
     setStatus("idle");
     setErrorMessage(null);
     setUnreachable(false);
+    setPickError(null);
   }
 
   // Compress once at pick time, so the preview shows exactly what gets
   // uploaded. If compression fails, upload the original rather than block.
   async function pickImage(asset: ImagePicker.ImagePickerAsset) {
-    const selected = imageFileFromAsset(asset);
-    if (!selected) return Alert.alert("Unsupported image", "Choose a JPG or PNG receipt.");
+    // The camera often reports no type at all; it always produces a JPEG.
+    const mimeType = receiptMimeType(asset.mimeType, asset.fileName) ?? "image/jpeg";
+    const problem = receiptFileProblem(mimeType, null);
+    if (problem) return setPickError(problem);
+
+    const name = asset.fileName ?? "photo.jpg";
     try {
+      // The upload is a small JPEG whatever the source (JPEG, PNG or WebP).
       const small = await compressReceiptImage(asset.uri, asset.width, asset.height);
-      const baseName = selected.name.replace(/\.[^.]+$/, "");
-      pick({ ...selected, uri: small.uri, mimeType: small.mimeType, name: `${baseName}.jpg` });
+      const baseName = name.replace(/\.[^.]+$/, "");
+      pick({ type: "image", name: `${baseName}.jpg`, uri: small.uri, mimeType: small.mimeType });
     } catch (err) {
       console.warn("Image compression failed; uploading the original:", err);
-      pick(selected);
+      // The original is uploaded as it is, so it must fit the size limit.
+      const tooBig = receiptFileProblem(mimeType, asset.fileSize);
+      if (tooBig) return setPickError(tooBig);
+      pick({ type: "image", name, uri: asset.uri, mimeType });
     }
   }
 
   async function handleCamera() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) return Alert.alert("Camera access needed", "Enable it in Settings.");
-    const result = await ImagePicker.launchCameraAsync({ quality: 1 });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 });
     if (!result.canceled) await pickImage(result.assets[0]);
   }
   async function handleGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return Alert.alert("Photo access needed", "Enable it in Settings.");
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 1 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
     if (!result.canceled) await pickImage(result.assets[0]);
   }
   async function handlePdf() {
-    const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
-    if (!result.canceled) {
-      const a = result.assets[0];
-      pick({ type: "pdf", name: a.name, size: formatBytes(a.size), uri: a.uri, mimeType: a.mimeType ?? "application/pdf" });
-    }
+    const result = await DocumentPicker.getDocumentAsync({ type: PDF_MIME_TYPE, copyToCacheDirectory: true });
+    if (result.canceled) return;
+    const a = result.assets[0];
+    const mimeType = receiptMimeType(a.mimeType, a.name);
+    // Only PDFs belong here; the gallery button is for photos.
+    const problem = mimeType === PDF_MIME_TYPE ? receiptFileProblem(mimeType, a.size) : "That isn't a PDF. Choose a PDF file.";
+    if (problem) return setPickError(problem);
+    pick({ type: "pdf", name: a.name, size: formatBytes(a.size), uri: a.uri, mimeType: PDF_MIME_TYPE });
   }
 
   // Offline-first: reading a receipt (OCR) happens on the server, so with no
@@ -179,87 +163,108 @@ export default function CaptureScreen() {
     }
   }
 
+  const tips = ["Lay the receipt flat", "Show all four edges", "Use good light, no glare"];
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Capture receipt" caption={isSplit ? "Split receipt · Step 1 of 3" : "Step 1 of 3"} />
+      <FlowHeader
+        title="Add receipt"
+        caption={isSplit ? "Split receipt · Step 1 of 3" : "Step 1 of 3"}
+        step={{ current: 1, total: 3 }}
+      />
 
-      <View style={styles.container}>
-        <View style={styles.contextChip}>
-          {isSplit ? (
-            <>
-              <Text style={styles.contextTitle}>Split receipt</Text>
-              <Text style={styles.contextMeta}>One receipt for several open requests. You'll confirm the split later.</Text>
-            </>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {!isSplit && (
+          <View style={styles.contextChip}>
+            <Text style={styles.contextTitle} numberOfLines={1}>{draft.ticket?.subject}</Text>
+            <Text style={styles.contextMeta} numberOfLines={1}>{draft.ticket?.projectName}</Text>
+          </View>
+        )}
+
+        <View style={[styles.dropArea, file && styles.dropAreaFilled]}>
+          {file ? (
+            <FilePreview file={file} />
           ) : (
             <>
-              <Text style={styles.contextTitle} numberOfLines={1}>{draft.ticket?.subject}</Text>
-              <Text style={styles.contextMeta} numberOfLines={1}>{draft.ticket?.projectName}</Text>
+              <View style={styles.dropIcon}>
+                <IconSymbol name="doc.fill" size={30} color={COLORS.primary} />
+              </View>
+              <Text style={styles.dropTitle}>Add a photo or PDF of the receipt</Text>
+              <Text style={styles.dropBody}>We read the vendor, total and items for you. You check them next.</Text>
             </>
           )}
         </View>
 
-        {file ? (
-          <>
-            <View style={styles.previewZone}><FilePreview file={file} /></View>
-            <View style={styles.replaceRow}>
-              <Text style={styles.replaceLabel}>Wrong file?</Text>
-              <Pressable onPress={handleCamera} hitSlop={6}><Text style={styles.replaceLink}>Retake</Text></Pressable>
-              <Pressable onPress={handleGallery} hitSlop={6}><Text style={styles.replaceLink}>Gallery</Text></Pressable>
-              <Pressable onPress={handlePdf} hitSlop={6}><Text style={styles.replaceLink}>PDF</Text></Pressable>
-            </View>
-          </>
-        ) : (
-          <View style={styles.pickZone}>
-            <Pressable
-              onPress={handleCamera}
-              style={({ pressed }) => [styles.primaryPick, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Take a photo of the receipt"
-            >
-              <IconSymbol name="camera.fill" size={44} color="#FFFFFF" />
-              <Text style={styles.primaryPickText}>Take photo</Text>
-              <Text style={styles.primaryPickHint}>Lay the receipt flat, fill the frame</Text>
-            </Pressable>
-            <View style={styles.secondaryRow}>
-              <Pressable onPress={handleGallery} style={({ pressed }) => [styles.secondaryPick, pressed && styles.pressed]} accessibilityRole="button">
-                <IconSymbol name="photo.on.rectangle" size={20} color={COLORS.heading} />
-                <Text style={styles.secondaryPickText}>Gallery</Text>
-              </Pressable>
-              <Pressable onPress={handlePdf} style={({ pressed }) => [styles.secondaryPick, pressed && styles.pressed]} accessibilityRole="button">
-                <IconSymbol name="doc.fill" size={20} color={COLORS.heading} />
-                <Text style={styles.secondaryPickText}>PDF</Text>
-              </Pressable>
-            </View>
+        {pickError ? (
+          <View style={styles.errorBox} accessibilityRole="alert">
+            <Text style={styles.errorBoxText}>{pickError}</Text>
+          </View>
+        ) : null}
+
+        {!file && (
+          <View style={styles.tips}>
+            <Text style={styles.tipsTitle}>For a good scan</Text>
+            {tips.map((tip) => (
+              <View key={tip} style={styles.tipRow}>
+                <IconSymbol name="checkmark.circle.fill" size={16} color={COLORS.success} />
+                <Text style={styles.tipText}>{tip}</Text>
+              </View>
+            ))}
           </View>
         )}
-      </View>
+      </ScrollView>
 
-      {file && (
-        <View style={styles.footer}>
-          {status === "error" && errorMessage ? (
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          ) : !isOnline ? (
-            <Text style={styles.offlineText}>
-              You're offline. The receipt will be saved on your phone and uploaded for reading when you're back online.
-            </Text>
-          ) : null}
+      <View style={styles.footer}>
+        {file && status === "error" && errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : file && !isOnline ? (
+          <Text style={styles.offlineText}>
+            You're offline. The receipt will be saved on your phone and uploaded for reading when you're back online.
+          </Text>
+        ) : null}
+
+        {file && (
           <Pressable
-            style={({ pressed }) => [styles.submitButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
             onPress={handleSubmit}
             disabled={status === "uploading"}
             accessibilityRole="button"
           >
-            <Text style={styles.submitButtonText}>
+            <Text style={styles.primaryButtonText}>
               {!isOnline ? "Save to upload later" : status === "error" ? "Try again" : "Scan receipt"}
             </Text>
           </Pressable>
-          {isOnline && unreachable && (
-            <Pressable onPress={saveForLater} style={styles.secondaryButton} accessibilityRole="button">
-              <Text style={styles.secondaryButtonText}>Save on phone instead</Text>
-            </Pressable>
-          )}
+        )}
+        {file && isOnline && unreachable && (
+          <Pressable onPress={saveForLater} style={styles.outlinedButton} accessibilityRole="button">
+            <Text style={styles.outlinedButtonText}>Save on phone instead</Text>
+          </Pressable>
+        )}
+
+        <View style={styles.buttonRow}>
+          <Pressable
+            onPress={handleGallery}
+            style={({ pressed }) => [styles.rowButton, file ? styles.outlinedButton : styles.primaryButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+          >
+            <Text style={file ? styles.outlinedButtonText : styles.primaryButtonText}>Choose from gallery</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleCamera}
+            style={({ pressed }) => [styles.rowButton, styles.outlinedButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+          >
+            <Text style={styles.outlinedButtonText}>Take photo</Text>
+          </Pressable>
         </View>
-      )}
+        <Pressable
+          onPress={handlePdf}
+          style={({ pressed }) => [styles.outlinedButton, styles.pdfButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.outlinedButtonText}>Upload a PDF instead</Text>
+        </Pressable>
+      </View>
 
       <LoadingOverlay visible={status === "uploading"} message="Uploading receipt…" detail="Keep the app open until the upload finishes." />
     </SafeAreaView>
@@ -268,27 +273,35 @@ export default function CaptureScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  container: { flex: 1, paddingHorizontal: 16 },
-  contextChip: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 14 },
-  contextTitle: { fontSize: 14, fontWeight: "700", color: COLORS.heading },
-  contextMeta: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
-  pickZone: { flex: 1, gap: 12, paddingBottom: 16 },
-  primaryPick: { flex: 1, maxHeight: 320, backgroundColor: COLORS.primary, borderRadius: 20, alignItems: "center", justifyContent: "center", gap: 8 },
-  primaryPickText: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
-  primaryPickHint: { color: "rgba(255,255,255,0.85)", fontSize: 13 },
-  secondaryRow: { flexDirection: "row", gap: 12 },
-  secondaryPick: { flex: 1, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 14 },
-  secondaryPickText: { fontSize: 15, fontWeight: "700", color: COLORS.heading },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 12 },
+  contextChip: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 },
+  contextTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
+  contextMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+
+  dropArea: { minHeight: 220, alignItems: "center", justifyContent: "center", gap: 8, padding: 20, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
+  dropAreaFilled: { borderStyle: "solid", borderColor: COLORS.border, padding: 8, minHeight: 280 },
+  dropIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
+  dropTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, textAlign: "center" },
+  dropBody: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center", lineHeight: 19 },
+
+  errorBox: { marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.errorBorder, backgroundColor: COLORS.errorFill },
+  errorBoxText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 18 },
+
+  tips: { marginTop: 16, gap: 8 },
+  tipsTitle: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.heading },
+  tipRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  tipText: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted },
+
+  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, gap: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
+  buttonRow: { flexDirection: "row", gap: 10 },
+  rowButton: { flex: 1 },
+  primaryButton: { minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, backgroundColor: COLORS.primary },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONT.bold, textAlign: "center" },
+  outlinedButton: { minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: COLORS.card },
+  outlinedButtonText: { color: COLORS.primary, fontSize: 15, fontFamily: FONT.bold, textAlign: "center" },
+  pdfButton: { alignSelf: "stretch" },
   pressed: { opacity: 0.85 },
-  previewZone: { flex: 1, backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, justifyContent: "center", alignItems: "center", padding: 8 },
-  replaceRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, paddingVertical: 12 },
-  replaceLabel: { fontSize: 13, color: COLORS.muted },
-  replaceLink: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
-  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
-  submitButton: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
-  submitButtonText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
-  errorText: { color: "#C1121F", textAlign: "center", marginBottom: 8, fontSize: 13 },
-  offlineText: { color: "#7A4B00", textAlign: "center", marginBottom: 8, fontSize: 13, lineHeight: 18 },
-  secondaryButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderWidth: 1, marginTop: 10, paddingVertical: 13 },
-  secondaryButtonText: { color: COLORS.primary, fontSize: 15, fontWeight: "700" },
+
+  errorText: { color: COLORS.errorText, textAlign: "center", fontSize: 13, fontFamily: FONT.regular },
+  offlineText: { color: COLORS.amberText, textAlign: "center", fontSize: 13, fontFamily: FONT.regular, lineHeight: 18 },
 });
