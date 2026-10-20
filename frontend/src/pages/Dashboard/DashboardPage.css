@@ -19,33 +19,119 @@
   margin-top: var(--space-3);
 }
 
-/* --- Summary strip: one surface, four figures, divided by hairlines ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
-.dash-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: var(--color-surface);
+/* --- Welcome banner: gradient and a drawn skyline, no photo needed ------- */
+
+.dash-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-height: 132px;
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  background: linear-gradient(100deg, var(--color-surface) 0%, var(--color-surface) 45%, var(--color-brick-tint) 100%);
+}
+
+.dash-hero-text,
+.dash-hero-side {
+  position: relative;
+  z-index: 1;
+}
+
+.dash-hero-text h1 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dash-hero-text p {
+  margin-top: var(--space-1);
+  color: var(--color-ink-soft);
+  font-size: var(--text-base);
+}
+
+.dash-hero-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.dash-hero-date {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.dash-hero-art {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  width: min(48%, 460px);
+  color: var(--color-brick-light);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* --- KPI cards ------------------------------------------------------------ */
+
+.dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
   margin-bottom: var(--space-5);
 }
 
-.dash-stat {
+.dash-kpi {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   color: inherit;
   text-decoration: none;
   min-width: 0;
 }
 
-.dash-stat + .dash-stat {
-  border-left: 1px solid var(--color-border);
+a.dash-kpi:hover {
+  background: var(--color-surface-muted);
 }
 
-a.dash-stat:hover {
-  background: var(--color-surface-muted);
+.dash-kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--color-brick-tint);
+  color: var(--color-brick-dark);
+}
+
+.dash-kpi-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .dash-stat-label {
@@ -53,9 +139,9 @@ a.dash-stat:hover {
   color: var(--color-ink-soft);
 }
 
-.dash-stat-value {
+.dash-kpi-value {
   font-size: var(--text-lg);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
@@ -68,23 +154,24 @@ a.dash-stat:hover {
   color: var(--color-ink-faint);
 }
 
-.dash-stat-emphasis .dash-stat-value {
+.dash-kpi-emphasis .dash-kpi-value {
   color: var(--color-warning);
 }
 
-/* --- Panels ------------------------------------------------------------- */
+/* --- Layout and panels --------------------------------------------------- */
 
-.dash-grid {
+.dash-main {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
   gap: var(--space-5);
   align-items: start;
 }
 
-.dash-side {
+.dash-col {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+  min-width: 0;
 }
 
 .dash-panel {
@@ -97,7 +184,7 @@ a.dash-stat:hover {
 
 .dash-panel-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
@@ -106,6 +193,16 @@ a.dash-stat:hover {
 .dash-panel-head h2 {
   font-size: var(--text-base);
   font-weight: 650;
+}
+
+.dash-range select {
+  font: inherit;
+  font-size: var(--text-xs);
+  padding: 4px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .dash-link {
@@ -137,7 +234,18 @@ a.dash-stat:hover {
   font-weight: 400;
 }
 
-/* --- Budget table ------------------------------------------------------- */
+.dash-subhead {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.dash-chart {
+  position: relative;
+  height: 300px;
+}
+
+/* --- Tables --------------------------------------------------------------- */
 
 .dash-table {
   width: 100%;
@@ -164,159 +272,189 @@ a.dash-stat:hover {
   border-bottom: none;
 }
 
-.dash-project {
-  color: var(--color-ink);
-  font-weight: 600;
-  text-decoration: none;
-}
-.dash-project:hover {
-  text-decoration: underline;
-}
-
-.dash-used-col {
-  width: 150px;
-}
-
-.dash-used {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.dash-bar {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--color-surface-muted);
-  overflow: hidden;
-}
-
-.dash-bar-fill {
-  display: block;
-  height: 100%;
-  background: var(--color-ink-soft);
-}
-
-.dash-bar-over {
-  background: var(--color-danger);
-}
-
-.dash-pct {
-  width: 40px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-ink-soft);
-}
-
-.dash-pct-over {
-  color: var(--color-danger);
+.dash-project-plain {
   font-weight: 600;
 }
 
-/* Work-completion column — colored ProgressBar, to read differently from the
-   neutral grey budget-used bar in the same table. */
-.dash-progress-col {
-  width: 150px;
-}
-.dash-progress {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.dash-progress .progress-bar {
-  flex: 1;
-}
+/* --- Project status list -------------------------------------------------- */
 
-/* --- Key/value list (record protection) --------------------------------- */
-
-.dash-kv {
-  margin: 0;
-}
-
-.dash-kv > div {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--text-sm);
-}
-
-.dash-kv > div:last-child {
-  border-bottom: none;
-}
-
-.dash-kv dt {
-  color: var(--color-ink-soft);
-}
-
-.dash-kv dd {
-  margin: 0;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.dash-kv-alert dt,
-.dash-kv-alert dd {
-  color: var(--color-danger);
-}
-
-/* --- Recent expenses ---------------------------------------------------- */
-
-.dash-expenses {
+.dash-projects {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.dash-expenses li {
+.dash-projects li {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.dash-projects li:first-child {
+  padding-top: 0;
+}
+.dash-projects li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.dash-project-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
+}
+
+.dash-project {
+  color: var(--color-ink);
+  font-weight: 600;
+  text-decoration: none;
+  min-width: 0;
+}
+.dash-project:hover {
+  text-decoration: underline;
+}
+
+.dash-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.dash-progress .progress-bar {
+  flex: 1;
+}
+
+.dash-pct {
+  width: 40px;
+  text-align: right;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-soft);
+}
+
+.dash-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.dash-flag {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+  background: var(--color-surface-muted);
+  border-radius: 999px;
+  padding: 2px var(--space-2);
+}
+.dash-flag-bad {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  font-weight: 600;
+}
+
+/* --- Blockchain audit summary --------------------------------------------- */
+
+.dash-audit {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.dash-audit-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+.dash-audit-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dash-audit-good {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border-color: #c9e0d2;
+}
+.dash-audit-bad {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-color: #f0c4bc;
+}
+.dash-audit-label {
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+.dash-audit-value {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dash-audit-note {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+
+.dash-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dash-checks li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--color-border);
   font-size: var(--text-sm);
 }
-
-.dash-expenses li:last-child {
+.dash-checks li:last-child {
   border-bottom: none;
 }
-
-.dash-expense-main {
-  min-width: 0;
+.dash-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
 }
-
-.dash-expense-vendor {
-  display: block;
-  font-weight: 600;
+.dash-dot-bad {
+  background: var(--color-danger);
+}
+.dash-check-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.dash-expense-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+.dash-check-time {
   flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
 }
 
 @media (max-width: 1100px) {
-  .dash-grid {
+  .dash-main {
     grid-template-columns: 1fr;
+  }
+  .dash-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 760px) {
-  .dash-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 640px) {
+  .dash-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--space-4);
   }
-  .dash-stat:nth-child(3) {
-    border-left: none;
+  .dash-hero-side {
+    align-items: flex-start;
   }
-  .dash-stat:nth-child(n + 3) {
-    border-top: 1px solid var(--color-border);
+  .dash-kpis {
+    grid-template-columns: 1fr;
   }
 }
 
