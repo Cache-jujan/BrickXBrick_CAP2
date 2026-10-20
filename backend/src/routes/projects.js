@@ -27,6 +27,8 @@ const {
   notifyProject,
   validateLimits,
   saveLimits,
+  projectListScope,
+  hideBudgetFrom,
 } = require("../lib/projectRules");
 
 const router = express.Router();
@@ -200,9 +202,9 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
 });
 
 // LIST — broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter.
-// Site Managers are scoped to projects assigned to their account so project
+// Site Managers and Project Managers are scoped to their own projects so
 // pickers cannot expose unrelated projects and ticket creation cannot be
-// directed at a project they do not manage.
+// directed at a project they do not manage. Purchasers see no budget.
 router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
   const { status } = req.query;
   try {
@@ -213,9 +215,10 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
       params.push(status);
       conditions.push(`p.status = $${params.length}`);
     }
-    if (req.user.role === "Site Manager") {
-      params.push(req.user.id);
-      conditions.push(`p.siteManagerId = $${params.length}`);
+    const scope = projectListScope(req.user);
+    if (scope) {
+      params.push(scope.value);
+      conditions.push(`p.${scope.column} = $${params.length}`);
     }
 
     // Manager names are joined in so list pages can show who runs each
@@ -233,7 +236,7 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
         ORDER BY p.startdate DESC`,
       params
     );
-    res.json(result.rows);
+    res.json(hideBudgetFrom(req.user, result.rows));
   } catch (err) {
     sendError(res, err);
   }
