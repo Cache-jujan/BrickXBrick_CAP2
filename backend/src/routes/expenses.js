@@ -4,6 +4,7 @@
 
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
+const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
@@ -122,7 +123,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
 
         if (ticketID) {
             const ticketResult = await query(
-                "SELECT ticketid, projectid, status, assignedto, submittedby, tickettype FROM tickets WHERE ticketid = $1",
+                "SELECT ticketid, projectid, status, assignedto, submittedby, tickettype, quantity FROM tickets WHERE ticketid = $1",
                 [ticketID]
             );
             if (ticketResult.rowCount === 0) {
@@ -149,6 +150,11 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             // GM/PM may link only after the assigned Purchaser has completed it.
             if (ticket.status !== "Resolved") {
                 throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
+            }
+            // A receipt scanned earlier may belong to a request that has since
+            // been filled. Don't let it become a second expense for the same buy.
+            if (await isTicketFulfilled(query, ticket.ticketid, ticket.quantity)) {
+                throw httpError(409, FULFILLED_MESSAGE);
             }
 
             projectID = ticket.projectid;
