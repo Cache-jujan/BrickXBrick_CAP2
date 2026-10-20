@@ -37,13 +37,18 @@ export function buildSyncSummary(result) {
   const lines = [];
   if (result.expenses.synced > 0) lines.push(`${plural(result.expenses.synced, "expense", "expenses")} synced`);
   if (result.tasks.synced > 0) lines.push(`${plural(result.tasks.synced, "task update", "task updates")} sent for review`);
+  if (result.scans?.uploaded > 0) {
+    lines.push(`${plural(result.scans.uploaded, "receipt", "receipts")} uploaded for reading (see Scanned receipts)`);
+  }
 
   if (result.rejected > 0) {
     lines.push(`${result.rejected} not synced`);
     const reasons = (result.rejectedItems || []).slice(0, MAX_REASONS).map((item) =>
       item.kind === "task_update"
         ? `• ${describeRejection(item.code, item.message)}`
-        : `• ${item.code}: ${item.message}`
+        : item.kind === "scan"
+          ? `• Receipt photo: ${item.message}`
+          : `• ${item.code}: ${item.message}`
     );
     lines.push(...reasons);
     const more = result.rejected - reasons.length;

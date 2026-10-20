@@ -19,7 +19,6 @@ import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from 
 import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/requested-material-picker";
-import { fetchOpenRequests } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
@@ -36,6 +35,7 @@ import {
   reconcileFix,
   todayIso,
 } from "@/lib/receipt-checks";
+import { loadOpenRequests } from "@/lib/cached-api";
 
 const RED = "#C1121F";
 const AMBER = "#B45309";
@@ -77,8 +77,8 @@ export default function ReviewScreen() {
   const ticketId = draft.mode === "single" ? draft.ticket?.ticketId ?? null : null;
   useEffect(() => {
     let cancelled = false;
-    fetchOpenRequests()
-      .then((requests) => {
+    loadOpenRequests()
+      .then(({ data: requests }) => {
         if (cancelled) return;
         const mine = ticketId ? requests.filter((r) => r.ticketID === ticketId) : requests;
         setMaterials(

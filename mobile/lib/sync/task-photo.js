@@ -77,3 +77,51 @@ export async function copyPhotoToQueue(sourceUri) {
   await FileSystem.copyAsync({ from: sourceUri, to: target });
   return target;
 }
+
+// Any picked file (photo or PDF) into the app's documents folder, for the
+// offline receipt queue. Same reasoning as copyPhotoToQueue: the original may
+// sit in a cache folder the phone can clear.
+export async function copyFileToQueue(sourceUri, fileName = "") {
+  const dir = `${FileSystem.documentDirectory}queued-receipts/`;
+  await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {}); // already there
+  const name = fileName || sourceUri;
+  const ext = /\.pdf$/i.test(name) ? "pdf" : /\.png$/i.test(name) ? "png" : "jpg";
+  const target = `${dir}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  await FileSystem.copyAsync({ from: sourceUri, to: target });
+  return target;
+}
+
+// Upload one queued receipt for reading (POST /api/receipts/scans, the same
+// route the online "Scan receipt" button uses). Returns the server's scan.
+// Throws PhotoUploadRejected when retrying cannot help (bad or missing file),
+// a plain Error on anything temporary (no network, 5xx), so it stays queued.
+export async function uploadQueuedScan(row) {
+  const info = await FileSystem.getInfoAsync(row.file_path);
+  if (!info.exists) {
+    throw new PhotoUploadRejected("MISSING_FILE", "The receipt file is no longer on this phone. Please capture it again.");
+  }
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/receipts/scans`, row.file_path, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "file",
+    mimeType: row.mime_type,
+    parameters: { context: JSON.stringify(row.context) },
+    headers: authHeaders(),
+  });
+  let body = {};
+  try {
+    body = JSON.parse(result.body || "{}");
+  } catch {
+    // a non-JSON error page; the status below decides
+  }
+  if (result.status >= 200 && result.status < 300) return body;
+  if (result.status === 401) {
+    const error = new Error("Sign-in expired");
+    error.unauthorized = true;
+    throw error;
+  }
+  if (result.status === 400 || result.status === 413 || result.status === 415) {
+    throw new PhotoUploadRejected("BAD_FILE", body.error || "The server could not read this file. Please capture the receipt again.");
+  }
+  throw new Error(`Receipt upload failed (${result.status})`); // 429, 5xx...: try again later
+}

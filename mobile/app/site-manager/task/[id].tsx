@@ -17,7 +17,9 @@ import * as ImagePicker from "expo-image-picker";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
-import { fetchAssignedTasks, submitTaskProgress, type AssignedTask } from "@/lib/api";
+import { submitTaskProgress, type AssignedTask } from "@/lib/api";
+import { loadAssignedTasks } from "@/lib/cached-api";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { getSession } from "@/lib/auth";
 import {
   dismissRejectedTaskUpdate,
@@ -52,6 +54,8 @@ export default function SiteManagerTaskDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  // Set when the task on screen is the copy saved on this phone (offline).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   // F10 — offline queue state for THIS task.
   const { isOnline, pendingCount, refreshPendingCount, syncing, lastSync } = useNetwork();
@@ -78,7 +82,9 @@ export default function SiteManagerTaskDetailScreen() {
     setError(null);
 
     try {
-      const assignedTasks = await fetchAssignedTasks();
+      const result = await loadAssignedTasks();
+      setSavedAt(result.fromCache ? result.savedAt : null);
+      const assignedTasks = result.data;
       const matchingTask = assignedTasks.find((item) => item.taskid === id);
       if (!matchingTask) {
         throw new Error("This task is no longer assigned to your account.");
@@ -93,7 +99,7 @@ export default function SiteManagerTaskDetailScreen() {
         setError(
           onlineRef.current
             ? describeLoadError(err, true) ?? "Unable to load this task."
-            : "You're offline, and this task hasn't been opened on this phone yet. Open it once while you have a connection; after that you can add updates offline."
+            : "You're offline, and your tasks haven't been saved on this phone yet. Open the app once with a connection; after that you can view tasks and add updates offline."
         );
       }
     } finally {
@@ -288,6 +294,11 @@ export default function SiteManagerTaskDetailScreen() {
           </View>
         ) : task ? (
           <>
+            {savedAt && (
+              <Text style={styles.savedNote}>
+                {isOnline ? "Can't reach the server" : "You're offline"} · showing this task {savedAtLabel(savedAt)}.
+              </Text>
+            )}
             <Text style={styles.eyebrow}>TASK DETAILS</Text>
             <Text style={styles.title}>{task.taskname}</Text>
             <View style={[styles.statusPill, task.status === "Completed" && styles.statusPillCompleted]}>
@@ -508,6 +519,7 @@ const styles = StyleSheet.create({
   successBackText: { color: "#166534", fontSize: 12, fontWeight: "800" },
   queuedCard: { backgroundColor: "#FFF8E6", borderColor: "#F0D78C", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 14 },
   queuedHeader: { alignItems: "center", flexDirection: "row", gap: 8 },
+  savedNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 12, lineHeight: 17, marginBottom: 14, padding: 10 },
   queuedTitle: { color: "#8A5A00", flexShrink: 1, fontSize: 14, fontWeight: "800" },
   queuedBody: { color: "#6B4A00", fontSize: 13, lineHeight: 19, marginTop: 6 },
   queuedHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },

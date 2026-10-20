@@ -19,6 +19,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { initDb, getPendingCount } from "@/lib/sync/db";
 import { buildSyncSummary } from "@/lib/sync/messages";
 import { devLog } from "@/lib/sync/log";
+import { setCacheOnline } from "@/lib/sync/offline-cache";
 import { syncAllPending } from "@/lib/sync/sync";
 
 const RECHECK_INTERVAL_MS = 15000;
@@ -78,6 +79,7 @@ export function NetworkProvider({ children }) {
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = !!state.isConnected && state.isInternetReachable !== false;
       onlineRef.current = online;
+      setCacheOnline(online);
       setIsOnline(online);
       if (online) runSync();
     });

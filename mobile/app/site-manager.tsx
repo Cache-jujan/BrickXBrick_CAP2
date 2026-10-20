@@ -12,7 +12,9 @@ import {
 import { Redirect, router, useFocusEffect } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
-import { fetchAssignedTasks, type AssignedTask } from "@/lib/api";
+import { type AssignedTask } from "@/lib/api";
+import { loadAssignedTasks } from "@/lib/cached-api";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { getSession } from "@/lib/auth";
 import { describeLoadError } from "@/lib/sync/messages";
 import { getPendingTaskUpdateForTask } from "@/lib/sync/db";
@@ -26,6 +28,8 @@ export default function SiteManagerHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the list on screen is the copy saved on this phone (offline).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   const loadTasks = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -33,7 +37,9 @@ export default function SiteManagerHomeScreen() {
     setError(null);
 
     try {
-      setTasks(await fetchAssignedTasks());
+      const result = await loadAssignedTasks();
+      setTasks(result.data);
+      setSavedAt(result.fromCache ? result.savedAt : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load assigned tasks.");
     } finally {
@@ -141,11 +147,13 @@ export default function SiteManagerHomeScreen() {
           <Text style={styles.sectionMeta}>{tasks.length} total</Text>
         </View>
 
-        {!isOnline && (
+        {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
-            {tasks.length > 0
-              ? "You're offline. Showing your tasks as last loaded. You can still open a task and queue an update."
-              : "You're offline. Your tasks will load when you're back online."}
+            {savedAt
+              ? `${isOnline ? "Can't reach the server" : "You're offline"} · showing your tasks ${savedAtLabel(savedAt)}. You can open a task and queue an update; it is sent when you're back online.`
+              : tasks.length > 0
+                ? "You're offline. Showing your tasks as last loaded. You can still open a task and queue an update."
+                : "You're offline, and your tasks haven't been saved on this phone yet. Open the app once with a connection; after that it works offline."}
           </Text>
         )}
 

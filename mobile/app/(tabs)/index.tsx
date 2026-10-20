@@ -12,16 +12,22 @@ import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
 
 import {
-  fetchAllAssignedTickets,
-  fetchActiveProjects,
-  fetchOpenRequests,
-  fetchMyExpenses,
   type MyExpense,
   type OpenRequest,
   type Ticket,
   type Project,
 } from "@/lib/api";
 import { formatQty } from "@/lib/money";
+import {
+  loadActiveProjects,
+  loadAssignedTickets,
+  loadMyExpenses,
+  loadOpenRequests,
+  loadScans as loadScansCached,
+} from "@/lib/cached-api";
+import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
+import { deleteQueuedPhoto } from "@/lib/sync/task-photo";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { describeLoadError } from "@/lib/sync/messages";
@@ -30,7 +36,8 @@ import { COLORS } from "@/constants/expense-flow-colors";
 import { ScannedReceipts } from "@/components/scanned-receipts";
 import { RejectedExpenses } from "@/components/rejected-expenses";
 import { fileFromExpense, ocrResultFromExpense } from "@/lib/resubmit";
-import { dismissScan, fetchScans, type ReceiptScan } from "@/lib/receipt-scans";
+import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
+import type { QueuedScan } from "@/components/scanned-receipts";
 
 // While a receipt is still being read, refresh the list this often.
 const SCAN_REFRESH_MS = 4000;
@@ -63,11 +70,19 @@ export default function HomeScreen() {
   const [scans, setScans] = useState<ReceiptScan[]>([]);
   const [rejected, setRejected] = useState<MyExpense[]>([]);
   const [focused, setFocused] = useState(false);
+  // Offline-first: when the lists on screen are the copy saved on this phone.
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  // Receipts saved on this phone, waiting to be uploaded for reading.
+  const [queuedScans, setQueuedScans] = useState<QueuedScan[]>([]);
+  const refreshQueuedScans = useCallback(() => {
+    const userId = getSession()?.user.id ?? null;
+    setQueuedScans([...getPendingScans(userId), ...getRejectedScans(userId)] as QueuedScan[]);
+  }, []);
 
   // Background scans. A failure here must not hide the tickets.
   const loadScans = useCallback(async () => {
     try {
-      setScans(await fetchScans());
+      setScans((await loadScansCached()).data);
     } catch {
       // Keep whatever was shown; the next refresh tries again.
     }
@@ -77,10 +92,13 @@ export default function HomeScreen() {
     setError(null);
 
     try {
-      const [ticketList, projectList] = await Promise.all([
-        fetchAllAssignedTickets(isSiteManager ? "Site Manager" : "Purchaser"),
-        fetchActiveProjects(),
+      const [ticketResult, projectResult] = await Promise.all([
+        loadAssignedTickets(isSiteManager ? "Site Manager" : "Purchaser"),
+        loadActiveProjects(),
       ]);
+      const ticketList = ticketResult.data;
+      const projectList = projectResult.data;
+      setSavedAt(ticketResult.fromCache ? ticketResult.savedAt : null);
 
       const byId: Record<string, Project> = {};
 
@@ -94,13 +112,13 @@ export default function HomeScreen() {
       // F8 To-buy list (Purchaser only). A failure here must not hide the tickets.
       if (!isSiteManager) {
         try {
-          setOpenRequests(await fetchOpenRequests());
+          setOpenRequests((await loadOpenRequests()).data);
         } catch {
           setOpenRequests([]);
         }
         // Rejected expenses to correct and resubmit. A failure keeps the last list.
         try {
-          setRejected((await fetchMyExpenses()).filter((e) => e.status === "Rejected"));
+          setRejected((await loadMyExpenses()).data.filter((e) => e.status === "Rejected"));
         } catch {
           // Shown again on the next refresh.
         }
@@ -121,13 +139,19 @@ export default function HomeScreen() {
       setFocused(true);
       load();
       loadScans();
+      refreshQueuedScans();
       return () => setFocused(false);
-    }, [load, loadScans])
+    }, [load, loadScans, refreshQueuedScans])
   );
 
   // Offline: keep what was loaded last and never show a server error (the banner
   // already says "offline"). Reload by itself on reconnect.
-  const { isOnline } = useNetwork();
+  const { isOnline, pendingCount, lastSync } = useNetwork();
+  // A sync just ran (receipts may have been uploaded): refresh both lists.
+  useEffect(() => {
+    refreshQueuedScans();
+    if (lastSync?.result?.scans?.uploaded) loadScans();
+  }, [pendingCount, lastSync, refreshQueuedScans, loadScans]);
   const wasOnline = React.useRef(isOnline);
   useEffect(() => {
     if (isOnline && !wasOnline.current) {
@@ -269,10 +293,11 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {!isOnline && (
+      {(!isOnline || savedAt) && (
         <Text style={styles.offlineNote}>
-          You're offline. Showing requests as last loaded. Scanning a receipt needs a connection; it will work again
-          when you're back online.
+          {savedAt
+            ? `${isOnline ? "Can't reach the server" : "You're offline"} · showing your requests ${savedAtLabel(savedAt)}. You can still capture receipts; they upload when you're back online.`
+            : "You're offline. Showing requests as last loaded. You can still capture receipts; they upload when you're back online."}
         </Text>
       )}
 
@@ -287,7 +312,15 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <>
           {isSiteManager ? null : <RejectedExpenses expenses={rejected} onFix={fixRejected} />}
-          <ScannedReceipts scans={scans} onDismiss={removeScan} />
+          <ScannedReceipts
+            scans={scans}
+            onDismiss={removeScan}
+            queued={queuedScans}
+            onRemoveQueued={(row) => {
+              deleteQueuedPhoto(removeQueuedScan(row.scan_id));
+              refreshQueuedScans();
+            }}
+          />
           {isSiteManager ? null : (
             <View style={styles.toBuyBox}>
               <View style={styles.toBuyHeader}>

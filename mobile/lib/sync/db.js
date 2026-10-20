@@ -90,6 +90,39 @@ export function initDb() {
       error_message    TEXT
     );
   `);
+  // Offline-first (app opens and shows your work with no connection):
+  //   app_kv        small settings, e.g. the saved sign-in
+  //   api_cache     the last answer the server gave for each screen, per user
+  //   offline_scans receipt photos waiting to be uploaded for reading (OCR)
+  exec(`
+    CREATE TABLE IF NOT EXISTS app_kv (
+      key   TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+  `);
+  exec(`
+    CREATE TABLE IF NOT EXISTS api_cache (
+      key      TEXT NOT NULL,
+      user_id  TEXT NOT NULL,
+      body     TEXT NOT NULL,
+      saved_at TEXT NOT NULL,
+      PRIMARY KEY (key, user_id)
+    );
+  `);
+  exec(`
+    CREATE TABLE IF NOT EXISTS offline_scans (
+      scan_id       TEXT PRIMARY KEY NOT NULL,
+      user_id       TEXT NOT NULL,
+      file_path     TEXT NOT NULL,
+      file_name     TEXT NOT NULL,
+      file_type     TEXT NOT NULL,
+      mime_type     TEXT NOT NULL,
+      context       TEXT NOT NULL,
+      created_at    TEXT NOT NULL,
+      sync_status   TEXT NOT NULL DEFAULT 'PENDING',
+      error_message TEXT
+    );
+  `);
   purgeExpired();
 }
 
@@ -101,6 +134,7 @@ export function purgeExpired() {
   const cutoff = new Date(Date.now() - MAX_AGE_MS).toISOString();
   run("DELETE FROM offline_expenses WHERE created_at < ? AND status != 'pending';", [cutoff]);
   run("DELETE FROM offline_task_updates WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
+  run("DELETE FROM offline_scans WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
 }
 
 // ── the one queue rule ───────────────────────────────────────────────────────
@@ -134,7 +168,7 @@ export function evaluateEnqueue({
   return { allowed: true, reason: null, message: "" };
 }
 
-// May one more entry be queued right now? Counts BOTH queues, so the 100-entry
+// May one more entry be queued right now? Counts ALL queues, so the 100-entry
 // and 72-hour rules cannot drift apart. Pass replacingTaskId when a new task
 // submission will replace that task's pending one (so it does not count twice).
 export function canEnqueue({ replacingTaskId = null, now = Date.now() } = {}) {
@@ -146,6 +180,8 @@ export function canEnqueue({ replacingTaskId = null, now = Date.now() } = {}) {
        UNION ALL
        SELECT created_at FROM offline_task_updates
         WHERE sync_status = 'PENDING' AND task_id != ?
+       UNION ALL
+       SELECT created_at FROM offline_scans WHERE sync_status = 'PENDING'
      );`,
     [skip]
   );
@@ -180,9 +216,9 @@ export function getPendingExpenseCount() {
   return row ? row.c : 0;
 }
 
-// Everything waiting to sync, both queues (for the offline banner).
+// Everything waiting to sync, all queues (for the offline banner).
 export function getPendingCount() {
-  return getPendingExpenseCount() + getPendingTaskUpdateCount();
+  return getPendingExpenseCount() + getPendingTaskUpdateCount() + getPendingScanCount();
 }
 
 // Mark a row as synced and record the timestamp.
@@ -276,6 +312,7 @@ export function getPendingTaskUpdateCount() {
 
 // Pending task submissions, oldest first. Pass userId so a phone shared by two
 // people only ever sends each person's own entries.
+/** @param {string | null} [userId] */
 export function getPendingTaskUpdates(userId = null) {
   if (!db) return [];
   return all(
@@ -341,4 +378,115 @@ export function dismissRejectedTaskUpdate(updateId) {
   );
   run("DELETE FROM offline_task_updates WHERE update_id = ? AND sync_status = 'REJECTED';", [updateId]);
   return row ? row.photo_path : null;
+}
+
+
+// ── small settings (the saved sign-in) ───────────────────────────────────────
+
+export function kvGet(key) {
+  if (!db) return null;
+  const row = first("SELECT value FROM app_kv WHERE key = ?;", [key]);
+  return row ? row.value : null;
+}
+
+export function kvSet(key, value) {
+  if (!db) return;
+  run("INSERT OR REPLACE INTO app_kv (key, value) VALUES (?, ?);", [key, value]);
+}
+
+export function kvDelete(key) {
+  if (!db) return;
+  run("DELETE FROM app_kv WHERE key = ?;", [key]);
+}
+
+// ── last-known server answers (read offline) ─────────────────────────────────
+// One row per screen query per user, so a second person on the same phone
+// never sees the first person's data.
+
+export function cacheWrite(key, userId, data, savedAt = new Date().toISOString()) {
+  if (!db) return;
+  run(
+    "INSERT OR REPLACE INTO api_cache (key, user_id, body, saved_at) VALUES (?, ?, ?, ?);",
+    [key, userId, JSON.stringify(data), savedAt]
+  );
+}
+
+// { data, savedAt } or null.
+export function cacheRead(key, userId) {
+  if (!db) return null;
+  const row = first("SELECT body, saved_at FROM api_cache WHERE key = ? AND user_id = ?;", [key, userId]);
+  return row ? { data: JSON.parse(row.body), savedAt: row.saved_at } : null;
+}
+
+// ── receipt photos waiting to be uploaded for reading ────────────────────────
+// Reading a receipt (OCR) happens on the server, so offline the photo is saved
+// here and uploaded on reconnect. The server then reads it in the background
+// and it appears under "Scanned receipts" like any other scan.
+
+// Returns { queued: true } or { queued: false, reason, message }.
+export function queueScan({ scanId, userId, filePath, fileName, fileType, mimeType, context }) {
+  if (!db) return { queued: false, reason: "NO_DB", message: "Offline storage is not ready yet." };
+  purgeExpired();
+  const gate = canEnqueue();
+  if (!gate.allowed) return { queued: false, reason: gate.reason, message: gate.message };
+  run(
+    `INSERT INTO offline_scans
+       (scan_id, user_id, file_path, file_name, file_type, mime_type, context, created_at, sync_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING');`,
+    [scanId, userId, filePath, fileName, fileType, mimeType, JSON.stringify(context), new Date().toISOString()]
+  );
+  return { queued: true };
+}
+
+export function getPendingScanCount() {
+  if (!db) return 0;
+  const row = first("SELECT COUNT(*) as c FROM offline_scans WHERE sync_status = 'PENDING';");
+  return row ? row.c : 0;
+}
+
+// Pending scans for one user, oldest first; context is parsed back to an object.
+/** @param {string | null} [userId] */
+export function getPendingScans(userId = null) {
+  if (!db) return [];
+  return all(
+    `SELECT * FROM offline_scans
+      WHERE sync_status = 'PENDING' AND (? IS NULL OR user_id = ?)
+      ORDER BY created_at ASC;`,
+    [userId, userId]
+  ).map((row) => ({ ...row, context: JSON.parse(row.context) }));
+}
+
+// Uploaded: the server has it now. Returns the local file path to delete.
+export function markScanUploaded(scanId) {
+  if (!db) return null;
+  const row = first("SELECT file_path FROM offline_scans WHERE scan_id = ?;", [scanId]);
+  run("DELETE FROM offline_scans WHERE scan_id = ?;", [scanId]);
+  return row ? row.file_path : null;
+}
+
+export function markScanRejected(scanId, message) {
+  if (!db) return;
+  run(
+    "UPDATE offline_scans SET sync_status = 'REJECTED', error_message = ? WHERE scan_id = ?;",
+    [message || "The server could not accept this file.", scanId]
+  );
+}
+
+/** @param {string | null} [userId] */
+export function getRejectedScans(userId = null) {
+  if (!db) return [];
+  return all(
+    `SELECT * FROM offline_scans
+      WHERE sync_status = 'REJECTED' AND (? IS NULL OR user_id = ?)
+      ORDER BY created_at DESC;`,
+    [userId, userId]
+  ).map((row) => ({ ...row, context: JSON.parse(row.context) }));
+}
+
+// The user removed a waiting or rejected scan. Returns the file path to delete.
+export function removeQueuedScan(scanId) {
+  if (!db) return null;
+  const row = first("SELECT file_path FROM offline_scans WHERE scan_id = ?;", [scanId]);
+  run("DELETE FROM offline_scans WHERE scan_id = ?;", [scanId]);
+  return row ? row.file_path : null;
 }

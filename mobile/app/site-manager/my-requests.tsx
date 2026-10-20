@@ -14,10 +14,11 @@ import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "e
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import { formatPeso, formatQty } from "@/lib/money";
-import { fetchActiveProjects, fetchAllAssignedTickets, type Project, type Ticket } from "@/lib/api";
+import { type Project, type Ticket } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
+import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -50,10 +51,12 @@ export default function MyRequestsScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const [ticketList, projectList] = await Promise.all([
-        fetchAllAssignedTickets("Site Manager"),
-        fetchActiveProjects(),
+      const [ticketResult, projectResult] = await Promise.all([
+        loadAssignedTickets("Site Manager"),
+        loadActiveProjects(),
       ]);
+      const ticketList = ticketResult.data;
+      const projectList = projectResult.data;
       const byId: Record<string, Project> = {};
       for (const p of projectList) byId[p.projectid] = p;
       setProjectsById(byId);

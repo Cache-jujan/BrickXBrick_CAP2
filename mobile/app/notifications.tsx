@@ -23,6 +23,7 @@ import { getSession } from "@/lib/auth";
 import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { loadNotifications } from "@/lib/cached-api";
 
 const PAGE_SIZE = 30;
 type Tab = "Unread" | "All";
@@ -44,8 +45,8 @@ export default function NotificationsScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    fetchNotifications({ unreadOnly: which === "Unread", limit: PAGE_SIZE })
-      .then((rows) => {
+    loadNotifications(which === "Unread", PAGE_SIZE)
+      .then(({ data: rows }) => {
         setItems(rows);
         setHasMore(rows.length === PAGE_SIZE);
       })

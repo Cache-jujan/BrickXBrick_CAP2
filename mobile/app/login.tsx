@@ -14,7 +14,7 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { login, nextRouteAfterLogin } from "@/lib/auth";
+import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { isNetworkError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -25,7 +25,12 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  // Shown once when we got here because the saved sign-in expired.
+  const [error, setError] = useState(() =>
+    consumeSessionExpired()
+      ? "Your sign-in expired. Please sign in again. Anything saved on your phone is kept and will be sent after you sign in."
+      : ""
+  );
   const { isOnline } = useNetwork();
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
