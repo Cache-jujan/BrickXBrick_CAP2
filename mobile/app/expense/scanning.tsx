@@ -5,7 +5,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { dismissScan, fetchScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -13,7 +13,7 @@ import { useNetwork } from "@/lib/sync/network-context";
 const POLL_MS = 2000;
 // Past this the user is offered to type it in instead of waiting.
 const SLOW_AFTER_S = 20;
-const RED = "#C1121F";
+const RED = COLORS.errorText;
 
 // Shown after the upload: OCR is running on the server. Leaving this screen,
 // or closing the app, doesn't stop it; the receipt waits under "Scanned
@@ -156,17 +156,17 @@ const styles = StyleSheet.create({
   step: { flexDirection: "row", alignItems: "center", gap: 12 },
   stepIcon: { width: 24, alignItems: "center" },
   dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: COLORS.border },
-  stepLabel: { flex: 1, fontSize: 15, fontWeight: "700", color: COLORS.heading },
-  stepWaiting: { color: COLORS.muted, fontWeight: "600" },
-  stepDetail: { fontSize: 13, color: COLORS.muted, fontVariant: ["tabular-nums"] },
+  stepLabel: { flex: 1, fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
+  stepWaiting: { color: COLORS.muted, fontFamily: FONT.semibold },
+  stepDetail: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, fontVariant: ["tabular-nums"] },
   notice: { flexDirection: "row", gap: 8, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12 },
-  noticeText: { flex: 1, fontSize: 13, color: COLORS.muted, lineHeight: 19 },
-  bold: { fontWeight: "700", color: COLORS.heading },
-  slowText: { fontSize: 13, color: "#B45309", textAlign: "center" },
+  noticeText: { flex: 1, fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, lineHeight: 19 },
+  bold: { fontFamily: FONT.bold, color: COLORS.heading },
+  slowText: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.amberText, textAlign: "center" },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   button: { borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   primary: { backgroundColor: COLORS.primary },
-  primaryText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
+  primaryText: { color: "#FFF", fontFamily: FONT.bold, fontSize: 16 },
   secondary: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
-  secondaryText: { color: COLORS.heading, fontWeight: "700", fontSize: 15 },
+  secondaryText: { color: COLORS.heading, fontFamily: FONT.bold, fontSize: 15 },
 });

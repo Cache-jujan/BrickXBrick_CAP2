@@ -7,9 +7,9 @@ import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { getSession, logout } from "@/lib/auth";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
-const DANGER = "#C1121F";
+const DANGER = COLORS.errorText;
 
 // Shared by Purchasers and Site Managers. This is the only place to log out.
 export default function SettingsScreen() {
@@ -91,14 +91,14 @@ const styles = StyleSheet.create({
   card: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 16 },
   profileRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   profileText: { flex: 1 },
-  name: { fontSize: 17, fontWeight: "800", color: COLORS.heading },
-  email: { fontSize: 13, color: COLORS.muted, marginTop: 2 },
+  name: { fontSize: 17, fontFamily: FONT.extrabold, color: COLORS.heading },
+  email: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 14 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
-  rowLabel: { fontSize: 14, color: COLORS.muted },
-  rowValue: { fontSize: 14, fontWeight: "600", color: COLORS.heading },
+  rowLabel: { fontSize: 14, fontFamily: FONT.regular, color: COLORS.muted },
+  rowValue: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.heading },
   linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  linkText: { fontSize: 15, fontWeight: "600", color: COLORS.heading },
+  linkText: { fontSize: 15, fontFamily: FONT.semibold, color: COLORS.heading },
   logout: { borderWidth: 1, borderColor: DANGER, borderRadius: 14, paddingVertical: 14, alignItems: "center", backgroundColor: COLORS.card },
-  logoutText: { color: DANGER, fontSize: 15, fontWeight: "700" },
+  logoutText: { color: DANGER, fontSize: 15, fontFamily: FONT.bold },
 });

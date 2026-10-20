@@ -11,6 +11,7 @@ import { emitNewNotifications } from "@/lib/notification-events";
 import { kvGet, kvSet } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { pickNewNotifications } from "@/lib/sync/new-notifications";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
 const POLL_MS = 20_000;
 const SHOW_MS = 6_000;
@@ -125,8 +126,8 @@ const styles = StyleSheet.create({
   },
   icon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   body: { flex: 1 },
-  title: { color: "#6B6B6B", fontSize: 11, fontWeight: "700" },
-  message: { color: "#1A1A1A", fontSize: 14, fontWeight: "600", lineHeight: 19, marginTop: 2 },
-  more: { color: "#E85D0C", fontSize: 11, fontWeight: "700", marginTop: 3 },
-  close: { color: "#6B6B6B", fontSize: 22, paddingHorizontal: 4 },
+  title: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.bold },
+  message: { color: COLORS.heading, fontSize: 14, fontFamily: FONT.semibold, lineHeight: 19, marginTop: 2 },
+  more: { color: COLORS.primary, fontSize: 11, fontFamily: FONT.bold, marginTop: 3 },
+  close: { color: COLORS.muted, fontSize: 22, fontFamily: FONT.regular, paddingHorizontal: 4 },
 });

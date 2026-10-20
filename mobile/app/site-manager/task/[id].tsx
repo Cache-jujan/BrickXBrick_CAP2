@@ -33,6 +33,7 @@ import { describeLoadError, describeRejection, isNetworkError, plainError } from
 import { useNetwork } from "@/lib/sync/network-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
+import { BackButton } from "@/components/back-button";
 
 // A row of offline_task_updates (lib/sync/db.js).
 type QueuedUpdate = {
@@ -304,9 +305,7 @@ export default function SiteManagerTaskDetailScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => loadTask(true)} />
         }
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹ Back to tasks</Text>
-        </Pressable>
+        <BackButton />
 
         {loading ? (
           <View style={styles.centerState}>
@@ -524,8 +523,6 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
   keyboardAvoider: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
-  backButton: { alignSelf: "flex-start", marginBottom: 30, paddingVertical: 6 },
-  backText: { color: COLORS.primary, fontSize: 14, fontWeight: "800" },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 },
   title: { color: COLORS.heading, fontSize: 28, fontWeight: "800", lineHeight: 34 },
   statusPill: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 20, marginTop: 14, paddingHorizontal: 11, paddingVertical: 6 },

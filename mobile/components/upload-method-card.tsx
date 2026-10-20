@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
 type Props = {
   icon: string;
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#EDE6D9",
+    borderColor: COLORS.border,
   },
   cardFullWidth: {
     width: "100%",
@@ -44,12 +45,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   icon: {
-    fontSize: 22,
+    fontSize: 22, fontFamily: FONT.regular,
     marginBottom: 6,
   },
   label: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#1A1A1A",
+    fontFamily: FONT.semibold,
+    color: COLORS.heading,
   },
 });

@@ -6,7 +6,7 @@ import React from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
 export type RequestedMaterial = {
   key: string;
@@ -56,13 +56,13 @@ export function RequestedMaterialPicker({ visible, materials, onSelect, onClose 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: COLORS.card, borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 16, paddingTop: 16, maxHeight: "70%" },
-  title: { fontSize: 16, fontWeight: "700", color: COLORS.heading },
-  subtitle: { fontSize: 12, color: COLORS.muted, marginTop: 2, marginBottom: 10 },
+  title: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading },
+  subtitle: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2, marginBottom: 10 },
   list: { flexGrow: 0 },
-  row: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  row: { minHeight: 44, justifyContent: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   rowPressed: { backgroundColor: COLORS.bg },
-  name: { fontSize: 14, fontWeight: "600", color: COLORS.heading },
-  detail: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
+  name: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.heading },
+  detail: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   cancel: { alignItems: "center", paddingVertical: 14 },
-  cancelText: { fontSize: 14, fontWeight: "600", color: COLORS.primary },
+  cancelText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.primary },
 });
