@@ -113,7 +113,9 @@ export async function submitTaskProgress(
   if (uploadResult.status === 401) handleUnauthorized();
   const data = JSON.parse(uploadResult.body || "{}");
   if (uploadResult.status < 200 || uploadResult.status >= 300) {
-    throw new Error(data.error || `Failed to submit task progress (${uploadResult.status})`);
+    const error = new Error(data.error || `Failed to submit task progress (${uploadResult.status})`);
+    (error as Error & { code?: string }).code = data.details?.code ?? data.code;
+    throw error;
   }
 
   return data;

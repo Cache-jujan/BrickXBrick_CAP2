@@ -30,6 +30,7 @@ import {
 import { describeLoadError, describeRejection, isNetworkError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
+import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 
 // A row of offline_task_updates (lib/sync/db.js).
 type QueuedUpdate = {
@@ -52,6 +53,8 @@ export default function SiteManagerTaskDetailScreen() {
   const [note, setNote] = useState("");
   const [clientSubmissionId, setClientSubmissionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set when Submit is pressed without a photo, so the photo box turns red.
+  const [triedSubmit, setTriedSubmit] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   // Set when the task on screen is the copy saved on this phone (offline).
@@ -232,7 +235,8 @@ export default function SiteManagerTaskDetailScreen() {
 
   async function handleSubmit() {
     if (!task || !photo) {
-      setSubmitError("Choose a photo before submitting progress.");
+      setTriedSubmit(true);
+      setSubmitError(null);
       return;
     }
     if (!isOnline) {
@@ -265,6 +269,9 @@ export default function SiteManagerTaskDetailScreen() {
         return;
       }
       setSubmitError(plainError(err, "Unable to submit task progress."));
+      // Someone already sent a photo for this task (another phone, or a queued
+      // update that just synced): reload so the "waiting for review" card shows.
+      if ((err as { code?: string })?.code === "AWAITING_REVIEW") loadTask(true);
     } finally {
       setSubmitting(false);
     }
@@ -411,8 +418,10 @@ export default function SiteManagerTaskDetailScreen() {
                     </View>
                   </View>
                 ) : (
-                  <View style={styles.photoEmpty}>
-                    <Text style={styles.photoEmptyTitle}>No evidence photo selected</Text>
+                  <View style={[styles.photoEmpty, triedSubmit && fieldErrorStyle]}>
+                    <Text style={[styles.photoEmptyTitle, triedSubmit && styles.photoEmptyTitleError]}>
+                      {triedSubmit ? "A photo is required" : "No evidence photo selected"}
+                    </Text>
                     <Text style={styles.photoEmptyBody}>JPEG or PNG photos will be accepted.</Text>
                   </View>
                 )}
@@ -430,7 +439,12 @@ export default function SiteManagerTaskDetailScreen() {
                   textAlignVertical="top"
                 />
 
-                {submitError && <Text style={styles.submitError}>{submitError}</Text>}
+                <BlockedReasons
+                  reasons={[triedSubmit && !photo && "Take a photo of the finished work. Your Project Manager needs it as evidence."]}
+                />
+                {submitError && (
+                  <BlockedReasons title="Your update wasn't sent:" reasons={[submitError]} />
+                )}
                 {submitted ? (
                   <View style={styles.successCard} accessibilityLiveRegion="polite">
                     <Text style={styles.successTitle}>{sentFromQueue ? "Sent for review ✓" : "Submitted for review"}</Text>
@@ -518,6 +532,7 @@ const styles = StyleSheet.create({
   previewName: { color: COLORS.heading, flex: 1, fontSize: 12, fontWeight: "700", marginRight: 10 },
   removeText: { color: "#B42318", fontSize: 12, fontWeight: "800" },
   photoEmpty: { alignItems: "center", backgroundColor: "#FFFCF8", borderColor: "#E7DDCF", borderRadius: 14, borderStyle: "dashed", borderWidth: 1, marginTop: 12, padding: 22 },
+  photoEmptyTitleError: { color: "#B42318" },
   photoEmptyTitle: { color: COLORS.heading, fontSize: 13, fontWeight: "800" },
   photoEmptyBody: { color: COLORS.muted, fontSize: 12, marginTop: 6 },
   noteLabel: { color: COLORS.heading, fontSize: 13, fontWeight: "800", marginBottom: 7, marginTop: 18 },

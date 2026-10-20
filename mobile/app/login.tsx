@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS } from "@/constants/expense-flow-colors";
+import { fieldErrorStyle } from "@/components/blocked-reasons";
 import { isNetworkError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 
@@ -34,10 +35,20 @@ export default function LoginScreen() {
   const { isOnline } = useNetwork();
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
+  // Which fields were empty on the last attempt; they get a red outline.
+  const [missing, setMissing] = useState({ email: false, password: false });
 
   async function handleLogin() {
-    if (!email.trim() || !password) {
-      setError("Enter your email and password to continue.");
+    const nextMissing = { email: !email.trim(), password: !password };
+    setMissing(nextMissing);
+    if (nextMissing.email || nextMissing.password) {
+      setError(
+        nextMissing.email && nextMissing.password
+          ? "Enter your email and password to continue."
+          : nextMissing.email
+            ? "Enter your email address to continue."
+            : "Enter your password to continue."
+      );
       return;
     }
 
@@ -105,7 +116,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 placeholder="you@gmail.com"
                 placeholderTextColor={COLORS.muted}
-                style={styles.input}
+                style={[styles.input, missing.email && !email.trim() && fieldErrorStyle]}
                 value={email}
                 onChangeText={setEmail}
                 returnKeyType="next"
@@ -129,7 +140,7 @@ export default function LoginScreen() {
                 placeholder="Enter your password"
                 placeholderTextColor={COLORS.muted}
                 secureTextEntry={!showPassword}
-                style={styles.input}
+                style={[styles.input, missing.password && !password && fieldErrorStyle]}
                 value={password}
                 onChangeText={setPassword}
                 onSubmitEditing={handleLogin}
@@ -145,7 +156,11 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
             </Pressable>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                {error}
+              </Text>
+            ) : null}
 
             <Pressable
               accessibilityRole="button"

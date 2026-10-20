@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
+import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -101,6 +102,7 @@ export default function TicketRequestScreen() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [triedSubmit, setTriedSubmit] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [vendors, setVendors] = useState<ApprovedVendor[]>([]);
   // The rejected ticket we're resubmitting (null in the ordinary flow).
@@ -263,14 +265,18 @@ export default function TicketRequestScreen() {
     return [{ ...first, resubmittedFromId: resubmitOf.ticketid }, ...rest];
   }
 
-  const firstInvalid = cards.map(validateCard).findIndex((e) => e !== null);
-  const canSubmit = firstInvalid === -1 && !submitting && !!project;
+  const cardErrors = cards.map(validateCard);
+  const canSubmit = cardErrors.every((e) => e === null) && !submitting && !!project;
+  // The button stays tappable while the form is incomplete: tapping it shows
+  // what's missing (list above the button, red outline on each ticket).
+  const blockedReasons = [
+    !project && "Choose a project first.",
+    ...cardErrors.map((e, i) => e && (cards.length > 1 ? `Ticket ${i + 1}: ${e}` : e)),
+  ];
 
   async function handleSubmit() {
-    const errors = cards.map(validateCard);
-    const bad = errors.findIndex((e) => e !== null);
-    if (bad !== -1) {
-      setError(`Ticket ${bad + 1}: ${errors[bad]}`);
+    if (!canSubmit) {
+      setTriedSubmit(true);
       return;
     }
     setSubmitting(true);
@@ -368,7 +374,7 @@ export default function TicketRequestScreen() {
         const k = (field: string) => `${card.id}:${field}`;
 
         return (
-          <View key={card.id} style={styles.ticketCard}>
+          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index] && fieldErrorStyle]}>
             <View style={styles.ticketCardHead}>
               <Text style={styles.ticketCardTitle}>Ticket {index + 1}</Text>
               {cards.length > 1 && (
@@ -377,6 +383,9 @@ export default function TicketRequestScreen() {
                 </Pressable>
               )}
             </View>
+            {triedSubmit && cardErrors[index] ? (
+              <Text style={styles.cardError}>{cardErrors[index]}</Text>
+            ) : null}
 
             <Dropdown
               label="Type"
@@ -515,7 +524,8 @@ export default function TicketRequestScreen() {
         </Pressable>
       )}
 
-      <Pressable onPress={handleSubmit} disabled={!canSubmit} style={[styles.submitButton, !canSubmit && styles.disabled]}>
+      {triedSubmit && <BlockedReasons reasons={blockedReasons} />}
+      <Pressable onPress={handleSubmit} disabled={submitting} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
           {submitting
             ? resubmitOf ? "Resubmitting…" : "Submitting…"
@@ -595,6 +605,7 @@ const styles = StyleSheet.create({
   changeLink: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
 
   // Ticket card
+  cardError: { color: "#B42318", fontSize: 13, fontWeight: "700", marginBottom: 6 },
   ticketCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
   ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },

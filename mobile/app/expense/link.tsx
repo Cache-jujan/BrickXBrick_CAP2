@@ -14,6 +14,7 @@ import { isNetworkError } from "@/lib/sync/messages";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { formatPeso } from "@/lib/money";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
@@ -27,6 +28,8 @@ export default function LinkScreen() {
   const [submitting, setSubmitting] = useState(false);
   // setState is async; the ref stops a fast double tap from submitting twice.
   const busyRef = useRef(false);
+  // Set when Submit is tapped without a category, so the chips turn red.
+  const [triedSubmit, setTriedSubmit] = useState(false);
 
   // All hooks are above this line. Direct deep link / hot reload with an empty draft lands here.
   // A rejected expense being resubmitted may have no ticket on hand: the server keeps its link.
@@ -35,7 +38,10 @@ export default function LinkScreen() {
   // Arrow function declared AFTER the guard, so ocrResult stays narrowed inside it.
   const handleSubmit = async () => {
     if (busyRef.current) return; // double-tap guard
-    if (!category) return Alert.alert("Category required", "Pick a category before submitting.");
+    if (!category) {
+      setTriedSubmit(true);
+      return;
+    }
 
     // 1) Validate everything BEFORE touching the ticket, so a bad draft can't leave it Resolved.
     const amountNum = typeof ocrResult.amount === "number" ? ocrResult.amount : Number(ocrResult.amount);
@@ -189,10 +195,12 @@ export default function LinkScreen() {
             <Text style={styles.ticketMeta}>{ocrResult.receiptDate} · {itemCount} item{itemCount === 1 ? "" : "s"}</Text>
           </View>
 
-          <Text style={styles.fieldLabel}>Category</Text>
+          <Text style={[styles.fieldLabel, triedSubmit && !category && styles.fieldLabelError]}>
+            Category{triedSubmit && !category ? " — required" : ""}
+          </Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((c) => (
-              <Pressable key={c} style={[styles.categoryChip, category === c && styles.categoryChipActive]} onPress={() => { setCategory(c); setDraftCategory(c); }}>
+              <Pressable key={c} style={[styles.categoryChip, triedSubmit && !category && fieldErrorStyle, category === c && styles.categoryChipActive]} onPress={() => { setCategory(c); setDraftCategory(c); }}>
                 <Text style={[styles.categoryChipText, category === c && styles.categoryChipTextActive]}>{c}</Text>
               </Pressable>
             ))}
@@ -207,6 +215,7 @@ export default function LinkScreen() {
             <Text style={styles.summaryLabel}>Receipt total</Text>
             <Text style={styles.summaryAmount}>{formatPeso(ocrResult.amount)}</Text>
           </View>
+          <BlockedReasons reasons={[triedSubmit && !category && "Pick a category for this expense: Materials, Equipment or Other."]} />
           <Pressable style={[styles.submitButton, (!category || submitting) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={submitting} accessibilityRole="button">
             <Text style={styles.submitButtonText}>{submitLabel}</Text>
           </Pressable>
@@ -230,6 +239,7 @@ const styles = StyleSheet.create({
   ticketSubject: { fontSize: 15, fontWeight: "700", color: COLORS.heading },
   ticketMeta: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
   ticketBudget: { fontSize: 12, fontWeight: "700", color: COLORS.heading, marginTop: 6 },
+  fieldLabelError: { color: "#B42318" },
   fieldLabel: { fontSize: 12, fontWeight: "600", color: COLORS.muted, marginBottom: 6, marginTop: 4 },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   categoryChip: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: COLORS.card },

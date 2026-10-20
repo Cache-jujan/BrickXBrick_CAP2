@@ -19,6 +19,7 @@ import {
 import { formatPeso, formatQty } from "@/lib/money";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
+import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -110,6 +111,15 @@ export default function AllocateScreen() {
     ...excluded.filter((id) => !portionByTicket.has(id)),
   ];
   const canSubmit = !!plan?.ok && !!category && !loading && !submitting;
+  // Why the Submit button is disabled, shown right above it.
+  const blockedReasons = submitting
+    ? []
+    : [
+        loading && "Still working out how this receipt splits across your requests…",
+        !loading && !!error && "The split couldn't be worked out. See the message at the top and tap Try again.",
+        !loading && !error && plan && !plan.ok && "Some receipt lines aren't covered by a request. Fix the problems listed at the top.",
+        !category && "Pick a category: Materials, Equipment or Other.",
+      ];
 
   function toggleExcluded(ticketID: string, value: boolean) {
     setSubmitProblems([]);
@@ -346,7 +356,7 @@ export default function AllocateScreen() {
           {CATEGORIES.map((c) => (
             <TouchableOpacity
               key={c}
-              style={[styles.chip, category === c && styles.chipActive]}
+              style={[styles.chip, !category && fieldErrorStyle, category === c && styles.chipActive]}
               onPress={() => { setCategory(c); setDraftCategory(c); }}
             >
               <Text style={[styles.chipText, category === c && { color: COLORS.primary }]}>{c}</Text>
@@ -361,6 +371,7 @@ export default function AllocateScreen() {
           </View>
         )}
 
+        <BlockedReasons reasons={blockedReasons} />
         <TouchableOpacity style={[styles.submitButton, !canSubmit && { opacity: 0.5 }]} onPress={handleSubmit} disabled={!canSubmit}>
           <Text style={styles.submitButtonText}>
             {submitting ? "Submitting…" : !category && plan?.ok ? "Pick a category" : "Submit Split for Approval"}
