@@ -63,6 +63,9 @@ export type AssignedTask = {
   completionpercentage: number | string;
   photoevidenceurl?: string | null;
   pendingphotoevidenceurl?: string | null;
+  // When the submission now waiting for the PM's review was made, and its note.
+  pendingsubmittedat?: string | null;
+  pendingnote?: string | null;
   latestreviewstatus?: string | null;
   latestreviewreason?: string | null;
 };

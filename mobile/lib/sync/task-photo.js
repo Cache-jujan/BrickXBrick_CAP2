@@ -51,7 +51,8 @@ export async function uploadTaskPhoto(taskId, photoPath) {
 
   if (result.status >= 200 && result.status < 300 && body.photoUrl) return body.photoUrl;
 
-  const code = REJECT_CODE_BY_STATUS[result.status];
+  // A submission is already waiting for the PM's review (409 AWAITING_REVIEW).
+  const code = body.details?.code === "AWAITING_REVIEW" ? "SUPERSEDED" : REJECT_CODE_BY_STATUS[result.status];
   if (code) throw new PhotoUploadRejected(code, body.error || `Photo upload refused (${result.status})`);
   throw new Error(`Photo upload failed (${result.status})`); // 401, 5xx...: try again later
 }

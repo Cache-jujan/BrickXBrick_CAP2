@@ -46,10 +46,11 @@ async function getTaskForUser(user, taskId, query = db.query) {
  *                              checks above and before the photo is resolved.
  *                              Sync uses it for rules the online route lacks
  *                              (project active, photo exists). May throw.
- *   input.rejectIfPending      sync only. If a Pending Review row already
- *                              exists, throw 409 SUPERSEDED instead of
- *                              superseding it (the server's newer record wins).
- *                              Checked under the task lock, so it cannot race.
+ * One submission at a time: while a Pending Review row exists for the task,
+ * a new submission is refused with 409 AWAITING_REVIEW (online and offline
+ * sync alike). It is checked before the photo is stored, and again under the
+ * task lock so two phones cannot race past it. After the PM Flags it, the
+ * Site Manager can submit again.
  *   deps                       { query, withTransaction } for tests
  * Returns { log, replayed }. replayed is true when this clientSubmissionId
  * was already saved by the same user for the same task.
@@ -57,7 +58,7 @@ async function getTaskForUser(user, taskId, query = db.query) {
 async function submitTaskProgress(input, deps = {}) {
   const query = deps.query || db.query;
   const withTransaction = deps.withTransaction || db.withTransaction;
-  const { user, taskId, clientSubmissionId, note, photoUrl, uploadPhoto, beforeWrite, rejectIfPending } = input;
+  const { user, taskId, clientSubmissionId, note, photoUrl, uploadPhoto, beforeWrite } = input;
 
   const task = await getTaskForUser(user, taskId, query);
 
@@ -78,6 +79,9 @@ async function submitTaskProgress(input, deps = {}) {
     throw new TaskProgressError(409, "TASK_CLOSED", "This task is already completed and cannot be resubmitted");
   }
 
+  // Before storing any photo: one submission waits for review at a time.
+  if (await hasPendingReview(taskId, query)) throw awaitingReview();
+
   if (beforeWrite) await beforeWrite(task);
 
   const photoEvidenceURL = photoUrl || (await uploadPhoto());
@@ -89,24 +93,8 @@ async function submitTaskProgress(input, deps = {}) {
       // (migration 021) is the DB-level backstop if they race past this anyway.
       await client.query("SELECT taskId FROM tasks WHERE taskId = $1 FOR UPDATE", [taskId]);
 
-      if (rejectIfPending) {
-        const pending = await client.query(
-          "SELECT 1 FROM task_progress_log WHERE taskId = $1 AND reviewStatus = 'Pending Review'",
-          [taskId]
-        );
-        if (pending.rowCount > 0) {
-          throw new TaskProgressError(409, "SUPERSEDED", "This task already has a submission waiting for review");
-        }
-      }
-
-      // Supersede any prior pending entry rather than blocking: resubmission
-      // mid-review is allowed, not queued.
-      await client.query(
-        `UPDATE task_progress_log
-            SET reviewStatus = 'Superseded'::varchar
-          WHERE taskId = $1 AND reviewStatus = 'Pending Review'`,
-        [taskId]
-      );
+      // Again under the lock: another phone may have submitted in between.
+      if (await hasPendingReview(taskId, client.query.bind(client))) throw awaitingReview();
 
       const insertResult = await client.query(
         `INSERT INTO task_progress_log
@@ -119,11 +107,28 @@ async function submitTaskProgress(input, deps = {}) {
     });
     return { log, replayed: false };
   } catch (error) {
-    if (error.code === "23505") {
-      throw new TaskProgressError(409, "PENDING_EXISTS", "A submission is already pending review for this task");
-    }
+    // The one-pending-per-task index (migration 021) caught a race.
+    if (error.code === "23505") throw awaitingReview();
     throw error;
   }
+}
+
+const AWAITING_REVIEW_MESSAGE =
+  "This task already has a submission waiting for your Project Manager's review. You can submit again only if they flag it.";
+
+function awaitingReview() {
+  const error = new TaskProgressError(409, "AWAITING_REVIEW", AWAITING_REVIEW_MESSAGE);
+  error.details = { code: "AWAITING_REVIEW" };
+  return error;
+}
+
+// Is a submission for this task waiting for the PM's review?
+async function hasPendingReview(taskId, query = db.query) {
+  const pending = await query(
+    "SELECT 1 FROM task_progress_log WHERE taskId = $1 AND reviewStatus = 'Pending Review'",
+    [taskId]
+  );
+  return pending.rowCount > 0;
 }
 
 /**
@@ -143,4 +148,4 @@ async function taskPhotoExists(url, taskId, deps = {}) {
   return objectExists(key);
 }
 
-module.exports = { submitTaskProgress, getTaskForUser, taskPhotoExists, TaskProgressError };
+module.exports = { submitTaskProgress, getTaskForUser, taskPhotoExists, hasPendingReview, awaitingReview, TaskProgressError };

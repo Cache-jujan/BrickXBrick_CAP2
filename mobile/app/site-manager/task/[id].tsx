@@ -137,6 +137,10 @@ export default function SiteManagerTaskDetailScreen() {
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
+  // Site Manager: one submission at a time. While one waits for the PM's
+  // review the form is hidden (the server refuses a second one too).
+  const awaitingReview = !!task?.pendingphotoevidenceurl && task?.status !== "Completed";
+
   // What the queued-update card says, from the network state and the last sync.
   const postponedHere = !!queued && !!lastSync?.result?.postponedItems?.some((p: { id: string }) => p.id === queued.update_id);
   const queuedStuck = postponedHere || (!!queued && !!lastSync?.error);
@@ -331,11 +335,17 @@ export default function SiteManagerTaskDetailScreen() {
               </View>
             )}
 
-            {task.pendingphotoevidenceurl && task.status !== "Completed" && (
-              <View style={styles.queuedCard}>
-                <Text style={styles.queuedTitle}>Awaiting PM review</Text>
-                <Text style={styles.queuedHint}>
-                  Your latest update was sent. Submitting a new photo below replaces it.
+            {awaitingReview && (
+              <View style={styles.reviewCard} accessibilityLiveRegion="polite">
+                <Text style={styles.reviewEyebrow}>CURRENT SUBMISSION</Text>
+                <Text style={styles.reviewTitle}>Waiting for your Project Manager's review</Text>
+                {task.pendingsubmittedat ? (
+                  <Text style={styles.reviewMeta}>Submitted {formatDateTime(task.pendingsubmittedat)}</Text>
+                ) : null}
+                {task.pendingnote ? <Text style={styles.reviewNote}>“{task.pendingnote}”</Text> : null}
+                <Text style={styles.reviewBody}>
+                  You can't send another photo for this task until it is reviewed. If your Project Manager flags it,
+                  you'll see why here and can submit a new photo.
                 </Text>
               </View>
             )}
@@ -376,7 +386,7 @@ export default function SiteManagerTaskDetailScreen() {
               </View>
             )}
 
-            {task.status !== "Completed" && (!queued || showForm) && (
+            {task.status !== "Completed" && !awaitingReview && (!queued || showForm) && (
               <View style={styles.submissionSection}>
                 <Text style={styles.sectionTitle}>Progress update</Text>
                 <Text style={styles.sectionSubtitle}>Take one photo as evidence and add an optional note.</Text>
@@ -460,6 +470,11 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
@@ -519,10 +534,15 @@ const styles = StyleSheet.create({
   successBackText: { color: "#166534", fontSize: 12, fontWeight: "800" },
   queuedCard: { backgroundColor: "#FFF8E6", borderColor: "#F0D78C", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 14 },
   queuedHeader: { alignItems: "center", flexDirection: "row", gap: 8 },
+  reviewCard: { backgroundColor: "#EEF4FF", borderColor: "#B9CCF2", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 16 },
+  reviewEyebrow: { color: "#1D4E89", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+  reviewTitle: { color: "#123A6B", fontSize: 16, fontWeight: "800", marginTop: 6 },
+  reviewMeta: { color: "#2F5C93", fontSize: 12, fontWeight: "600", marginTop: 4 },
+  reviewNote: { color: "#123A6B", fontSize: 13, fontStyle: "italic", lineHeight: 19, marginTop: 8 },
+  reviewBody: { color: "#2F5C93", fontSize: 13, lineHeight: 19, marginTop: 8 },
   savedNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 12, lineHeight: 17, marginBottom: 14, padding: 10 },
   queuedTitle: { color: "#8A5A00", flexShrink: 1, fontSize: 14, fontWeight: "800" },
   queuedBody: { color: "#6B4A00", fontSize: 13, lineHeight: 19, marginTop: 6 },
-  queuedHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
   replaceButton: { alignSelf: "flex-start", borderColor: "#8A5A00", borderRadius: 10, borderWidth: 1, marginTop: 12, paddingHorizontal: 13, paddingVertical: 8 },
   replaceText: { color: "#8A5A00", fontSize: 12, fontWeight: "800" },
   queuedImage: { backgroundColor: "#EEE7DE", borderRadius: 10, height: 160, marginTop: 10, width: "100%" },

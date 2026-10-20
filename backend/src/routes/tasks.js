@@ -18,7 +18,7 @@ const {
     buildStorageKey,
     documentUrl,
 } = require("../lib/taskDocuments");
-const { submitTaskProgress, getTaskForUser } = require("../lib/taskProgress");
+const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview } = require("../lib/taskProgress");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -37,13 +37,15 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                     m.name AS milestonename,
                     p.name AS projectname,
                     pending.photoevidenceurl AS pendingphotoevidenceurl,
+                    pending.createdat AS pendingsubmittedat,
+                    pending.note AS pendingnote,
                     latest.reviewstatus AS latestreviewstatus,
                     latest.reviewreason AS latestreviewreason
                FROM tasks t
                JOIN milestones m ON m.milestoneId = t.milestoneId
                JOIN projects p ON p.projectId = m.projectId
                LEFT JOIN LATERAL (
-                    SELECT photoevidenceurl
+                    SELECT photoevidenceurl, createdat, note
                       FROM task_progress_log
                      WHERE taskid = t.taskid AND reviewstatus = 'Pending Review'
                      ORDER BY createdat DESC
@@ -128,6 +130,9 @@ router.post("/:id/photo", requireRole("Site Manager"), upload.single("photo"), a
             err.status = 409;
             throw err;
         }
+        // One submission waits for review at a time: don't store a photo that
+        // could never be submitted.
+        if (await hasPendingReview(req.params.id)) throw awaitingReview();
 
         const photoUrl = await uploadBuffer(req.file.buffer, {
             contentType: req.file.mimetype,

@@ -357,3 +357,15 @@ test("only the signed-in user's saved receipts are uploaded", async () => {
   assert.equal(result.scans.uploaded, 0);
   assert.equal(q.getPendingScanCount(), 1);
 });
+
+test("photo upload refused because a submission is already waiting for review -> SUPERSEDED (plain reason), not TASK_CLOSED", async () => {
+  setup();
+  queueTask("t1");
+  fs.uploadHandler = async () => ({
+    status: 409,
+    body: JSON.stringify({ error: "This task already has a submission waiting for your Project Manager's review.", details: { code: "AWAITING_REVIEW" } }),
+  });
+  const result = await syncAllPending();
+  assert.equal(result.tasks.rejected, 1);
+  assert.equal(q.getRejectedTaskUpdates()[0].error_code, "SUPERSEDED");
+});
