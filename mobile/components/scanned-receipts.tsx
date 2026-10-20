@@ -10,11 +10,39 @@ const AMBER = "#B45309";
 const AMBER_BG = "#FEF3C7";
 const RED = "#C1121F";
 
-// Receipts uploaded for background scanning that haven't been submitted yet.
+// A receipt saved on this phone while offline (lib/sync/db.js offline_scans).
+export type QueuedScan = {
+  scan_id: string;
+  file_name: string;
+  created_at: string;
+  sync_status: "PENDING" | "REJECTED";
+  error_message: string | null;
+  context: { mode?: string; ticket?: { subject?: string } | null } | null;
+};
+
+// Receipts uploaded for background scanning that haven't been submitted yet,
+// plus receipts saved on the phone offline that are waiting to be uploaded.
 // Renders nothing when there are none.
-export function ScannedReceipts({ scans, onDismiss }: { scans: ReceiptScan[]; onDismiss: (scan: ReceiptScan) => void }) {
+export function ScannedReceipts({
+  scans,
+  onDismiss,
+  queued = [],
+  onRemoveQueued,
+}: {
+  scans: ReceiptScan[];
+  onDismiss: (scan: ReceiptScan) => void;
+  queued?: QueuedScan[];
+  onRemoveQueued?: (row: QueuedScan) => void;
+}) {
   const { openReady, openManual, openScanning } = useOpenScan();
-  if (scans.length === 0) return null;
+  if (scans.length === 0 && queued.length === 0) return null;
+
+  function confirmRemoveQueued(row: QueuedScan) {
+    Alert.alert("Remove this receipt?", "It hasn't been uploaded yet, so it will be deleted from this phone.", [
+      { text: "Keep", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => onRemoveQueued?.(row) },
+    ]);
+  }
 
   function open(scan: ReceiptScan) {
     if (scan.status === "Ready") openReady(scan);
@@ -32,6 +60,34 @@ export function ScannedReceipts({ scans, onDismiss }: { scans: ReceiptScan[]; on
   return (
     <View style={styles.box}>
       <Text style={styles.title}>Scanned receipts</Text>
+      {queued.map((row) => {
+        const title = row.context?.mode === "split" ? "Split receipt" : row.context?.ticket?.subject ?? "Receipt";
+        const rejected = row.sync_status === "REJECTED";
+        return (
+          <Pressable
+            key={row.scan_id}
+            onLongPress={() => confirmRemoveQueued(row)}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            accessibilityHint="Long-press to remove"
+          >
+            <View style={styles.flex}>
+              <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+              <Text style={[styles.rowMeta, rejected && { color: RED }]} numberOfLines={2}>
+                {rejected
+                  ? `Couldn't upload: ${row.error_message ?? "the server refused this file"}`
+                  : `Saved on your phone · ${scanTimeLabel(row.created_at)} · uploads when you're back online`}
+              </Text>
+            </View>
+            <View style={[styles.pill, { backgroundColor: rejected ? "#FDECEC" : COLORS.bg }]}>
+              <IconSymbol name={rejected ? "exclamationmark.triangle.fill" : "clock.fill"} size={14} color={rejected ? RED : COLORS.muted} />
+              <Text style={[styles.pillText, { color: rejected ? RED : COLORS.muted }]}>{rejected ? "Not uploaded" : "Waiting"}</Text>
+            </View>
+            <Pressable onPress={() => confirmRemoveQueued(row)} hitSlop={10} accessibilityLabel="Remove this receipt">
+              <Text style={styles.remove}>×</Text>
+            </Pressable>
+          </Pressable>
+        );
+      })}
       {scans.map((scan) => {
         const title = scan.context?.mode === "split" ? "Split receipt" : scan.context?.ticket?.subject ?? "Receipt";
         const vendor = scan.status === "Ready" ? scan.result?.vendorName : null;

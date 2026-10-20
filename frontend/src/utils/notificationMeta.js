@@ -25,6 +25,8 @@ export const NOTIFICATION_META = {
   ExpenseRejected:     { Icon: ReceiptXGlyph,    bg: "#FFF5F3", fg: "#B42318", fallback: "An expense was rejected." },
   TamperAlert:         { Icon: ShieldAlertGlyph, bg: "#FDE8E8", fg: "#9F1239", fallback: "A record integrity issue was found." },
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallback: "A task was assigned to you." },
+  TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallback: "A task photo was accepted." },
+  TaskFlagged:         { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallback: "A task photo was flagged." },
   ProjectAssigned:     { Icon: FolderIcon,       bg: "#EAF2FF", fg: "#2563EB", fallback: "A project was assigned to you." },
   ProjectActivated:    { Icon: RocketGlyph,      bg: "#DCFCE7", fg: "#16A34A", fallback: "A project was activated." },
   BOMApproved:         { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallback: "A Bill of Materials was approved." },

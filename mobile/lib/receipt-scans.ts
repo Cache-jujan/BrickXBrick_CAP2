@@ -7,6 +7,8 @@ import { API_URL, authHeaders } from "@/constants/api";
 import type { FileState } from "@/components/file-preview";
 import type { DraftMode } from "@/lib/expense-draft-context";
 import type { OcrResult, SelectedTicket } from "@/lib/expense-types";
+import { apiFetch } from "@/lib/http";
+import { handleUnauthorized } from "@/lib/auth";
 
 // What the app needs to pick the receipt up again later.
 export type ScanContext = {
@@ -45,24 +47,25 @@ export async function startScan(file: NonNullable<FileState>, context: ScanConte
     parameters: { context: JSON.stringify(context) },
     headers: authHeaders(),
   });
+  if (upload.status === 401) handleUnauthorized();
   if (upload.status < 200 || upload.status >= 300) throw new Error(`Server responded ${upload.status}`);
   return JSON.parse(upload.body);
 }
 
 export async function fetchScan(scanID: string): Promise<ReceiptScan> {
-  const res = await fetch(`${API_URL}/api/receipts/scans/${scanID}`, { headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/receipts/scans/${scanID}`, { headers: authHeaders() });
   return readJson(res, "load the scan");
 }
 
 export async function fetchScans(): Promise<ReceiptScan[]> {
-  const res = await fetch(`${API_URL}/api/receipts/scans`, { headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/receipts/scans`, { headers: authHeaders() });
   return readJson(res, "load scanned receipts");
 }
 
 // Hides the scan from "Scanned receipts". Best effort: a failure only means
 // the row lingers in the list, so callers don't need to wait on it.
 export async function dismissScan(scanID: string): Promise<void> {
-  const res = await fetch(`${API_URL}/api/receipts/scans/${scanID}`, { method: "DELETE", headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/receipts/scans/${scanID}`, { method: "DELETE", headers: authHeaders() });
   if (!res.ok && res.status !== 404) throw new Error(`Failed to remove the scan (${res.status})`);
 }
 

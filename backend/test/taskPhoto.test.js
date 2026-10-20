@@ -16,12 +16,14 @@ const state = {
   me: { id: "sm-1", role: "Site Manager" },
   task: { taskid: TASK, assignedto: "sm-1", status: "Pending" },
   uploads: [],
+  pending: false,
 };
 
 stub("../src/lib/db", {
   query: async (sql) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     if (text.startsWith("select * from tasks")) return state.task ? { rowCount: 1, rows: [state.task] } : { rowCount: 0, rows: [] };
+    if (text.startsWith("select 1 from task_progress_log")) return { rowCount: state.pending ? 1 : 0, rows: [] };
     throw new Error("unexpected query: " + text);
   },
   withTransaction: async () => { throw new Error("the photo route must not write to the database"); },
@@ -43,7 +45,7 @@ const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 async function upload(taskId, { type = "image/jpeg", bytes = JPEG, withFile = true } = {}) {
   const app = express();
   app.use("/api/tasks", tasksRouter);
-  app.use((err, _req, res, _next) => res.status(err.status || 500).json({ error: err.message }));
+  app.use((err, _req, res, _next) => res.status(err.status || 500).json({ error: err.message, details: err.details }));
   const server = await new Promise((resolve) => {
     const s = http.createServer(app).listen(0, () => resolve(s));
   });
@@ -61,6 +63,7 @@ function reset() {
   state.me = { id: "sm-1", role: "Site Manager" };
   state.task = { taskid: TASK, assignedto: "sm-1", status: "Pending" };
   state.uploads.length = 0;
+  state.pending = false;
 }
 
 test("assigned Site Manager: 201 with the stored URL under tasks/<id>/", async () => {
@@ -149,4 +152,14 @@ test("taskPhotoExists does not call storage when the URL is not this task's", as
   const deps = { keyFromPublicUrl: (url) => realR2.keyFromPublicUrl(url, BASE), objectExists: async () => (calls++, true) };
   await taskPhotoExists(`${BASE}/tasks/other/a.jpg`, "t1", deps);
   assert.equal(calls, 0);
+});
+
+test("a submission already waiting for review: 409 AWAITING_REVIEW and no photo is stored", async () => {
+  reset();
+  state.pending = true;
+  const res = await upload(TASK);
+  assert.equal(res.status, 409);
+  assert.equal(res.body.details.code, "AWAITING_REVIEW");
+  assert.match(res.body.error, /waiting for your Project Manager's review/);
+  assert.equal(state.uploads.length, 0);
 });

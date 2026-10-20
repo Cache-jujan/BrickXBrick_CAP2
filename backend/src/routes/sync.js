@@ -192,7 +192,7 @@ const TASK_REJECT_CODE = {
   TASK_NOT_YOURS: "TASK_NOT_YOURS",
   TASK_CLOSED: "TASK_CLOSED",
   SUPERSEDED: "SUPERSEDED",
-  PENDING_EXISTS: "SUPERSEDED", // lost the race to another pending submission
+  AWAITING_REVIEW: "SUPERSEDED", // a submission is already waiting for review
   CLIENT_ID_IN_USE: "DUPLICATE_UUID",
 };
 
@@ -225,7 +225,6 @@ async function syncTaskUpdate(user, uuid, data) {
       clientSubmissionId: uuid,
       note,
       photoUrl,
-      rejectIfPending: true,
       // Rules the online route does not have: server wins if the project is no
       // longer Active, and the photo must be one this server stored for this task.
       beforeWrite: async (task) => {

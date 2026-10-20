@@ -4,15 +4,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import * as Crypto from "expo-crypto";
 
 import { FilePreview, type FileState } from "@/components/file-preview";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useNetwork } from "@/lib/sync/network-context";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { compressReceiptImage } from "@/lib/compress-image";
 import { startScan } from "@/lib/receipt-scans";
+import { getSession } from "@/lib/auth";
+import { queueScan } from "@/lib/sync/db";
+import { copyFileToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 
 function formatBytes(bytes?: number) {
   if (!bytes) return "";
@@ -46,10 +51,13 @@ function imageFileFromAsset(asset: { fileName?: string | null; mimeType?: string
 }
 
 export default function CaptureScreen() {
-  const { draft, setFile, setScanID } = useExpenseDraft();
+  const { draft, setFile, setScanID, reset } = useExpenseDraft();
   const [file, setLocalFile] = useState<FileState>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { isOnline, refreshPendingCount } = useNetwork();
+  // The server couldn't be reached on the last try: offer to keep it on the phone.
+  const [unreachable, setUnreachable] = useState(false);
 
   const isSplit = draft.mode === "split";
   // Single mode needs a ticket; split mode has none (the server picks the requests).
@@ -60,6 +68,7 @@ export default function CaptureScreen() {
     setLocalFile(next);
     setStatus("idle");
     setErrorMessage(null);
+    setUnreachable(false);
   }
 
   // Compress once at pick time, so the preview shows exactly what gets
@@ -97,10 +106,54 @@ export default function CaptureScreen() {
     }
   }
 
+  // Offline-first: reading a receipt (OCR) happens on the server, so with no
+  // connection the file is kept on the phone and uploaded for reading on
+  // reconnect (lib/sync/sync.js). It then shows under "Scanned receipts".
+  async function saveForLater() {
+    if (!file || status === "uploading") return;
+    const session = getSession();
+    if (!session) return;
+    setStatus("uploading");
+    setErrorMessage(null);
+    let copied: string | null = null;
+    try {
+      copied = await copyFileToQueue(file.uri, file.name);
+      const result = queueScan({
+        scanId: Crypto.randomUUID(),
+        userId: session.user.id,
+        filePath: copied,
+        fileName: file.name,
+        fileType: file.type,
+        mimeType: file.mimeType ?? (file.type === "image" ? "image/jpeg" : "application/pdf"),
+        context: { mode: draft.mode, ticket: draft.ticket, fileName: file.name, fileType: file.type },
+      });
+      if (!result.queued) {
+        await deleteQueuedPhoto(copied);
+        setErrorMessage(result.message ?? "Couldn't save this receipt on your phone.");
+        setStatus("error");
+        return;
+      }
+      refreshPendingCount();
+      setStatus("idle");
+      Alert.alert(
+        "Saved on your phone",
+        "It will be uploaded for reading when you're back online. Then it appears under Scanned receipts, ready to review."
+      );
+      reset();
+      router.replace("/");
+    } catch (err) {
+      if (copied) await deleteQueuedPhoto(copied);
+      setErrorMessage("Couldn't save this receipt on your phone. Please try again.");
+      setStatus("error");
+    }
+  }
+
   // Only the upload happens here. OCR runs on the server in the background,
   // so the user can leave the scanning screen or close the app.
   async function handleSubmit() {
     if (!file || status === "uploading") return;
+    if (!isOnline) return saveForLater();
+    setUnreachable(false);
     setStatus("uploading"); setErrorMessage(null);
     try {
       const scan = await startScan(file, { mode: draft.mode, ticket: draft.ticket, fileName: file.name, fileType: file.type });
@@ -111,7 +164,17 @@ export default function CaptureScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const isNetworkError = /network|connect|timed out|unreachable/i.test(message);
-      setErrorMessage(isNetworkError ? "Can't reach the server. Check your connection." : "Something went wrong while uploading. Please try again.");
+      if (isNetworkError && !isOnline) {
+        // The connection dropped mid-upload: keep it on the phone instead.
+        setStatus("idle");
+        return saveForLater();
+      }
+      setUnreachable(isNetworkError);
+      setErrorMessage(
+        isNetworkError
+          ? "Can't reach the server right now. Try again, or save it on your phone and it uploads by itself later."
+          : "Something went wrong while uploading. Please try again."
+      );
       setStatus("error");
     }
   }
@@ -173,15 +236,28 @@ export default function CaptureScreen() {
 
       {file && (
         <View style={styles.footer}>
-          {status === "error" && errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+          {status === "error" && errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : !isOnline ? (
+            <Text style={styles.offlineText}>
+              You're offline. The receipt will be saved on your phone and uploaded for reading when you're back online.
+            </Text>
+          ) : null}
           <Pressable
             style={({ pressed }) => [styles.submitButton, pressed && styles.pressed]}
             onPress={handleSubmit}
             disabled={status === "uploading"}
             accessibilityRole="button"
           >
-            <Text style={styles.submitButtonText}>{status === "error" ? "Try again" : "Scan receipt"}</Text>
+            <Text style={styles.submitButtonText}>
+              {!isOnline ? "Save to upload later" : status === "error" ? "Try again" : "Scan receipt"}
+            </Text>
           </Pressable>
+          {isOnline && unreachable && (
+            <Pressable onPress={saveForLater} style={styles.secondaryButton} accessibilityRole="button">
+              <Text style={styles.secondaryButtonText}>Save on phone instead</Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -212,4 +288,7 @@ const styles = StyleSheet.create({
   submitButton: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
   submitButtonText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
   errorText: { color: "#C1121F", textAlign: "center", marginBottom: 8, fontSize: 13 },
+  offlineText: { color: "#7A4B00", textAlign: "center", marginBottom: 8, fontSize: 13, lineHeight: 18 },
+  secondaryButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderWidth: 1, marginTop: 10, paddingVertical: 13 },
+  secondaryButtonText: { color: COLORS.primary, fontSize: 15, fontWeight: "700" },
 });

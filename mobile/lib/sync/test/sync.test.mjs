@@ -9,7 +9,7 @@ import { register } from "node:module";
 register("./hooks.mjs", import.meta.url);
 const shim = await import("./expo-sqlite-shim.mjs");
 const { fs } = await import("./file-system-shim.mjs");
-const { setSession } = await import("./auth-shim.mjs");
+const { setSession, unauthorized } = await import("./auth-shim.mjs");
 const q = await import("../db.js");
 const { syncAllPending } = await import("../sync.js");
 
@@ -228,7 +228,7 @@ test("nothing pending: no network call at all", async () => {
   setup();
   const result = await syncAllPending();
   assert.equal(calls.fetches.length, 0);
-  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, rejectedItems: [] });
+  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, scans: { uploaded: 0, rejected: 0 }, rejectedItems: [], postponedItems: [] });
 });
 
 test("expenses still sync exactly as before (response shape unchanged)", async () => {
@@ -265,4 +265,107 @@ test("rejectedItems lists every rejection with its kind, code and message (serve
     result.rejectedItems.map((i) => [i.kind, i.code]).sort(),
     [["task_update", "SUPERSEDED"], ["task_update", "TASK_CLOSED"]]
   );
+});
+
+test("postponedItems: a photo that could not upload yet, and an item the server left unanswered, are reported (so the screen can say 'not sent yet')", async () => {
+  setup();
+  const a = queueTask("t1");
+  const b = queueTask("t2");
+  fs.uploadHandler = async (url) =>
+    url.includes("/t1/") ? { status: 503, body: "{}" } : { status: 201, body: JSON.stringify({ photoUrl: "https://r2/tasks/t2/b.jpg" }) };
+  serverReply = async () => ({ body: { syncedIds: [], rejected: [] } }); // server could not check t2 yet
+  const result = await syncAllPending();
+  assert.deepEqual(result.postponedItems.map((p) => p.id).sort(), [a.updateId, b.updateId].sort());
+  assert.equal(result.synced + result.rejected, 0);
+  assert.equal(q.getPendingTaskUpdateCount(), 2); // both still queued, will retry
+});
+
+test("a fully sent batch has no postponedItems", async () => {
+  setup();
+  queueTask("t1");
+  const result = await syncAllPending();
+  assert.deepEqual(result.postponedItems, []);
+  assert.equal(result.tasks.synced, 1);
+});
+
+// ---- receipts saved offline --------------------------------------------------------
+
+function queueReceipt(userId = "sm-1", name = "r.jpg") {
+  const scanId = uid();
+  const filePath = `/docs/queued-receipts/${scanId}.jpg`;
+  fs.existing.add(filePath);
+  const ok = q.queueScan({ scanId, userId, filePath, fileName: name, fileType: "image", mimeType: "image/jpeg", context: { mode: "single", ticket: { ticketId: "t-9", subject: "Cement" }, fileName: name, fileType: "image" } });
+  assert.equal(ok.queued, true);
+  return { scanId, filePath };
+}
+
+test("a receipt saved offline is uploaded to /api/receipts/scans with its context, then removed from the phone", async () => {
+  setup();
+  const { filePath } = queueReceipt();
+  fs.uploadHandler = async () => ({ status: 201, body: JSON.stringify({ scanID: "server-1", status: "Scanning" }) });
+  const result = await syncAllPending();
+  assert.equal(fs.uploads.length, 1);
+  assert.equal(fs.uploads[0].url, "http://api.test/api/receipts/scans");
+  assert.equal(fs.uploads[0].options.fieldName, "file");
+  assert.equal(JSON.parse(fs.uploads[0].options.parameters.context).ticket.ticketId, "t-9");
+  assert.equal(result.scans.uploaded, 1);
+  assert.equal(result.synced, 1);
+  assert.equal(q.getPendingScanCount(), 0);
+  assert.deepEqual(fs.deleted, [filePath]);
+  assert.equal(calls.fetches.length, 0); // nothing else to send
+});
+
+test("receipt upload: server down keeps it queued (postponed); a bad file is rejected with the reason", async () => {
+  setup();
+  const a = queueReceipt();
+  fs.uploadHandler = async () => ({ status: 503, body: "{}" });
+  let result = await syncAllPending();
+  assert.equal(q.getPendingScanCount(), 1);
+  assert.deepEqual(result.postponedItems.map((p) => [p.kind, p.id]), [["scan", a.scanId]]);
+
+  fs.uploadHandler = async () => ({ status: 400, body: JSON.stringify({ error: "File is not an image or PDF" }) });
+  result = await syncAllPending();
+  assert.equal(result.scans.rejected, 1);
+  assert.equal(q.getPendingScanCount(), 0);
+  assert.equal(q.getRejectedScans()[0].error_message, "File is not an image or PDF");
+});
+
+test("receipt upload: the file is gone from the phone -> rejected, nothing uploaded", async () => {
+  setup();
+  const { filePath } = queueReceipt();
+  fs.existing.delete(filePath);
+  const result = await syncAllPending();
+  assert.equal(fs.uploads.length, 0);
+  assert.equal(result.scans.rejected, 1);
+});
+
+test("an expired sign-in (401) stops the sync and signs out; the receipt stays queued", async () => {
+  setup();
+  queueReceipt();
+  const before = unauthorized.calls;
+  fs.uploadHandler = async () => ({ status: 401, body: "{}" });
+  await assert.rejects(() => syncAllPending(), /Sign-in expired/);
+  assert.equal(unauthorized.calls, before + 1);
+  assert.equal(q.getPendingScanCount(), 1);
+});
+
+test("only the signed-in user's saved receipts are uploaded", async () => {
+  setup();
+  queueReceipt("someone-else");
+  const result = await syncAllPending();
+  assert.equal(fs.uploads.length, 0);
+  assert.equal(result.scans.uploaded, 0);
+  assert.equal(q.getPendingScanCount(), 1);
+});
+
+test("photo upload refused because a submission is already waiting for review -> SUPERSEDED (plain reason), not TASK_CLOSED", async () => {
+  setup();
+  queueTask("t1");
+  fs.uploadHandler = async () => ({
+    status: 409,
+    body: JSON.stringify({ error: "This task already has a submission waiting for your Project Manager's review.", details: { code: "AWAITING_REVIEW" } }),
+  });
+  const result = await syncAllPending();
+  assert.equal(result.tasks.rejected, 1);
+  assert.equal(q.getRejectedTaskUpdates()[0].error_code, "SUPERSEDED");
 });
