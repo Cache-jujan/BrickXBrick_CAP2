@@ -4,6 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { fetchUnreadCount } from "@/lib/api";
+import { useOnNewNotifications } from "@/lib/notification-events";
 
 const POLL_MS = 30_000;
 
@@ -18,6 +19,8 @@ export function NotificationBell({ color }: { color: string }) {
       .then(setCount)
       .catch(() => {});
   }, []);
+
+  useOnNewNotifications(poll);
 
   useFocusEffect(
     useCallback(() => {

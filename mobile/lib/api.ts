@@ -2,6 +2,8 @@ import * as FileSystem from "expo-file-system/legacy";
 
 import { API_URL, authHeaders, getAuthToken } from "../constants/api";
 import type { BackendLineItem } from "./expense-types";
+import { apiFetch } from "@/lib/http";
+import { handleUnauthorized } from "@/lib/auth";
 
 export type Ticket = {
   ticketid: string;
@@ -61,12 +63,22 @@ export type AssignedTask = {
   completionpercentage: number | string;
   photoevidenceurl?: string | null;
   pendingphotoevidenceurl?: string | null;
+  // When the submission now waiting for the PM's review was made, and its note.
+  pendingsubmittedat?: string | null;
+  pendingnote?: string | null;
   latestreviewstatus?: string | null;
   latestreviewreason?: string | null;
+  // Dashboard: project dates, the milestone deadline, and when it was completed.
+  projectid?: string;
+  projectstartdate?: string | null;
+  projectenddate?: string | null;
+  milestoneduedate?: string | null;
+  completedat?: string | null;
+  lastupdatedat?: string | null;
 };
 
 export async function fetchAssignedTasks(): Promise<AssignedTask[]> {
-  const res = await fetch(`${API_URL}/api/tasks/assigned`, {
+  const res = await apiFetch(`${API_URL}/api/tasks/assigned`, {
     headers: authHeaders(),
   });
 
@@ -105,9 +117,12 @@ export async function submitTaskProgress(
     }
   );
 
+  if (uploadResult.status === 401) handleUnauthorized();
   const data = JSON.parse(uploadResult.body || "{}");
   if (uploadResult.status < 200 || uploadResult.status >= 300) {
-    throw new Error(data.error || `Failed to submit task progress (${uploadResult.status})`);
+    const error = new Error(data.error || `Failed to submit task progress (${uploadResult.status})`);
+    (error as Error & { code?: string }).code = data.details?.code ?? data.code;
+    throw error;
   }
 
   return data;
@@ -115,7 +130,7 @@ export async function submitTaskProgress(
 
 export async function fetchAllAssignedTickets(role: "Purchaser" | "Site Manager"): Promise<Ticket[]> {
   const endpoint = role === "Site Manager" ? "/api/tickets/submitted" : "/api/tickets/assigned";
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const res = await apiFetch(`${API_URL}${endpoint}`, {
     headers: authHeaders(),
   });
 
@@ -127,7 +142,7 @@ export async function fetchAllAssignedTickets(role: "Purchaser" | "Site Manager"
 }
 
 export async function fetchActiveProjects(): Promise<Project[]> {
-  const res = await fetch(`${API_URL}/api/projects?status=Active`, {
+  const res = await apiFetch(`${API_URL}/api/projects?status=Active`, {
     headers: authHeaders(),
   });
 
@@ -139,7 +154,7 @@ export async function fetchActiveProjects(): Promise<Project[]> {
 }
 
 export async function fetchApprovedVendors(): Promise<ApprovedVendor[]> {
-  const res = await fetch(`${API_URL}/api/tickets/vendors`, {
+  const res = await apiFetch(`${API_URL}/api/tickets/vendors`, {
     headers: authHeaders(),
   });
 
@@ -163,7 +178,7 @@ export type BomItem = {
 // is allowed to read these (unit costs are hidden server-side). Returns an
 // empty list when the project has no approved BOM yet.
 export async function fetchBomItems(projectId: string): Promise<BomItem[]> {
-  const res = await fetch(`${API_URL}/api/projects/${projectId}/bom/items`, {
+  const res = await apiFetch(`${API_URL}/api/projects/${projectId}/bom/items`, {
     headers: authHeaders(),
   });
 
@@ -208,7 +223,7 @@ export async function fetchSubmittedTicket(ticketId: string): Promise<Ticket> {
 }
 
 export async function createTicket(body: TicketInput) {
-  const res = await fetch(`${API_URL}/api/tickets`, {
+  const res = await apiFetch(`${API_URL}/api/tickets`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -228,7 +243,7 @@ export async function createTicket(body: TicketInput) {
 // Create several tickets in one atomic request (all succeed or none).
 // Used by the Site Manager's multi-card ticket form.
 export async function createTicketsBatch(tickets: TicketInput[]) {
-  const res = await fetch(`${API_URL}/api/tickets/batch`, {
+  const res = await apiFetch(`${API_URL}/api/tickets/batch`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -246,7 +261,7 @@ export async function createTicketsBatch(tickets: TicketInput[]) {
 }
 
 export async function resolveTicket(ticketId: string) {
-  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/resolve`, {
+  const res = await apiFetch(`${API_URL}/api/tickets/${ticketId}/resolve`, {
     method: "PATCH",
     headers: authHeaders(),
   });
@@ -276,7 +291,7 @@ export type ExpenseSubmission = {
 };
 
 export async function submitExpense(body: ExpenseSubmission) {
-  const res = await fetch(`${API_URL}/api/expenses`, {
+  const res = await apiFetch(`${API_URL}/api/expenses`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -319,7 +334,7 @@ export type MyExpense = {
 };
 
 export async function fetchMyExpenses(): Promise<MyExpense[]> {
-  const res = await fetch(`${API_URL}/api/expenses/mine`, { headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/expenses/mine`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`Failed to load your expenses (${res.status})`);
   return res.json();
 }
@@ -329,7 +344,7 @@ export async function fetchMyExpenses(): Promise<MyExpense[]> {
 export type ExpenseResubmission = Omit<ExpenseSubmission, "ticketID" | "receiptImageURL">;
 
 export async function resubmitExpense(expenseID: string, body: ExpenseResubmission) {
-  const res = await fetch(`${API_URL}/api/expenses/${expenseID}/resubmit`, {
+  const res = await apiFetch(`${API_URL}/api/expenses/${expenseID}/resubmit`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
@@ -427,12 +442,12 @@ export type AllocationResult = {
 };
 
 export async function fetchOpenRequests(): Promise<OpenRequest[]> {
-  const res = await fetch(`${API_URL}/api/allocations/open-requests`, { headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/allocations/open-requests`, { headers: authHeaders() });
   return readJson(res, "Failed to load open requests");
 }
 
 export async function previewAllocation(lineItems: SplitLine[], options: PlanOptions): Promise<AllocationPlan> {
-  const res = await fetch(`${API_URL}/api/allocations/preview`, {
+  const res = await apiFetch(`${API_URL}/api/allocations/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ lineItems, ...options }),
@@ -441,7 +456,7 @@ export async function previewAllocation(lineItems: SplitLine[], options: PlanOpt
 }
 
 export async function submitAllocation(body: AllocationSubmission): Promise<AllocationResult> {
-  const res = await fetch(`${API_URL}/api/allocations`, {
+  const res = await apiFetch(`${API_URL}/api/allocations`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
@@ -475,24 +490,24 @@ export async function fetchNotifications(opts?: { before?: string; unreadOnly?: 
   if (opts?.unreadOnly) params.set("unreadOnly", "true");
   if (opts?.limit) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  const res = await fetch(`${API_URL}/api/notifications/mine${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/notifications/mine${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
   return readJson(res, "Failed to load notifications");
 }
 
 export async function fetchUnreadCount(): Promise<number> {
   const data = await readJson(
-    await fetch(`${API_URL}/api/notifications/unread-count`, { headers: authHeaders() }),
+    await apiFetch(`${API_URL}/api/notifications/unread-count`, { headers: authHeaders() }),
     "Failed to load unread count"
   );
   return data.count;
 }
 
 export async function markNotificationRead(id: string) {
-  const res = await fetch(`${API_URL}/api/notifications/${id}/read`, { method: "PATCH", headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/notifications/${id}/read`, { method: "PATCH", headers: authHeaders() });
   return readJson(res, "Failed to mark notification read");
 }
 
 export async function markAllNotificationsRead() {
-  const res = await fetch(`${API_URL}/api/notifications/read-all`, { method: "PATCH", headers: authHeaders() });
+  const res = await apiFetch(`${API_URL}/api/notifications/read-all`, { method: "PATCH", headers: authHeaders() });
   return readJson(res, "Failed to mark all notifications read");
 }

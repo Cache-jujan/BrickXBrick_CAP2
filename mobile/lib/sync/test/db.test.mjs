@@ -207,3 +207,42 @@ test("old expense behavior is unchanged: pending list is oldest first, synced ro
   q.purgeSynced();
   assert.equal(q.getPendingCount(), 0);
 });
+
+// ---- the phone crash: "NativeDatabase.prepareSync ... NullPointerException" ----------
+
+test("initDb opens the database once, however often it runs (no second handle to be garbage-collected)", () => {
+  fresh();
+  const before = shim.stats.opens;
+  q.initDb();
+  q.initDb();
+  q.initDb();
+  assert.equal(shim.stats.opens, before); // reused, not reopened
+});
+
+test("if the shared connection gets closed, the next call reopens a fresh connection and still works", () => {
+  fresh();
+  expense();
+  q.queueTaskUpdate(task("t1"));
+  shim.breakConnections(); // what the garbage-collected handle did on the phone
+
+  assert.equal(q.getPendingCount(), 2); // recovered, data intact
+  assert.deepEqual(shim.stats.lastOptions, { useNewConnection: true });
+  assert.equal(expense(), true); // "Save offline" works again
+  assert.equal(q.getPendingCount(), 3);
+});
+
+test("a closed connection in the middle of queueing a task update still saves it, once", () => {
+  fresh();
+  q.queueTaskUpdate(task("t1", { note: "old" }));
+  shim.breakConnections();
+  const result = q.queueTaskUpdate(task("t1", { note: "new" }));
+  assert.equal(result.queued, true);
+  assert.equal(q.getPendingTaskUpdateCount(), 1);
+  assert.equal(q.getPendingTaskUpdateForTask("t1").note, "new");
+});
+
+test("real SQL errors are not hidden by the reconnect logic", () => {
+  fresh();
+  assert.throws(() => q.queueTaskUpdate({ updateId: uid(), taskId: "t1", userId: "sm-1", photoPath: null }), /NOT NULL/);
+  assert.equal(shim.stats.opens, 0); // no pointless reopen
+});

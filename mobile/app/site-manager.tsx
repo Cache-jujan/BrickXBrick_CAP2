@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,8 +12,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, useFocusEffect } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
-import { fetchAssignedTasks, type AssignedTask } from "@/lib/api";
+import { type AssignedTask } from "@/lib/api";
+import { loadAssignedTasks } from "@/lib/cached-api";
 import { getSession } from "@/lib/auth";
+import { useOnNewNotifications } from "@/lib/notification-events";
+import { dueLabel, projectSummaries, splitTasks, toDay } from "@/lib/sm-dashboard";
+import { getPendingTaskUpdateForTask } from "@/lib/sync/db";
+import { describeLoadError } from "@/lib/sync/messages";
+import { useNetwork } from "@/lib/sync/network-context";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { NotificationBell } from "@/components/notification-bell";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
@@ -52,6 +59,9 @@ export default function SiteManagerHomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>("All");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Set when the list on screen is the copy saved on this phone (offline).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadTasks = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -59,7 +69,9 @@ export default function SiteManagerHomeScreen() {
     setError(null);
 
     try {
-      setTasks(await fetchAssignedTasks());
+      const result = await loadAssignedTasks();
+      setTasks(result.data);
+      setSavedAt(result.fromCache ? result.savedAt : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load assigned tasks.");
     } finally {
@@ -68,27 +80,57 @@ export default function SiteManagerHomeScreen() {
     }
   }, []);
 
+  // A pop-up just announced something new (e.g. the PM reviewed a task).
+  useOnNewNotifications(() => { loadTasks(true); });
+
   useFocusEffect(
     useCallback(() => {
       if (session?.user.role === "Site Manager") loadTasks();
     }, [loadTasks, session?.user.role])
   );
 
+  // Offline: keep the list that was loaded last and never show a server error
+  // (the banner already says "offline"). Reload by itself on reconnect.
+  const { isOnline } = useNetwork(); // any queue change re-renders the list, so the labels stay current
+  const wasOnline = useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current && session?.user.role === "Site Manager") loadTasks(true);
+    wasOnline.current = isOnline;
+  }, [isOnline, loadTasks, session?.user.role]);
+  const shownError = describeLoadError(error, isOnline);
+
   const today = startOfDay(new Date());
+
+  // Completed tasks move to "Archived" 7 days after completion
+  // (lib/sm-dashboard.js); the filters and folders show the rest.
+  const { open: openTasks, archived } = useMemo(() => splitTasks(tasks), [tasks]);
+  const visibleTasks = useMemo(() => {
+    const archivedIds = new Set(archived.map((task) => task.taskid));
+    return tasks.filter((task) => !archivedIds.has(task.taskid));
+  }, [tasks, archived]);
+  const nextUp = openTasks.slice(0, 3);
+  const dueToday = openTasks.filter((task) => dueLabel(task.duedate).tone === "today").length;
+  const overdue = openTasks.filter((task) => dueLabel(task.duedate).tone === "late").length;
+  // Project dates and the nearest open deadline, shown on each folder.
+  const projectInfo = useMemo(() => {
+    const byName = new Map<string, ReturnType<typeof projectSummaries>[number]>();
+    projectSummaries(tasks).forEach((p) => byName.set(p.name, p));
+    return byName;
+  }, [tasks]);
 
   const counts = useMemo(() => {
     const result = {} as Record<FilterKey, number>;
     FILTERS.forEach((key) => {
-      result[key] = tasks.filter((task) => matchesFilter(task, key, today)).length;
+      result[key] = visibleTasks.filter((task) => matchesFilter(task, key, today)).length;
     });
     return result;
-  }, [tasks, today]);
+  }, [visibleTasks, today]);
 
   // One folder per project. The pending badge counts every unfinished task in
   // the project; the cards inside only show what the active filter allows.
   const folders = useMemo(() => {
     const byProject = new Map<string, { name: string; all: AssignedTask[]; shown: AssignedTask[] }>();
-    tasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       const name = task.projectname || "Other tasks";
       if (!byProject.has(name)) byProject.set(name, { name, all: [], shown: [] });
       const folder = byProject.get(name)!;
@@ -96,7 +138,7 @@ export default function SiteManagerHomeScreen() {
       if (matchesFilter(task, filter, today)) folder.shown.push(task);
     });
     return Array.from(byProject.values()).filter((folder) => folder.shown.length > 0);
-  }, [tasks, filter, today]);
+  }, [visibleTasks, filter, today]);
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
@@ -130,8 +172,6 @@ export default function SiteManagerHomeScreen() {
           </View>
         </View>
 
-        <Text style={styles.subtitle}>Keep your site work moving and up to date.</Text>
-
         <View style={styles.actionGrid}>
           <Pressable
             style={styles.actionCard}
@@ -162,10 +202,61 @@ export default function SiteManagerHomeScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryHead}>
+            <View style={styles.flex}>
+              <Text style={styles.summaryLabel}>MY TASKS</Text>
+              <Text style={styles.summaryTitle}>
+                {loading
+                  ? "Checking your tasks…"
+                  : openTasks.length === 0
+                    ? "All caught up"
+                    : `${openTasks.length} open task${openTasks.length === 1 ? "" : "s"}`}
+              </Text>
+              {!loading && (dueToday > 0 || overdue > 0) && (
+                <Text style={styles.summaryAlert}>
+                  {[overdue > 0 && `${overdue} overdue`, dueToday > 0 && `${dueToday} due today`].filter(Boolean).join(" · ")}
+                </Text>
+              )}
+            </View>
+            <View style={styles.summaryIcon}>
+              <IconSymbol name="list.clipboard.fill" size={26} color="#FFFFFF" />
+            </View>
+          </View>
+          {nextUp.map((task) => {
+            const due = dueLabel(task.duedate);
+            return (
+              <Pressable
+                key={task.taskid}
+                onPress={() => router.push(`/site-manager/task/${task.taskid}`)}
+                style={({ pressed }) => [styles.summaryRow, pressed && styles.taskCardPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${task.taskname}, ${due.text}`}
+              >
+                <Text style={styles.summaryRowName} numberOfLines={1}>{task.taskname}</Text>
+                <Text style={[styles.summaryRowDue, DUE_TONE[due.tone]]}>{due.text}</Text>
+              </Pressable>
+            );
+          })}
+          {openTasks.length > nextUp.length && (
+            <Text style={styles.summaryMore}>+{openTasks.length - nextUp.length} more below</Text>
+          )}
+        </View>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Assigned tasks</Text>
-          <Text style={styles.sectionMeta}>{tasks.length} total</Text>
+          <Text style={styles.sectionMeta}>{openTasks.length} open</Text>
         </View>
+
+        {(!isOnline || savedAt) && (
+          <Text style={styles.offlineNote}>
+            {savedAt
+              ? `${isOnline ? "Can't reach the server" : "You're offline"} · showing your tasks ${savedAtLabel(savedAt)}. You can open a task and queue an update; it is sent when you're back online.`
+              : tasks.length > 0
+                ? "You're offline. Showing your tasks as last loaded. You can still open a task and queue an update."
+                : "You're offline, and your tasks haven't been saved on this phone yet. Open the app once with a connection; after that it works offline."}
+          </Text>
+        )}
 
         <ScrollView
           horizontal
@@ -188,10 +279,10 @@ export default function SiteManagerHomeScreen() {
           ))}
         </ScrollView>
 
-        {error ? (
+        {shownError ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>Couldn’t load tasks</Text>
-            <Text style={styles.errorBody}>{error}</Text>
+            <Text style={styles.errorBody}>{shownError}</Text>
             <Pressable onPress={() => loadTasks()} style={styles.retryButton}>
               <Text style={styles.retryText}>Try again</Text>
             </Pressable>
@@ -221,6 +312,8 @@ export default function SiteManagerHomeScreen() {
             {folders.map((folder) => {
               const pending = folder.all.filter((task) => task.status !== "Completed").length;
               const isCollapsed = !!collapsed[folder.name];
+              const info = projectInfo.get(folder.name);
+              const next = info?.next ? dueLabel(info.next.date) : null;
               return (
                 <View key={folder.name} style={styles.folder}>
                   <Pressable
@@ -234,6 +327,16 @@ export default function SiteManagerHomeScreen() {
                     <View style={styles.folderTitleWrap}>
                       <Text style={styles.folderName} numberOfLines={1}>{folder.name}</Text>
                       <Text style={styles.folderMeta}>{folder.all.length} task{folder.all.length === 1 ? "" : "s"} in total</Text>
+                      {info?.startDate && (
+                        <Text style={styles.folderMeta}>
+                          {formatDay(info.startDate)} – {info.endDate ? formatDay(info.endDate) : "no end date"}
+                        </Text>
+                      )}
+                      {info?.next && next && (
+                        <Text style={[styles.folderNext, DUE_TONE[next.tone]]} numberOfLines={2}>
+                          Nearest deadline: {info.next.label} · {next.text}
+                        </Text>
+                      )}
                     </View>
                     <View style={[styles.pendingBadge, pending === 0 && styles.pendingBadgeDone]}>
                       <Text style={[styles.pendingBadgeText, pending === 0 && styles.pendingBadgeTextDone]}>
@@ -251,6 +354,18 @@ export default function SiteManagerHomeScreen() {
             })}
           </View>
         )}
+
+        {!loading && archived.length > 0 && (filter === "All" || filter === "Completed") && (
+          <View style={styles.archiveWrap}>
+            <Pressable onPress={() => setShowArchived((v) => !v)} style={styles.archiveToggle} accessibilityRole="button">
+              <Text style={styles.archiveToggleText}>
+                {showArchived ? "Hide archived" : `Show archived (${archived.length})`}
+              </Text>
+              <Text style={styles.archiveHint}>Completed more than 7 days ago</Text>
+            </Pressable>
+            {showArchived && archived.map((task) => <TaskCard key={task.taskid} task={task} today={today} />)}
+          </View>
+        )}
       </ScrollView>
       <SmBottomBar />
     </SafeAreaView>
@@ -265,12 +380,11 @@ function TaskCard({ task, today }: { task: AssignedTask; today: number }) {
   // A submission is waiting for the PM: the task status itself does not
   // change until the PM acknowledges, so show it here.
   const awaitingReview = !completed && !!task.pendingphotoevidenceurl;
-  const dueDate = new Date(task.duedate);
-  const formattedDueDate = Number.isNaN(dueDate.getTime())
-    ? task.duedate
-    : dueDate.toLocaleDateString();
+  // F10: an update saved on this phone and not sent yet.
+  const queuedOnPhone = !completed && !!getPendingTaskUpdateForTask(task.taskid);
   const due = dueDay(task);
   const pastDue = !completed && due !== null && due < today;
+  const label = dueLabel(task.duedate);
 
   return (
     <Pressable
@@ -278,8 +392,15 @@ function TaskCard({ task, today }: { task: AssignedTask; today: number }) {
       style={({ pressed }) => [styles.taskCard, pressed && styles.taskCardPressed]}
     >
       <View style={styles.taskTopRow}>
-        <Text style={styles.taskStatus}>{completed ? "COMPLETED" : pastDue ? "PAST DUE" : "ASSIGNED"}</Text>
-        <Text style={[styles.taskDue, pastDue && styles.taskDuePast]}>Due {formattedDueDate}</Text>
+        <View style={styles.taskStatusRow}>
+          {completed && <IconSymbol name="checkmark.circle.fill" size={14} color={COLORS.success} />}
+          <Text style={[styles.taskStatus, completed && styles.taskStatusDone]}>
+            {completed ? "COMPLETED" : pastDue ? "PAST DUE" : "ASSIGNED"}
+          </Text>
+        </View>
+        <Text style={[styles.taskDue, !completed && DUE_TONE[label.tone]]}>
+          {completed ? `Due ${formatDay(task.duedate)}` : label.text}
+        </Text>
       </View>
       <Text style={styles.taskName}>{task.taskname}</Text>
       {task.milestonename && <Text style={styles.taskProject}>{task.milestonename}</Text>}
@@ -292,7 +413,7 @@ function TaskCard({ task, today }: { task: AssignedTask; today: number }) {
         <Text style={styles.taskProgress}>{Number(task.completionpercentage || 0)}% complete</Text>
         <View style={[styles.statusPill, completed && styles.statusPillCompleted]}>
           <Text style={[styles.statusPillText, completed && styles.statusPillTextCompleted]}>
-            {awaitingReview ? "Awaiting PM review" : task.status}
+            {queuedOnPhone ? "Queued on phone" : awaitingReview ? "Awaiting PM review" : task.status}
           </Text>
         </View>
       </View>
@@ -300,14 +421,44 @@ function TaskCard({ task, today }: { task: AssignedTask; today: number }) {
   );
 }
 
+function formatDay(value?: string | null) {
+  const day = toDay(value);
+  return day ? day.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+}
+
+const DUE_TONE = StyleSheet.create({
+  late: { color: "#D92D20", fontWeight: "800" },
+  today: { color: "#E85D0C", fontWeight: "800" },
+  soon: { color: "#B45309", fontWeight: "700" },
+  normal: {},
+});
+
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  summaryCard: { backgroundColor: "#1A1A1A", borderRadius: 18, marginTop: 20, overflow: "hidden", padding: 20 },
+  summaryHead: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 6 },
+  summaryLabel: { color: "#D8C7AA", fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
+  summaryTitle: { color: "#FFFFFF", fontSize: 21, fontWeight: "800", lineHeight: 27, marginTop: 10 },
+  summaryAlert: { color: "#FFB27A", fontSize: 13, fontWeight: "700", marginTop: 6 },
+  summaryIcon: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 28, height: 56, justifyContent: "center", width: 56 },
+  summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, borderTopColor: "#333", borderTopWidth: 1, paddingVertical: 11 },
+  summaryRowName: { color: "#FFFFFF", flex: 1, fontSize: 14, fontWeight: "700" },
+  summaryRowDue: { color: "#C9C0B3", fontSize: 12 },
+  summaryMore: { color: "#C9C0B3", fontSize: 12, marginTop: 4 },
+  folderNext: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  taskStatusRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  taskStatusDone: { color: COLORS.success },
+  archiveWrap: { gap: 10, marginTop: 14 },
+  archiveToggle: { alignItems: "center", borderColor: "#E7DDCF", borderRadius: 12, borderStyle: "dashed", borderWidth: 1, paddingVertical: 12 },
+  archiveToggleText: { color: COLORS.primary, fontSize: 13, fontWeight: "800" },
+  archiveHint: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
+  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginBottom: 12, padding: 12 },
   safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 28 },
   headerRow: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 },
   title: { color: "#1A1A1A", fontSize: 25, fontWeight: "800", letterSpacing: -0.4, maxWidth: 250 },
-  subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   settingsButton: { borderColor: "#D8CDBD", borderRadius: 10, borderWidth: 1, padding: 7 },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 26 },

@@ -30,6 +30,8 @@ const META: Record<string, Meta> = {
   ExpenseRejected:       { icon: "receipt",          bg: "#FFF5F3", fg: "#B42318", fallback: "An expense was rejected." },
   TamperAlert:           { icon: "shield.lefthalf.filled", bg: "#FDE8E8", fg: "#9F1239", fallback: "A record integrity issue was found." },
   TaskAssigned:          { icon: "list.clipboard.fill", bg: "#EAF2FF", fg: "#2563EB", fallback: "A task was assigned to you." },
+  TaskAcknowledged:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "Your task photo was accepted." },
+  TaskFlagged:           { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallback: "Your task photo was flagged." },
   ProjectAssigned:       { icon: "folder.fill",      bg: "#EAF2FF", fg: "#2563EB", fallback: "A project was assigned to you." },
   ProjectActivated:      { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A project was activated." },
   BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A Bill of Materials was approved." },

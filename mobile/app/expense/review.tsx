@@ -19,12 +19,12 @@ import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from 
 import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/requested-material-picker";
-import { fetchOpenRequests } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
 import { COLORS } from "@/constants/expense-flow-colors";
 import { formatAmountInput, formatPesoCents, groupAmountText, toCents, toHundredths } from "@/lib/money";
+import { devLog } from "@/lib/sync/log";
 import {
   ADJUSTMENT_PREFIX,
   birStatusPreview,
@@ -35,6 +35,8 @@ import {
   reconcileFix,
   todayIso,
 } from "@/lib/receipt-checks";
+import { loadOpenRequests } from "@/lib/cached-api";
+import { BlockedReasons } from "@/components/blocked-reasons";
 
 const RED = "#C1121F";
 const AMBER = "#B45309";
@@ -57,6 +59,7 @@ export default function ReviewScreen() {
   const { draft, setOcrResult } = useExpenseDraft();
   const result = draft.ocrResult;
 
+  const [triedContinue, setTriedContinue] = useState(false);
   const [vendorName, setVendorName] = useState("");
   const [tin, setTin] = useState("");
   const [birPermitNumber, setBirPermitNumber] = useState("");
@@ -77,8 +80,8 @@ export default function ReviewScreen() {
   const ticketId = draft.mode === "single" ? draft.ticket?.ticketId ?? null : null;
   useEffect(() => {
     let cancelled = false;
-    fetchOpenRequests()
-      .then((requests) => {
+    loadOpenRequests()
+      .then(({ data: requests }) => {
         if (cancelled) return;
         const mine = ticketId ? requests.filter((r) => r.ticketID === ticketId) : requests;
         setMaterials(
@@ -91,7 +94,7 @@ export default function ReviewScreen() {
         );
       })
       // The picker is a shortcut; without it the user types the names.
-      .catch((err) => console.warn("Couldn't load requested materials:", err));
+      .catch((err) => devLog("Couldn't load requested materials:", err?.message ?? err));
     return () => {
       cancelled = true;
     };
@@ -155,6 +158,16 @@ export default function ReviewScreen() {
   const dateProblem = receiptDateProblem(receiptDate);
   const vendorMissing = vendorName.trim().length === 0;
   const canContinue = allLinesValid && totalsMatch && !dateProblem && !vendorMissing;
+  // Everything still blocking Continue. Shown above the button once the user
+  // has tapped it, next to the red outlines on the fields themselves.
+  const blockedReasons = [
+    vendorMissing && "Enter the store or vendor name.",
+    dateProblem,
+    namedItems.length === 0 && "Add at least one item.",
+    namedItems.length > 0 && !allLinesValid && "Every item needs a quantity and an amount (use 0 for delivery, VAT and fees).",
+    totalCents === null && "Enter the receipt total.",
+    allLinesValid && totalCents !== null && !totalsMatch && "The items must add up to the receipt total.",
+  ];
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
   // One-tap way out when the lines won't add up (rounding, unlisted VAT or
   // discount). The adjustment line routes the expense to PM review.
@@ -214,6 +227,7 @@ export default function ReviewScreen() {
 
   /** Validate receipt fields and totals, save corrected values and open the next flow step. */
   function handleContinue() {
+    setTriedContinue(true);
     if (vendorMissing) return Alert.alert("Vendor required", "Enter the store or vendor name.");
     if (dateProblem) return Alert.alert("Check the date", dateProblem);
     if (namedItems.length === 0) return Alert.alert("Add at least one item", "Every expense needs at least one line item.");
@@ -413,6 +427,7 @@ export default function ReviewScreen() {
               <Text style={styles.fixButtonHint}>A Project Manager will review the adjustment.</Text>
             </Pressable>
           )}
+          {triedContinue && <BlockedReasons reasons={blockedReasons} />}
           <Pressable style={[styles.submitButton, !canContinue && styles.submitButtonDisabled]} onPress={handleContinue} accessibilityRole="button" accessibilityState={{ disabled: !canContinue }}>
             <Text style={styles.submitButtonText}>Looks correct — Continue</Text>
           </Pressable>

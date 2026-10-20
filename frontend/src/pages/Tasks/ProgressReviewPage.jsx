@@ -10,11 +10,25 @@ import "./ProgressReviewPage.css";
 
 const DATE = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
 
+// Common reasons a PM sends a photo back. "Other" opens a text box. The chosen
+// text is what the Site Manager sees on their phone.
+const FLAG_REASONS = [
+  "Photo is blurry or too dark",
+  "Photo doesn't show the finished work",
+  "Work is incomplete",
+  "Wrong task or location in the photo",
+  "Quality issue: work needs to be redone",
+];
+const OTHER = "__other__";
+
 export function ProgressReviewPage() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Per submission: { choice, other } from the reason dropdown.
   const [reasonById, setReasonById] = useState({});
+  // Submissions where Flag was pressed without a reason: outlined in red.
+  const [missingReasonId, setMissingReasonId] = useState(null);
   const [submittingId, setSubmittingId] = useState(null);
   // Deep-link from the dashboard "Needs your attention" panel: ?focus=<logId>
   // scrolls to that submission's card and highlights it briefly.
@@ -51,11 +65,18 @@ export function ProgressReviewPage() {
   }, [focusId, loading, submissions]);
 
   async function handleReview(submission, decision) {
-    const reason = reasonById[submission.logid] || "";
-    if (decision === "Flag" && !reason.trim()) {
-      setError("Enter a reason before flagging a submission.");
+    const picked = reasonById[submission.logid] || {};
+    const reason = picked.choice === OTHER ? (picked.other || "").trim() : picked.choice || "";
+    if (decision === "Flag" && !reason) {
+      setMissingReasonId(submission.logid);
+      setError(
+        picked.choice === OTHER
+          ? "Type the reason for flagging. The Site Manager sees it on their phone."
+          : "Choose a reason for flagging. The Site Manager sees it on their phone."
+      );
       return;
     }
+    setMissingReasonId(null);
 
     setSubmittingId(submission.logid);
     setError("");
@@ -96,6 +117,9 @@ export function ProgressReviewPage() {
         <div className="progress-review-list">
           {submissions.map((submission) => {
             const isSubmitting = submittingId === submission.logid;
+            const picked = reasonById[submission.logid] || {};
+            const setPicked = (patch) =>
+              setReasonById((current) => ({ ...current, [submission.logid]: { ...picked, ...patch } }));
             return (
               <Card
                 key={submission.logid}
@@ -136,13 +160,31 @@ export function ProgressReviewPage() {
                     {isSubmitting ? "Saving…" : "Acknowledge & Complete"}
                   </Button>
                   <div className="progress-review-flag">
-                    <input
-                      type="text"
-                      placeholder="Reason for flagging"
-                      value={reasonById[submission.logid] || ""}
-                      onChange={(event) => setReasonById((current) => ({ ...current, [submission.logid]: event.target.value }))}
+                    <select
+                      aria-label="Reason for flagging"
+                      className={missingReasonId === submission.logid && !picked.choice ? "progress-review-invalid" : undefined}
+                      value={picked.choice || ""}
+                      onChange={(event) => setPicked({ choice: event.target.value })}
                       disabled={isSubmitting}
-                    />
+                    >
+                      <option value="">Reason for flagging…</option>
+                      {FLAG_REASONS.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                      <option value={OTHER}>Other (type a reason)</option>
+                    </select>
+                    {picked.choice === OTHER && (
+                      <input
+                        type="text"
+                        placeholder="Type the reason"
+                        aria-label="Other reason for flagging"
+                        className={missingReasonId === submission.logid && !(picked.other || "").trim() ? "progress-review-invalid" : undefined}
+                        value={picked.other || ""}
+                        onChange={(event) => setPicked({ other: event.target.value })}
+                        disabled={isSubmitting}
+                        autoFocus
+                      />
+                    )}
                     <Button variant="danger" type="button" onClick={() => handleReview(submission, "Flag")} disabled={isSubmitting}>
                       Flag
                     </Button>

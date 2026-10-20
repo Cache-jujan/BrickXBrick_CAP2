@@ -18,7 +18,8 @@ const {
     buildStorageKey,
     documentUrl,
 } = require("../lib/taskDocuments");
-const { submitTaskProgress, getTaskForUser } = require("../lib/taskProgress");
+const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview, taskReviewNotice } = require("../lib/taskProgress");
+const { notify } = require("../lib/notify");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -35,15 +36,21 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
         const result = await query(
             `SELECT t.*,
                     m.name AS milestonename,
+                    m.dueDate AS milestoneduedate,
+                    p.projectId AS projectid,
                     p.name AS projectname,
+                    p.startDate AS projectstartdate,
+                    p.endDate AS projectenddate,
                     pending.photoevidenceurl AS pendingphotoevidenceurl,
+                    pending.createdat AS pendingsubmittedat,
+                    pending.note AS pendingnote,
                     latest.reviewstatus AS latestreviewstatus,
                     latest.reviewreason AS latestreviewreason
                FROM tasks t
                JOIN milestones m ON m.milestoneId = t.milestoneId
                JOIN projects p ON p.projectId = m.projectId
                LEFT JOIN LATERAL (
-                    SELECT photoevidenceurl
+                    SELECT photoevidenceurl, createdat, note
                       FROM task_progress_log
                      WHERE taskid = t.taskid AND reviewstatus = 'Pending Review'
                      ORDER BY createdat DESC
@@ -128,6 +135,9 @@ router.post("/:id/photo", requireRole("Site Manager"), upload.single("photo"), a
             err.status = 409;
             throw err;
         }
+        // One submission waits for review at a time: don't store a photo that
+        // could never be submitted.
+        if (await hasPendingReview(req.params.id)) throw awaitingReview();
 
         const photoUrl = await uploadBuffer(req.file.buffer, {
             contentType: req.file.mimetype,
@@ -288,6 +298,19 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
                 const taskResult = await client.query("SELECT * FROM tasks WHERE taskId = $1", [updatedLog.taskid]);
                 task = taskResult.rows[0];
             }
+
+            // Tell the Site Manager the outcome (shows on their phone as a
+            // pop-up and in Notifications). Same transaction: no notice for a
+            // review that didn't happen.
+            const notice = taskReviewNotice({ decision, taskName: log.taskname, reason });
+            await notify(client, {
+                recipientIds: [updatedLog.submittedby],
+                excludeUserId: req.user.id,
+                type: notice.type,
+                entityType: "Task",
+                entityId: updatedLog.taskid,
+                message: notice.message,
+            });
 
             return { log: updatedLog, task };
         });
