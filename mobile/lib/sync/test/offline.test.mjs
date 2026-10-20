@@ -90,3 +90,27 @@ test("savedAtLabel: time only today, date and time for older copies", () => {
   assert.match(savedAtLabel(new Date(2026, 9, 18, 9, 5).toISOString(), now), /^as of .*2026.* 9:05|^as of .*18.* 9:05/);
   assert.equal(savedAtLabel(null), "");
 });
+
+test("a request that never answers falls back to the saved copy after the time limit", async () => {
+  const saved = { data: [{ id: 7 }], savedAt: "2026-01-01T00:00:00.000Z" };
+  const r = await withCache("tasks", "u1", () => new Promise(() => {}), {
+    isOnline: true,
+    timeoutMs: 20,
+    cacheRead: () => saved,
+    cacheWrite: () => {},
+  });
+  assert.equal(r.fromCache, true);
+  assert.deepEqual(r.data, [{ id: 7 }]);
+});
+
+test("a request that never answers and has no saved copy fails with a network error", async () => {
+  await assert.rejects(
+    withCache("tasks", "u1", () => new Promise(() => {}), {
+      isOnline: true,
+      timeoutMs: 20,
+      cacheRead: () => null,
+      cacheWrite: () => {},
+    }),
+    /timed out/
+  );
+});

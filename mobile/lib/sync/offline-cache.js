@@ -18,6 +18,19 @@ export function setCacheOnline(value) {
   online = !!value;
 }
 
+// A request that gets no answer at all (weak signal, or a firewall that drops
+// it silently) would otherwise spin forever. After this long we stop waiting
+// and show the saved copy; the next refresh tries the server again.
+export const LOAD_TIMEOUT_MS = 8000;
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Network request timed out")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * withCache(key, userId, load) -> { data, fromCache, savedAt }
  *   key     a stable name for the query, e.g. "tasks:assigned"
@@ -33,7 +46,7 @@ export async function withCache(key, userId, load, deps = {}) {
 
   if (isOnline) {
     try {
-      const data = await load();
+      const data = await withTimeout(load(), deps.timeoutMs ?? LOAD_TIMEOUT_MS);
       const savedAt = new Date().toISOString();
       if (userId) write(key, userId, data, savedAt);
       return { data, fromCache: false, savedAt };
