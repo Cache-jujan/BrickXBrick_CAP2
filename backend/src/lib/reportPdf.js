@@ -82,7 +82,7 @@ function buildReportDocDefinition(summary, options) {
             header("Project"),
             header("Budget", "right"),
             header("Spend (period)", "right"),
-            header("Net P&L", "right"),
+            header("Budget left", "right"),
             header("Utilization", "right"),
             header("Status"),
           ],

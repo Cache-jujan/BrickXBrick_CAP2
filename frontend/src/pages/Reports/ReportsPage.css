@@ -68,3 +68,9 @@
   color: var(--color-ink);
   margin-bottom: var(--space-2) !important;
 }
+
+.reports-chart-note {
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}

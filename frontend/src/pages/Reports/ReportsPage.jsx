@@ -6,8 +6,8 @@ import { defaultReportRange, explainEmpty, spanOfProjects, validateReportFilters
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { BirTable } from "../../components/reports/BirTable";
 import { BudgetChart } from "../../components/reports/BudgetChart";
+import { ProjectsTable } from "../../components/reports/ProjectsTable";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import "./ReportsPage.css";
@@ -177,7 +177,7 @@ export function ReportsPage() {
       {!summary && !submitting && problems.length === 0 && (
         <div className="reports-placeholder">
           <p className="reports-placeholder-title">Your report will appear here</p>
-          <p>Choose one or more projects and a period, then select Generate report. You will see the budget against spend, a chart and the BIR-deductible spending, and you can export it as a PDF.</p>
+          <p>Choose one or more projects and a period, then select Generate report. You will see the budget against spend, a table of every project and the tax-deductible spending, and you can export it as a PDF.</p>
         </div>
       )}
 
@@ -226,31 +226,29 @@ export function ReportsPage() {
 
           {(warnings.pendingExpenses > 0 || warnings.fraudFlaggedExpenses > 0) && (
             <Banner tone="warning" title="These figures may change">
-              {warnings.pendingExpenses > 0 && (
-                <p>
-                  {plural(warnings.pendingExpenses, "expense is", "expenses are")} still waiting for approval in this period and{" "}
-                  {warnings.pendingExpenses === 1 ? "is" : "are"} not counted.
-                </p>
-              )}
-              {warnings.fraudFlaggedExpenses > 0 && (
-                <p>
-                  {plural(warnings.fraudFlaggedExpenses, "expense carries", "expenses carry")} an unresolved fraud flag.
-                </p>
-              )}
+              <p>
+                {[
+                  warnings.pendingExpenses > 0 && `${plural(warnings.pendingExpenses, "expense is", "expenses are")} waiting for approval and not counted`,
+                  warnings.fraudFlaggedExpenses > 0 && `${plural(warnings.fraudFlaggedExpenses, "expense carries", "expenses carry")} an unresolved fraud flag`,
+                ]
+                  .filter(Boolean)
+                  .join("; ")}
+                .
+              </p>
             </Banner>
           )}
 
           <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
 
-          <div className="reports-grid">
-            <Card>
-              <h2 className="reports-section-title">Budget against spend</h2>
-              <BudgetChart ref={chartRef} projects={summary.projects} />
-            </Card>
-            <Card>
-              <BirTable projects={summary.projects} totals={summary.totals} />
-            </Card>
-          </div>
+          <Card>
+            <ProjectsTable projects={summary.projects} totals={summary.totals} />
+          </Card>
+
+          <Card>
+            <h2 className="reports-section-title">Budget used to date</h2>
+            <p className="reports-chart-note">Each bar fills as a project spends its budget. A red bar means the budget is exceeded. This chart is also printed in the PDF.</p>
+            <BudgetChart ref={chartRef} projects={summary.projects} />
+          </Card>
 
           <div className="reports-export">
             <Button onClick={exportPdf} disabled={exporting}>

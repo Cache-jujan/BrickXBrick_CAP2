@@ -1,0 +1,105 @@
+.projects-table-wrap {
+  overflow-x: auto;
+}
+.projects-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.projects-table caption {
+  text-align: left;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-ink);
+  padding-bottom: var(--space-3);
+}
+.projects-table caption span {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--color-ink-soft);
+  margin-top: var(--space-1);
+}
+.projects-table th,
+.projects-table td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.projects-table thead th {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-soft);
+  white-space: nowrap;
+}
+.projects-table tbody th {
+  font-weight: 600;
+  min-width: 180px;
+}
+.projects-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.projects-table tfoot th,
+.projects-table tfoot td {
+  font-weight: 700;
+  border-bottom: none;
+  border-top: 2px solid var(--color-border-strong);
+}
+.projects-table-over {
+  background: var(--color-danger-bg);
+}
+.projects-table-flag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-danger);
+  background: #ffffff;
+}
+.projects-table-sub {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-ink-soft);
+}
+
+.projects-table-used {
+  min-width: 150px;
+}
+.used-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.used-bar-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.used-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-brick);
+}
+.used-bar-over {
+  background: var(--color-danger);
+}
+.used-bar-text {
+  width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-soft);
+}
+.used-bar-text-over {
+  color: var(--color-danger);
+  font-weight: 700;
+}
