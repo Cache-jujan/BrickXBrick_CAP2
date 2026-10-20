@@ -1,7 +1,7 @@
 // F10 wording (lib/sync/messages.js): one plain message per sync run.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { describeRejection, buildSyncSummary, describeLoadError, isNetworkError, bannerState, SENT_SHOW_MS } from "../messages.js";
+import { describeRejection, buildSyncSummary, describeLoadError, isNetworkError, bannerState, SENT_SHOW_MS, plainError } from "../messages.js";
 
 const result = (over = {}) => ({
   synced: 0, rejected: 0,
@@ -107,4 +107,26 @@ test("all sent: green strip for a few seconds, then nothing", () => {
 test("online with nothing queued and nothing recent: no strip", () => {
   assert.equal(strip({}), null);
   assert.equal(strip({ pendingCount: 1 }), null); // queued, not tried yet: the sync starts by itself
+});
+
+test("the exact Android error from a phone is recognised as 'can't reach the server'", () => {
+  const android = "fetch failed: java.net.SocketException: Connection reset";
+  assert.equal(isNetworkError(android), true);
+  assert.equal(describeLoadError(new Error(android), false), null);
+  assert.match(describeLoadError(new Error(android), true), /Can't reach the server/);
+  for (const raw of [
+    "java.net.ConnectException: Failed to connect to /192.168.1.5:3000",
+    "java.net.UnknownHostException: Unable to resolve host",
+    "java.net.SocketTimeoutException: timeout",
+    "Connection refused",
+  ]) {
+    assert.equal(isNetworkError(raw), true, raw);
+  }
+  assert.equal(isNetworkError("Invalid email or password"), false);
+});
+
+test("plainError: connection problems become one plain sentence, real messages stay", () => {
+  assert.equal(plainError(new Error("fetch failed: java.net.SocketException: Connection reset"), "x"), "Can't reach the server. Check your connection and try again.");
+  assert.equal(plainError(new Error("Ticket not found"), "x"), "Ticket not found");
+  assert.equal(plainError(undefined, "Fallback"), "Fallback");
 });

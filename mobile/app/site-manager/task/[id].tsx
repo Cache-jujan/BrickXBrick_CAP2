@@ -25,7 +25,7 @@ import {
   getRejectedTaskUpdates,
   queueTaskUpdate,
 } from "@/lib/sync/db";
-import { describeLoadError, describeRejection } from "@/lib/sync/messages";
+import { describeLoadError, describeRejection, isNetworkError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 
@@ -175,7 +175,10 @@ export default function SiteManagerTaskDetailScreen() {
   // F10 — no connection: keep the photo on the phone and queue the update. It is
   // sent by itself on reconnect (lib/sync/sync.js). One queued update per task:
   // a newer one replaces the older one.
-  async function queueOffline() {
+  // updateId: pass the online attempt's clientSubmissionId when a submit just
+  // failed for lack of connection. If that attempt did reach the server, the
+  // sync replays the same id and the server returns the saved row: no duplicate.
+  async function queueOffline(updateId?: string) {
     if (!task || !photo || !session) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -183,7 +186,7 @@ export default function SiteManagerTaskDetailScreen() {
     try {
       copiedPath = await copyPhotoToQueue(photo.uri);
       const result = queueTaskUpdate({
-        updateId: Crypto.randomUUID(),
+        updateId: updateId ?? Crypto.randomUUID(),
         taskId: task.taskid,
         userId: session.user.id,
         photoPath: copiedPath,
@@ -205,7 +208,7 @@ export default function SiteManagerTaskDetailScreen() {
       router.replace("/site-manager");
     } catch (err) {
       if (copiedPath) await deleteQueuedPhoto(copiedPath);
-      setSubmitError(err instanceof Error ? err.message : "Unable to save this update on your phone.");
+      setSubmitError(plainError(err, "Unable to save this update on your phone."));
     } finally {
       setSubmitting(false);
     }
@@ -229,9 +232,9 @@ export default function SiteManagerTaskDetailScreen() {
 
     setSubmitting(true);
     setSubmitError(null);
+    const submissionId = clientSubmissionId || Crypto.randomUUID();
+    if (!clientSubmissionId) setClientSubmissionId(submissionId);
     try {
-      const submissionId = clientSubmissionId || Crypto.randomUUID();
-      if (!clientSubmissionId) setClientSubmissionId(submissionId);
 
       await submitTaskProgress(task.taskid, photo, note, submissionId);
       // Clear the form so it doesn't look unsent, then go back to the task
@@ -243,7 +246,15 @@ export default function SiteManagerTaskDetailScreen() {
       Alert.alert("Submitted for review", "Your Project Manager can now review this progress update.");
       router.replace("/site-manager");
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Unable to submit task progress.");
+      if (isNetworkError(err)) {
+        // The phone thinks it's online but the server can't be reached (weak
+        // signal, server down). Don't show the raw error: keep the update on
+        // the phone instead; it is sent by itself when the server answers.
+        setSubmitting(false);
+        await queueOffline(submissionId);
+        return;
+      }
+      setSubmitError(plainError(err, "Unable to submit task progress."));
     } finally {
       setSubmitting(false);
     }
