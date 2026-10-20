@@ -50,7 +50,7 @@ export default function SiteManagerHomeScreen() {
 
   // Offline: keep the list that was loaded last and never show a server error
   // (the banner already says "offline"). Reload by itself on reconnect.
-  const { isOnline, pendingCount } = useNetwork(); // pendingCount: re-render the labels when the queue changes
+  const { isOnline } = useNetwork(); // any queue change re-renders the list, so the labels stay current
   const wasOnline = useRef(isOnline);
   useEffect(() => {
     if (isOnline && !wasOnline.current && session?.user.role === "Site Manager") loadTasks(true);
