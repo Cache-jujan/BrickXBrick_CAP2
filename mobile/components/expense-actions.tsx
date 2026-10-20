@@ -61,10 +61,10 @@ export function ExpenseActions() {
     <>
       <View style={styles.bar}>
         <Pressable onPress={openPicker} style={({ pressed }) => [styles.button, styles.filled, pressed && styles.pressed]} accessibilityRole="button">
-          <Text style={styles.filledText}>Submit expense</Text>
+          <Text style={styles.filledText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Submit expense</Text>
         </Pressable>
         <Pressable onPress={split} style={({ pressed }) => [styles.button, styles.outlined, pressed && styles.pressed]} accessibilityRole="button">
-          <Text style={styles.outlinedText}>Split receipt</Text>
+          <Text style={styles.outlinedText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Split receipt</Text>
         </Pressable>
       </View>
 
@@ -104,11 +104,11 @@ export function ExpenseActions() {
 
 const styles = StyleSheet.create({
   bar: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, backgroundColor: COLORS.card, borderTopWidth: 1, borderTopColor: COLORS.border },
-  button: { flex: 1, minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  button: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 8 },
   filled: { backgroundColor: COLORS.primary },
-  filledText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONT.bold },
+  filledText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONT.bold, textAlign: "center", flexShrink: 1 },
   outlined: { borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: COLORS.card },
-  outlinedText: { color: COLORS.primary, fontSize: 15, fontFamily: FONT.bold },
+  outlinedText: { color: COLORS.primary, fontSize: 15, fontFamily: FONT.bold, textAlign: "center", flexShrink: 1 },
   pressed: { opacity: 0.85 },
   modal: { flex: 1, backgroundColor: COLORS.bg },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 16, paddingRight: 8, minHeight: MIN_TAP + 12 },
