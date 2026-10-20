@@ -48,6 +48,42 @@ function canonicalizeExpense(expense) {
     return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
+// Version 2 fingerprint (adviser audit S4). Everything in version 1, plus the
+// fields a dishonest edit would most want to change after approval: the BIR
+// official receipt number, the vendor TIN, and WHO approved the expense. The
+// "version" key is part of the hashed text, so a version 2 hash can never be
+// mistaken for a version 1 hash.
+//
+// Expenses approved before this change keep their version 1 hash on the
+// chain, which cannot be edited. matchesApprovedHash() therefore accepts
+// either version. Accepting both does not weaken the check: a changed record
+// has to produce the exact stored hash in one of the two formats, and the two
+// formats never produce the same text.
+function canonicalizeExpenseV2(expense) {
+    const canonical = {
+        version: 2,
+        expenseID: expense.expenseid,
+        projectID: expense.projectid,
+        submittedBy: expense.submittedby,
+        approvedBy: expense.approvedby,
+        vendorName: expense.vendorname,
+        amount: expense.amount,
+        receiptDate: canonicalReceiptDate(expense.receiptdate),
+        category: expense.category,
+        birValidationStatus: expense.birvalidationstatus,
+        birNumber: expense.birnumber ?? null,
+        tin: expense.tin ?? null,
+        quantity: expense.quantity,
+    };
+    return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+/** True when the expense still equals what was secured, in either format. */
+function matchesApprovedHash(expense, onChainHash) {
+    if (onChainHash === null || onChainHash === undefined) return false;
+    return onChainHash === canonicalizeExpenseV2(expense) || onChainHash === canonicalizeExpense(expense);
+}
+
 // --- F11: report hash ----------------------------------------------------
 // A report is hashed from the report_events row, so the hash can be
 // recomputed later from what is stored. Same lessons as the expense hash:
@@ -135,4 +171,4 @@ async function getOnChainHash(txHash) {
 }
 
 
-module.exports = { canonicalizeExpense, canonicalizeReport, submitHashWithTimeout, getOnChainHash };
+module.exports = { canonicalizeExpense, canonicalizeExpenseV2, matchesApprovedHash, canonicalizeReport, submitHashWithTimeout, getOnChainHash };
