@@ -1,0 +1,64 @@
+.spend-share {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+}
+.spend-share-ring {
+  position: relative;
+  width: 190px;
+  height: 190px;
+}
+.spend-share-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+.spend-share-center span {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.spend-share-center small {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+.spend-share-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.spend-share-legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+.spend-share-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.spend-share-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spend-share-pct {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.spend-share-empty {
+  margin: var(--space-5) 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  text-align: center;
+}

@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { BudgetChart } from "../../components/reports/BudgetChart";
 import { ProjectsTable } from "../../components/reports/ProjectsTable";
+import { SpendShare } from "../../components/reports/SpendShare";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import "./ReportsPage.css";
@@ -219,10 +220,21 @@ export function ReportsPage() {
       )}
 
       {summary && !summary.empty && (
-        <>
-          <p className="reports-stamp">
-            Figures as of {STAMP.format(new Date(summary.generatedAt))} (Manila time) · {summary.period.from} to {summary.period.to}
-          </p>
+        <section className="reports-results" aria-label="Report results">
+          <div className="reports-results-head">
+            <div>
+              <h2 className="reports-results-title">Report results</h2>
+              <p className="reports-stamp">
+                {summary.period.from} to {summary.period.to} · figures as of {STAMP.format(new Date(summary.generatedAt))} (Manila time)
+              </p>
+            </div>
+            <div className="reports-export">
+              <Button onClick={exportPdf} disabled={exporting}>
+                {exporting ? "Preparing PDF…" : "Export PDF"}
+              </Button>
+              <span className="reports-export-note">Saved as a record; figures always match the system.</span>
+            </div>
+          </div>
 
           {(warnings.pendingExpenses > 0 || warnings.fraudFlaggedExpenses > 0) && (
             <Banner tone="warning" title="These figures may change">
@@ -240,24 +252,24 @@ export function ReportsPage() {
 
           <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
 
+          <div className="reports-grid">
+            <Card>
+              <h3 className="reports-section-title">Budget used to date</h3>
+              <p className="reports-chart-note">Each bar fills as a project spends its budget. Red means over budget. Also printed in the PDF.</p>
+              <BudgetChart ref={chartRef} projects={summary.projects} />
+            </Card>
+            <Card>
+              <h3 className="reports-section-title">Where this period's spend went</h3>
+              <p className="reports-chart-note">Share of the period spend by project.</p>
+              <SpendShare projects={summary.projects} total={summary.totals.periodSpend} />
+            </Card>
+          </div>
+
           <Card>
+            <h3 className="reports-section-title">Project breakdown</h3>
+            <p className="reports-chart-note">Tax-deductible counts only receipts classed Formal-Tax-Deductible, within the chosen dates.</p>
             <ProjectsTable projects={summary.projects} totals={summary.totals} />
           </Card>
-
-          <Card>
-            <h2 className="reports-section-title">Budget used to date</h2>
-            <p className="reports-chart-note">Each bar fills as a project spends its budget. A red bar means the budget is exceeded. This chart is also printed in the PDF.</p>
-            <BudgetChart ref={chartRef} projects={summary.projects} />
-          </Card>
-
-          <div className="reports-export">
-            <Button onClick={exportPdf} disabled={exporting}>
-              {exporting ? "Preparing PDF…" : "Export PDF"}
-            </Button>
-            <span className="reports-export-note">
-              The PDF is rebuilt from the database and saved as a record, so its figures always match the system.
-            </span>
-          </div>
 
           {exportError && <Banner tone="error" title={exportError} />}
 
@@ -284,7 +296,7 @@ export function ReportsPage() {
               {exportResult.retryMessage && <p>{exportResult.retryMessage}</p>}
             </Banner>
           )}
-        </>
+        </section>
       )}
     </div>
   );

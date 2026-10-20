@@ -1,33 +1,19 @@
-.projects-table-wrap {
+.report-table-wrap {
   overflow-x: auto;
 }
-.projects-table {
+.report-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
-.projects-table caption {
-  text-align: left;
-  font-size: var(--text-md);
-  font-weight: 700;
-  color: var(--color-ink);
-  padding-bottom: var(--space-3);
-}
-.projects-table caption span {
-  display: block;
-  font-size: var(--text-sm);
-  font-weight: 400;
-  color: var(--color-ink-soft);
-  margin-top: var(--space-1);
-}
-.projects-table th,
-.projects-table td {
+.report-table th,
+.report-table td {
   padding: var(--space-3);
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
 }
-.projects-table thead th {
+.report-table thead th {
   font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
@@ -35,25 +21,25 @@
   color: var(--color-ink-soft);
   white-space: nowrap;
 }
-.projects-table tbody th {
+.report-table tbody th {
   font-weight: 600;
   min-width: 180px;
 }
-.projects-table .num {
+.report-table .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.projects-table tfoot th,
-.projects-table tfoot td {
+.report-table tfoot th,
+.report-table tfoot td {
   font-weight: 700;
   border-bottom: none;
   border-top: 2px solid var(--color-border-strong);
 }
-.projects-table-over {
+.report-table-over {
   background: var(--color-danger-bg);
 }
-.projects-table-flag {
+.report-table-flag {
   display: inline-block;
   margin-left: var(--space-2);
   padding: 1px var(--space-2);
@@ -63,43 +49,43 @@
   color: var(--color-danger);
   background: #ffffff;
 }
-.projects-table-sub {
+.report-table-sub {
   display: block;
   font-size: var(--text-xs);
   font-weight: 400;
   color: var(--color-ink-soft);
 }
 
-.projects-table-used {
+.report-table-used {
   min-width: 150px;
 }
-.used-bar {
+.rt-bar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.used-bar-track {
+.rt-bar-track {
   flex: 1;
   height: 8px;
   border-radius: 4px;
   background: var(--color-surface-muted);
   overflow: hidden;
 }
-.used-bar-fill {
+.rt-bar-fill {
   display: block;
   height: 100%;
   background: var(--color-brick);
 }
-.used-bar-over {
+.rt-bar-over {
   background: var(--color-danger);
 }
-.used-bar-text {
+.rt-bar-text {
   width: 52px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--color-ink-soft);
 }
-.used-bar-text-over {
+.rt-bar-text-over {
   color: var(--color-danger);
   font-weight: 700;
 }
