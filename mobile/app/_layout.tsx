@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { Stack, router, useRootNavigationState } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 
 import { ExpenseDraftProvider } from "@/lib/expense-draft-context";
 import { NetworkProvider } from "@/lib/sync/network-context";
@@ -15,6 +16,10 @@ import {
   PlusJakartaSans_800ExtraBold,
   useFonts,
 } from "@expo-google-fonts/plus-jakarta-sans";
+
+// Keep the splash screen up until the fonts are ready. The navigator itself is
+// always rendered: expo-router needs it mounted to handle the first redirect.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   // Redesigned screens use Plus Jakarta Sans (see FONT in constants/expense-flow-colors).
@@ -38,8 +43,10 @@ export default function RootLayout() {
     sentHome.current = true;
     router.replace(nextRouteAfterLogin(restored.user));
   }, [navReady, restored]);
-  // Wait for the fonts. If they fail to load, carry on with the system font.
-  if (!fontsLoaded && !fontError) return null;
+  // If the fonts fail to load, carry on with the system font.
+  useEffect(() => {
+    if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded, fontError]);
 
   return (
     <ExpenseDraftProvider>
