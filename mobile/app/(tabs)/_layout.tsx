@@ -1,31 +1,71 @@
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, router, Tabs } from "expo-router";
 
 import { AppHeader } from "@/components/app-header";
-import { SmBottomBar } from "@/components/sm-bottom-bar";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
 
-const BG = "#F8F1E8";
-
-// The Purchaser home is a single screen. The tab bar is hidden; Settings
-// (and logout) live behind the gear in the header at /settings.
+// The Purchaser gets Requests / Expenses / Account tabs. A Site Manager landing
+// here keeps the single screen with no tab bar. Account opens Settings (and
+// logout) at /settings.
 // The (tabs) folder name is kept because index.tsx, login.tsx and the OAuth
 // callback all redirect to "/(tabs)".
 export default function TabLayout() {
   const session = getSession();
   if (!session || !["Purchaser", "Site Manager"].includes(session.user.role)) return <Redirect href="/login" />;
+  const isPurchaser = session.user.role === "Purchaser";
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
-      <SafeAreaView edges={["top"]} style={{ backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <SafeAreaView edges={["top"]} style={{ backgroundColor: COLORS.card }}>
         <AppHeader />
       </SafeAreaView>
 
-      <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: "none" } }}>
-        <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: isPurchaser
+            ? { backgroundColor: COLORS.card, borderTopColor: COLORS.border, minHeight: 56 }
+            : { display: "none" },
+          tabBarActiveTintColor: COLORS.primary,
+          tabBarInactiveTintColor: COLORS.muted,
+          tabBarLabelStyle: { fontFamily: FONT.semibold, fontSize: 11 },
+          tabBarItemStyle: { minHeight: 48 },
+        }}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Requests",
+            tabBarIcon: ({ color }) => <IconSymbol name="list.clipboard.fill" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="expenses"
+          options={{
+            title: "Expenses",
+            href: isPurchaser ? undefined : null,
+            tabBarIcon: ({ color }) => <IconSymbol name="receipt" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="account"
+          options={{
+            title: "Account",
+            href: isPurchaser ? undefined : null,
+            tabBarIcon: ({ color }) => <IconSymbol name="person.crop.circle" size={24} color={color} />,
+          }}
+          listeners={{
+            // Account is not a screen of its own: open Settings instead.
+            tabPress: (event) => {
+              event.preventDefault();
+              router.push("/settings");
+            },
+          }}
+        />
       </Tabs>
-      <SmBottomBar />
     </View>
   );
 }

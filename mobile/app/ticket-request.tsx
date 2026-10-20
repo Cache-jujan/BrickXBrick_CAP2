@@ -29,6 +29,9 @@ import {
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
+import { DateField } from "@/components/date-field";
+import { parseNeededBy, toDateText } from "@/lib/needed-by";
+import { BackButton } from "@/components/back-button";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -53,6 +56,7 @@ type Card = {
   unit: string; // chosen unit (not-in-BOM / Work Item)
   vendorName: string; // optional
   requestedBudget: string;
+  neededBy: string; // optional "YYYY-MM-DD"
   reportText: string; // Report
 };
 
@@ -67,8 +71,17 @@ function emptyCard(id: string): Card {
     unit: "",
     vendorName: "",
     requestedBudget: "",
+    neededBy: "",
     reportText: "",
   };
+}
+
+// A past date would be refused by the server, so a resubmit drops it.
+function keepFutureDate(value?: string | null) {
+  const date = parseNeededBy(value);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date && date >= today ? toDateText(date) : "";
 }
 
 // Build a card prefilled from a rejected ticket, so the SM lands with every
@@ -88,6 +101,7 @@ function prefilledCard(id: string, t: Ticket): Card {
     unit: t.unit || "",
     vendorName: t.vendorname || "",
     requestedBudget: t.requestedbudget == null ? "" : String(t.requestedbudget),
+    neededBy: keepFutureDate(t.neededby),
     reportText: isReport ? (t.description || t.subject || "") : "",
   };
 }
@@ -214,6 +228,7 @@ export default function TicketRequestScreen() {
 
   function buildPayload(card: Card): TicketInput {
     const vendorName = card.vendorName.trim() || undefined;
+    const neededBy = card.neededBy || undefined;
     if (card.ticketType === "Report") {
       return {
         projectID: project!.projectid,
@@ -231,6 +246,7 @@ export default function TicketRequestScreen() {
         quantity: Number(card.quantity),
         unit: card.unit,
         vendorName,
+        neededBy,
       };
     }
     // Material Request
@@ -244,6 +260,7 @@ export default function TicketRequestScreen() {
       subject: cap100(bomDesc),
       quantity: Number(card.quantity),
       vendorName,
+      neededBy,
       requestedBudget: Number(card.requestedBudget),
     };
     if (notInBom) {
@@ -505,6 +522,15 @@ export default function TicketRequestScreen() {
               />
             )}
 
+            {!isReport && (
+              <DateField
+                label="Needed by (optional)"
+                value={card.neededBy}
+                onChange={(v) => updateCard(card.id, { neededBy: v })}
+                hint="The Project Manager may adjust this date."
+              />
+            )}
+
             {isMR && (
               <Field
                 label="Requested budget (PHP)"
@@ -542,7 +568,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={() => router.back()} style={styles.backButton}><Text style={styles.backText}>‹ Back</Text></Pressable>
+        <BackButton />
         <Text style={styles.eyebrow}>SITE MANAGER</Text>
         {children}
       </ScrollView>
@@ -582,8 +608,6 @@ function Field({ label, value, onChangeText, placeholder, multiline, keyboardTyp
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
   content: { padding: 20, paddingBottom: 48 },
-  backButton: { alignSelf: "flex-start", marginBottom: 20 },
-  backText: { color: COLORS.primary, fontSize: 14, fontWeight: "700" },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 27, fontWeight: "800", marginTop: 7 },
   subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 6 },

@@ -22,6 +22,8 @@ export type Ticket = {
   quantity?: string | number | null;
   unit?: string | null;
   vendorname?: string | null;
+  // Optional date the material is needed by (set by the Site Manager, editable by the PM).
+  neededby?: string | null;
   bomitemid?: string | null;
   notinbom?: boolean | null;
   notinbomreason?: string | null;
@@ -200,6 +202,8 @@ export type TicketInput = {
   unit?: string;
   vendorName?: string;
   requestedBudget?: number;
+  // Optional "YYYY-MM-DD" date the material is needed by.
+  neededBy?: string;
   // Material Request: either reference an approved BOM item, or mark not-in-BOM
   // with a reason (the backend derives materialType + unit from the BOM item).
   bomItemID?: string;
@@ -331,6 +335,8 @@ export type MyExpense = {
   tin: string | null;
   birPermitNumber: string | null;
   lineItems: BackendLineItem[] | null;
+  // Projects a split receipt was shared across; 0 for an ordinary expense.
+  splitProjectCount?: number;
 };
 
 export async function fetchMyExpenses(): Promise<MyExpense[]> {
