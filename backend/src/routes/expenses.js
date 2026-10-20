@@ -222,8 +222,13 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
 router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const result = await query(
-            `SELECT ${EXPENSE_COLUMNS} FROM expenses
-             WHERE submittedby = $1 ORDER BY submittedat DESC`,
+            // splitProjectCount: how many projects a split receipt was shared across
+            // (0 for an ordinary single-request expense).
+            `SELECT ${EXPENSE_COLUMNS},
+                    (SELECT COUNT(DISTINCT a.projectID)::int FROM ReceiptAllocations a
+                      WHERE a.expenseID = expenses.expenseID) AS "splitProjectCount"
+               FROM expenses
+              WHERE submittedby = $1 ORDER BY submittedat DESC`,
             [req.user.id]
         );
         res.json(result.rows);
