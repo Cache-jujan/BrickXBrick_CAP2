@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Tabs } from "expo-router";
 
 import { AppHeader } from "@/components/app-header";
+import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { getSession } from "@/lib/auth";
 
 const BG = "#F8F1E8";
@@ -24,6 +25,7 @@ export default function TabLayout() {
       <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: "none" } }}>
         <Tabs.Screen name="index" options={{ title: "Home" }} />
       </Tabs>
+      <SmBottomBar />
     </View>
   );
 }

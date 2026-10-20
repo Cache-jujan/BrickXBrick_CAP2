@@ -4,12 +4,12 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
@@ -17,6 +17,7 @@ import { formatPeso, formatQty } from "@/lib/money";
 import { fetchActiveProjects, fetchAllAssignedTickets, type Project, type Ticket } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
+import { SmBottomBar } from "@/components/sm-bottom-bar";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -130,7 +131,7 @@ export default function MyRequestsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.topBar}>
@@ -202,6 +203,7 @@ export default function MyRequestsScreen() {
           )}
         />
       )}
+      <SmBottomBar />
     </SafeAreaView>
   );
 }
