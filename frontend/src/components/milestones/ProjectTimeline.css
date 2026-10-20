@@ -73,7 +73,12 @@
 
 .timeline-today-line { position: absolute; top: 0; bottom: 0; z-index: 3; width: 1px; background: #d48b4b; pointer-events: none; }
 .timeline-today-line span { position: absolute; top: 5px; left: -22px; padding: 3px 7px; border-radius: 5px; background: #d48b4b; color: white; font-size: 9px; font-weight: 800; }
-.timeline-overlay-popover, .timeline-overlay-tooltip { position: absolute; z-index: 10; pointer-events: auto; }
+.timeline-overlay-popover, .timeline-overlay-tooltip { position: fixed; z-index: 1000; pointer-events: auto; }
+.timeline-bar-task-done { background: #72a890; }
+.timeline-popover-completed { border-top-color: #72a890; }
+.timeline-status-pill.completed { background: #e4f0e9; color: #4d8068; }
+.timeline-status-dot.completed { background: #72a890; }
+.timeline-popover-task-done { background: #e8f1ec; }
 .timeline-overlay-popover, .timeline-overlay-tooltip { max-width: calc(100vw - 32px); }
 .timeline-popover, .timeline-tooltip { background: rgba(255, 255, 255, .98); border-radius: 10px; box-shadow: 0 15px 30px rgba(52, 45, 36, .18); border: 1px solid var(--color-border); }
 .timeline-popover { width: 286px; padding: 16px; border-top: 5px solid #cba76d; }

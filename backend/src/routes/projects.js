@@ -625,8 +625,14 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     const milestoneIds = milestones.map((m) => m.milestoneid);
     let tasks = [];
     if (milestones.length > 0) {
+      // assignedToName: the timeline shows who a task is assigned to; the bare
+      // tasks row only has the assignedTo user id, so it always read "Unassigned".
       const tasksResult = await query(
-        "SELECT * FROM tasks WHERE milestoneId = ANY($1) ORDER BY dueDate ASC",
+        `SELECT t.*, u.name AS assignedtoname
+           FROM tasks t
+           LEFT JOIN users u ON u.userid = t.assignedto
+          WHERE t.milestoneId = ANY($1)
+          ORDER BY t.dueDate ASC`,
         [milestoneIds]
       );
       tasks = tasksResult.rows;
