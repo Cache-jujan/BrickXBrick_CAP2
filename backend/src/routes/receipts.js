@@ -37,6 +37,7 @@ router.use(requireAuth);
 const scanLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 20,
+  /** Share the scan quota across requests made by the same authenticated user. */
   keyGenerator: (req) => req.user.id,
   standardHeaders: true,
   legacyHeaders: false,
@@ -73,7 +74,7 @@ function notFound() {
   return err;
 }
 
-// POST /scan — upload a receipt, get back an expense draft.
+/** Upload a receipt and return its OCR draft, recording the scan when possible. */
 router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, upload.single("file"), async (req, res, next) => {
   try {
     requireFile(req);
@@ -95,9 +96,10 @@ router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, upload.single("fil
   }
 });
 
-// POST /scans — upload a receipt and return at once. The draft is fetched
-// later from GET /scans/:id, even if the app was closed in between.
-// Optional multipart field `context`: JSON the app needs to resume.
+/**
+ * Upload a receipt and return a scan ID before starting OCR in the background.
+ * Accept optional multipart JSON context; GET /scans/:id retrieves the draft later.
+ */
 router.post("/scans", requireRole(...SCAN_ROLES), scanLimiter, upload.single("file"), async (req, res, next) => {
   try {
     requireFile(req);

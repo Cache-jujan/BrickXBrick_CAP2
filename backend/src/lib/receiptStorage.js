@@ -44,7 +44,7 @@ function isAllowedMime(mimeType) {
   return Object.prototype.hasOwnProperty.call(EXTENSION_BY_MIME, mimeType);
 }
 
-// The declared MIME type is client-controlled; check the real bytes too.
+/** Return whether the file's leading bytes match the declared receipt MIME type. */
 function hasValidReceiptBytes(buffer, mimeType) {
   const signature = MAGIC[EXTENSION_BY_MIME[mimeType]];
   if (!signature || !buffer || buffer.length < signature.length) return false;

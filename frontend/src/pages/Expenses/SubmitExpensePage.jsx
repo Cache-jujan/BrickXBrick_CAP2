@@ -36,6 +36,7 @@ function toDateInput(value) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
 }
 
+/** Convert scanned receipt fields into editable strings, filling missing unit prices and line rows. */
 export function draftFromScan(result) {
   const extractedItems = Array.isArray(result.lineItems)
     ? result.lineItems.map((item) => withUnitPrice({
@@ -67,12 +68,14 @@ export function draftFromScan(result) {
   };
 }
 
+/** Accept a JPEG, PNG or PDF MIME type or extension for client-side receipt selection. */
 export function isSupportedReceipt(file) {
   const extension = file.name.split(".").pop()?.toLowerCase();
   return ["image/jpeg", "image/jpg", "image/png", "application/pdf"].includes(file.type)
     || ["jpg", "jpeg", "png", "pdf"].includes(extension);
 }
 
+/** Render the managers' receipt capture and expense submission flow for resolved tickets. */
 export function SubmitExpensePage() {
   const { user } = useAuth();
   const cameraInput = useRef(null);
@@ -165,6 +168,7 @@ export function SubmitExpensePage() {
     if (ticketID) setField("category", "Materials");
   }
 
+  /** Edit one receipt line, keeping its quantity, unit price and amount synchronized. */
   function updateLineItem(index, name, value) {
     setDraft((current) => ({
       ...current,
@@ -216,6 +220,7 @@ export function SubmitExpensePage() {
       && !submitting
   );
 
+  /** Validate and submit the ticket-linked receipt once, clearing the draft after success. */
   async function handleSubmit(event) {
     event.preventDefault();
     if (busyRef.current) return;

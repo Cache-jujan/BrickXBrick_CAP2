@@ -25,6 +25,7 @@ const {
   normalizeLineItems,
   computeQuantityFromLineItems,
 } = require("../lib/receiptFields");
+const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
 const { screenExpense } = require("../lib/screenExpense");
 const { submitTaskProgress, taskPhotoExists, TaskProgressError } = require("../lib/taskProgress");
 
@@ -112,7 +113,7 @@ async function syncExpense(user, uuid, data) {
   let resolveTicketInTransaction = false;
   if (ticketID) {
     const ticketResult = await query(
-      "SELECT projectid, status, assignedto FROM tickets WHERE ticketid = $1",
+      "SELECT projectid, status, assignedto, quantity FROM tickets WHERE ticketid = $1",
       [ticketID]
     );
     if (ticketResult.rowCount === 0) {
@@ -121,6 +122,14 @@ async function syncExpense(user, uuid, data) {
     const ticket = ticketResult.rows[0];
     if (ticket.assignedto !== user.id) {
       throw new SyncReject("TICKET_NOT_YOURS", "You may only submit an expense against a ticket assigned to you");
+    }
+    // Only a request that is still being bought can take an expense: not one the
+    // Site Manager withdrew or the PM rejected, and not one already filled.
+    if (ticket.status !== "Acknowledged" && ticket.status !== "Resolved") {
+      throw new SyncReject("TICKET_NOT_OPEN", `Ticket is ${ticket.status}; expenses can only be recorded against an Acknowledged ticket`);
+    }
+    if (await isTicketFulfilled(query, ticketID, ticket.quantity)) {
+      throw new SyncReject("TICKET_FULFILLED", FULFILLED_MESSAGE);
     }
     // Auto-resolve: the online path calls resolveTicket before submitting, but
     // offline queues skip that step, so the sync endpoint does it. It runs in

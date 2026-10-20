@@ -11,15 +11,17 @@
 //
 // Quantity 0 lines (delivery, VAT, fees) have no unit price.
 
+/** Parse a nonnegative numeric field into centavos or quantity hundredths; return null if invalid. */
 const toUnits = (value) => {
   const text = String(value ?? "").replace(/,/g, "").trim();
   if (text === "" || !Number.isFinite(Number(text)) || Number(text) < 0) return null;
   return Math.round(Number(text) * 100); // centavos, or hundredths for a quantity
 };
 
+/** Format integer centavos or hundredths as an ungrouped two-decimal string. */
 const format = (cents) => (cents / 100).toFixed(2);
 
-// Unit price text for a quantity and a row total, or "" when it can't be derived.
+/** Derive unit price text from quantity and amount, or return an empty string if not derivable. */
 export function derivedUnitPrice(quantity, amount) {
   const qtyH = toUnits(quantity);
   const cents = toUnits(amount);
@@ -27,7 +29,11 @@ export function derivedUnitPrice(quantity, amount) {
   return format(Math.round((cents * 100) / qtyH));
 }
 
-// item: { quantity, amount, unitPrice, unitEntered } as strings. Returns a new item.
+/**
+ * Return a copy of a line with an edited quantity, amount or unit price.
+ * Amount edits derive the unit price; quantity edits preserve a manually entered
+ * unit price and recalculate the amount, otherwise preserving the amount.
+ */
 export function editLine(item, field, value) {
   const next = { ...item, [field]: value };
   const qtyH = toUnits(next.quantity);
@@ -51,13 +57,13 @@ export function editLine(item, field, value) {
   return next;
 }
 
-// A row that came from a scan: fill a blank unit price from the amount.
+/** Keep a scanned unit price, deriving one from quantity and amount when the field is blank. */
 export function withUnitPrice(item) {
   if (String(item.unitPrice ?? "").trim() !== "") return item;
   return { ...item, unitPrice: derivedUnitPrice(item.quantity, item.amount) };
 }
 
-// The unit price to send: what is in the box, else derived, else null (fee lines).
+/** Return a positive entered unit price, a derived price, or null when neither is available. */
 export function unitPriceForPayload(item) {
   const typed = toUnits(item.unitPrice);
   if (typed !== null && typed > 0) return typed / 100;
