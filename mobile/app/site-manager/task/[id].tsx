@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -74,6 +75,9 @@ export default function SiteManagerTaskDetailScreen() {
   const queuedIdRef = useRef<string | null>(null);
   const onlineRef = useRef(isOnline);
   onlineRef.current = isOnline;
+  const scrollRef = useRef<ScrollView>(null);
+  // How many tasks in this task's project are still unfinished for this SM.
+  const [projectPending, setProjectPending] = useState<number | null>(null);
 
   const loadLocal = useCallback(() => {
     setQueued((getPendingTaskUpdateForTask(id) as QueuedUpdate | null) ?? null);
@@ -95,6 +99,11 @@ export default function SiteManagerTaskDetailScreen() {
       }
       taskRef.current = matchingTask;
       setTask(matchingTask);
+      setProjectPending(
+        assignedTasks.filter(
+          (item) => item.projectname === matchingTask.projectname && item.status !== "Completed"
+        ).length
+      );
     } catch (err) {
       // Offline refresh: keep showing the task that is already on screen, so the
       // form (and "Queue Update") stays usable. Only a first load shows a
@@ -284,8 +293,13 @@ export default function SiteManagerTaskDetailScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
+      {/* Lifts the form above the keyboard so the Note box is never covered. */}
+      <KeyboardAvoidingView style={styles.keyboardAvoider} behavior="padding">
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadTask(true)} />
         }
@@ -334,6 +348,12 @@ export default function SiteManagerTaskDetailScreen() {
 
             <View style={styles.infoCard}>
               {task.projectname && <InfoRow label="Project" value={task.projectname} />}
+              {task.projectname && projectPending !== null && (
+                <InfoRow
+                  label="Pending in this project"
+                  value={`${projectPending} task${projectPending === 1 ? "" : "s"}`}
+                />
+              )}
               {task.milestonename && <InfoRow label="Milestone" value={task.milestonename} />}
               <InfoRow label="Due date" value={formatDate(task.duedate)} />
               <InfoRow label="Task status" value={task.status} />
@@ -440,6 +460,7 @@ export default function SiteManagerTaskDetailScreen() {
                   style={styles.noteInput}
                   value={note}
                   onChangeText={setNote}
+                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250)}
                   textAlignVertical="top"
                 />
 
@@ -475,6 +496,7 @@ export default function SiteManagerTaskDetailScreen() {
           </>
         ) : null}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -500,6 +522,7 @@ function formatDate(value: string) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
+  keyboardAvoider: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
   backButton: { alignSelf: "flex-start", marginBottom: 30, paddingVertical: 6 },
   backText: { color: COLORS.primary, fontSize: 14, fontWeight: "800" },

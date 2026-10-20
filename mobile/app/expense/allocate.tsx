@@ -33,6 +33,7 @@ const RED_BG = "#FDECEC";
 const AMBER = "#B45309";
 const AMBER_BG = "#FEF3C7";
 
+/** Preview and submit a split receipt with request exclusions, fee moves and retry support. */
 export default function AllocateScreen() {
   const { draft, setCategory: setDraftCategory, reset } = useExpenseDraft();
   const { ocrResult } = draft;
@@ -178,6 +179,7 @@ export default function AllocateScreen() {
   const needsRetry =
     !!error || (!!plan && (plan.uncovered.length + plan.unmatched.length > 0 || plan.portions.length === 0));
 
+  /** Clear submission problems and refresh the preview without rescanning the receipt. */
   function retryPreview() {
     setSubmitProblems([]);
     setRefreshKey((k) => k + 1);

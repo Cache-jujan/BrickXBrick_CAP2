@@ -249,3 +249,33 @@ test("review keeps who, when and why; others are notified; can't be reviewed twi
     (e) => e.status === 409
   );
 });
+
+// ---- fingerprint version 2 (audit S4) -----------------------------------------
+const { canonicalizeExpenseV2 } = require("../src/lib/blockchainService");
+
+test("version 2 hash differs from version 1 for the same expense", () => {
+  assert.notEqual(canonicalizeExpenseV2(makeExpense()), canonicalizeExpense(makeExpense()));
+});
+
+test("version 2: changing the OR number, TIN or approver is caught", async () => {
+  const base = makeExpense({ birnumber: "OR-1001", tin: "123-456-789-000" });
+  const secured = canonicalizeExpenseV2(base);
+  const edits = [{ birnumber: "OR-9999" }, { tin: "999-999-999-000" }, { approvedby: GM2 }];
+  for (const edit of edits) {
+    const db = fakeDb({ logs: [firstLog] });
+    const r = await checkExpenseIntegrity({ ...base, ...edit }, { query: db.query, getOnChainHash: async () => secured });
+    assert.equal(r.state, "Mismatch", `${Object.keys(edit)[0]} edit detected`);
+  }
+  const db = fakeDb({ logs: [firstLog] });
+  const same = await checkExpenseIntegrity(base, { query: db.query, getOnChainHash: async () => secured });
+  assert.equal(same.state, "Match");
+});
+
+test("expenses secured before version 2 still verify, and tampering is still caught", async () => {
+  const old = makeExpense();
+  const db = fakeDb({ logs: [firstLog] });
+  const ok = await checkExpenseIntegrity(old, { query: db.query, getOnChainHash: async () => canonicalizeExpense(old) });
+  assert.equal(ok.state, "Match");
+  const bad = await checkExpenseIntegrity({ ...old, amount: "1.00" }, { query: db.query, getOnChainHash: async () => canonicalizeExpense(old) });
+  assert.equal(bad.state, "Mismatch");
+});

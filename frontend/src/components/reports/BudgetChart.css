@@ -1,5 +1,4 @@
 .budget-chart {
   position: relative;
-  height: 340px;
   background: #ffffff; /* the PNG sent to the PDF has no transparent background */
 }

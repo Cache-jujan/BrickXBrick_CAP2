@@ -167,7 +167,8 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
     <form onSubmit={handleSubmit} noValidate className="pf-form">
       <div className="pf-grid">
         <div className="pf-col">
-          <p className="create-project-section pf-first">Project</p>
+          <section className="pf-section">
+          <h2 className="pf-section-title">Project</h2>
           <Field
             label="Project Name"
             required
@@ -209,7 +210,10 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
             onChange={(e) => updateField("description", e.target.value)}
           />
 
-          <p className="create-project-section">Site</p>
+          </section>
+
+          <section className="pf-section">
+          <h2 className="pf-section-title">Site</h2>
           <div className="create-project-row">
             <Field
               label="Municipality / City"
@@ -238,10 +242,12 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
               handled by a subcontractor. You can still create it.
             </Banner>
           )}
+          </section>
         </div>
 
         <div className="pf-col">
-          <p className="create-project-section pf-first">Budget</p>
+          <section className="pf-section">
+          <h2 className="pf-section-title">Budget</h2>
           <Field
             label="Target Budget in PHP"
             required
@@ -260,7 +266,10 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
               : "The BOM total. It is set automatically when the BOM is approved."}
           </p>
 
-          <p className="create-project-section">Timeline</p>
+          </section>
+
+          <section className="pf-section">
+          <h2 className="pf-section-title">Timeline</h2>
           <div className="create-project-row create-project-row-3">
             <Field
               label="Target Date of Development"
@@ -291,7 +300,10 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
             Development covers planning, permits and procurement. The project stays in Draft until it is activated.
           </p>
 
-          <p className="create-project-section">Team</p>
+          </section>
+
+          <section className="pf-section">
+          <h2 className="pf-section-title">Team</h2>
           {listError && <Banner tone="error" title={listError} />}
           {!loadingLists && !listError && availablePMs.length === 0 && (
             <Banner tone="warning" title="No Project Manager is available">
@@ -322,6 +334,7 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
               onChange={(v) => updateField("siteManagerId", v)}
             />
           )}
+          </section>
         </div>
       </div>
 

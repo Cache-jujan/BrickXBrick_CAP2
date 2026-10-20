@@ -39,7 +39,11 @@ router.post("/login", async (req, res) => {
     if (userResult.rowCount === 0) return genericFail();
     const user = userResult.rows[0];
  
+    // A deactivated account only hears so after proving it knows the password,
+    // so this route cannot be used to find out which emails are deactivated.
     if (user.status !== "Active") {
+      const { error: inactiveError } = await supabaseAnon.auth.signInWithPassword({ email, password });
+      if (inactiveError) return genericFail();
       return res.status(403).json({ error: "This account has been deactivated. Contact your System Administrator." });
     }
  

@@ -3,6 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { normalizeLineItems } = require("../src/lib/receiptFields");
 
+/** Normalize one cement line with the supplied quantity, amount and unit price. */
 const one = (item) => normalizeLineItems([{ description: "Cement", ...item }])[0];
 
 test("a blank unit price is derived from amount / quantity", () => {

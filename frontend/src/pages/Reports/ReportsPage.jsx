@@ -6,8 +6,10 @@ import { defaultReportRange, explainEmpty, spanOfProjects, validateReportFilters
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { BirTable } from "../../components/reports/BirTable";
 import { BudgetChart } from "../../components/reports/BudgetChart";
+import { BudgetStands, ProjectHero } from "../../components/reports/ProjectReport";
+import { ProjectsTable } from "../../components/reports/ProjectsTable";
+import { SpendShare } from "../../components/reports/SpendShare";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import "./ReportsPage.css";
@@ -67,6 +69,18 @@ export function ReportsPage() {
     setFilters(next);
   }
 
+  // One-click period (This month, Last 3 months, ...).
+  function chooseRange(from, to) {
+    datesTouched.current = true;
+    setFieldErrors({});
+    setFilters({ ...filters, from, to });
+  }
+
+  function clearProjects() {
+    setFieldErrors({});
+    setFilters({ ...filters, projectIds: [] });
+  }
+
   function useProjectDates() {
     const span = spanOfProjects(selectedProjects);
     if (!span) return;
@@ -97,6 +111,7 @@ export function ReportsPage() {
   }
 
   const warnings = summary?.warnings;
+  const singleProject = summary?.projects?.length === 1;
   const problems = [...Object.values(fieldErrors), ...(error ? [error] : [])];
 
   // Bring the problem into view: a small red line under a field is easy to miss.
@@ -156,9 +171,18 @@ export function ReportsPage() {
         submitting={submitting}
         onToggleProject={toggleProject}
         onDateChange={changeDate}
+        onRangeChange={chooseRange}
+        onClearProjects={clearProjects}
         onUseProjectDates={useProjectDates}
         onSubmit={generate}
       />
+
+      {!summary && !submitting && problems.length === 0 && (
+        <div className="reports-placeholder">
+          <p className="reports-placeholder-title">Your report will appear here</p>
+          <p>Choose one or more projects and a period, then select Generate report. You will see the budget against spend, a table of every project and the tax-deductible spending, and you can export it as a PDF.</p>
+        </div>
+      )}
 
       {problems.length > 0 && (
         <div ref={problemsRef}>
@@ -198,47 +222,76 @@ export function ReportsPage() {
       )}
 
       {summary && !summary.empty && (
-        <>
-          <p className="reports-stamp">
-            Figures as of {STAMP.format(new Date(summary.generatedAt))} (Manila time) · {summary.period.from} to {summary.period.to}
-          </p>
+        <section className="reports-results" aria-label="Report results">
+          <div className="reports-results-head">
+            <div>
+              <h2 className="reports-results-title">{singleProject ? "Project report" : "Report results"}</h2>
+              <p className="reports-stamp">
+                {summary.period.from} to {summary.period.to} · figures as of {STAMP.format(new Date(summary.generatedAt))} (Manila time)
+              </p>
+            </div>
+            <div className="reports-export">
+              <Button onClick={exportPdf} disabled={exporting}>
+                {exporting ? "Preparing PDF…" : "Export PDF"}
+              </Button>
+              <span className="reports-export-note">Saved as a record; figures always match the system.</span>
+            </div>
+          </div>
 
           {(warnings.pendingExpenses > 0 || warnings.fraudFlaggedExpenses > 0) && (
             <Banner tone="warning" title="These figures may change">
-              {warnings.pendingExpenses > 0 && (
-                <p>
-                  {plural(warnings.pendingExpenses, "expense is", "expenses are")} still waiting for approval in this period and{" "}
-                  {warnings.pendingExpenses === 1 ? "is" : "are"} not counted.
-                </p>
-              )}
-              {warnings.fraudFlaggedExpenses > 0 && (
-                <p>
-                  {plural(warnings.fraudFlaggedExpenses, "expense carries", "expenses carry")} an unresolved fraud flag.
-                </p>
-              )}
+              <p>
+                {[
+                  warnings.pendingExpenses > 0 && `${plural(warnings.pendingExpenses, "expense is", "expenses are")} waiting for approval and not counted`,
+                  warnings.fraudFlaggedExpenses > 0 && `${plural(warnings.fraudFlaggedExpenses, "expense carries", "expenses carry")} an unresolved fraud flag`,
+                ]
+                  .filter(Boolean)
+                  .join("; ")}
+                .
+              </p>
             </Banner>
           )}
 
-          <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
+          {singleProject ? (
+            <>
+              <ProjectHero project={summary.projects[0]} info={projects.find((p) => p.projectid === summary.projects[0].projectId)} period={summary.period} />
+              <div className="reports-grid">
+                <Card>
+                  <h3 className="reports-section-title">Where the budget stands</h3>
+                  <p className="reports-chart-note">Spend before and during the period against what is left.</p>
+                  <BudgetStands project={summary.projects[0]} />
+                </Card>
+                <Card>
+                  <h3 className="reports-section-title">Budget used to date</h3>
+                  <p className="reports-chart-note">Also printed in the PDF.</p>
+                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                </Card>
+              </div>
+            </>
+          ) : (
+            <>
+              <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
 
-          <div className="reports-grid">
-            <Card>
-              <h2 className="reports-section-title">Budget against spend</h2>
-              <BudgetChart ref={chartRef} projects={summary.projects} />
-            </Card>
-            <Card>
-              <BirTable projects={summary.projects} totals={summary.totals} />
-            </Card>
-          </div>
+              <div className="reports-grid">
+                <Card>
+                  <h3 className="reports-section-title">Budget used to date</h3>
+                  <p className="reports-chart-note">Each bar fills as a project spends its budget. Red means over budget. Also printed in the PDF.</p>
+                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                </Card>
+                <Card>
+                  <h3 className="reports-section-title">Where this period's spend went</h3>
+                  <p className="reports-chart-note">Share of the period spend by project.</p>
+                  <SpendShare projects={summary.projects} total={summary.totals.periodSpend} />
+                </Card>
+              </div>
 
-          <div className="reports-export">
-            <Button onClick={exportPdf} disabled={exporting}>
-              {exporting ? "Preparing PDF…" : "Export PDF"}
-            </Button>
-            <span className="reports-export-note">
-              The PDF is rebuilt from the database and saved as a record, so its figures always match the system.
-            </span>
-          </div>
+              <Card>
+                <h3 className="reports-section-title">Project breakdown</h3>
+                <p className="reports-chart-note">Tax-deductible counts only receipts classed Formal-Tax-Deductible, within the chosen dates.</p>
+                <ProjectsTable projects={summary.projects} totals={summary.totals} />
+              </Card>
+            </>
+          )}
 
           {exportError && <Banner tone="error" title={exportError} />}
 
@@ -265,7 +318,7 @@ export function ReportsPage() {
               {exportResult.retryMessage && <p>{exportResult.retryMessage}</p>}
             </Banner>
           )}
-        </>
+        </section>
       )}
     </div>
   );

@@ -14,13 +14,16 @@ function stub(relative, exports) {
 const TICKET = "33333333-3333-4333-8333-333333333333";
 const PROJECT = "44444444-4444-4444-8444-444444444444";
 const UUID = "55555555-5555-4555-8555-555555555555";
-const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0 };
+const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0 };
 
 function makeRun() {
   return async (sql) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     if (text.startsWith("select action_uuid")) return { rowCount: 0, rows: [] };
-    if (text.startsWith("select projectid, status, assignedto from tickets")) {
+    if (text.startsWith("select count(*)::int as count")) {
+      return { rowCount: 1, rows: [{ count: state.spentCount, quantity: state.spentCount ? 5 : 0 }] };
+    }
+    if (text.startsWith("select projectid, status, assignedto")) {
       return { rowCount: 1, rows: [{ projectid: PROJECT, status: state.ticketStatus, assignedto: "purchaser-1" }] };
     }
     if (text.startsWith("select status from projects")) return { rowCount: 1, rows: [{ status: "Active" }] };
@@ -110,4 +113,22 @@ test("a failed expense insert leaves the ticket as it was (not Resolved)", async
   assert.equal(res.body.rejected[0].code, "SERVER_ERROR");
   assert.equal(state.ticketStatus, "Acknowledged");
   assert.equal(state.expenses, 0);
+});
+
+test("a request that is already fulfilled rejects the queued expense", async () => {
+  Object.assign(state, { ticketStatus: "Resolved", failInsert: false, expenses: 0, synced: 0, spentCount: 1 });
+  const res = await sync([expenseItem()]);
+  state.spentCount = 0;
+  assert.equal(res.body.syncedIds.length, 0);
+  assert.equal(res.body.rejected[0].code, "TICKET_FULFILLED");
+  assert.equal(state.expenses, 0);
+});
+
+test("a Rejected or Pending ticket rejects the queued expense", async () => {
+  for (const ticketStatus of ["Rejected", "Pending"]) {
+    Object.assign(state, { ticketStatus, failInsert: false, expenses: 0, synced: 0, spentCount: 0 });
+    const res = await sync([expenseItem()]);
+    assert.equal(res.body.rejected[0].code, "TICKET_NOT_OPEN");
+    assert.equal(state.expenses, 0);
+  }
 });

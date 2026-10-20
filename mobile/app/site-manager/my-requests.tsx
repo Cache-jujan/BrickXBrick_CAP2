@@ -20,6 +20,7 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
+import { SmBottomBar } from "@/components/sm-bottom-bar";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -138,7 +139,7 @@ export default function MyRequestsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.topBar}>
@@ -210,6 +211,7 @@ export default function MyRequestsScreen() {
           )}
         />
       )}
+      <SmBottomBar />
     </SafeAreaView>
   );
 }

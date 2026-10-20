@@ -44,7 +44,7 @@ async function requireAuth(req, res, next) {
   let dbUser;
   try {
     const result = await query(
-      `SELECT userid, name, email, role, status FROM users WHERE supabaseuserid = $1`,
+      `SELECT userid, name, email, role, status, lockoutuntil FROM users WHERE supabaseuserid = $1`,
       [payload.sub]
     );
 
@@ -59,6 +59,17 @@ async function requireAuth(req, res, next) {
 
   if (dbUser.status !== "Active") {
     return res.status(403).json({ error: "Account is not active" });
+  }
+
+  // The failed-login lockout is set by POST /api/auth/login, but someone can
+  // also sign in straight against Supabase with the public anon key and skip
+  // that route. Honour the lockout here too, so a locked account is refused
+  // on every API call, even with a token that was already issued.
+  if (dbUser.lockoutuntil && new Date(dbUser.lockoutuntil) > new Date()) {
+    return res.status(423).json({
+      error: "Account locked due to repeated failed logins.",
+      lockoutUntil: dbUser.lockoutuntil,
+    });
   }
 
   req.user = {

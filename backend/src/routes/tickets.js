@@ -525,6 +525,13 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
                JOIN projects p ON p.projectId = t.projectId
               WHERE t.status = 'Resolved'
                 AND t.ticketType = 'Material Request'
+                -- not yet fulfilled: same rule as lib/ticketAvailability.js
+                AND (
+                  (t.quantity IS NULL AND NOT EXISTS (
+                    SELECT 1 FROM expenses e WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'))
+                  OR (t.quantity IS NOT NULL AND t.quantity > COALESCE((
+                    SELECT SUM(e.quantity) FROM expenses e WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'), 0))
+                )
                 ${projectScope}
               ORDER BY t.resolvedAt DESC NULLS LAST, t.createdAt DESC`,
             params

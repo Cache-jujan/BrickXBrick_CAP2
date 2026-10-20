@@ -105,6 +105,7 @@ const db = { calls: [], rejectedRow: null };
 const screened = [];
 let currentUser = { id: "user-1", role: "Purchaser" };
 
+/** Emulate expense, ticket and review queries against the test's in-memory database. */
 async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
@@ -147,6 +148,7 @@ async function send(server, method, url, body) {
   return { status: res.status, body: await res.json().catch(() => ({})) };
 }
 
+/** Build a valid Purchaser expense submission with optional field overrides. */
 function submission(overrides = {}) {
   return {
     projectID: "project-1",

@@ -2,14 +2,13 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: var(--space-4);
-  margin-bottom: var(--space-5);
 }
 
 .summary-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-5);
 }
 .summary-card h3 {
   font-size: var(--text-sm);
@@ -38,4 +37,24 @@
 }
 .summary-card-negative .summary-card-value {
   color: var(--color-danger);
+}
+
+.summary-card-bar {
+  display: block;
+  height: 6px;
+  margin-top: var(--space-2);
+  border-radius: 3px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.summary-card-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-brick);
+}
+.summary-card-negative .summary-card-bar {
+  background: #ffffff;
+}
+.summary-card-negative .summary-card-bar-fill {
+  background: var(--color-danger);
 }

@@ -54,6 +54,7 @@ function makeId() { return Math.random().toString(36).slice(2, 10); }
 // Case, spacing and punctuation don't count as renaming a line.
 function simpleText(text: string) { return text.toLowerCase().replace(/[^a-z0-9]+/g, ""); }
 
+/** Review and correct scanned receipt fields and totals before ticket linking or allocation. */
 export default function ReviewScreen() {
   const { draft, setOcrResult } = useExpenseDraft();
   const result = draft.ocrResult;
@@ -176,13 +177,14 @@ export default function ReviewScreen() {
 
   // Any edit counts as the user checking that row, so its OCR flag goes.
   function updateItem(id: string, patch: Partial<LineItem>) { setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch, ocr: undefined } : it))); }
-  // Qty, unit price and amount move together (lib/line-math.ts).
+  /** Synchronize a line's numeric fields and clear its OCR warning after an edit. */
   function editItem(id: string, field: "quantity" | "price" | "unitPrice", value: string) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...editLine(it, field, value), ocr: undefined } : it)));
   }
   function removeItem(id: string) { setItems((prev) => prev.filter((it) => it.id !== id)); }
   function addItem() { setItems((prev) => [...prev, { id: makeId(), name: "", quantity: "", price: "" }]); }
 
+  /** Reconcile totals by adding an adjustment or applying a discount with a review note. */
   function applyFix() {
     if (!fix) return;
     if (fix.kind === "add") {
@@ -223,6 +225,7 @@ export default function ReviewScreen() {
     }
   }
 
+  /** Validate receipt fields and totals, save corrected values and open the next flow step. */
   function handleContinue() {
     setTriedContinue(true);
     if (vendorMissing) return Alert.alert("Vendor required", "Enter the store or vendor name.");

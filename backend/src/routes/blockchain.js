@@ -78,9 +78,24 @@ router.get("/alerts", requireRole("General Manager", "System Administrator"), as
 });
 
 // GET /project/:projectId — summary for the project's Financial/Blockchain section.
-// GM/PM only (same access level as viewing the project itself).
+// GM, or the PM who manages the project (same access as viewing the project).
 router.get("/project/:projectId", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
+        // A Project Manager may only see the projects they manage (audit S2).
+        const projectResult = await query(
+            "SELECT projectmanagerid FROM Projects WHERE projectid = $1::uuid",
+            [req.params.projectId]
+        );
+        if (projectResult.rowCount === 0) {
+            const err = new Error("Project not found");
+            err.status = 404;
+            throw err;
+        }
+        if (req.user.role === "Project Manager" && projectResult.rows[0].projectmanagerid !== req.user.id) {
+            const err = new Error("You do not have access to this project");
+            err.status = 403;
+            throw err;
+        }
         const logsResult = await query(
             `SELECT bl.txhash, bl.blocknumber, bl.timestamp, bl.expenseid, bl.validatornodecount,
                     e.vendorname, e.amount, e.blockchainstatus

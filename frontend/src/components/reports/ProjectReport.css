@@ -1,0 +1,148 @@
+.pr-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.pr-name {
+  font-size: var(--text-lg);
+  margin: 0;
+}
+.pr-dates {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+.pr-hero-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .pr-hero-body {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+}
+
+/* The ring is plain CSS (a conic gradient), so it needs no chart library. */
+.pr-ring {
+  --pr-color: var(--color-brick);
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background: conic-gradient(var(--pr-color) var(--pr-fill), var(--color-surface-muted) 0);
+  display: grid;
+  place-items: center;
+}
+.pr-ring-over {
+  --pr-color: var(--color-danger);
+}
+.pr-ring-inner {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.pr-ring-inner strong {
+  font-size: var(--text-xl, 1.75rem);
+  line-height: 1.1;
+  color: var(--color-ink);
+}
+.pr-ring-over .pr-ring-inner strong {
+  color: var(--color-danger);
+}
+.pr-ring-inner span {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+
+.pr-stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-5) var(--space-6);
+}
+.pr-stats dt {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+.pr-stats dd {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.pr-stats small {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+.pr-negative dd {
+  color: var(--color-danger);
+}
+
+.pr-split {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  margin-bottom: var(--space-4);
+}
+.pr-split-earlier {
+  background: #3a3631;
+}
+.pr-split-period {
+  background: var(--color-brick);
+}
+.pr-split-left {
+  background: var(--color-surface-muted);
+}
+.pr-split-over .pr-split-period {
+  background: var(--color-danger);
+}
+.pr-legend {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+.pr-legend li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.pr-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+.pr-legend-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pr-tax {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+.pr-tax strong {
+  color: var(--color-ink);
+}
