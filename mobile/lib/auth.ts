@@ -2,6 +2,7 @@ import { router } from "expo-router";
 
 import { API_URL, setAuthToken } from "@/constants/api";
 import { initDb, kvDelete, kvGet, kvSet } from "@/lib/sync/db";
+import { fetchWithRetry } from "@/lib/retry-fetch";
 
 export type MobileRole = "Purchaser" | "Site Manager";
 
@@ -90,7 +91,9 @@ export function consumeSessionExpired() {
 }
 
 export async function login(email: string, password: string): Promise<MobileSession> {
-  const response = await fetch(`${API_URL}/api/auth/login`, {
+  // Signing in twice is harmless, so a dead reused connection is retried
+  // instead of telling the user to check their internet.
+  const response = await fetchWithRetry(`${API_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: email.trim(), password }),
