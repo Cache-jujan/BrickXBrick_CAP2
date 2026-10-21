@@ -6,6 +6,7 @@ import {
   markAllNotificationsRead,
 } from "../../api/notificationsApi";
 import { extractErrorMessage } from "../../api/client";
+import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
 import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
 import { useAuth } from "../../context/AuthContext";
@@ -38,6 +39,25 @@ export function NotificationsPage() {
   }, []);
 
   useEffect(() => { load(tab); }, [tab, load]);
+
+  // Another tab marked notifications read, or this tab was just switched back
+  // to: quietly refetch the first page (no loading flash).
+  useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = subscribeNotificationsRefresh(() => {
+      listMyNotifications({ unreadOnly: tab === "Unread", limit: PAGE_SIZE })
+        .then((rows) => {
+          if (cancelled) return;
+          setItems(rows);
+          setHasMore(rows.length === PAGE_SIZE);
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [tab]);
 
   function loadMore() {
     const oldest = items[items.length - 1];
