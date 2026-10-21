@@ -1,10 +1,10 @@
 // Colors and fonts shared by the Purchaser screens (and the Site Manager ones
 // that reuse them). Keep every hex value here, not in the screens.
 export const COLORS = {
-  primary: "#C4500B", primaryTint: "#FFF1E6", primaryTintText: "#8F3705",
-  bg: "#F6F7F9", card: "#FFFFFF",
-  // The warm page background the Site Manager screens already use.
-  bgWarm: "#F8F1E8", border: "#E6E8EC", inputBorder: "#C9CDD5",
+  primary: "#BF4307", primaryTint: "#FFF1E6", primaryTintText: "#8F3705",
+  bg: "#F8F1E8", card: "#FFFFFF",
+  // bgWarm is the same cream as bg (kept so older screens still compile).
+  bgWarm: "#F8F1E8", border: "#ECE6DC", inputBorder: "#C9CDD5",
   heading: "#1B1F27", muted: "#565D6B",
   success: "#1B5E32", successBg: "#E3F4E8",
   // Amber: a field the scan wasn't sure about, or a notice to read.

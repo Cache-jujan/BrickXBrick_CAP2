@@ -22,7 +22,7 @@ import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { NotificationBell } from "@/components/notification-bell";
+import { MainHeader } from "@/components/main-header";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
@@ -84,11 +84,6 @@ function greeting() {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function initialsOf(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "SM";
 }
 
 function formatDay(value?: string | null) {
@@ -279,34 +274,12 @@ export default function SiteManagerHomeScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
+      <MainHeader tagline="Build Today. Better Tomorrow." />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTasks(true)} />}
       >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={styles.brandRow}>
-            <BrickLogo />
-            <View>
-              <Text style={styles.brandName}>Brick x Brick</Text>
-              <Text style={styles.brandTagline}>Build Today. Better Tomorrow.</Text>
-            </View>
-          </View>
-          <View style={styles.headerActions}>
-            <NotificationBell color={COLORS.heading} />
-            <Pressable
-              onPress={() => router.push("/settings")}
-              style={styles.avatar}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Open settings"
-            >
-              <Text style={styles.avatarText}>{initialsOf(session.user.name)}</Text>
-            </Pressable>
-          </View>
-        </View>
-
         <Text style={styles.title}>{greeting()}, {firstName}.</Text>
         <Text style={styles.subtitle}>Here’s your task progress.</Text>
 
@@ -539,25 +512,6 @@ export default function SiteManagerHomeScreen() {
   );
 }
 
-function BrickLogo() {
-  return (
-    <View style={styles.logo}>
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBrick, { width: 14 }]} />
-        <View style={[styles.logoBrick, { width: 22 }]} />
-      </View>
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBrick, { width: 22 }]} />
-        <View style={[styles.logoBrick, { width: 14 }]} />
-      </View>
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBrick, { width: 14 }]} />
-        <View style={[styles.logoBrick, { width: 22 }]} />
-      </View>
-    </View>
-  );
-}
-
 function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
   const badge = badgeFor(task, today);
   const right = rightLabel(task);
@@ -608,21 +562,11 @@ const CARD = { backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius:
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.bgWarm, flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 28 },
+  content: { paddingHorizontal: 20, paddingBottom: 28 },
   pressed: { opacity: 0.78 },
 
-  headerRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  brandRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  brandName: { color: COLORS.heading, fontSize: 18, fontFamily: FONT.extrabold },
-  brandTagline: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, marginTop: 1 },
-  logo: { gap: 2 },
-  logoRow: { flexDirection: "row", gap: 2 },
-  logoBrick: { backgroundColor: COLORS.primary, borderRadius: 2, height: 8 },
-  headerActions: { alignItems: "center", flexDirection: "row", gap: 12 },
-  avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: 44, justifyContent: "center", width: 44 },
-  avatarText: { color: "#FFFFFF", fontSize: 16, fontFamily: FONT.extrabold },
 
-  title: { color: "#111827", fontSize: 30, fontFamily: FONT.extrabold, letterSpacing: -0.5, marginTop: 22 },
+  title: { color: COLORS.heading, fontSize: 28, fontFamily: FONT.extrabold, letterSpacing: -0.5, marginTop: 14 },
   subtitle: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 15, marginTop: 6 },
   offlineNote: { fontFamily: FONT.regular, backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
 

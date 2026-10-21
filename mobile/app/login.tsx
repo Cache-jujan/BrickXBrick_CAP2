@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Linking,
   Pressable,
   StyleSheet,
@@ -16,6 +15,8 @@ import { fieldErrorStyle } from "@/components/blocked-reasons";
 import { isNetworkError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { KeyboardScreen } from "@/components/screen";
+import { AppButton } from "@/components/app-button";
+import { BrandMark } from "@/components/brand-mark";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
@@ -85,20 +86,19 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardScreen contentContainerStyle={styles.content}>
+    <KeyboardScreen topColor={COLORS.primary} contentContainerStyle={styles.content}>
       {/* The sign-in form scrolls and rides above the keyboard (components/screen). */}
       <>
-          <View style={styles.brandRow}>
-            <View style={styles.brandMark}>
-              <View style={styles.brandBrickLight} />
-              <View style={styles.brandBrickDark} />
-              <View style={styles.brandBrickAccent} />
-            </View>
-            <Text style={styles.brandName}>Brick x Brick</Text>
+          <View style={styles.hero}>
+            <BrandMark size={64} white />
+            <Text style={styles.heroName}>Brick x Brick</Text>
+            <Text style={styles.heroTagline}>Build Today. Better Tomorrow.</Text>
           </View>
 
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.subtitle}>Use your Brick x Brick account.</Text>
+          <View style={styles.heading}>
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>Sign in with your Brick x Brick account.</Text>
+          </View>
 
           <View style={styles.card}>
             <View style={styles.fieldGroup}>
@@ -156,15 +156,9 @@ export default function LoginScreen() {
               </Text>
             ) : null}
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={submitting}
-              onPress={handleLogin}
-              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, submitting && styles.buttonDisabled]}
-            >
-              {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Sign in</Text>}
-            </Pressable>
+            <AppButton label="Sign in" onPress={handleLogin} loading={submitting} />
           </View>
+          <Text style={styles.footer}>© 2026 Brick x Brick</Text>
       </>
     </KeyboardScreen>
   );
@@ -173,16 +167,16 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  content: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 22 },
-  brandMark: { height: 22, width: 28, position: "relative" },
-  brandBrickLight: { position: "absolute", left: 0, top: 0, width: 13, height: 9, borderRadius: 2, backgroundColor: "#D8C7AA" },
-  brandBrickDark: { position: "absolute", right: 0, top: 0, width: 13, height: 9, borderRadius: 2, backgroundColor: COLORS.heading },
-  brandBrickAccent: { position: "absolute", left: 7, bottom: 0, width: 13, height: 9, borderRadius: 2, backgroundColor: COLORS.primary },
-  brandName: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold, letterSpacing: 0.3 },
+  content: { flexGrow: 1, paddingBottom: 24 },
+  // Orange block at the top: the mark, the name and the tagline.
+  hero: { alignItems: "center", backgroundColor: COLORS.primary, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, paddingBottom: 56, paddingTop: 36 },
+  heroName: { color: "#FFFFFF", fontFamily: FONT.extrabold, fontSize: 26, letterSpacing: -0.3, marginTop: 16 },
+  heroTagline: { color: "rgba(255,255,255,0.85)", fontFamily: FONT.medium, fontSize: 13, marginTop: 4 },
+  heading: { marginHorizontal: 24, marginTop: 26 },
   title: { color: COLORS.heading, fontSize: 26, fontFamily: FONT.extrabold, letterSpacing: -0.5 },
   subtitle: { color: COLORS.muted, fontSize: 14, fontFamily: FONT.regular, marginTop: 4 },
-  card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 18, borderWidth: 1, marginTop: 18, padding: 18, shadowColor: "#5B4636", shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  footer: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, marginTop: 22, textAlign: "center" },
+  card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 20, borderWidth: 1, marginHorizontal: 24, marginTop: 18, padding: 18, shadowColor: "#5B4636", shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
   fieldGroup: { marginBottom: 16 },
   labelRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 7 },
   label: { color: COLORS.heading, fontSize: 13, fontFamily: FONT.bold, marginBottom: 7 },
@@ -193,8 +187,4 @@ const styles = StyleSheet.create({
   forgotPasswordText: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
   input: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 15, fontFamily: FONT.regular, paddingHorizontal: 14, paddingVertical: 13 },
   error: { color: COLORS.errorText, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, marginBottom: 14 },
-  button: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 13, justifyContent: "center", minHeight: 50, paddingHorizontal: 18 },
-  buttonPressed: { opacity: 0.86 },
-  buttonDisabled: { opacity: 0.65 },
-  buttonText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONT.extrabold },
 });

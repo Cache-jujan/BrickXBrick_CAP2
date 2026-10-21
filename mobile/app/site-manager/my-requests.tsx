@@ -20,7 +20,7 @@ import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
-import { FlowHeader } from "@/components/flow-header";
+import { MainHeader } from "@/components/main-header";
 import { Screen } from "@/components/screen";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
@@ -142,7 +142,7 @@ export default function MyRequestsScreen() {
   return (
     <Screen
       background={COLORS.bgWarm}
-      header={<FlowHeader title="My requests" fallback="/site-manager" />}
+      header={<MainHeader title="My requests" />}
       footer={<SmBottomBar />}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -302,7 +302,7 @@ function RequestCard({
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 25, fontWeight: "800", marginTop: 6, marginBottom: 12 },

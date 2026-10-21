@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, Tabs } from "expo-router";
 
-import { AppHeader } from "@/components/app-header";
+import { MainHeader } from "@/components/main-header";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -19,9 +19,9 @@ export default function TabLayout() {
   const isPurchaser = session.user.role === "Purchaser";
 
   return (
-    <View style={{ flex: 1, backgroundColor: isPurchaser ? COLORS.bg : COLORS.bgWarm }}>
-      <SafeAreaView edges={["top"]} style={{ backgroundColor: COLORS.card }}>
-        <AppHeader />
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <SafeAreaView edges={["top"]} style={{ backgroundColor: COLORS.bg }}>
+        <MainHeader />
       </SafeAreaView>
 
       <Tabs

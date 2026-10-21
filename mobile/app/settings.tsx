@@ -3,6 +3,7 @@ import { Redirect, router } from "expo-router";
 import Constants from "expo-constants";
 
 import { FlowHeader } from "@/components/flow-header";
+import { MainHeader } from "@/components/main-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { getSession, logout } from "@/lib/auth";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
@@ -40,7 +41,10 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen header={<FlowHeader title="Settings" />} footer={<SmBottomBar />}>
+    <Screen
+      header={role === "Site Manager" ? <MainHeader title="Settings" hideAvatar /> : <FlowHeader title="Settings" />}
+      footer={<SmBottomBar />}
+    >
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.profileRow}>
