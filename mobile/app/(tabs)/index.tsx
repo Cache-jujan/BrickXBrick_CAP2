@@ -251,7 +251,11 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.safeArea, isSiteManager && styles.safeAreaWarm]} edges={[]}>
       <View style={styles.header}>
         <Text style={styles.brand}>{isSiteManager ? "Ready for expense capture" : "Requests"}</Text>
-        {isSiteManager ? null : <Text style={styles.subtitle}>Materials assigned to you</Text>}
+        <Text style={styles.subtitle}>
+          {isSiteManager
+            ? "Material requests that have been bought. Tap one to photograph its receipt and log the expense."
+            : "Materials assigned to you"}
+        </Text>
       </View>
 
       <View style={styles.filterRow}>

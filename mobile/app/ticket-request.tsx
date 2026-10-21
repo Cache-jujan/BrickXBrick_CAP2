@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -31,6 +31,7 @@ import { DateField } from "@/components/date-field";
 import { parseNeededBy, toDateText } from "@/lib/needed-by";
 import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
+import { AppButton } from "@/components/app-button";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -130,6 +131,8 @@ export default function TicketRequestScreen() {
   const cardSeq = useRef(1);
   const [openKey, setOpenKey] = useState<string | null>(null); // "<cardId>:<field>"
   const [submitting, setSubmitting] = useState(false);
+  // Set once the tickets were sent: shows the confirmation screen instead of the form.
+  const [sent, setSent] = useState<{ count: number; resubmit: boolean } | null>(null);
 
   useEffect(() => {
     if (!session || session.user.role !== "Site Manager") return;
@@ -299,16 +302,7 @@ export default function TicketRequestScreen() {
     setError(null);
     try {
       const created = await createTicketsBatch(withResubmitTag(cards.map(buildPayload)));
-      Alert.alert(
-        resubmitOf ? "Request resubmitted" : created.length > 1 ? "Tickets submitted" : "Ticket submitted",
-        resubmitOf
-          ? "Your updated request was sent to your Project Manager."
-          : `${created.length} ${created.length > 1 ? "requests were" : "request was"} sent to your Project Manager.`,
-        // A ternary between two route literals widens to plain `string` (not
-        // the literal union typed routes expects — see the comment on
-        // lib/notificationMeta.ts's routeForNotification for the same issue).
-        [{ text: "Done", onPress: () => router.replace((resubmitOf ? "/site-manager/my-requests" : "/site-manager") as Href) }]
-      );
+      setSent({ count: created.length, resubmit: !!resubmitOf });
     } catch (err) {
       setError(plainError(err, "Unable to submit the tickets."));
     } finally {
@@ -317,6 +311,39 @@ export default function TicketRequestScreen() {
   }
 
   // ---- Render states ----------------------------------------------------
+  // The confirmation is a screen, not a pop-up: it can't be dismissed by
+  // accident, and the form is gone so the same tickets can't be sent twice.
+  if (sent) {
+    return (
+      <Shell>
+        <View style={styles.sentCard} accessibilityLiveRegion="polite">
+          <View style={styles.sentIcon}><Text style={styles.sentIconText}>✓</Text></View>
+          <Text style={styles.sentTitle}>
+            {sent.resubmit ? "Request resubmitted" : sent.count > 1 ? "Tickets submitted" : "Ticket submitted"}
+          </Text>
+          <Text style={styles.sentBody}>
+            {sent.resubmit
+              ? "Your updated request was sent to your Project Manager."
+              : `${sent.count} ${sent.count > 1 ? "requests were" : "request was"} sent to your Project Manager. You'll be notified when they review it.`}
+          </Text>
+        </View>
+        <AppButton label="View my requests" onPress={() => router.replace("/site-manager/my-requests" as Href)} style={styles.sentButton} />
+        <AppButton
+          label={sent.resubmit ? "Back to tasks" : "Request another ticket"}
+          variant="secondary"
+          onPress={() => {
+            if (sent.resubmit) { router.replace("/site-manager" as Href); return; }
+            setCards([emptyCard("c1")]);
+            cardSeq.current = 1;
+            setTriedSubmit(false);
+            setSent(null);
+          }}
+          style={styles.sentButton}
+        />
+      </Shell>
+    );
+  }
+
   if (loading) {
     return (
       <Shell>
@@ -586,10 +613,14 @@ function Dropdown({ label, value, open, disabled, onToggle, options }: { label: 
         <Text style={styles.chevron}>{open ? "⌃" : "⌄"}</Text>
       </Pressable>
       {open && (
+        // A ScrollView, because the BOM can have far more items than fit in
+        // 260px. nestedScrollEnabled lets Android scroll it inside the page.
         <View style={styles.dropdownMenu}>
-          {options.length === 0 ? <Text style={styles.noOptions}>No options available</Text> : options.map((option) => (
-            <Pressable key={option.key} onPress={option.onPress} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{option.label}</Text></Pressable>
-          ))}
+          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+            {options.length === 0 ? <Text style={styles.noOptions}>No options available</Text> : options.map((option) => (
+              <Pressable key={option.key} onPress={option.onPress} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{option.label}</Text></Pressable>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -656,6 +687,12 @@ const styles = StyleSheet.create({
   input: { backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11 },
   multilineInput: { minHeight: 84, textAlignVertical: "top" },
 
+  sentCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 20, borderWidth: 1, gap: 8, marginTop: 18, paddingHorizontal: 24, paddingVertical: 32 },
+  sentIcon: { alignItems: "center", backgroundColor: COLORS.successBg, borderRadius: 32, height: 64, justifyContent: "center", width: 64 },
+  sentIconText: { color: COLORS.success, fontSize: 32, fontWeight: "800" },
+  sentTitle: { color: COLORS.heading, fontSize: 21, fontWeight: "800", marginTop: 6, textAlign: "center" },
+  sentBody: { color: COLORS.muted, fontSize: 14, lineHeight: 21, textAlign: "center" },
+  sentButton: { marginTop: 12 },
   addButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderStyle: "dashed", borderWidth: 1.5, marginTop: 16, paddingVertical: 14 },
   addButtonText: { color: COLORS.primary, fontSize: 14, fontWeight: "800" },
   submitButton: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 14, marginTop: 20, paddingVertical: 15 },
