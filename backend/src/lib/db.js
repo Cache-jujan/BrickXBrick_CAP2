@@ -13,6 +13,16 @@ types.setTypeParser(TIMESTAMP_WITHOUT_TZ, (value) =>
 defaults.parseInputDatesAsUTC = true;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+// Neon closes idle connections (the free compute also suspends after a few
+// minutes of quiet). node-postgres reports that as an 'error' event on the
+// pool, and an 'error' event with no listener crashes the whole Node process
+// ("Connection terminated unexpectedly"). The dead connection is already
+// dropped from the pool and the next query opens a fresh one, so log it and
+// carry on.
+pool.on("error", (err) => {
+  console.error("Idle database connection lost (it will reconnect on the next query):", err.message);
+});
+
 async function query(text, params) { return pool.query(text, params); }
 
 async function withTransaction(fn) {
