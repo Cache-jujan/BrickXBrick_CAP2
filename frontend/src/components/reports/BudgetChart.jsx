@@ -5,7 +5,7 @@ import "./BudgetChart.css";
 // Register only what a bar chart needs, so the bundle stays small.
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
 
-const USED_COLOR = "#ec7a1c"; // brand orange
+const USED_COLOR = "#bf4307"; // brand orange
 const OVER_COLOR = "#a23223"; // danger: spend above budget
 const TRACK_COLOR = "#efece6"; // the empty part of each bar (up to 100%)
 
