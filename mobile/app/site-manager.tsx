@@ -24,6 +24,8 @@ import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { NotificationBell } from "@/components/notification-bell";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
+import { AppButton } from "@/components/app-button";
+import { StateCard } from "@/components/state-card";
 
 type FilterKey = "Today" | "Upcoming" | "Past due" | "Completed";
 type CompletedView = "Recent" | "Archive";
@@ -328,14 +330,13 @@ export default function SiteManagerHomeScreen() {
           </View>
         </View>
 
-        <Pressable
-          style={styles.ticketButton}
+        <AppButton
+          label="＋  Request a ticket"
+          variant="secondary"
           onPress={() => router.push("/ticket-request")}
-          accessibilityRole="button"
           accessibilityLabel="Request ticket"
-        >
-          <Text style={styles.ticketButtonText}>＋  Request a ticket</Text>
-        </Pressable>
+          style={styles.ticketButton}
+        />
 
         {/* Filter tabs */}
         <View style={styles.filterBar}>
@@ -362,25 +363,16 @@ export default function SiteManagerHomeScreen() {
         </View>
 
         {shownError ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Couldn’t load tasks</Text>
-            <Text style={styles.errorBody}>{shownError}</Text>
-            <Pressable onPress={() => loadTasks()} style={styles.retryButton}>
-              <Text style={styles.retryText}>Try again</Text>
-            </Pressable>
+          <View style={styles.stateWrap}>
+            <StateCard kind="error" title="Couldn’t load tasks" body={shownError} onRetry={() => loadTasks()} />
           </View>
         ) : loading ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator color={COLORS.primary} />
-            <Text style={styles.emptyBody}>Loading assigned tasks…</Text>
+          <View style={styles.stateWrap}>
+            <StateCard kind="loading" body="Loading assigned tasks…" />
           </View>
         ) : tasks.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}>
-              <Text style={styles.emptyIconText}>✓</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No tasks to show yet</Text>
-            <Text style={styles.emptyBody}>Tasks assigned to you by your Project Manager will appear here.</Text>
+          <View style={styles.stateWrap}>
+            <StateCard kind="empty" title="No tasks to show yet" body="Tasks assigned to you by your Project Manager will appear here." />
           </View>
         ) : (
           <>
@@ -492,16 +484,17 @@ export default function SiteManagerHomeScreen() {
             )}
 
             {visibleTasks.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>{showingArchive ? "Nothing archived yet" : `Nothing in “${filter}”`}</Text>
-                <Text style={styles.emptyBody}>
-                  {showingArchive
+              <StateCard
+                kind="empty"
+                title={showingArchive ? "Nothing archived yet" : `Nothing in “${filter}”`}
+                body={
+                  showingArchive
                     ? `Completed tasks move here ${ARCHIVE_AFTER_DAYS} days after they’re finished.`
                     : projectFilter
                     ? "No tasks match this project and filter."
-                    : "No tasks match this filter right now."}
-                </Text>
-              </View>
+                    : "No tasks match this filter right now."
+                }
+              />
             ) : showingArchive ? (
               archiveGroups.map((group) => (
                 <View key={group.label} style={styles.archiveGroup}>
@@ -591,7 +584,7 @@ const DUE_TONE = StyleSheet.create({
 const CARD = { backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1 } as const;
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
+  safeArea: { backgroundColor: COLORS.bgWarm, flex: 1 },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 28 },
   pressed: { opacity: 0.78 },
@@ -624,8 +617,8 @@ const styles = StyleSheet.create({
   progressFill: { backgroundColor: COLORS.success, borderRadius: 4, height: 8 },
   progressAlert: { color: "#D92D20", fontSize: 12, fontWeight: "700", marginTop: 8 },
 
-  ticketButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderWidth: 1.5, marginTop: 12, paddingVertical: 11 },
-  ticketButtonText: { color: COLORS.primary, fontSize: 13, fontWeight: "800" },
+  ticketButton: { marginTop: 12 },
+  stateWrap: { marginTop: 20 },
 
   filterBar: { ...CARD, flexDirection: "row", marginTop: 14, overflow: "hidden" },
   filterItem: { alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingVertical: 12 },
@@ -678,14 +671,4 @@ const styles = StyleSheet.create({
   taskRight: { alignItems: "flex-end", gap: 6 },
   taskDue: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
 
-  emptyCard: { ...CARD, alignItems: "center", paddingHorizontal: 24, paddingVertical: 28 },
-  emptyIcon: { alignItems: "center", backgroundColor: COLORS.successBg, borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
-  emptyIconText: { color: COLORS.success, fontSize: 23, fontWeight: "800" },
-  emptyTitle: { color: COLORS.heading, fontSize: 16, fontWeight: "800", marginTop: 4 },
-  emptyBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7, textAlign: "center" },
-  errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, marginTop: 20, padding: 16 },
-  errorTitle: { color: "#B42318", fontSize: 15, fontWeight: "800" },
-  errorBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
-  retryButton: { alignSelf: "flex-start", backgroundColor: COLORS.primary, borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 9 },
-  retryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
 });
