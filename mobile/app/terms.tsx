@@ -8,6 +8,8 @@ import { FlowHeader } from "@/components/flow-header";
 import { API_URL, authHeaders } from "@/constants/api";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { getSession, homeRouteFor, logout, setTermsAccepted } from "@/lib/auth";
+import { loadLegalDocs } from "@/lib/cached-api";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { plainError } from "@/lib/sync/messages";
 
 type Section = { heading: string; paragraphs?: string[]; bullets?: string[] };
@@ -54,6 +56,8 @@ export default function TermsScreen() {
   const [data, setData] = useState<LegalData | null>(null);
   const [docId, setDocId] = useState("terms");
   const [loadError, setLoadError] = useState("");
+  // Set when the text on screen is the copy saved on this phone.
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -63,9 +67,13 @@ export default function TermsScreen() {
   const load = useCallback(async () => {
     setLoadError("");
     try {
-      const res = await fetch(`${API_URL}/api/legal`);
-      if (!res.ok) throw new Error();
-      setData(await res.json());
+      const result = await loadLegalDocs<LegalData>(async () => {
+        const res = await fetch(`${API_URL}/api/legal`);
+        if (!res.ok) throw new Error(`Failed to load the terms (${res.status})`);
+        return (await res.json()) as LegalData;
+      });
+      setData(result.data);
+      setSavedAt(result.fromCache ? result.savedAt : null);
     } catch {
       setLoadError("Couldn't load the terms. Check your connection and try again.");
     }
@@ -145,6 +153,10 @@ export default function TermsScreen() {
             </View>
           ) : null}
         </View>
+
+        {savedAt ? (
+          <Text style={styles.savedNote}>Offline · showing the terms saved {savedAtLabel(savedAt)}.</Text>
+        ) : null}
 
         {loadError ? (
           <View style={styles.errorCard}>
@@ -397,6 +409,7 @@ const styles = StyleSheet.create({
   nextTitle: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading },
   endNote: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center" },
 
+  savedNote: { backgroundColor: COLORS.amberBannerFill, borderRadius: 10, color: COLORS.amberBannerText, fontFamily: FONT.medium, fontSize: 12, marginBottom: 10, padding: 10 },
   errorCard: {
     backgroundColor: COLORS.card,
     borderRadius: 14,

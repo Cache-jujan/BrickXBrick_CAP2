@@ -356,7 +356,7 @@ export default function SiteManagerHomeScreen() {
 
         <AppButton
           label="＋  Request a ticket"
-          variant="secondary"
+          variant="primary"
           onPress={() => router.push("/ticket-request")}
           accessibilityLabel="Request ticket"
           style={styles.ticketButton}
@@ -376,7 +376,7 @@ export default function SiteManagerHomeScreen() {
               >
                 <IconSymbol name={icon} size={22} color={active ? "#FFFFFF" : tint} />
                 <View style={styles.filterLabelRow}>
-                  <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{label}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.filterLabel, active && styles.filterLabelActive]}>{label}</Text>
                   <View style={[styles.filterCount, { backgroundColor: active ? "rgba(255,255,255,0.28)" : countBg }]}>
                     <Text style={[styles.filterCountText, { color: active ? "#FFFFFF" : tint }]}>{counts[key]}</Text>
                   </View>
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   heroCard: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 24, flexDirection: "row", gap: 16, marginTop: 18, padding: 16 },
   dateTile: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 18, justifyContent: "center", paddingVertical: 10, width: 84 },
   dateWeekday: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 1.2 },
-  dateDay: { color: COLORS.heading, fontSize: 36, fontFamily: FONT.extrabold, lineHeight: 42 },
+  dateDay: { color: COLORS.heading, fontSize: 36, fontFamily: FONT.extrabold, lineHeight: 44, includeFontPadding: false },
   dateMonth: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 1.2 },
   heroLabel: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: FONT.medium },
   heroValue: { color: "#FFFFFF", fontSize: 21, fontFamily: FONT.extrabold, marginTop: 3 },
@@ -656,8 +656,8 @@ const styles = StyleSheet.create({
   filterItem: { alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingVertical: 12 },
   filterItemDivider: { borderLeftColor: "#ECE6DC", borderLeftWidth: 1 },
   filterItemActive: { backgroundColor: COLORS.primary, borderRadius: 14, margin: 3 },
-  filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4 },
-  filterLabel: { color: COLORS.heading, fontSize: 11, fontFamily: FONT.bold },
+  filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4, maxWidth: "100%", paddingHorizontal: 2 },
+  filterLabel: { flexShrink: 1, color: COLORS.heading, fontSize: 11, fontFamily: FONT.bold },
   filterLabelActive: { color: "#FFFFFF" },
   filterCount: { borderRadius: 10, minWidth: 18, paddingHorizontal: 5, paddingVertical: 1 },
   filterCountText: { fontSize: 11, fontFamily: FONT.extrabold, textAlign: "center" },

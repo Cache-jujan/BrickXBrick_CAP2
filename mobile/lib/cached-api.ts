@@ -6,7 +6,9 @@ import { getSession } from "@/lib/auth";
 import {
   fetchActiveProjects,
   fetchAllAssignedTickets,
+  fetchApprovedVendors,
   fetchAssignedTasks,
+  fetchBomItems,
   fetchMyExpenses,
   fetchNotifications,
   fetchOpenRequests,
@@ -29,3 +31,9 @@ export const loadMyExpenses = () => cached("expenses:mine", fetchMyExpenses);
 export const loadScans = () => cached("receipts:scans", fetchScans);
 export const loadNotifications = (unreadOnly: boolean, limit: number) =>
   cached(`notifications:${unreadOnly ? "unread" : "all"}:${limit}`, () => fetchNotifications({ unreadOnly, limit }));
+
+// Ticket request: the lists behind the form's pickers, so it opens offline.
+export const loadApprovedVendors = () => cached("vendors:approved", fetchApprovedVendors);
+export const loadBomItems = (projectId: string) => cached(`bom:items:${projectId}`, () => fetchBomItems(projectId));
+// Terms and Privacy text (public endpoint, so the caller supplies the request).
+export const loadLegalDocs = <T,>(load: () => Promise<T>) => cached("legal:docs", load);

@@ -14,16 +14,14 @@ import type { Href } from "expo-router";
 import { COLORS } from "@/constants/expense-flow-colors";
 import {
   createTicketsBatch,
-  fetchActiveProjects,
-  fetchApprovedVendors,
-  fetchBomItems,
-  fetchSubmittedTicket,
   type ApprovedVendor,
   type BomItem,
   type Project,
   type Ticket,
   type TicketInput,
 } from "@/lib/api";
+import { loadActiveProjects, loadApprovedVendors, loadAssignedTickets, loadBomItems } from "@/lib/cached-api";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
@@ -32,6 +30,7 @@ import { parseNeededBy, toDateText } from "@/lib/needed-by";
 import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
+import type { Cached } from "@/lib/cached-api";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -132,20 +131,35 @@ export default function TicketRequestScreen() {
   const [openKey, setOpenKey] = useState<string | null>(null); // "<cardId>:<field>"
   const [submitting, setSubmitting] = useState(false);
   // Set once the tickets were sent: shows the confirmation screen instead of the form.
+  // Set when a list on this form is the copy saved on this phone (offline).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  function noteSaved(...results: Cached<unknown>[]) {
+    const old = results.find((r) => r.fromCache);
+    if (old) setSavedAt((prev) => prev ?? old.savedAt);
+  }
   const [sent, setSent] = useState<{ count: number; resubmit: boolean } | null>(null);
 
   useEffect(() => {
     if (!session || session.user.role !== "Site Manager") return;
-    const loads: Promise<unknown>[] = [fetchActiveProjects(), fetchApprovedVendors()];
-    if (resubmitId) loads.push(fetchSubmittedTicket(resubmitId));
+    // Every list comes from the server when it can be reached, otherwise from
+    // the copy saved on this phone, so the form still opens offline.
+    const loads: Promise<unknown>[] = [loadActiveProjects(), loadApprovedVendors()];
+    if (resubmitId) loads.push(loadAssignedTickets("Site Manager"));
     Promise.all(loads)
       .then((results) => {
-        const projectList = results[0] as Project[];
-        const vendorList = results[1] as ApprovedVendor[];
+        const projectResult = results[0] as Cached<Project[]>;
+        const vendorResult = results[1] as Cached<ApprovedVendor[]>;
+        const projectList = projectResult.data;
+        const vendorList = vendorResult.data;
         setProjects(projectList);
         setVendors(vendorList);
+        noteSaved(projectResult, vendorResult);
         if (resubmitId) {
-          const orig = results[2] as Ticket;
+          const orig = (results[2] as Cached<Ticket[]>).data.find((t) => t.ticketid === resubmitId);
+          if (!orig) {
+            setError("The request you're resubmitting is no longer available.");
+            return;
+          }
           if (orig.status !== "Rejected") {
             setError("This request has already been handled — only rejected requests can be resubmitted.");
             return;
@@ -169,8 +183,12 @@ export default function TicketRequestScreen() {
     if (!project) return;
     let cancelled = false;
     setBomLoading(true);
-    fetchBomItems(project.projectid)
-      .then((items) => { if (!cancelled) setBomItems(items); })
+    loadBomItems(project.projectid)
+      .then((result) => {
+        if (cancelled) return;
+        setBomItems(result.data);
+        noteSaved(result);
+      })
       .catch(() => { if (!cancelled) setBomItems([]); })
       .finally(() => { if (!cancelled) setBomLoading(false); });
     return () => { cancelled = true; };
@@ -404,6 +422,12 @@ export default function TicketRequestScreen() {
             Fix what's needed below, then resubmit — this will replace the rejected request.
           </Text>
         </View>
+      )}
+
+      {savedAt && (
+        <Text style={styles.offlineNote}>
+          Offline · the project, BOM and vendor lists are the copy saved {savedAtLabel(savedAt)}. You can fill the form, but submitting needs a connection.
+        </Text>
       )}
 
       {error && <Text style={styles.errorText}>{error}</Text>}
@@ -643,6 +667,7 @@ const styles = StyleSheet.create({
   title: { color: COLORS.heading, fontSize: 27, fontWeight: "800", marginTop: 7 },
   subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 6 },
   errorText: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 12, borderWidth: 1, color: "#B42318", lineHeight: 19, marginTop: 14, padding: 12 },
+  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
   rejectionBanner: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 14 },
   rejectionBannerLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
   rejectionBannerReason: { color: COLORS.heading, fontSize: 14, fontWeight: "600", lineHeight: 20 },
