@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,7 +11,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -33,7 +31,8 @@ import { describeLoadError, describeRejection, isNetworkError, plainError } from
 import { useNetwork } from "@/lib/sync/network-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
-import { BackButton } from "@/components/back-button";
+import { FlowHeader } from "@/components/flow-header";
+import { KeyboardScreen } from "@/components/screen";
 
 // A row of offline_task_updates (lib/sync/db.js).
 type QueuedUpdate = {
@@ -292,21 +291,14 @@ export default function SiteManagerTaskDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <KeyboardScreen
+      scrollRef={scrollRef}
+      background={COLORS.bgWarm}
+      header={<FlowHeader variant="bar" title="Task details" fallback="/site-manager" />}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTask(true)} />}
+    >
       <Stack.Screen options={{ headerShown: false }} />
-      {/* Lifts the form above the keyboard so the Note box is never covered. */}
-      <KeyboardAvoidingView style={styles.keyboardAvoider} behavior="padding">
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadTask(true)} />
-        }
-      >
-        <BackButton />
-
         {loading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={COLORS.primary} />
@@ -494,9 +486,7 @@ export default function SiteManagerTaskDetailScreen() {
             )}
           </>
         ) : null}
-      </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </KeyboardScreen>
   );
 }
 

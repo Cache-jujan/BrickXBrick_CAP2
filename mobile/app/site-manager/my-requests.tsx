@@ -9,7 +9,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useOnNewNotifications } from "@/lib/notification-events";
 
@@ -21,7 +20,8 @@ import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
-import { BackButton } from "@/components/back-button";
+import { FlowHeader } from "@/components/flow-header";
+import { Screen } from "@/components/screen";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -140,14 +140,12 @@ export default function MyRequestsScreen() {
   }
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.safeArea}>
+    <Screen
+      background={COLORS.bgWarm}
+      header={<FlowHeader title="My requests" fallback="/site-manager" />}
+      footer={<SmBottomBar />}
+    >
       <Stack.Screen options={{ headerShown: false }} />
-
-      <View style={styles.topBar}>
-        <BackButton />
-        <Text style={styles.eyebrow}>SITE MANAGER</Text>
-        <Text style={styles.title}>My requests</Text>
-      </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chipsRow}>
         {FILTERS.map((key) => (
@@ -210,8 +208,7 @@ export default function MyRequestsScreen() {
           )}
         />
       )}
-      <SmBottomBar />
-    </SafeAreaView>
+    </Screen>
   );
 }
 

@@ -8,7 +8,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router } from "expo-router";
 
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -24,7 +23,8 @@ import { describeLoadError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { loadNotifications } from "@/lib/cached-api";
-import { BackButton } from "@/components/back-button";
+import { FlowHeader } from "@/components/flow-header";
+import { Screen } from "@/components/screen";
 
 const PAGE_SIZE = 30;
 type Tab = "Unread" | "All";
@@ -110,20 +110,21 @@ export default function NotificationsScreen() {
   const grouped = groupByDay(items);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <Screen
+      header={
+        <FlowHeader
+          title="Notifications"
+          right={
+            (tab === "All" && unreadCount > 0) || (tab === "Unread" && items.length > 0) ? (
+              <Pressable onPress={handleMarkAllRead} hitSlop={8} style={styles.markAllButton} accessibilityRole="button">
+                <Text style={styles.markAll}>Mark all read</Text>
+              </Pressable>
+            ) : null
+          }
+        />
+      }
+    >
       <Stack.Screen options={{ headerShown: false }} />
-
-      <View style={styles.topBar}>
-        <BackButton />
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Notifications</Text>
-          {((tab === "All" && unreadCount > 0) || (tab === "Unread" && items.length > 0)) && (
-            <Pressable onPress={handleMarkAllRead}>
-              <Text style={styles.markAll}>Mark all read</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
 
       <View style={styles.tabsRow}>
         {(["Unread", "All"] as Tab[]).map((key) => (
@@ -214,12 +215,13 @@ export default function NotificationsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
+  markAllButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: COLORS.heading, fontSize: 25, fontFamily: FONT.extrabold },

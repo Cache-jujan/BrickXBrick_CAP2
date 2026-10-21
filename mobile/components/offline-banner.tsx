@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,28 +14,55 @@ const TONES = {
   sent: { bg: COLORS.success, icon: "checkmark.circle.fill" },
 } as const;
 
-// 10.2 — one strip at the top of every screen for the offline queue:
-// offline (with the queued count), sending, waiting to retry, or all sent.
-// The rule for which one shows lives in lib/sync/messages.js (bannerState).
-export function OfflineBanner() {
+// Which strip (if any) is showing right now. The rule lives in
+// lib/sync/messages.js (bannerState); this only adds the timer that hides the
+// "all sent" strip once it has been up long enough.
+function useBannerState() {
   const { isOnline, pendingCount, syncing, lastSync } = useNetwork();
-  const insets = useSafeAreaInsets();
   const [, setTick] = useState(0);
 
-  // Re-render once the "all sent" strip has been up long enough, so it hides.
   useEffect(() => {
     if (!lastSync) return;
     const timer = setTimeout(() => setTick((t) => t + 1), SENT_SHOW_MS + 100);
     return () => clearTimeout(timer);
   }, [lastSync]);
 
-  const state = bannerState({ isOnline, pendingCount, syncing, lastSync, now: Date.now() });
+  return bannerState({ isOnline, pendingCount, syncing, lastSync, now: Date.now() });
+}
+
+// Lets screens know whether the strip is showing and how tall it is. While it
+// shows it already clears the status bar, so a screen under it must not add
+// its own top inset (hooks/use-screen-insets.ts) and the keyboard wrapper does
+// not need it.
+type Strip = { visible: boolean; height: number; setHeight: (height: number) => void };
+const StripContext = createContext<Strip>({ visible: false, height: 0, setHeight: () => {} });
+
+export function OfflineStripProvider({ children }: { children: React.ReactNode }) {
+  const state = useBannerState();
+  const [height, setHeight] = useState(0);
+  const value = useMemo<Strip>(() => ({ visible: !!state, height: state ? height : 0, setHeight }), [state, height]);
+  return <StripContext.Provider value={value}>{children}</StripContext.Provider>;
+}
+
+export function useOfflineStrip() {
+  const { visible, height } = useContext(StripContext);
+  return { visible, height };
+}
+
+// 10.2 — one strip at the top of every screen for the offline queue:
+// offline (with the queued count), sending, waiting to retry, or all sent.
+export function OfflineBanner() {
+  const state = useBannerState();
+  const insets = useSafeAreaInsets();
+  const { setHeight } = useContext(StripContext);
+
   if (!state) return null;
   const tone = TONES[state.tone as keyof typeof TONES];
 
   return (
     <View
       style={[styles.banner, { backgroundColor: tone.bg, paddingTop: insets.top + 6 }]}
+      onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >

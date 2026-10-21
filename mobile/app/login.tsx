@@ -1,24 +1,21 @@
 import { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { fieldErrorStyle } from "@/components/blocked-reasons";
 import { isNetworkError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
+import { KeyboardScreen } from "@/components/screen";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
@@ -88,12 +85,9 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <KeyboardScreen contentContainerStyle={styles.content}>
+      {/* The sign-in form scrolls and rides above the keyboard (components/screen). */}
+      <>
           <View style={styles.brandRow}>
             <View style={styles.brandMark}>
               <View style={styles.brandBrickLight} />
@@ -171,9 +165,8 @@ export default function LoginScreen() {
               {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Sign in</Text>}
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </>
+    </KeyboardScreen>
   );
 }
 

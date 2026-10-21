@@ -5,7 +5,7 @@ import * as SplashScreen from "expo-splash-screen";
 
 import { ExpenseDraftProvider } from "@/lib/expense-draft-context";
 import { NetworkProvider } from "@/lib/sync/network-context";
-import { OfflineBanner } from "@/components/offline-banner";
+import { OfflineBanner, OfflineStripProvider } from "@/components/offline-banner";
 import { NotificationToast } from "@/components/notification-toast";
 import { nextRouteAfterLogin, restoreSession } from "@/lib/auth";
 import {
@@ -51,16 +51,18 @@ export default function RootLayout() {
   return (
     <ExpenseDraftProvider>
       <NetworkProvider>
-        <View style={{ flex: 1 }}>
-          <OfflineBanner />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="expense" />
-            <Stack.Screen name="oauth/callback" />
-            <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
-          </Stack>
-          <NotificationToast />
-        </View>
+        <OfflineStripProvider>
+          <View style={{ flex: 1 }}>
+            <OfflineBanner />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="expense" />
+              <Stack.Screen name="oauth/callback" />
+              <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
+            </Stack>
+            <NotificationToast />
+          </View>
+        </OfflineStripProvider>
       </NetworkProvider>
     </ExpenseDraftProvider>
   );

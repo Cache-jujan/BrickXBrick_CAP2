@@ -1,5 +1,4 @@
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import Constants from "expo-constants";
 
@@ -8,6 +7,8 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { getSession, logout } from "@/lib/auth";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { Screen } from "@/components/screen";
+import { SmBottomBar } from "@/components/sm-bottom-bar";
 
 const DANGER = COLORS.errorText;
 
@@ -39,8 +40,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Settings" />
+    <Screen header={<FlowHeader title="Settings" />} footer={<SmBottomBar />}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.profileRow}>
@@ -72,7 +72,7 @@ export default function SettingsScreen() {
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 

@@ -3,13 +3,11 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import type { Href } from "expo-router";
 
@@ -31,7 +29,8 @@ import { plainError } from "@/lib/sync/messages";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { DateField } from "@/components/date-field";
 import { parseNeededBy, toDateText } from "@/lib/needed-by";
-import { BackButton } from "@/components/back-button";
+import { FlowHeader } from "@/components/flow-header";
+import { KeyboardScreen } from "@/components/screen";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -566,13 +565,14 @@ export default function TicketRequestScreen() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <BackButton />
-        <Text style={styles.eyebrow}>SITE MANAGER</Text>
-        {children}
-      </ScrollView>
-    </SafeAreaView>
+    <KeyboardScreen
+      background={COLORS.bgWarm}
+      header={<FlowHeader variant="bar" title="Ticket request" fallback="/site-manager" />}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={styles.eyebrow}>SITE MANAGER</Text>
+      {children}
+    </KeyboardScreen>
   );
 }
 
