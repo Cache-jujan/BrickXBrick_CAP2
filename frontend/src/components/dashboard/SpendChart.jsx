@@ -8,8 +8,8 @@ import {
 Chart.register(BarController, BarElement, LineController, LineElement, PointElement,
   CategoryScale, LinearScale, Tooltip, Legend, Filler);
 
-const SPEND_COLOR = "#ec7a1c"; // brand orange
-const CUMULATIVE_COLOR = "#c9631a";
+const SPEND_COLOR = "#bf4307"; // brand orange
+const CUMULATIVE_COLOR = "#9e3505";
 const REMAINING_COLOR = "#44443b";
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 

@@ -24,7 +24,7 @@
     rgba(48, 47, 40, 0.95) 0%,
     rgba(48, 41, 30, 0.88) 34%,
     rgba(144, 70, 44, 0.55) 70%,
-    rgba(236, 122, 28, 0.28) 100%
+    rgba(191, 67, 7, 0.28) 100%
   );
 }
 
@@ -126,8 +126,8 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  border: 1px solid rgba(236, 122, 28, 0.5);
-  background: rgba(236, 122, 28, 0.12);
+  border: 1px solid rgba(191, 67, 7, 0.5);
+  background: rgba(191, 67, 7, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -330,8 +330,6 @@
   width: 36px;
   height: 36px;
   border-radius: var(--radius-sm);
-  background: #fff;
-  padding: 3px;
 }
 
 .login-brand-name {

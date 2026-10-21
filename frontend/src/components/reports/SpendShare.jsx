@@ -5,7 +5,7 @@ import "./SpendShare.css";
 Chart.register(ArcElement, DoughnutController, Tooltip);
 
 // Same order as the projects, so a colour means the same project everywhere on the page.
-export const SHARE_COLORS = ["#ec7a1c", "#3a3631", "#2f7f86", "#d9a441", "#9b6b8f"];
+export const SHARE_COLORS = ["#bf4307", "#3a3631", "#2f7f86", "#d9a441", "#9b6b8f"];
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 
 /**
