@@ -6,7 +6,7 @@ export function BrandMark({ size = 32, style, white }: { size?: number; style?: 
   return (
     <Image
       source={white ? require("../assets/images/logo-mark-white.png") : require("../assets/images/logo-mark.png")}
-      style={[{ height: size, aspectRatio: 600 / 514 }, style]}
+      style={[{ height: size, width: Math.round((size * 600) / 514) }, style]}
       resizeMode="contain"
       accessibilityIgnoresInvertColors
       accessibilityLabel="Brick x Brick"

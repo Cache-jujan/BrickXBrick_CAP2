@@ -1,12 +1,5 @@
 import { useRef, useState } from "react";
-import {
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
@@ -86,105 +79,100 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardScreen topColor={COLORS.primary} contentContainerStyle={styles.content}>
-      {/* The sign-in form scrolls and rides above the keyboard (components/screen). */}
-      <>
-          <View style={styles.hero}>
-            <BrandMark size={64} white />
-            <Text style={styles.heroName}>Brick x Brick</Text>
-            <Text style={styles.heroTagline}>Build Today. Better Tomorrow.</Text>
-          </View>
+    <KeyboardScreen background={COLORS.bg} contentContainerStyle={styles.content}>
+      {/* A faint, oversized copy of the mark behind the form. Decoration only. */}
+      <BrandMark size={300} style={styles.watermark} />
 
-          <View style={styles.heading}>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in with your Brick x Brick account.</Text>
-          </View>
+      <View style={styles.brand}>
+        <BrandMark size={34} />
+        <Text style={styles.brandName}>Brick x Brick</Text>
+      </View>
 
-          <View style={styles.card}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email address</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect={false}
-                keyboardType="email-address"
-                placeholder="you@gmail.com"
-                placeholderTextColor={COLORS.muted}
-                style={[styles.input, missing.email && !email.trim() && fieldErrorStyle]}
-                value={email}
-                onChangeText={setEmail}
-                returnKeyType="next"
-                submitBehavior="submit"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-              />
-            </View>
+      <View style={styles.heading}>
+        <Text style={styles.title}>Sign in</Text>
+        <Text style={styles.subtitle}>Use the account your System Administrator created for you.</Text>
+      </View>
 
-            <View style={styles.fieldGroup}>
-              <View style={styles.labelRow}>
-                <Text style={[styles.label, styles.labelInRow]}>Password</Text>
-                <Pressable onPress={() => setShowPassword((value) => !value)} hitSlop={8}>
-                  <Text style={styles.showPassword}>{showPassword ? "Hide" : "Show"}</Text>
-                </Pressable>
-              </View>
-              <TextInput
-                ref={passwordRef}
-                autoCapitalize="none"
-                autoComplete="password"
-                autoCorrect={false}
-                placeholder="Enter your password"
-                placeholderTextColor={COLORS.muted}
-                secureTextEntry={!showPassword}
-                style={[styles.input, missing.password && !password && fieldErrorStyle]}
-                value={password}
-                onChangeText={setPassword}
-                onSubmitEditing={handleLogin}
-                returnKeyType="go"
-              />
-            </View>
+      <View style={styles.form}>
+        <Text style={styles.label}>Email address</Text>
+        <TextInput
+          autoCapitalize="none"
+          autoComplete="email"
+          autoCorrect={false}
+          keyboardType="email-address"
+          placeholder="you@gmail.com"
+          placeholderTextColor={COLORS.muted}
+          style={[styles.input, missing.email && !email.trim() && fieldErrorStyle]}
+          value={email}
+          onChangeText={setEmail}
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+        />
 
-            <Pressable
-              accessibilityRole="link"
-              onPress={handleForgotPassword}
-              style={styles.forgotPasswordButton}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </Pressable>
+        <Text style={[styles.label, styles.labelSpaced]}>Password</Text>
+        <View style={[styles.inputRow, missing.password && !password && fieldErrorStyle]}>
+          <TextInput
+            ref={passwordRef}
+            autoCapitalize="none"
+            autoComplete="password"
+            autoCorrect={false}
+            placeholder="Enter your password"
+            placeholderTextColor={COLORS.muted}
+            secureTextEntry={!showPassword}
+            style={styles.inputInRow}
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={handleLogin}
+            returnKeyType="go"
+          />
+          <Pressable
+            onPress={() => setShowPassword((value) => !value)}
+            hitSlop={8}
+            style={styles.showButton}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+          >
+            <Text style={styles.showPassword}>{showPassword ? "Hide" : "Show"}</Text>
+          </Pressable>
+        </View>
 
-            {error ? (
-              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                {error}
-              </Text>
-            ) : null}
+        <Pressable accessibilityRole="link" onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
+          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+        </Pressable>
 
-            <AppButton label="Sign in" onPress={handleLogin} loading={submitting} />
-          </View>
-          <Text style={styles.footer}>© 2026 Brick x Brick</Text>
-      </>
+        {error ? (
+          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            {error}
+          </Text>
+        ) : null}
+
+        <AppButton label="Sign in" onPress={handleLogin} loading={submitting} />
+      </View>
+
+      <Text style={styles.footer}>© 2026 Brick x Brick</Text>
     </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  content: { flexGrow: 1, paddingBottom: 24 },
-  // Orange block at the top: the mark, the name and the tagline.
-  hero: { alignItems: "center", backgroundColor: COLORS.primary, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, paddingBottom: 56, paddingTop: 36 },
-  heroName: { color: "#FFFFFF", fontFamily: FONT.extrabold, fontSize: 26, letterSpacing: -0.3, marginTop: 16 },
-  heroTagline: { color: "rgba(255,255,255,0.85)", fontFamily: FONT.medium, fontSize: 13, marginTop: 4 },
-  heading: { marginHorizontal: 24, marginTop: 26 },
-  title: { color: COLORS.heading, fontSize: 26, fontFamily: FONT.extrabold, letterSpacing: -0.5 },
-  subtitle: { color: COLORS.muted, fontSize: 14, fontFamily: FONT.regular, marginTop: 4 },
-  footer: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, marginTop: 22, textAlign: "center" },
-  card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 20, borderWidth: 1, marginHorizontal: 24, marginTop: 18, padding: 18, shadowColor: "#5B4636", shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
-  fieldGroup: { marginBottom: 16 },
-  labelRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 7 },
-  label: { color: COLORS.heading, fontSize: 13, fontFamily: FONT.bold, marginBottom: 7 },
-  // Inside labelRow the row already provides the bottom spacing.
-  labelInRow: { marginBottom: 0 },
-  showPassword: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.bold },
-  forgotPasswordButton: { alignSelf: "flex-end", marginBottom: 16, marginTop: -8 },
-  forgotPasswordText: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
-  input: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 15, fontFamily: FONT.regular, paddingHorizontal: 14, paddingVertical: 13 },
-  error: { color: COLORS.errorText, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, marginBottom: 14 },
+  content: { flexGrow: 1, overflow: "hidden", paddingBottom: 24, paddingHorizontal: 24, paddingTop: 20 },
+  watermark: { opacity: 0.07, position: "absolute", right: -90, top: 70 },
+  brand: { alignItems: "center", flexDirection: "row", gap: 10 },
+  brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
+  heading: { marginTop: 56 },
+  title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 38, letterSpacing: -1 },
+  subtitle: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 300 },
+  form: { marginTop: 36 },
+  label: { color: COLORS.heading, fontFamily: FONT.bold, fontSize: 13, marginBottom: 8 },
+  labelSpaced: { marginTop: 18 },
+  input: { backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, color: COLORS.heading, fontFamily: FONT.regular, fontSize: 16, minHeight: 54, paddingHorizontal: 16 },
+  inputRow: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, flexDirection: "row", minHeight: 54 },
+  inputInRow: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 16, minHeight: 52, paddingHorizontal: 16 },
+  showButton: { justifyContent: "center", minHeight: 52, paddingHorizontal: 16 },
+  showPassword: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
+  forgotPasswordButton: { alignSelf: "flex-start", marginBottom: 22, marginTop: 14, minHeight: 32, justifyContent: "center" },
+  forgotPasswordText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
+  error: { backgroundColor: COLORS.errorFill, borderRadius: 10, color: COLORS.errorText, fontFamily: FONT.medium, fontSize: 13, lineHeight: 19, marginBottom: 14, padding: 12 },
+  footer: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, marginTop: "auto", paddingTop: 28, textAlign: "center" },
 });
