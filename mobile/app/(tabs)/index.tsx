@@ -35,6 +35,8 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { ExpenseActions } from "@/components/expense-actions";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { AppButton } from "@/components/app-button";
+import { StateCard } from "@/components/state-card";
 import { StatusChip, type ChipTone } from "@/components/status-chip";
 import { ScannedReceipts } from "@/components/scanned-receipts";
 import { RejectedExpenses } from "@/components/rejected-expenses";
@@ -244,12 +246,16 @@ export default function HomeScreen() {
   }
 
   return (
-    // The tab layout's header already sits under the status bar. The Purchaser
-    // has a tab bar below, so only a Site Manager needs the bottom inset.
-    <SafeAreaView style={styles.safeArea} edges={isSiteManager ? ["bottom"] : []}>
+    // The tab layout's header already sits under the status bar and its tab bar
+    // (Purchaser) or Site Manager bottom bar handles the bottom inset.
+    <SafeAreaView style={[styles.safeArea, isSiteManager && styles.safeAreaWarm]} edges={[]}>
       <View style={styles.header}>
         <Text style={styles.brand}>{isSiteManager ? "Ready for expense capture" : "Requests"}</Text>
-        {isSiteManager ? null : <Text style={styles.subtitle}>Materials assigned to you</Text>}
+        <Text style={styles.subtitle}>
+          {isSiteManager
+            ? "Material requests that have been bought. Tap one to photograph its receipt and log the expense."
+            : "Materials assigned to you"}
+        </Text>
       </View>
 
       <View style={styles.filterRow}>
@@ -277,7 +283,9 @@ export default function HomeScreen() {
       )}
 
       {shownError && (
-        <Text style={styles.errorText}>{shownError}</Text>
+        <View style={styles.stateWrap}>
+          <StateCard kind="error" title="Couldn’t load requests" body={shownError} onRetry={load} />
+        </View>
       )}
 
       <FlatList
@@ -322,9 +330,15 @@ export default function HomeScreen() {
         }
         ListEmptyComponent={
           !loading ? (
-            <Text style={styles.emptyText}>
-              No tickets in this view yet.
-            </Text>
+            <StateCard
+              kind="empty"
+              title={isSiteManager ? "No requests ready for expense capture" : "No requests in this view"}
+              body={
+                isSiteManager
+                  ? "Material requests appear here once the purchase is done. Pull down to refresh."
+                  : "Requests assigned to you will appear here. Pull down to refresh."
+              }
+            />
           ) : null
         }
         renderItem={({ item }) => {
@@ -372,11 +386,12 @@ export default function HomeScreen() {
               {isSiteManager ? (
                 <View style={styles.cardFooterRow}>
                   <Text style={styles.cardFooterText}>{new Date(item.createdat).toLocaleDateString()}</Text>
-                  <View style={[styles.addBtn, alreadyCaptured && styles.addBtnSecondary]}>
-                    <Text style={[styles.addBtnText, alreadyCaptured && styles.addBtnTextSecondary]}>
-                      {alreadyCaptured ? "+ Add another expense" : "+ Add Expense"}
-                    </Text>
-                  </View>
+                  <AppButton
+                    label={alreadyCaptured ? "+ Add another expense" : "+ Add Expense"}
+                    variant={alreadyCaptured ? "secondary" : "primary"}
+                    fit
+                    onPress={() => openTicket(item)}
+                  />
                 </View>
               ) : (
                 <View style={styles.cardFooterRow}>
@@ -425,6 +440,8 @@ const URGENCY_COLOR = {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
+  safeAreaWarm: { backgroundColor: COLORS.bgWarm },
+  stateWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   flex: { flex: 1 },
   pressed: { opacity: 0.85 },
 
@@ -439,10 +456,8 @@ const styles = StyleSheet.create({
   pillTextActive: { color: COLORS.primaryTintText, fontFamily: FONT.bold },
 
   offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
-  errorText: { color: COLORS.errorText, paddingHorizontal: 16, marginBottom: 8, fontSize: 12, fontFamily: FONT.medium },
 
   list: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
-  emptyText: { textAlign: "center", color: COLORS.muted, marginTop: 40, fontFamily: FONT.regular },
 
   listHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
   sectionTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading },
@@ -465,8 +480,4 @@ const styles = StyleSheet.create({
   urgencyText: { flexShrink: 1, fontSize: 12, fontFamily: FONT.bold },
   estimate: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.primary },
 
-  addBtn: { minHeight: MIN_TAP, justifyContent: "center", borderWidth: 1, borderColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 12 },
-  addBtnText: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.primary },
-  addBtnSecondary: { borderColor: COLORS.border, backgroundColor: COLORS.bg },
-  addBtnTextSecondary: { color: COLORS.muted },
 });

@@ -9,7 +9,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useOnNewNotifications } from "@/lib/notification-events";
 
@@ -21,7 +20,8 @@ import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
-import { BackButton } from "@/components/back-button";
+import { MainHeader } from "@/components/main-header";
+import { Screen } from "@/components/screen";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -140,14 +140,12 @@ export default function MyRequestsScreen() {
   }
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.safeArea}>
+    <Screen
+      background={COLORS.bgWarm}
+      header={<MainHeader title="My requests" />}
+      footer={<SmBottomBar />}
+    >
       <Stack.Screen options={{ headerShown: false }} />
-
-      <View style={styles.topBar}>
-        <BackButton />
-        <Text style={styles.eyebrow}>SITE MANAGER</Text>
-        <Text style={styles.title}>My requests</Text>
-      </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chipsRow}>
         {FILTERS.map((key) => (
@@ -210,8 +208,7 @@ export default function MyRequestsScreen() {
           )}
         />
       )}
-      <SmBottomBar />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
@@ -305,7 +302,7 @@ function RequestCard({
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 25, fontWeight: "800", marginTop: 6, marginBottom: 12 },

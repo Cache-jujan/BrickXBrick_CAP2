@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import * as Crypto from "expo-crypto";
@@ -16,6 +16,7 @@ import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { formatPeso } from "@/lib/money";
+import { KeyboardAvoider } from "@/components/keyboard-avoider";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 
@@ -179,7 +180,7 @@ export default function LinkScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader title={draft.resubmit ? "Resubmit expense" : "Link & submit"} caption="Step 3 of 3" />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoider style={styles.flex}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           {ticket ? (
             <View style={styles.ticketCard}>
@@ -220,7 +221,7 @@ export default function LinkScreen() {
             <Text style={styles.submitButtonText}>{submitLabel}</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
 
       <LoadingOverlay visible={submitting} message={draft.resubmit ? "Resubmitting expense…" : isOnline ? "Submitting expense…" : "Saving offline…"} detail={isOnline ? "Running the screening checks." : "Queuing on this device."} />
     </SafeAreaView>

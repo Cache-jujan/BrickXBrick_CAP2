@@ -4,7 +4,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
-import { fetchActiveProjects, fetchAllAssignedTickets, type Ticket } from "@/lib/api";
+import type { Ticket } from "@/lib/api";
+import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
+import { StateCard } from "@/components/state-card";
+import { plainError } from "@/lib/sync/messages";
+import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { formatPeso } from "@/lib/money";
 
@@ -19,21 +23,26 @@ export function ExpenseActions() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Choice[]>([]);
+  // Set when the list is the copy saved on this phone (offline).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   async function openPicker() {
     setPickerOpen(true);
     setLoading(true);
     setError(null);
     try {
-      const [tickets, projects] = await Promise.all([fetchAllAssignedTickets("Purchaser"), fetchActiveProjects()]);
-      const names = new Map(projects.map((p) => [p.projectid, p.name]));
+      // Server first, otherwise the copy saved on this phone, so the picker still opens offline.
+      const [ticketResult, projectResult] = await Promise.all([loadAssignedTickets("Purchaser"), loadActiveProjects()]);
+      const names = new Map(projectResult.data.map((p) => [p.projectid, p.name]));
+      const old = [ticketResult, projectResult].find((r) => r.fromCache);
+      setSavedAt(old ? old.savedAt : null);
       setChoices(
-        tickets
+        ticketResult.data
           .filter((t) => t.status === "Acknowledged")
           .map((ticket) => ({ ticket, projectName: names.get(ticket.projectid) ?? "Unknown project" }))
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't load your requests.");
+      setError(plainError(err, "Couldn't load your requests."));
     } finally {
       setLoading(false);
     }
@@ -79,13 +88,20 @@ export function ExpenseActions() {
           {loading ? (
             <ActivityIndicator style={styles.center} color={COLORS.primary} />
           ) : error ? (
-            <Text style={[styles.note, { color: COLORS.errorText }]}>{error}</Text>
+            <View style={styles.list}>
+              <StateCard kind="error" title="Couldn’t load your requests" body={error} onRetry={openPicker} />
+            </View>
           ) : (
             <FlatList
               data={choices}
               keyExtractor={(c) => c.ticket.ticketid}
               contentContainerStyle={styles.list}
-              ListEmptyComponent={<Text style={styles.note}>No requests are waiting to be purchased.</Text>}
+              ListHeaderComponent={
+                savedAt ? <Text style={styles.savedNote}>Offline · showing the requests saved {savedAtLabel(savedAt)}.</Text> : null
+              }
+              ListEmptyComponent={
+                <StateCard kind="empty" title="Nothing to purchase yet" body="Requests assigned to you will appear here once they are ready to be bought." />
+              }
               renderItem={({ item }) => (
                 <Pressable onPress={() => choose(item)} style={({ pressed }) => [styles.choice, pressed && styles.pressed]} accessibilityRole="button">
                   <Text style={styles.choiceTitle} numberOfLines={2}>{item.ticket.subject}</Text>
@@ -117,6 +133,7 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.primary },
   center: { marginTop: 40 },
   list: { padding: 16, gap: 10 },
+  savedNote: { backgroundColor: COLORS.amberBannerFill, borderRadius: 10, color: COLORS.amberBannerText, fontFamily: FONT.medium, fontSize: 12, marginBottom: 4, padding: 10 },
   note: { textAlign: "center", marginTop: 40, paddingHorizontal: 16, fontSize: 14, fontFamily: FONT.regular, color: COLORS.muted },
   choice: { minHeight: MIN_TAP, backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14 },
   choiceTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },

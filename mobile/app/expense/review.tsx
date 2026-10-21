@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -40,6 +39,7 @@ import {
 import { loadOpenRequests } from "@/lib/cached-api";
 import { BlockedReasons } from "@/components/blocked-reasons";
 import { phoneReachableUrl } from "@/lib/receipt-scans";
+import { KeyboardAvoider } from "@/components/keyboard-avoider";
 
 const RED = COLORS.errorText;
 const AMBER = COLORS.amberText;
@@ -273,7 +273,7 @@ export default function ReviewScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader title="Review receipt" caption={isSplit ? "Split receipt · Step 2 of 3" : "Step 2 of 3"} step={{ current: 2, total: 3 }} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoider style={styles.flex}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft.resubmit && (
             <View style={styles.rejectBox}>
@@ -462,7 +462,7 @@ export default function ReviewScreen() {
             <Text style={styles.submitButtonText}>Looks correct, continue</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
 
       <RequestedMaterialPicker
         visible={pickingItemId !== null}

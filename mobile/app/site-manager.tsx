@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, useFocusEffect } from "expo-router";
 
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { type AssignedTask } from "@/lib/api";
 import { loadAssignedTasks } from "@/lib/cached-api";
 import { getSession } from "@/lib/auth";
@@ -22,8 +22,10 @@ import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { NotificationBell } from "@/components/notification-bell";
+import { MainHeader } from "@/components/main-header";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
+import { AppButton } from "@/components/app-button";
+import { StateCard } from "@/components/state-card";
 
 type FilterKey = "Today" | "Upcoming" | "Past due" | "Completed";
 type CompletedView = "Recent" | "Archive";
@@ -82,11 +84,6 @@ function greeting() {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function initialsOf(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "SM";
 }
 
 function formatDay(value?: string | null) {
@@ -261,36 +258,28 @@ export default function SiteManagerHomeScreen() {
   const dateWeekday = now.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
   const dateMonth = now.toLocaleDateString(undefined, { month: "short" }).toUpperCase();
 
+  // Monday to Sunday of this week, with a dot on days that have an open deadline.
+  const openDueDays = new Set(open.map(dueDay).filter((d): d is number => d !== null));
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+    return {
+      time: d.getTime(),
+      name: d.toLocaleDateString(undefined, { weekday: "short" }),
+      num: d.getDate(),
+      isToday: d.getTime() === today,
+      hasDue: openDueDays.has(d.getTime()),
+    };
+  });
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
+      <MainHeader tagline="Build Today. Better Tomorrow." />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTasks(true)} />}
       >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={styles.brandRow}>
-            <BrickLogo />
-            <View>
-              <Text style={styles.brandName}>Brick x Brick</Text>
-              <Text style={styles.brandTagline}>Build Today. Better Tomorrow.</Text>
-            </View>
-          </View>
-          <View style={styles.headerActions}>
-            <NotificationBell color={COLORS.heading} />
-            <Pressable
-              onPress={() => router.push("/settings")}
-              style={styles.avatar}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Open settings"
-            >
-              <Text style={styles.avatarText}>{initialsOf(session.user.name)}</Text>
-            </Pressable>
-          </View>
-        </View>
-
         <Text style={styles.title}>{greeting()}, {firstName}.</Text>
         <Text style={styles.subtitle}>Here’s your task progress.</Text>
 
@@ -304,38 +293,47 @@ export default function SiteManagerHomeScreen() {
           </Text>
         )}
 
-        {/* Date + progress card */}
-        <View style={styles.progressCard}>
+        {/* Today summary */}
+        <View style={styles.heroCard}>
           <View style={styles.dateTile} accessibilityLabel={now.toDateString()}>
             <Text style={styles.dateWeekday}>{dateWeekday}</Text>
             <Text style={styles.dateDay}>{now.getDate()}</Text>
             <Text style={styles.dateMonth}>{dateMonth}</Text>
           </View>
-          <View style={styles.progressDivider} />
           <View style={styles.progressBody}>
-            <Text style={styles.progressLabel}>Task Progress</Text>
-            <Text style={styles.progressValue}>
+            <Text style={styles.heroLabel}>Task progress</Text>
+            <Text style={styles.heroValue}>
               {loading ? "…" : `${doneCount} of ${activeTasks.length} tasks`}
             </Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${percent}%` }]} />
             </View>
             {!loading && (dueToday > 0 || overdue > 0) && (
-              <Text style={styles.progressAlert}>
+              <Text style={styles.heroAlert}>
                 {[overdue > 0 && `${overdue} overdue`, dueToday > 0 && `${dueToday} due today`].filter(Boolean).join(" · ")}
               </Text>
             )}
           </View>
         </View>
 
-        <Pressable
-          style={styles.ticketButton}
+        {/* This week: a dot marks a day with an open deadline */}
+        <View style={styles.weekRow} accessibilityLabel="This week">
+          {weekDays.map((day) => (
+            <View key={day.time} style={[styles.weekDay, day.isToday && styles.weekDayToday]}>
+              <Text style={[styles.weekName, day.isToday && styles.weekTextToday]}>{day.name}</Text>
+              <Text style={[styles.weekNum, day.isToday && styles.weekTextToday]}>{day.num}</Text>
+              <View style={[styles.weekDot, day.hasDue && { backgroundColor: day.isToday ? "#FFFFFF" : COLORS.primary }]} />
+            </View>
+          ))}
+        </View>
+
+        <AppButton
+          label="＋  Request a ticket"
+          variant="primary"
           onPress={() => router.push("/ticket-request")}
-          accessibilityRole="button"
           accessibilityLabel="Request ticket"
-        >
-          <Text style={styles.ticketButtonText}>＋  Request a ticket</Text>
-        </Pressable>
+          style={styles.ticketButton}
+        />
 
         {/* Filter tabs */}
         <View style={styles.filterBar}>
@@ -351,7 +349,7 @@ export default function SiteManagerHomeScreen() {
               >
                 <IconSymbol name={icon} size={22} color={active ? "#FFFFFF" : tint} />
                 <View style={styles.filterLabelRow}>
-                  <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{label}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.filterLabel, active && styles.filterLabelActive]}>{label}</Text>
                   <View style={[styles.filterCount, { backgroundColor: active ? "rgba(255,255,255,0.28)" : countBg }]}>
                     <Text style={[styles.filterCountText, { color: active ? "#FFFFFF" : tint }]}>{counts[key]}</Text>
                   </View>
@@ -362,25 +360,16 @@ export default function SiteManagerHomeScreen() {
         </View>
 
         {shownError ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Couldn’t load tasks</Text>
-            <Text style={styles.errorBody}>{shownError}</Text>
-            <Pressable onPress={() => loadTasks()} style={styles.retryButton}>
-              <Text style={styles.retryText}>Try again</Text>
-            </Pressable>
+          <View style={styles.stateWrap}>
+            <StateCard kind="error" title="Couldn’t load tasks" body={shownError} onRetry={() => loadTasks()} />
           </View>
         ) : loading ? (
-          <View style={styles.emptyCard}>
-            <ActivityIndicator color={COLORS.primary} />
-            <Text style={styles.emptyBody}>Loading assigned tasks…</Text>
+          <View style={styles.stateWrap}>
+            <StateCard kind="loading" body="Loading assigned tasks…" />
           </View>
         ) : tasks.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}>
-              <Text style={styles.emptyIconText}>✓</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No tasks to show yet</Text>
-            <Text style={styles.emptyBody}>Tasks assigned to you by your Project Manager will appear here.</Text>
+          <View style={styles.stateWrap}>
+            <StateCard kind="empty" title="No tasks to show yet" body="Tasks assigned to you by your Project Manager will appear here." />
           </View>
         ) : (
           <>
@@ -420,11 +409,9 @@ export default function SiteManagerHomeScreen() {
                           <Text style={styles.projectIconText}>▦</Text>
                         </View>
                         <View style={styles.projectBody}>
-                          <View style={styles.projectTopRow}>
-                            <Text style={styles.projectName} numberOfLines={1}>{project.name}</Text>
-                            <View style={[styles.pill, { backgroundColor: tone.bg }]}>
-                              <Text style={[styles.pillText, { color: tone.fg }]}>{tone.label}</Text>
-                            </View>
+                          <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
+                          <View style={[styles.pill, styles.projectPill, { backgroundColor: tone.bg }]}>
+                            <Text style={[styles.pillText, { color: tone.fg }]}>{tone.label}</Text>
                           </View>
                           <View style={styles.projectProgressRow}>
                             <View style={styles.projectTrack}>
@@ -492,16 +479,17 @@ export default function SiteManagerHomeScreen() {
             )}
 
             {visibleTasks.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>{showingArchive ? "Nothing archived yet" : `Nothing in “${filter}”`}</Text>
-                <Text style={styles.emptyBody}>
-                  {showingArchive
+              <StateCard
+                kind="empty"
+                title={showingArchive ? "Nothing archived yet" : `Nothing in “${filter}”`}
+                body={
+                  showingArchive
                     ? `Completed tasks move here ${ARCHIVE_AFTER_DAYS} days after they’re finished.`
                     : projectFilter
                     ? "No tasks match this project and filter."
-                    : "No tasks match this filter right now."}
-                </Text>
-              </View>
+                    : "No tasks match this filter right now."
+                }
+              />
             ) : showingArchive ? (
               archiveGroups.map((group) => (
                 <View key={group.label} style={styles.archiveGroup}>
@@ -521,25 +509,6 @@ export default function SiteManagerHomeScreen() {
       </ScrollView>
       <SmBottomBar />
     </SafeAreaView>
-  );
-}
-
-function BrickLogo() {
-  return (
-    <View style={styles.logo}>
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBrick, { width: 14 }]} />
-        <View style={[styles.logoBrick, { width: 22 }]} />
-      </View>
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBrick, { width: 22 }]} />
-        <View style={[styles.logoBrick, { width: 14 }]} />
-      </View>
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBrick, { width: 14 }]} />
-        <View style={[styles.logoBrick, { width: 22 }]} />
-      </View>
-    </View>
   );
 }
 
@@ -582,110 +551,100 @@ function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
 }
 
 const DUE_TONE = StyleSheet.create({
-  late: { color: "#D92D20", fontWeight: "800" },
-  today: { color: "#E85D0C", fontWeight: "800" },
-  soon: { color: "#B45309", fontWeight: "700" },
+  late: { color: "#D92D20", fontFamily: FONT.extrabold },
+  today: { color: "#E85D0C", fontFamily: FONT.extrabold },
+  soon: { color: "#B45309", fontFamily: FONT.bold },
   normal: {},
 });
 
 const CARD = { backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1 } as const;
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
+  safeArea: { backgroundColor: COLORS.bgWarm, flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 28 },
+  content: { paddingHorizontal: 20, paddingBottom: 28 },
   pressed: { opacity: 0.78 },
 
-  headerRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  brandRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  brandName: { color: COLORS.heading, fontSize: 18, fontWeight: "800" },
-  brandTagline: { color: COLORS.muted, fontSize: 11, marginTop: 1 },
-  logo: { gap: 2 },
-  logoRow: { flexDirection: "row", gap: 2 },
-  logoBrick: { backgroundColor: COLORS.primary, borderRadius: 2, height: 8 },
-  headerActions: { alignItems: "center", flexDirection: "row", gap: 12 },
-  avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: 44, justifyContent: "center", width: 44 },
-  avatarText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
 
-  title: { color: "#111827", fontSize: 30, fontWeight: "800", letterSpacing: -0.5, marginTop: 22 },
-  subtitle: { color: COLORS.muted, fontSize: 15, marginTop: 6 },
-  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
+  title: { color: COLORS.heading, fontSize: 28, fontFamily: FONT.extrabold, letterSpacing: -0.5, marginTop: 14 },
+  subtitle: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 15, marginTop: 6 },
+  offlineNote: { fontFamily: FONT.regular, backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
 
-  progressCard: { ...CARD, alignItems: "center", flexDirection: "row", gap: 16, marginTop: 18, padding: 16 },
-  dateTile: { alignItems: "center", backgroundColor: "#FFF3EA", borderColor: "#F8D3B8", borderRadius: 16, borderWidth: 1, justifyContent: "center", paddingVertical: 10, width: 88 },
-  dateWeekday: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
-  dateDay: { color: COLORS.heading, fontSize: 38, fontWeight: "800", lineHeight: 44 },
-  dateMonth: { color: COLORS.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
-  progressDivider: { alignSelf: "stretch", backgroundColor: "#ECE6DC", width: 1 },
+  heroCard: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 24, flexDirection: "row", gap: 16, marginTop: 18, padding: 16 },
+  dateTile: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 18, justifyContent: "center", paddingVertical: 10, width: 84 },
+  dateWeekday: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 1.2 },
+  dateDay: { color: COLORS.heading, fontSize: 36, fontFamily: FONT.extrabold, lineHeight: 44, includeFontPadding: false },
+  dateMonth: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 1.2 },
+  heroLabel: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: FONT.medium },
+  heroValue: { color: "#FFFFFF", fontSize: 21, fontFamily: FONT.extrabold, marginTop: 3 },
+  heroAlert: { color: "#FFFFFF", fontSize: 12, fontFamily: FONT.bold, marginTop: 8 },
+
+  weekRow: { flexDirection: "row", gap: 6, marginTop: 14 },
+  weekDay: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, paddingVertical: 8 },
+  weekDayToday: { backgroundColor: COLORS.heading, borderColor: COLORS.heading },
+  weekName: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
+  weekNum: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold },
+  weekTextToday: { color: "#FFFFFF" },
+  weekDot: { backgroundColor: "transparent", borderRadius: 3, height: 6, marginTop: 2, width: 6 },
   progressBody: { flex: 1 },
-  progressLabel: { color: COLORS.muted, fontSize: 14 },
-  progressValue: { color: COLORS.heading, fontSize: 21, fontWeight: "800", marginTop: 4 },
-  progressTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, height: 8, marginTop: 12, overflow: "hidden" },
-  progressFill: { backgroundColor: COLORS.success, borderRadius: 4, height: 8 },
-  progressAlert: { color: "#D92D20", fontSize: 12, fontWeight: "700", marginTop: 8 },
+  
+  
+  progressTrack: { backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 4, height: 8, marginTop: 12, overflow: "hidden" },
+  progressFill: { backgroundColor: "#FFFFFF", borderRadius: 4, height: 8 },
+  
 
-  ticketButton: { alignItems: "center", borderColor: COLORS.primary, borderRadius: 14, borderWidth: 1.5, marginTop: 12, paddingVertical: 11 },
-  ticketButtonText: { color: COLORS.primary, fontSize: 13, fontWeight: "800" },
+  ticketButton: { marginTop: 12 },
+  stateWrap: { marginTop: 20 },
 
   filterBar: { ...CARD, flexDirection: "row", marginTop: 14, overflow: "hidden" },
   filterItem: { alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingVertical: 12 },
   filterItemDivider: { borderLeftColor: "#ECE6DC", borderLeftWidth: 1 },
   filterItemActive: { backgroundColor: COLORS.primary, borderRadius: 14, margin: 3 },
-  filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4 },
-  filterLabel: { color: COLORS.heading, fontSize: 11, fontWeight: "700" },
+  filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4, maxWidth: "100%", paddingHorizontal: 2 },
+  filterLabel: { flexShrink: 1, color: COLORS.heading, fontSize: 11, fontFamily: FONT.bold },
   filterLabelActive: { color: "#FFFFFF" },
   filterCount: { borderRadius: 10, minWidth: 18, paddingHorizontal: 5, paddingVertical: 1 },
-  filterCountText: { fontSize: 11, fontWeight: "800", textAlign: "center" },
+  filterCountText: { fontSize: 11, fontFamily: FONT.extrabold, textAlign: "center" },
 
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 24 },
-  sectionTitle: { color: COLORS.heading, fontSize: 19, fontWeight: "800" },
-  viewAll: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
+  sectionTitle: { color: COLORS.heading, fontSize: 19, fontFamily: FONT.extrabold },
+  viewAll: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
   cardList: { gap: 10 },
 
   segment: { backgroundColor: "#EFE7DA", borderRadius: 12, flexDirection: "row", marginBottom: 12, padding: 3 },
   segmentItem: { alignItems: "center", borderRadius: 10, flex: 1, paddingVertical: 8 },
   segmentItemActive: { backgroundColor: "#FFFFFF" },
-  segmentText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  segmentText: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.bold },
   segmentTextActive: { color: COLORS.heading },
   archiveGroup: { marginBottom: 12 },
-  archiveMonth: { color: COLORS.muted, fontSize: 12, fontWeight: "800", letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" },
+  archiveMonth: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" },
 
-  projectCard: { ...CARD, alignItems: "center", flexDirection: "row", gap: 12, padding: 12 },
+  projectCard: { ...CARD, alignItems: "flex-start", flexDirection: "row", gap: 12, padding: 14 },
   projectCardSelected: { backgroundColor: "#FFF6EE", borderColor: COLORS.primary },
-  projectIcon: { alignItems: "center", backgroundColor: "#E8F0FB", borderRadius: 12, height: 56, justifyContent: "center", width: 56 },
-  projectIconText: { color: "#2F6FD0", fontSize: 26 },
+  projectIcon: { alignItems: "center", backgroundColor: "#E8F0FB", borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
+  projectIconText: { color: "#2F6FD0", fontSize: 22 },
   projectBody: { flex: 1 },
-  projectTopRow: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "space-between" },
-  projectName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "800" },
+  projectName: { color: COLORS.heading, fontSize: 15, lineHeight: 20, fontFamily: FONT.extrabold },
   projectProgressRow: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 10 },
   projectTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, flex: 1, height: 7, overflow: "hidden" },
   projectFill: { borderRadius: 4, height: 7 },
-  projectCount: { color: COLORS.muted, fontSize: 11, fontWeight: "600" },
-  projectPending: { color: COLORS.muted, fontSize: 11, marginTop: 6 },
-  projectMeta: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  projectCount: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
+  projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, marginTop: 6 },
+  projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   projectChip: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 16, marginBottom: 10, maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 6 },
-  projectChipText: { color: COLORS.primary, fontSize: 12, fontWeight: "800" },
+  projectChipText: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold },
 
+  projectPill: { alignSelf: "flex-start", marginTop: 6 },
   pill: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { fontSize: 11, fontWeight: "800" },
+  pillText: { fontSize: 11, fontFamily: FONT.extrabold },
 
   taskRow: { ...CARD, alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
   taskLead: { alignItems: "center", borderRadius: 16, borderWidth: 2.5, height: 32, justifyContent: "center", width: 32 },
-  taskLeadGlyph: { fontSize: 16, fontWeight: "900" },
+  taskLeadGlyph: { fontSize: 16, fontFamily: FONT.extrabold },
   taskBody: { flex: 1 },
-  taskName: { color: COLORS.heading, fontSize: 15, fontWeight: "800", lineHeight: 20 },
-  taskProject: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
+  taskName: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold, lineHeight: 20 },
+  taskProject: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, marginTop: 4 },
   taskRight: { alignItems: "flex-end", gap: 6 },
-  taskDue: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
+  taskDue: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.semibold },
 
-  emptyCard: { ...CARD, alignItems: "center", paddingHorizontal: 24, paddingVertical: 28 },
-  emptyIcon: { alignItems: "center", backgroundColor: COLORS.successBg, borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
-  emptyIconText: { color: COLORS.success, fontSize: 23, fontWeight: "800" },
-  emptyTitle: { color: COLORS.heading, fontSize: 16, fontWeight: "800", marginTop: 4 },
-  emptyBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7, textAlign: "center" },
-  errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, marginTop: 20, padding: 16 },
-  errorTitle: { color: "#B42318", fontSize: 15, fontWeight: "800" },
-  errorBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
-  retryButton: { alignSelf: "flex-start", backgroundColor: COLORS.primary, borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 9 },
-  retryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
 });

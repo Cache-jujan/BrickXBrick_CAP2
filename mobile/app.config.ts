@@ -32,12 +32,15 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#F8F1E8",
+      backgroundColor: "#BF4307",
       foregroundImage: "./assets/adaptive-icon.png",
-      backgroundImage: "./assets/adaptive-icon.png",
       monochromeImage: "./assets/adaptive-icon.png",
     },
     predictiveBackGestureEnabled: false,
+    // The Expo default, written down on purpose. The keyboard wrapper in
+    // components/keyboard-avoider.tsx measures what the keyboard really covers,
+    // so it works with this mode and with edge-to-edge.
+    softwareKeyboardLayoutMode: "resize",
     package: env.androidPackage,
     permissions: ["POST_NOTIFICATIONS"],
     intentFilters: [

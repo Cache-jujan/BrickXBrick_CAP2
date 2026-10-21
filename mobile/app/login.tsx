@@ -1,24 +1,15 @@
 import { useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { fieldErrorStyle } from "@/components/blocked-reasons";
 import { isNetworkError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
+import { KeyboardScreen } from "@/components/screen";
+import { AppButton } from "@/components/app-button";
+import { BrandMark } from "@/components/brand-mark";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
@@ -88,120 +79,100 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.brandRow}>
-            <View style={styles.brandMark}>
-              <View style={styles.brandBrickLight} />
-              <View style={styles.brandBrickDark} />
-              <View style={styles.brandBrickAccent} />
-            </View>
-            <Text style={styles.brandName}>Brick x Brick</Text>
-          </View>
+    <KeyboardScreen background={COLORS.bg} contentContainerStyle={styles.content}>
+      {/* A faint, oversized copy of the mark behind the form. Decoration only. */}
+      <BrandMark size={300} style={styles.watermark} />
 
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.subtitle}>Use your Brick x Brick account.</Text>
+      <View style={styles.brand}>
+        <BrandMark size={34} />
+        <Text style={styles.brandName}>Brick x Brick</Text>
+      </View>
 
-          <View style={styles.card}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email address</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect={false}
-                keyboardType="email-address"
-                placeholder="you@gmail.com"
-                placeholderTextColor={COLORS.muted}
-                style={[styles.input, missing.email && !email.trim() && fieldErrorStyle]}
-                value={email}
-                onChangeText={setEmail}
-                returnKeyType="next"
-                submitBehavior="submit"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-              />
-            </View>
+      <View style={styles.heading}>
+        <Text style={styles.title}>Sign in</Text>
+        <Text style={styles.subtitle}>Use the account your System Administrator created for you.</Text>
+      </View>
 
-            <View style={styles.fieldGroup}>
-              <View style={styles.labelRow}>
-                <Text style={[styles.label, styles.labelInRow]}>Password</Text>
-                <Pressable onPress={() => setShowPassword((value) => !value)} hitSlop={8}>
-                  <Text style={styles.showPassword}>{showPassword ? "Hide" : "Show"}</Text>
-                </Pressable>
-              </View>
-              <TextInput
-                ref={passwordRef}
-                autoCapitalize="none"
-                autoComplete="password"
-                autoCorrect={false}
-                placeholder="Enter your password"
-                placeholderTextColor={COLORS.muted}
-                secureTextEntry={!showPassword}
-                style={[styles.input, missing.password && !password && fieldErrorStyle]}
-                value={password}
-                onChangeText={setPassword}
-                onSubmitEditing={handleLogin}
-                returnKeyType="go"
-              />
-            </View>
+      <View style={styles.form}>
+        <Text style={styles.label}>Email address</Text>
+        <TextInput
+          autoCapitalize="none"
+          autoComplete="email"
+          autoCorrect={false}
+          keyboardType="email-address"
+          placeholder="you@gmail.com"
+          placeholderTextColor={COLORS.muted}
+          style={[styles.input, missing.email && !email.trim() && fieldErrorStyle]}
+          value={email}
+          onChangeText={setEmail}
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+        />
 
-            <Pressable
-              accessibilityRole="link"
-              onPress={handleForgotPassword}
-              style={styles.forgotPasswordButton}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </Pressable>
+        <Text style={[styles.label, styles.labelSpaced]}>Password</Text>
+        <View style={[styles.inputRow, missing.password && !password && fieldErrorStyle]}>
+          <TextInput
+            ref={passwordRef}
+            autoCapitalize="none"
+            autoComplete="password"
+            autoCorrect={false}
+            placeholder="Enter your password"
+            placeholderTextColor={COLORS.muted}
+            secureTextEntry={!showPassword}
+            style={styles.inputInRow}
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={handleLogin}
+            returnKeyType="go"
+          />
+          <Pressable
+            onPress={() => setShowPassword((value) => !value)}
+            hitSlop={8}
+            style={styles.showButton}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+          >
+            <Text style={styles.showPassword}>{showPassword ? "Hide" : "Show"}</Text>
+          </Pressable>
+        </View>
 
-            {error ? (
-              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                {error}
-              </Text>
-            ) : null}
+        <Pressable accessibilityRole="link" onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
+          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+        </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={submitting}
-              onPress={handleLogin}
-              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, submitting && styles.buttonDisabled]}
-            >
-              {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Sign in</Text>}
-            </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        {error ? (
+          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            {error}
+          </Text>
+        ) : null}
+
+        <AppButton label="Sign in" onPress={handleLogin} loading={submitting} />
+      </View>
+
+      <Text style={styles.footer}>© 2026 Brick x Brick</Text>
+    </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  content: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 22 },
-  brandMark: { height: 22, width: 28, position: "relative" },
-  brandBrickLight: { position: "absolute", left: 0, top: 0, width: 13, height: 9, borderRadius: 2, backgroundColor: "#D8C7AA" },
-  brandBrickDark: { position: "absolute", right: 0, top: 0, width: 13, height: 9, borderRadius: 2, backgroundColor: COLORS.heading },
-  brandBrickAccent: { position: "absolute", left: 7, bottom: 0, width: 13, height: 9, borderRadius: 2, backgroundColor: COLORS.primary },
-  brandName: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold, letterSpacing: 0.3 },
-  title: { color: COLORS.heading, fontSize: 26, fontFamily: FONT.extrabold, letterSpacing: -0.5 },
-  subtitle: { color: COLORS.muted, fontSize: 14, fontFamily: FONT.regular, marginTop: 4 },
-  card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 18, borderWidth: 1, marginTop: 18, padding: 18, shadowColor: "#5B4636", shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
-  fieldGroup: { marginBottom: 16 },
-  labelRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 7 },
-  label: { color: COLORS.heading, fontSize: 13, fontFamily: FONT.bold, marginBottom: 7 },
-  // Inside labelRow the row already provides the bottom spacing.
-  labelInRow: { marginBottom: 0 },
-  showPassword: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.bold },
-  forgotPasswordButton: { alignSelf: "flex-end", marginBottom: 16, marginTop: -8 },
-  forgotPasswordText: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
-  input: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 15, fontFamily: FONT.regular, paddingHorizontal: 14, paddingVertical: 13 },
-  error: { color: COLORS.errorText, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, marginBottom: 14 },
-  button: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 13, justifyContent: "center", minHeight: 50, paddingHorizontal: 18 },
-  buttonPressed: { opacity: 0.86 },
-  buttonDisabled: { opacity: 0.65 },
-  buttonText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONT.extrabold },
+  content: { flexGrow: 1, overflow: "hidden", paddingBottom: 24, paddingHorizontal: 24, paddingTop: 20 },
+  watermark: { opacity: 0.07, position: "absolute", right: -90, top: 70 },
+  brand: { alignItems: "center", flexDirection: "row", gap: 10 },
+  brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
+  heading: { marginTop: 56 },
+  title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 38, letterSpacing: -1 },
+  subtitle: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 300 },
+  form: { marginTop: 36 },
+  label: { color: COLORS.heading, fontFamily: FONT.bold, fontSize: 13, marginBottom: 8 },
+  labelSpaced: { marginTop: 18 },
+  input: { backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, color: COLORS.heading, fontFamily: FONT.regular, fontSize: 16, minHeight: 54, paddingHorizontal: 16 },
+  inputRow: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, flexDirection: "row", minHeight: 54 },
+  inputInRow: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 16, minHeight: 52, paddingHorizontal: 16 },
+  showButton: { justifyContent: "center", minHeight: 52, paddingHorizontal: 16 },
+  showPassword: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
+  forgotPasswordButton: { alignSelf: "flex-start", marginBottom: 22, marginTop: 14, minHeight: 32, justifyContent: "center" },
+  forgotPasswordText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
+  error: { backgroundColor: COLORS.errorFill, borderRadius: 10, color: COLORS.errorText, fontFamily: FONT.medium, fontSize: 13, lineHeight: 19, marginBottom: 14, padding: 12 },
+  footer: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, marginTop: "auto", paddingTop: 28, textAlign: "center" },
 });
