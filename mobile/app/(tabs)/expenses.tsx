@@ -11,6 +11,7 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { formatPeso } from "@/lib/money";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { ExpenseActions } from "@/components/expense-actions";
+import { StateCard } from "@/components/state-card";
 import { StatusChip, type ChipTone } from "@/components/status-chip";
 
 type FilterKey = "All" | "Under review" | "Approved";
@@ -99,7 +100,11 @@ export default function ExpensesScreen() {
           {isOnline ? "Can't reach the server" : "You're offline"} · showing your expenses {savedAtLabel(savedAt)}.
         </Text>
       )}
-      {shownError && <Text style={styles.errorText}>{shownError}</Text>}
+      {shownError && (
+        <View style={styles.stateWrap}>
+          <StateCard kind="error" title="Couldn’t load expenses" body={shownError} onRetry={load} />
+        </View>
+      )}
 
       <FlatList
         data={visible}
@@ -118,7 +123,11 @@ export default function ExpensesScreen() {
             </View>
           </View>
         }
-        ListEmptyComponent={!loading ? <Text style={styles.emptyText}>No expenses in this view yet.</Text> : null}
+        ListEmptyComponent={
+          !loading ? (
+            <StateCard kind="empty" title="No expenses in this view" body="Expenses you submit will appear here. Pull down to refresh." />
+          ) : null
+        }
         renderItem={({ item }) => {
           const status = STATUS[item.status];
           const split = (item.splitProjectCount ?? 0) > 1;
@@ -168,10 +177,9 @@ const styles = StyleSheet.create({
   pillTextActive: { color: COLORS.primaryTintText, fontFamily: FONT.bold },
 
   offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
-  errorText: { color: COLORS.errorText, paddingHorizontal: 16, marginBottom: 8, fontSize: 12, fontFamily: FONT.medium },
+  stateWrap: { paddingHorizontal: 16, paddingBottom: 8 },
 
   list: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
-  emptyText: { textAlign: "center", color: COLORS.muted, marginTop: 40, fontFamily: FONT.regular },
 
   summary: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 4 },
   summaryLabel: { fontSize: 12, fontFamily: FONT.medium, color: COLORS.muted },
