@@ -6,7 +6,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { FlowHeader } from "@/components/flow-header";
 import { API_URL, authHeaders } from "@/constants/api";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { getSession, homeRouteFor, logout, setTermsAccepted } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 
@@ -16,10 +16,10 @@ type Highlight = { id: string; icon: string; title: string; text: string };
 type LegalData = { version: string; effectiveDate: string; highlights?: Highlight[]; documents: LegalDoc[] };
 
 // Warm accents that match the web version of this screen.
-const TINT = "#FDECE0";
-const TINT_INK = "#C9631A";
-const PAGE_BG = "#F6F4F1";
-const DANGER = "#C1121F";
+const TINT = COLORS.primaryTint;
+const TINT_INK = COLORS.primaryTintText;
+const PAGE_BG = COLORS.bg;
+const DANGER = COLORS.errorText;
 
 const HIGHLIGHT_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   account: "lock-outline",
@@ -297,9 +297,9 @@ const styles = StyleSheet.create({
   loading: { marginTop: 24 },
 
   hero: { gap: 8, paddingTop: 4 },
-  eyebrow: { fontSize: 12, fontWeight: "700", letterSpacing: 1, color: TINT_INK },
-  heroTitle: { fontSize: 24, fontWeight: "800", color: COLORS.heading, letterSpacing: -0.3 },
-  lede: { fontSize: 15, lineHeight: 22, color: COLORS.muted },
+  eyebrow: { fontSize: 12, fontFamily: FONT.bold, letterSpacing: 1, color: TINT_INK },
+  heroTitle: { fontSize: 24, fontFamily: FONT.extrabold, color: COLORS.heading, letterSpacing: -0.3 },
+  lede: { fontSize: 15, fontFamily: FONT.regular, lineHeight: 22, color: COLORS.muted },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 2 },
   chip: {
     borderWidth: 1,
@@ -309,11 +309,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
-  chipText: { fontSize: 12, fontWeight: "600", color: COLORS.muted },
-  meta: { fontSize: 13, color: COLORS.muted },
+  chipText: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
+  meta: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted },
 
   glance: { gap: 10 },
-  overline: { fontSize: 12, fontWeight: "700", letterSpacing: 1, color: COLORS.muted },
+  overline: { fontSize: 12, fontFamily: FONT.bold, letterSpacing: 1, color: COLORS.muted },
   glanceCard: {
     flexDirection: "row",
     gap: 12,
@@ -332,16 +332,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   glanceTextWrap: { flex: 1, gap: 2 },
-  glanceTitle: { fontSize: 15, fontWeight: "700", color: COLORS.heading },
-  glanceText: { fontSize: 13, lineHeight: 19, color: COLORS.muted },
-  note: { fontSize: 12, color: COLORS.muted },
+  glanceTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
+  glanceText: { fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, color: COLORS.muted },
+  note: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
 
   segment: {
     flexDirection: "row",
     padding: 4,
     gap: 4,
     borderRadius: 12,
-    backgroundColor: "#EFECE6",
+    backgroundColor: COLORS.border,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  segmentText: { fontSize: 14, fontWeight: "600", color: COLORS.muted },
+  segmentText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.muted },
   segmentTextActive: { color: COLORS.heading },
 
   docCard: {
@@ -364,9 +364,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 18,
   },
-  docTitle: { fontSize: 20, fontWeight: "800", color: COLORS.heading, marginBottom: 6 },
+  docTitle: { fontSize: 20, fontFamily: FONT.extrabold, color: COLORS.heading, marginBottom: 6 },
   section: { gap: 8, paddingTop: 14 },
-  sectionDivider: { marginTop: 14, borderTopWidth: 1, borderTopColor: "#EFECE6" },
+  sectionDivider: { marginTop: 14, borderTopWidth: 1, borderTopColor: COLORS.border },
   headingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   numBadge: {
     width: 24,
@@ -376,9 +376,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  numText: { fontSize: 12, fontWeight: "800", color: TINT_INK },
-  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: COLORS.heading },
-  body: { fontSize: 14.5, lineHeight: 22, color: "#334155" },
+  numText: { fontSize: 12, fontFamily: FONT.extrabold, color: TINT_INK },
+  heading: { flex: 1, fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading },
+  body: { fontSize: 14.5, fontFamily: FONT.regular, lineHeight: 22, color: COLORS.heading },
   bulletRow: { flexDirection: "row", gap: 10, paddingRight: 4 },
   bulletDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.primary, marginTop: 8 },
   bulletText: { flex: 1 },
@@ -393,9 +393,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
   },
-  nextLabel: { fontSize: 12, color: COLORS.muted },
-  nextTitle: { fontSize: 16, fontWeight: "700", color: COLORS.heading },
-  endNote: { fontSize: 13, color: COLORS.muted, textAlign: "center" },
+  nextLabel: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
+  nextTitle: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading },
+  endNote: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center" },
 
   errorCard: {
     backgroundColor: COLORS.card,
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  error: { color: DANGER, fontSize: 14 },
+  error: { color: DANGER, fontSize: 14, fontFamily: FONT.regular },
 
   acceptBar: {
     backgroundColor: COLORS.card,
@@ -431,20 +431,20 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: PAGE_BG,
   },
-  checkRowOn: { borderColor: "#F3985A", backgroundColor: TINT },
+  checkRowOn: { borderColor: COLORS.primary, backgroundColor: TINT },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#C9C1B1",
+    borderColor: COLORS.inputBorder,
     backgroundColor: COLORS.card,
     alignItems: "center",
     justifyContent: "center",
   },
   checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkLabel: { flex: 1, fontSize: 13.5, lineHeight: 19, color: COLORS.heading },
-  bold: { fontWeight: "700" },
+  checkLabel: { flex: 1, fontSize: 13.5, fontFamily: FONT.regular, lineHeight: 19, color: COLORS.heading },
+  bold: { fontFamily: FONT.bold },
   primaryButton: {
     flexDirection: "row",
     gap: 8,
@@ -454,10 +454,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  primaryText: { color: "#FFFFFF", fontSize: 16, fontFamily: FONT.bold },
   disabled: { opacity: 0.45 },
   signOut: { alignSelf: "center", paddingVertical: 6, marginBottom: 4 },
-  signOutText: { color: COLORS.muted, fontSize: 14, fontWeight: "600" },
+  signOutText: { color: COLORS.muted, fontSize: 14, fontFamily: FONT.semibold },
   secondaryButton: {
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -466,5 +466,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: COLORS.card,
   },
-  secondaryText: { color: COLORS.heading, fontSize: 15, fontWeight: "600" },
+  secondaryText: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.semibold },
 });

@@ -5,12 +5,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useNetwork } from "@/lib/sync/network-context";
 import { bannerState, SENT_SHOW_MS } from "@/lib/sync/messages";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
 const TONES = {
-  offline: { bg: "#C62828", icon: "wifi.slash" },
-  waiting: { bg: "#B26A00", icon: "clock.fill" },
-  sending: { bg: "#1D4E89", icon: "arrow.triangle.2.circlepath" },
-  sent: { bg: "#2E7D32", icon: "checkmark.circle.fill" },
+  offline: { bg: COLORS.errorBorder, icon: "wifi.slash" },
+  waiting: { bg: COLORS.amberText, icon: "clock.fill" },
+  sending: { bg: COLORS.infoText, icon: "arrow.triangle.2.circlepath" },
+  sent: { bg: COLORS.success, icon: "checkmark.circle.fill" },
 } as const;
 
 // 10.2 — one strip at the top of every screen for the offline queue:
@@ -53,5 +54,5 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     paddingHorizontal: 16,
   },
-  text: { color: "#FFF", fontSize: 12, fontWeight: "700", flexShrink: 1 },
+  text: { color: "#FFF", fontSize: 12, fontFamily: FONT.bold, flexShrink: 1 },
 });

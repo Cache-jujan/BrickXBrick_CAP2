@@ -14,16 +14,15 @@ import { useFocusEffect } from "expo-router";
 
 import {
   type MyExpense,
-  type OpenRequest,
   type Ticket,
   type Project,
 } from "@/lib/api";
-import { formatQty } from "@/lib/money";
+import { formatPeso, formatQty } from "@/lib/money";
+import { dueSortKey, urgencyFor } from "@/lib/needed-by";
 import {
   loadActiveProjects,
   loadAssignedTickets,
   loadMyExpenses,
-  loadOpenRequests,
   loadScans as loadScansCached,
 } from "@/lib/cached-api";
 import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
@@ -33,7 +32,10 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { getSession } from "@/lib/auth";
 import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
+import { ExpenseActions } from "@/components/expense-actions";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { StatusChip, type ChipTone } from "@/components/status-chip";
 import { ScannedReceipts } from "@/components/scanned-receipts";
 import { RejectedExpenses } from "@/components/rejected-expenses";
 import { fileFromExpense, ocrResultFromExpense } from "@/lib/resubmit";
@@ -44,10 +46,12 @@ import type { QueuedScan } from "@/components/scanned-receipts";
 const SCAN_REFRESH_MS = 4000;
 
 type FilterKey = "All" | "Pending" | "Completed";
+const FILTER_KEYS: FilterKey[] = ["Pending", "Completed", "All"];
+type SortKey = "due" | "newest";
 
 // Purchasers can act on Acknowledged tickets and see Resolved tickets as
 // completed. Site Managers see only their own Resolved Material Requests,
-// which are ready for expense capture. No priority/due-date field exists.
+// which are ready for expense capture. The optional neededby date drives the Purchaser's urgency and sort.
 function toBucket(
   status: string
 ): "Pending" | "Completed" | null {
@@ -57,7 +61,7 @@ function toBucket(
 }
 
 export default function HomeScreen() {
-  const { setTicket, reset, startSplit, startResubmit } = useExpenseDraft();
+  const { setTicket, reset, startResubmit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -67,7 +71,7 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<FilterKey>(isSiteManager ? "Completed" : "Pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
+  const [sort, setSort] = useState<SortKey>("due");
   const [scans, setScans] = useState<ReceiptScan[]>([]);
   const [rejected, setRejected] = useState<MyExpense[]>([]);
   const [focused, setFocused] = useState(false);
@@ -110,13 +114,7 @@ export default function HomeScreen() {
       setProjectsById(byId);
       setTickets(ticketList);
 
-      // F8 To-buy list (Purchaser only). A failure here must not hide the tickets.
       if (!isSiteManager) {
-        try {
-          setOpenRequests((await loadOpenRequests()).data);
-        } catch {
-          setOpenRequests([]);
-        }
         // Rejected expenses to correct and resubmit. A failure keeps the last list.
         try {
           setRejected((await loadMyExpenses()).data.filter((e) => e.status === "Rejected"));
@@ -183,48 +181,28 @@ export default function HomeScreen() {
     ? t.status === "Resolved" && t.tickettype === "Material Request"
     : toBucket(t.status) !== null);
 
+  const filterLabels: Record<FilterKey, string> = isSiteManager
+    ? { All: "All", Pending: "Pending", Completed: "Completed" }
+    : { All: "All", Pending: "Assigned", Completed: "Purchased" };
+
   const visible = actionable
-    .filter(
-      (t) =>
-        filter === "All" ||
-        toBucket(t.status) === filter
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.createdat).getTime() -
-        new Date(a.createdat).getTime()
-    );
+    .filter((t) => filter === "All" || toBucket(t.status) === filter)
+    .sort((a, b) => {
+      const newest = new Date(b.createdat).getTime() - new Date(a.createdat).getTime();
+      if (isSiteManager || sort === "newest") return newest;
+      // Earliest due date first; requests with no date go last.
+      const due = dueSortKey(a.neededby) - dueSortKey(b.neededby);
+      return Number.isNaN(due) || due === 0 ? newest : due;
+    });
 
   const counts = {
     All: actionable.length,
-    Pending: actionable.filter(
-      (t) => toBucket(t.status) === "Pending"
-    ).length,
-    Completed: actionable.filter(
-      (t) => toBucket(t.status) === "Completed"
-    ).length,
+    Pending: actionable.filter((t) => toBucket(t.status) === "Pending").length,
+    Completed: actionable.filter((t) => toBucket(t.status) === "Completed").length,
   };
 
-  // To-buy list: open requests grouped by material (lowercased, trimmed).
-  const toBuy = Object.values(
-    openRequests.reduce<Record<string, { material: string; total: number; requests: number; projects: string[] }>>(
-      (groups, request) => {
-        const key = request.materialType.trim().toLowerCase();
-        const group = groups[key] ?? { material: request.materialType.trim(), total: 0, requests: 0, projects: [] };
-        group.total += Number(request.remainingQuantity);
-        group.requests += 1;
-        if (!group.projects.includes(request.projectName)) group.projects.push(request.projectName);
-        groups[key] = group;
-        return groups;
-      },
-      {}
-    )
-  );
-
-  function startSplitReceipt() {
-    startSplit();
-    router.push("/expense/capture");
-  }
+  // Sum of the estimates of the requests listed below.
+  const estimatedTotal = visible.reduce((sum, t) => sum + Number(t.approvedbudget ?? 0), 0);
 
   // A Rejected expense goes back through the review screen, then updates the
   // same expense (PATCH .../resubmit) instead of creating a new one.
@@ -266,35 +244,28 @@ export default function HomeScreen() {
   }
 
   return (
-    // The tab layout's header already sits under the status bar, so only
-    // the bottom inset applies here.
-    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+    // The tab layout's header already sits under the status bar. The Purchaser
+    // has a tab bar below, so only a Site Manager needs the bottom inset.
+    <SafeAreaView style={styles.safeArea} edges={isSiteManager ? ["bottom"] : []}>
       <View style={styles.header}>
         <Text style={styles.brand}>{isSiteManager ? "Ready for expense capture" : "Requests"}</Text>
+        {isSiteManager ? null : <Text style={styles.subtitle}>Materials assigned to you</Text>}
       </View>
 
       <View style={styles.filterRow}>
-        {(["All", "Pending", "Completed"] as FilterKey[]).map(
-          (key) => (
-            <Pressable
-              key={key}
-              onPress={() => setFilter(key)}
-              style={[
-                styles.chip,
-                filter === key && styles.chipActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  filter === key && styles.chipTextActive,
-                ]}
-              >
-                {key} ({counts[key]})
-              </Text>
-            </Pressable>
-          )
-        )}
+        {FILTER_KEYS.map((key) => (
+          <Pressable
+            key={key}
+            onPress={() => setFilter(key)}
+            style={[styles.pill, filter === key && styles.pillActive]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filter === key }}
+          >
+            <Text style={[styles.pillText, filter === key && styles.pillTextActive]}>
+              {filterLabels[key]} ({counts[key]})
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {(!isOnline || savedAt) && (
@@ -326,29 +297,19 @@ export default function HomeScreen() {
             }}
           />
           {isSiteManager ? null : (
-            <View style={styles.toBuyBox}>
-              <View style={styles.toBuyHeader}>
-                <Text style={styles.toBuyTitle}>To buy</Text>
-                <Pressable onPress={startSplitReceipt} style={styles.splitBtn}>
-                  <Text style={styles.splitBtnText}>Split Receipt</Text>
-                </Pressable>
+            <View style={styles.listHeaderRow}>
+              <View style={styles.flex}>
+                <Text style={styles.sectionTitle}>{filter === "Completed" ? "Purchased" : "To purchase"}</Text>
+                <Text style={styles.sectionTotal}>{formatPeso(estimatedTotal)} est. total</Text>
               </View>
-              {toBuy.length === 0 ? (
-                <Text style={styles.cardMeta}>No open requests right now.</Text>
-              ) : (
-                toBuy.map((group) => (
-                  <View key={group.material.toLowerCase()} style={styles.toBuyRow}>
-                    <Text style={styles.toBuyLine}>
-                      {group.material} · {formatQty(group.total)} · {group.requests} {group.requests === 1 ? "request" : "requests"}
-                    </Text>
-                    <View style={styles.projectTags}>
-                      {group.projects.map((name) => (
-                        <Text key={name} style={styles.projectTag}>{name}</Text>
-                      ))}
-                    </View>
-                  </View>
-                ))
-              )}
+              <Pressable
+                onPress={() => setSort((current) => (current === "due" ? "newest" : "due"))}
+                style={styles.sortButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Sorted by ${sort === "due" ? "due date" : "newest"}. Tap to change.`}
+              >
+                <Text style={styles.sortText}>{sort === "due" ? "Due date" : "Newest"} ↓</Text>
+              </Pressable>
             </View>
           )}
           </>
@@ -378,31 +339,29 @@ export default function HomeScreen() {
           const expenseCount = Number(item.expensecount || 0);
           const alreadyCaptured = expenseCount > 0;
 
+          const quantityLine = item.quantity != null
+            ? `${formatQty(Number(item.quantity))}${item.unit ? ` ${item.unit}` : ""}`
+            : null;
+          const urgency = urgencyFor(item.neededby);
+
+          let chip: { label: string; tone: ChipTone };
+          if (item.status === "Resolved") chip = { label: "Purchased", tone: "success" };
+          else if (alreadyCaptured) chip = { label: "In progress", tone: "info" };
+          else chip = { label: "To purchase", tone: "primary" };
+
           const Card = (
             <View style={styles.card}>
               <View style={styles.cardHeaderRow}>
-                <Text style={styles.cardBadge}>
-                  {item.tickettype}
-                </Text>
-
-                {item.approvedbudget != null && (
-                  <Text style={styles.budgetPill}>
-                    ₱
-                    {Number(item.approvedbudget).toLocaleString()}
-                  </Text>
-                )}
+                <Text style={styles.cardType}>{item.tickettype}</Text>
+                <StatusChip label={chip.label} tone={chip.tone} />
               </View>
 
-              <Text
-                style={styles.cardTitle}
-                numberOfLines={2}
-              >
-                {item.subject}
-              </Text>
+              <Text style={styles.cardTitle} numberOfLines={2}>{item.subject}</Text>
+              {quantityLine ? <Text style={styles.cardQuantity}>{quantityLine}</Text> : null}
 
-              <Text style={styles.cardMeta}>
-                {project?.name ?? "Unknown project"}
-              </Text>
+              <View style={styles.divider} />
+
+              <Text style={styles.cardLocation} numberOfLines={1}>{project?.name ?? "Unknown project"}</Text>
 
               {alreadyCaptured && (
                 <Text style={styles.capturedNote}>
@@ -410,31 +369,38 @@ export default function HomeScreen() {
                 </Text>
               )}
 
-              <View style={styles.cardFooterRow}>
-                <Text style={styles.cardFooterText}>
-                  {new Date(
-                    item.createdat
-                  ).toLocaleDateString()}
-                </Text>
-
-                {actionableNow ? (
+              {isSiteManager ? (
+                <View style={styles.cardFooterRow}>
+                  <Text style={styles.cardFooterText}>{new Date(item.createdat).toLocaleDateString()}</Text>
                   <View style={[styles.addBtn, alreadyCaptured && styles.addBtnSecondary]}>
                     <Text style={[styles.addBtnText, alreadyCaptured && styles.addBtnTextSecondary]}>
                       {alreadyCaptured ? "+ Add another expense" : "+ Add Expense"}
                     </Text>
                   </View>
-                ) : (
-                  <Text style={styles.completedBadge}>
-                    Resolved
-                  </Text>
-                )}
-              </View>
+                </View>
+              ) : (
+                <View style={styles.cardFooterRow}>
+                  <View style={styles.urgencyRow}>
+                    <IconSymbol name="calendar" size={14} color={URGENCY_COLOR[urgency.tone]} />
+                    <Text style={[styles.urgencyText, { color: URGENCY_COLOR[urgency.tone] }]} numberOfLines={1}>
+                      {urgency.label}
+                    </Text>
+                  </View>
+                  {item.approvedbudget != null && (
+                    <Text style={styles.estimate}>{formatPeso(item.approvedbudget)} est.</Text>
+                  )}
+                </View>
+              )}
             </View>
           );
 
+          // The whole card is the tap target when there is something to do.
           return actionableNow ? (
             <Pressable
               onPress={() => openTicket(item)}
+              style={({ pressed }) => pressed && styles.pressed}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.subject}, ${chip.label}. Capture an expense.`}
             >
               {Card}
             </Pressable>
@@ -443,225 +409,64 @@ export default function HomeScreen() {
           );
         }}
       />
+
+      {isSiteManager ? null : <ExpenseActions />}
     </SafeAreaView>
   );
 }
 
+const URGENCY_COLOR = {
+  late: COLORS.errorText,
+  today: COLORS.errorText,
+  soon: COLORS.amberText,
+  normal: COLORS.muted,
+  none: COLORS.muted,
+};
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
+  flex: { flex: 1 },
+  pressed: { opacity: 0.85 },
 
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-  },
+  header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+  brand: { fontSize: 26, fontFamily: FONT.extrabold, color: COLORS.heading },
+  subtitle: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
 
-  brand: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.heading,
-  },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+  pill: { minHeight: MIN_TAP, justifyContent: "center", paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
+  pillActive: { backgroundColor: COLORS.primaryTint, borderColor: COLORS.primary },
+  pillText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.muted },
+  pillTextActive: { color: COLORS.primaryTintText, fontFamily: FONT.bold },
 
-  filterRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
+  offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
+  errorText: { color: COLORS.errorText, paddingHorizontal: 16, marginBottom: 8, fontSize: 12, fontFamily: FONT.medium },
 
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
+  list: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
+  emptyText: { textAlign: "center", color: COLORS.muted, marginTop: 40, fontFamily: FONT.regular },
 
-  chipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
+  listHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  sectionTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading },
+  sectionTotal: { fontSize: 12, fontFamily: FONT.medium, color: COLORS.muted, marginTop: 1 },
+  sortButton: { minHeight: MIN_TAP, justifyContent: "center", paddingHorizontal: 8 },
+  sortText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.primary },
 
-  chipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.muted,
-  },
+  card: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14 },
+  cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 },
+  cardType: { flexShrink: 1, fontSize: 11, fontFamily: FONT.bold, color: COLORS.muted },
+  cardTitle: { fontSize: 19, fontFamily: FONT.extrabold, color: COLORS.heading },
+  cardQuantity: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 10 },
+  cardLocation: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.heading, marginBottom: 8 },
+  capturedNote: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.success, marginBottom: 8 },
 
-  chipTextActive: {
-    color: "#FFF",
-  },
+  cardFooterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  cardFooterText: { fontSize: 11, fontFamily: FONT.regular, color: COLORS.muted },
+  urgencyRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
+  urgencyText: { flexShrink: 1, fontSize: 12, fontFamily: FONT.bold },
+  estimate: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.primary },
 
-  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginBottom: 8, marginHorizontal: 16, padding: 12 },
-  errorText: {
-    color: "#C1121F",
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    fontSize: 12,
-  },
-
-  list: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 10,
-  },
-
-  emptyText: {
-    textAlign: "center",
-    color: COLORS.muted,
-    marginTop: 40,
-  },
-
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-  },
-
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-
-  cardBadge: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-
-  budgetPill: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.heading,
-  },
-
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.heading,
-    marginBottom: 4,
-  },
-
-  cardMeta: {
-    fontSize: 12,
-    color: COLORS.muted,
-    marginBottom: 10,
-  },
-
-  cardFooterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  cardFooterText: {
-    fontSize: 11,
-    color: COLORS.muted,
-  },
-
-  addBtn: {
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-
-  addBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-
-  addBtnSecondary: {
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bg,
-  },
-
-  addBtnTextSecondary: {
-    color: COLORS.muted,
-  },
-
-  capturedNote: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.success,
-    marginBottom: 8,
-  },
-
-  toBuyBox: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    marginBottom: 6,
-  },
-
-  toBuyHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-
-  toBuyTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: COLORS.heading,
-  },
-
-  splitBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-
-  splitBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#FFF",
-  },
-
-  toBuyRow: {
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-
-  toBuyLine: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.heading,
-  },
-
-  projectTags: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 4,
-  },
-
-  projectTag: {
-    fontSize: 10,
-    color: COLORS.muted,
-    backgroundColor: COLORS.bg,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-
-  completedBadge: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.success,
-  },
+  addBtn: { minHeight: MIN_TAP, justifyContent: "center", borderWidth: 1, borderColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 12 },
+  addBtnText: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.primary },
+  addBtnSecondary: { borderColor: COLORS.border, backgroundColor: COLORS.bg },
+  addBtnTextSecondary: { color: COLORS.muted },
 });

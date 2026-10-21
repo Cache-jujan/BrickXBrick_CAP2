@@ -21,6 +21,7 @@ import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
+import { BackButton } from "@/components/back-button";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -143,9 +144,7 @@ export default function MyRequestsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
+        <BackButton />
         <Text style={styles.eyebrow}>SITE MANAGER</Text>
         <Text style={styles.title}>My requests</Text>
       </View>
@@ -308,8 +307,6 @@ function RequestCard({
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
-  backButton: { alignSelf: "flex-start", marginBottom: 14 },
-  backText: { color: COLORS.primary, fontSize: 14, fontWeight: "700" },
   eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 25, fontWeight: "800", marginTop: 6, marginBottom: 12 },
 

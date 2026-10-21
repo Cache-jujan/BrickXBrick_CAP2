@@ -2,13 +2,13 @@ import React from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
 
-const AMBER = "#B45309";
-const AMBER_BG = "#FEF3C7";
-const RED = "#C1121F";
+const AMBER = COLORS.amberText;
+const AMBER_BG = COLORS.amberBannerFill;
+const RED = COLORS.errorText;
 
 // A receipt saved on this phone while offline (lib/sync/db.js offline_scans).
 export type QueuedScan = {
@@ -78,7 +78,7 @@ export function ScannedReceipts({
                   : `Saved on your phone · ${scanTimeLabel(row.created_at)} · uploads when you're back online`}
               </Text>
             </View>
-            <View style={[styles.pill, { backgroundColor: rejected ? "#FDECEC" : COLORS.bg }]}>
+            <View style={[styles.pill, { backgroundColor: rejected ? COLORS.errorFill : COLORS.bg }]}>
               <IconSymbol name={rejected ? "exclamationmark.triangle.fill" : "clock.fill"} size={14} color={rejected ? RED : COLORS.muted} />
               <Text style={[styles.pillText, { color: rejected ? RED : COLORS.muted }]}>{rejected ? "Not uploaded" : "Waiting"}</Text>
             </View>
@@ -144,13 +144,13 @@ function StatusPill({ status }: { status: ReceiptScan["status"] }) {
 
 const styles = StyleSheet.create({
   box: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 12, marginBottom: 12, gap: 8 },
-  title: { fontSize: 15, fontWeight: "800", color: COLORS.heading },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
+  title: { fontSize: 15, fontFamily: FONT.extrabold, color: COLORS.heading },
+  row: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
   pressed: { opacity: 0.7 },
   flex: { flex: 1 },
-  rowTitle: { fontSize: 14, fontWeight: "700", color: COLORS.heading },
-  rowMeta: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
+  rowTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
+  rowMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   pill: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
-  pillText: { fontSize: 12, fontWeight: "700" },
-  remove: { fontSize: 20, color: RED, paddingHorizontal: 2 },
+  pillText: { fontSize: 12, fontFamily: FONT.bold },
+  remove: { fontSize: 20, fontFamily: FONT.regular, color: RED, paddingHorizontal: 2 },
 });

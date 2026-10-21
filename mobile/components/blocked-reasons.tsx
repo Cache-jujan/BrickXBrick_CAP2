@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
 // Shown right above an action button that can't run yet, so the user sees
 // exactly why instead of a greyed-out button with no explanation.
@@ -24,18 +25,18 @@ export function BlockedReasons({
 }
 
 // Red outline for a field the user still needs to fix.
-export const fieldErrorStyle = { borderColor: "#D92D20", borderWidth: 1.5 } as const;
+export const fieldErrorStyle = { borderColor: COLORS.errorText, borderWidth: 1.5 } as const;
 
 const styles = StyleSheet.create({
   box: {
-    backgroundColor: "#FFF5F3",
-    borderColor: "#F4C7C3",
+    backgroundColor: COLORS.errorFill,
+    borderColor: COLORS.errorBorder,
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
     gap: 3,
   },
-  title: { color: "#B42318", fontSize: 13, fontWeight: "800" },
-  item: { color: "#8C2D24", fontSize: 13, lineHeight: 19 },
+  title: { color: COLORS.errorText, fontSize: 13, fontFamily: FONT.extrabold },
+  item: { color: COLORS.errorText, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19 },
 });

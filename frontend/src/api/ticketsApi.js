@@ -38,10 +38,12 @@ export async function listPurchasers() {
   return data;
 }
 
-export async function acknowledgeTicket(ticketId, assignedTo, approvedBudget) {
+// neededBy: "YYYY-MM-DD" to set the needed-by date, "" to clear it, undefined to keep it.
+export async function acknowledgeTicket(ticketId, assignedTo, approvedBudget, neededBy) {
   const { data } = await apiClient.patch(`/api/tickets/${ticketId}/acknowledge`, {
     assignedTo,
     ...(approvedBudget !== undefined ? { approvedBudget } : {}),
+    ...(neededBy !== undefined ? { neededBy: neededBy || null } : {}),
   });
   return data;
 }

@@ -18,6 +18,7 @@ import { TicketForm } from "../../components/tickets/TicketForm";
 import "./TicketQueuePage.css";
 
 const DATE = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const DAY = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" });
 const TIME = new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" });
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
 const QTY = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 });
@@ -74,6 +75,9 @@ export function TicketQueuePage() {
   // Per-ticket assign state (Needs action tab).
   const [assignments, setAssignments] = useState({});
   const [approvedBudgets, setApprovedBudgets] = useState({});
+  // Needed-by dates the PM changed, by ticket id. A ticket not in here keeps
+  // the date the Site Manager gave (or none).
+  const [neededByDates, setNeededByDates] = useState({});
 
   // Edit modal.
   const [editing, setEditing] = useState(null);
@@ -185,7 +189,7 @@ export function TicketQueuePage() {
     setSubmittingId(ticket.ticketid);
     setError("");
     try {
-      await acknowledgeTicket(ticket.ticketid, assignedTo, approvedBudget);
+      await acknowledgeTicket(ticket.ticketid, assignedTo, approvedBudget, neededByDates[ticket.ticketid]);
       removeFromView(ticket.ticketid);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't acknowledge this ticket."));
@@ -216,7 +220,7 @@ export function TicketQueuePage() {
       }
       try {
         // eslint-disable-next-line no-await-in-loop
-        await acknowledgeTicket(t.ticketid, assignments[t.ticketid], approvedBudget);
+        await acknowledgeTicket(t.ticketid, assignments[t.ticketid], approvedBudget, neededByDates[t.ticketid]);
         removeFromView(t.ticketid);
       } catch (err) {
         failures.push(`${t.subject}: ${extractErrorMessage(err, "failed")}`);
@@ -503,6 +507,8 @@ export function TicketQueuePage() {
                 setAssignments={setAssignments}
                 approvedBudgets={approvedBudgets}
                 setApprovedBudgets={setApprovedBudgets}
+                neededByDates={neededByDates}
+                setNeededByDates={setNeededByDates}
                 submittingId={submittingId}
                 highlightId={highlightId}
                 activeTab={activeTab}
@@ -521,6 +527,8 @@ export function TicketQueuePage() {
                 setAssignments={setAssignments}
                 approvedBudgets={approvedBudgets}
                 setApprovedBudgets={setApprovedBudgets}
+                neededByDates={neededByDates}
+                setNeededByDates={setNeededByDates}
                 submittingId={submittingId}
                 highlightId={highlightId}
                 activeTab={activeTab}
@@ -610,10 +618,23 @@ function BomStrip({ ticket }) {
   );
 }
 
+// "YYYY-MM-DD" for a <input type="date">, from the API's ISO date (read in local time).
+function toInputDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function todayInputValue() {
+  return toInputDate(new Date().toISOString());
+}
+
 // ---- A single ticket card ----
 function TicketCard(props) {
   const {
     ticket, purchasers, assignments, setAssignments, approvedBudgets, setApprovedBudgets,
+    neededByDates, setNeededByDates,
     submittingId, highlightId, activeTab, onAcknowledge, onResolve, onReject, onEdit, inBatch,
   } = props;
   const meta = TYPE_META[ticket.tickettype] || { key: "work", label: ticket.tickettype };
@@ -660,6 +681,7 @@ function TicketCard(props) {
           <div><dt>Material</dt><dd>{ticket.materialtype || "—"}</dd></div>
           <div><dt>Quantity</dt><dd>{ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
           <div><dt>Preferred vendor</dt><dd>{ticket.vendorname || "—"}</dd></div>
+          <div><dt>Needed by</dt><dd>{ticket.neededby ? DAY.format(new Date(ticket.neededby)) : "Not given"}</dd></div>
           {ticket.tickettype === "Material Request" && (
             <div><dt>SM requested budget</dt><dd>{ticket.requestedbudget == null ? "Not provided" : PESO.format(Number(ticket.requestedbudget))}</dd></div>
           )}
@@ -695,6 +717,14 @@ function TicketCard(props) {
                   <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>
                 ))}
               </Field>
+              <Field
+                label="Needed by (optional)"
+                type="date"
+                min={todayInputValue()}
+                value={neededByDates[ticket.ticketid] ?? toInputDate(ticket.neededby)}
+                disabled={busy}
+                onChange={(e) => setNeededByDates((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
+              />
               {ticket.tickettype === "Material Request" && (
                 <Field
                   label="Approved budget (₱)"

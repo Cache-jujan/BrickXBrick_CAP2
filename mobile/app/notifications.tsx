@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, Stack, router } from "expo-router";
 
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import {
   fetchNotifications,
   markNotificationRead,
@@ -24,6 +24,7 @@ import { describeLoadError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { loadNotifications } from "@/lib/cached-api";
+import { BackButton } from "@/components/back-button";
 
 const PAGE_SIZE = 30;
 type Tab = "Unread" | "All";
@@ -113,9 +114,7 @@ export default function NotificationsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
+        <BackButton />
         <View style={styles.titleRow}>
           <Text style={styles.title}>Notifications</Text>
           {((tab === "All" && unreadCount > 0) || (tab === "Unread" && items.length > 0)) && (
@@ -220,54 +219,52 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
-  backButton: { alignSelf: "flex-start", marginBottom: 14 },
-  backText: { color: COLORS.primary, fontSize: 14, fontWeight: "700" },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: COLORS.heading, fontSize: 25, fontWeight: "800" },
-  markAll: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
+  title: { color: COLORS.heading, fontSize: 25, fontFamily: FONT.extrabold },
+  markAll: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
 
-  tabsRow: { flexDirection: "row", gap: 20, paddingHorizontal: 20, marginTop: 16, borderBottomWidth: 1, borderBottomColor: "#E7DDCF" },
+  tabsRow: { flexDirection: "row", gap: 20, paddingHorizontal: 20, marginTop: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   tabBtn: { paddingBottom: 10, minHeight: 36, justifyContent: "flex-start" },
-  tabText: { color: COLORS.muted, fontSize: 14, fontWeight: "700" },
+  tabText: { color: COLORS.muted, fontSize: 14, fontFamily: FONT.bold },
   tabTextActive: { color: COLORS.heading },
   tabUnderline: { height: 2, backgroundColor: COLORS.primary, marginTop: 8, borderRadius: 1 },
 
   list: { paddingHorizontal: 20, paddingBottom: 36, paddingTop: 16 },
 
   group: { marginBottom: 18 },
-  groupLabel: { color: COLORS.muted, fontSize: 11, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 },
+  groupLabel: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.extrabold, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 },
 
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
     backgroundColor: COLORS.card,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 14,
     padding: 13,
     marginBottom: 8,
   },
-  rowUnread: { backgroundColor: "#FFF4E8", borderColor: "#F3DDBE" },
+  rowUnread: { backgroundColor: COLORS.primaryTint, borderColor: COLORS.border },
   rowIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   rowBody: { flex: 1 },
-  rowMessage: { color: COLORS.heading, fontSize: 13, lineHeight: 19 },
-  rowMessageUnread: { fontWeight: "700" },
-  rowTime: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
+  rowMessage: { color: COLORS.heading, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19 },
+  rowMessageUnread: { fontFamily: FONT.bold },
+  rowTime: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.regular, marginTop: 3 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 6 },
 
-  loadMore: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderWidth: 1, borderRadius: 12, paddingVertical: 12, marginTop: 4 },
-  loadMoreText: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
+  loadMore: { minHeight: 44, justifyContent: "center", alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, paddingVertical: 12, marginTop: 4 },
+  loadMoreText: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
 
-  emptyCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderWidth: 1, borderRadius: 16, gap: 10, marginTop: 18, paddingHorizontal: 24, paddingVertical: 28 },
-  emptyTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
-  emptyBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, textAlign: "center" },
+  emptyCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 16, gap: 10, marginTop: 18, paddingHorizontal: 24, paddingVertical: 28 },
+  emptyTitle: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold },
+  emptyBody: { color: COLORS.muted, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, textAlign: "center" },
 
-  errorCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderWidth: 1, borderRadius: 16, marginHorizontal: 20, marginTop: 14, padding: 16 },
-  errorTitle: { color: "#B42318", fontSize: 15, fontWeight: "800" },
-  errorBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
-  retryButton: { alignSelf: "flex-start", backgroundColor: COLORS.primary, borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 9 },
-  retryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  errorCard: { backgroundColor: COLORS.errorFill, borderColor: COLORS.errorBorder, borderWidth: 1, borderRadius: 16, marginHorizontal: 20, marginTop: 14, padding: 16 },
+  errorTitle: { color: COLORS.errorText, fontSize: 15, fontFamily: FONT.extrabold },
+  errorBody: { color: COLORS.errorText, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, marginTop: 6 },
+  retryButton: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start", backgroundColor: COLORS.primary, borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 9 },
+  retryText: { color: "#FFFFFF", fontSize: 12, fontFamily: FONT.extrabold },
 });

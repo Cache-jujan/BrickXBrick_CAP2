@@ -3,11 +3,12 @@ import { router } from "expo-router";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { NotificationBell } from "@/components/notification-bell";
+import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 
-const COLORS = {
-  bg: "#F8F1E8",
-  ink: "#1A1A1A",
-  border: "#EDE6D9",
+const HEADER = {
+  bg: COLORS.card,
+  ink: COLORS.heading,
+  border: COLORS.border,
 };
 
 // Brand on the left, gear on the right. Logout lives only in Settings so it
@@ -16,11 +17,11 @@ export function AppHeader() {
   return (
     <View style={styles.bar}>
       <Text style={styles.brand} numberOfLines={1}>
-        BrickXBrick
+        BxB
       </Text>
 
       <View style={styles.actions}>
-        <NotificationBell color={COLORS.ink} />
+        <NotificationBell color={HEADER.ink} />
         <Pressable
           style={styles.gear}
           onPress={() => router.push("/settings")}
@@ -28,7 +29,7 @@ export function AppHeader() {
           accessibilityRole="button"
           accessibilityLabel="Open settings"
         >
-          <IconSymbol name="gearshape.fill" size={22} color={COLORS.ink} />
+          <IconSymbol name="gearshape.fill" size={22} color={HEADER.ink} />
         </Pressable>
       </View>
     </View>
@@ -42,14 +43,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: COLORS.bg,
+    backgroundColor: HEADER.bg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: HEADER.border,
   },
   brand: {
     fontSize: 16,
-    fontWeight: "800",
-    color: COLORS.ink,
+    fontFamily: FONT.extrabold,
+    color: HEADER.ink,
   },
   actions: {
     flexDirection: "row",
@@ -57,6 +58,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   gear: {
-    padding: 4,
+    width: MIN_TAP,
+    height: MIN_TAP,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

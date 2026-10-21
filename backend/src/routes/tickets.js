@@ -7,6 +7,7 @@ const { requireRole } = require("../middleware/requireRole");
 const { assertLegalTransition, logTransition } = require("../lib/ticketTransitions");
 const { notify } = require("../lib/notify");
 const { VALID_TICKET_TYPES } = require("../lib/ticketRouting");
+const { parseNeededBy } = require("../lib/neededBy");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -105,6 +106,7 @@ async function createTicketRecord(client, user, body) {
             notInBom,
             notInBomReason,
             resubmittedFromId,
+            neededBy,
         } = body;
 
         const isPM = user.role === "Project Manager";
@@ -148,6 +150,9 @@ async function createTicketRecord(client, user, body) {
                 throw err;
             }
         }
+
+        // Optional date the material is needed by. Reports have no due date.
+        const neededByValue = isMaterialReq || isWorkItem ? parseNeededBy(neededBy) : null;
 
         // Work Item keeps a free-text materialType (no BOM link).
         if (isWorkItem && !materialType) {
@@ -365,8 +370,8 @@ async function createTicketRecord(client, user, body) {
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
                     materialType, quantity, unit, vendorName, requestedBudget,
                     bomItemID, notInBom, notInBomReason,
-                    status, assignedTo, acknowledgedBy, approvedBudget, resubmittedFromId, acknowledgedAt)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${acknowledgedAtSql})
+                    status, assignedTo, acknowledgedBy, approvedBudget, resubmittedFromId, neededBy, acknowledgedAt)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, ${acknowledgedAtSql})
                  RETURNING *`,
                 [
                     projectID,
@@ -388,6 +393,7 @@ async function createTicketRecord(client, user, body) {
                     acknowledgedByValue,
                     approvedBudgetValue,
                     resolvedResubmittedFromId,
+                    neededByValue,
                 ]
             );
             const newTicket = insertResult.rows[0];
@@ -745,16 +751,25 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
             throw err;
         }
 
+        // The PM may set or change the needed-by date while acknowledging.
+        // Sending the key (even null to clear it) replaces the Site Manager's
+        // date; leaving it out keeps whatever the ticket already has.
+        const changesNeededBy = Object.prototype.hasOwnProperty.call(req.body, "neededBy")
+            && ticket.tickettype !== "Report";
+        const neededByValue = changesNeededBy ? parseNeededBy(req.body.neededBy) : null;
+
         assertLegalTransition(ticket.status, "Acknowledged");
 
         const updated = await withTransaction(async (client) => {
             const updateResult = await client.query(
                 `UPDATE tickets
                     SET status = 'Acknowledged', assignedTo = $1, acknowledgedBy = $2,
-                        acknowledgedAt = NOW(), approvedBudget = $3, updatedAt = NOW()
+                        acknowledgedAt = NOW(), approvedBudget = $3,
+                        neededBy = CASE WHEN $6::boolean THEN $7::date ELSE neededBy END,
+                        updatedAt = NOW()
                   WHERE ticketId = $4 AND status = $5
                   RETURNING *`,
-                [assignedTo, req.user.id, approvedBudgetValue, req.params.id, ticket.status]
+                [assignedTo, req.user.id, approvedBudgetValue, req.params.id, ticket.status, changesNeededBy, neededByValue]
             );
 
             if (updateResult.rowCount === 0) {

@@ -11,7 +11,7 @@ import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
 import { canEnqueue, queueExpense } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { isNetworkError } from "@/lib/sync/messages";
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
@@ -232,24 +232,24 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { paddingHorizontal: 16, paddingBottom: 24 },
   receiptCard: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 16 },
-  receiptVendor: { fontSize: 15, fontWeight: "700", color: COLORS.heading },
+  receiptVendor: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   ticketCard: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.primary, padding: 14, marginBottom: 16 },
-  ticketBadge: { fontSize: 11, fontWeight: "700", color: COLORS.success, marginBottom: 4 },
-  ticketSubject: { fontSize: 15, fontWeight: "700", color: COLORS.heading },
-  ticketMeta: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
-  ticketBudget: { fontSize: 12, fontWeight: "700", color: COLORS.heading, marginTop: 6 },
-  fieldLabelError: { color: "#B42318" },
-  fieldLabel: { fontSize: 12, fontWeight: "600", color: COLORS.muted, marginBottom: 6, marginTop: 4 },
+  ticketBadge: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.success, marginBottom: 4 },
+  ticketSubject: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
+  ticketMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+  ticketBudget: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 6 },
+  fieldLabelError: { color: COLORS.errorText },
+  fieldLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted, marginBottom: 6, marginTop: 4 },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  categoryChip: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: COLORS.card },
-  categoryChipActive: { borderColor: COLORS.primary, backgroundColor: "#FDECE1" },
-  categoryChipText: { fontSize: 12, fontWeight: "600", color: COLORS.heading },
+  categoryChip: { minHeight: 44, justifyContent: "center", borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: COLORS.card },
+  categoryChipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryTint },
+  categoryChipText: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.heading },
   categoryChipTextActive: { color: COLORS.primary },
-  notesInput: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, fontSize: 13, color: COLORS.heading, textAlignVertical: "top", minHeight: 70, marginBottom: 14 },
+  notesInput: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, fontSize: 13, fontFamily: FONT.regular, color: COLORS.heading, textAlignVertical: "top", minHeight: 70, marginBottom: 14 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  summaryLabel: { fontSize: 12, color: COLORS.muted },
-  summaryAmount: { fontSize: 20, fontWeight: "800", color: COLORS.heading },
+  summaryLabel: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
+  summaryAmount: { fontSize: 20, fontFamily: FONT.extrabold, color: COLORS.heading },
   submitButton: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 16, alignItems: "center" },
-  submitButtonText: { color: "#FFF", fontWeight: "700", fontSize: 15 },
+  submitButtonText: { color: "#FFF", fontFamily: FONT.bold, fontSize: 15 },
 });

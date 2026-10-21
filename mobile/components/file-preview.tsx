@@ -1,6 +1,9 @@
 import React from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
+
 
 // Shared file-state shape — imported by index.tsx too, so it only lives here.
 export type FileState =
@@ -46,7 +49,7 @@ export function FilePreview({ file }: { file: FileState }) {
 
   return (
     <View style={styles.pdfRow}>
-      <Text style={styles.pdfIcon}>📕</Text>
+      <IconSymbol name="doc.fill" size={32} color={COLORS.errorText} />
       <View style={styles.pdfMeta}>
         <Text style={styles.pdfName} numberOfLines={1}>
           {file.name}
@@ -62,23 +65,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyIcon: {
-    fontSize: 34,
+    fontSize: 34, fontFamily: FONT.regular,
     marginBottom: 6,
     opacity: 0.5,
   },
   emptyText: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#6C6455",
+    fontFamily: FONT.semibold,
+    color: COLORS.muted,
   },
   emptySubtext: {
-    fontSize: 11,
-    color: "#A79E8C",
+    fontSize: 11, fontFamily: FONT.regular,
+    color: COLORS.muted,
     marginTop: 3,
   },
   imageWrapper: {
     width: "100%",
-    height: "100%",
+    height: 280,
     alignItems: "center",
   },
   image: {
@@ -97,7 +100,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: "#FFF",
-    fontSize: 11,
+    fontSize: 11, fontFamily: FONT.regular,
   },
   pdfRow: {
     flexDirection: "row",
@@ -106,7 +109,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   pdfIcon: {
-    fontSize: 28,
+    fontSize: 28, fontFamily: FONT.regular,
     marginRight: 12,
   },
   pdfMeta: {
@@ -114,12 +117,12 @@ const styles = StyleSheet.create({
   },
   pdfName: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#1A1A1A",
+    fontFamily: FONT.semibold,
+    color: COLORS.heading,
   },
   pdfSize: {
-    fontSize: 11,
-    color: "#8A8272",
+    fontSize: 11, fontFamily: FONT.regular,
+    color: COLORS.muted,
     marginTop: 2,
   },
 });
