@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, useFocusEffect } from "expo-router";
 
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { type AssignedTask } from "@/lib/api";
 import { loadAssignedTasks } from "@/lib/cached-api";
 import { getSession } from "@/lib/auth";
@@ -263,6 +263,20 @@ export default function SiteManagerHomeScreen() {
   const dateWeekday = now.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
   const dateMonth = now.toLocaleDateString(undefined, { month: "short" }).toUpperCase();
 
+  // Monday to Sunday of this week, with a dot on days that have an open deadline.
+  const openDueDays = new Set(open.map(dueDay).filter((d): d is number => d !== null));
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+    return {
+      time: d.getTime(),
+      name: d.toLocaleDateString(undefined, { weekday: "short" }),
+      num: d.getDate(),
+      isToday: d.getTime() === today,
+      hasDue: openDueDays.has(d.getTime()),
+    };
+  });
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <ScrollView
@@ -306,28 +320,38 @@ export default function SiteManagerHomeScreen() {
           </Text>
         )}
 
-        {/* Date + progress card */}
-        <View style={styles.progressCard}>
+        {/* Today summary */}
+        <View style={styles.heroCard}>
           <View style={styles.dateTile} accessibilityLabel={now.toDateString()}>
             <Text style={styles.dateWeekday}>{dateWeekday}</Text>
             <Text style={styles.dateDay}>{now.getDate()}</Text>
             <Text style={styles.dateMonth}>{dateMonth}</Text>
           </View>
-          <View style={styles.progressDivider} />
           <View style={styles.progressBody}>
-            <Text style={styles.progressLabel}>Task Progress</Text>
-            <Text style={styles.progressValue}>
+            <Text style={styles.heroLabel}>Task progress</Text>
+            <Text style={styles.heroValue}>
               {loading ? "…" : `${doneCount} of ${activeTasks.length} tasks`}
             </Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${percent}%` }]} />
             </View>
             {!loading && (dueToday > 0 || overdue > 0) && (
-              <Text style={styles.progressAlert}>
+              <Text style={styles.heroAlert}>
                 {[overdue > 0 && `${overdue} overdue`, dueToday > 0 && `${dueToday} due today`].filter(Boolean).join(" · ")}
               </Text>
             )}
           </View>
+        </View>
+
+        {/* This week: a dot marks a day with an open deadline */}
+        <View style={styles.weekRow} accessibilityLabel="This week">
+          {weekDays.map((day) => (
+            <View key={day.time} style={[styles.weekDay, day.isToday && styles.weekDayToday]}>
+              <Text style={[styles.weekName, day.isToday && styles.weekTextToday]}>{day.name}</Text>
+              <Text style={[styles.weekNum, day.isToday && styles.weekTextToday]}>{day.num}</Text>
+              <View style={[styles.weekDot, day.hasDue && { backgroundColor: day.isToday ? "#FFFFFF" : COLORS.primary }]} />
+            </View>
+          ))}
         </View>
 
         <AppButton
@@ -412,11 +436,9 @@ export default function SiteManagerHomeScreen() {
                           <Text style={styles.projectIconText}>▦</Text>
                         </View>
                         <View style={styles.projectBody}>
-                          <View style={styles.projectTopRow}>
-                            <Text style={styles.projectName} numberOfLines={1}>{project.name}</Text>
-                            <View style={[styles.pill, { backgroundColor: tone.bg }]}>
-                              <Text style={[styles.pillText, { color: tone.fg }]}>{tone.label}</Text>
-                            </View>
+                          <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
+                          <View style={[styles.pill, styles.projectPill, { backgroundColor: tone.bg }]}>
+                            <Text style={[styles.pillText, { color: tone.fg }]}>{tone.label}</Text>
                           </View>
                           <View style={styles.projectProgressRow}>
                             <View style={styles.projectTrack}>
@@ -575,9 +597,9 @@ function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
 }
 
 const DUE_TONE = StyleSheet.create({
-  late: { color: "#D92D20", fontWeight: "800" },
-  today: { color: "#E85D0C", fontWeight: "800" },
-  soon: { color: "#B45309", fontWeight: "700" },
+  late: { color: "#D92D20", fontFamily: FONT.extrabold },
+  today: { color: "#E85D0C", fontFamily: FONT.extrabold },
+  soon: { color: "#B45309", fontFamily: FONT.bold },
   normal: {},
 });
 
@@ -591,31 +613,41 @@ const styles = StyleSheet.create({
 
   headerRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   brandRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  brandName: { color: COLORS.heading, fontSize: 18, fontWeight: "800" },
-  brandTagline: { color: COLORS.muted, fontSize: 11, marginTop: 1 },
+  brandName: { color: COLORS.heading, fontSize: 18, fontFamily: FONT.extrabold },
+  brandTagline: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, marginTop: 1 },
   logo: { gap: 2 },
   logoRow: { flexDirection: "row", gap: 2 },
   logoBrick: { backgroundColor: COLORS.primary, borderRadius: 2, height: 8 },
   headerActions: { alignItems: "center", flexDirection: "row", gap: 12 },
   avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: 44, justifyContent: "center", width: 44 },
-  avatarText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  avatarText: { color: "#FFFFFF", fontSize: 16, fontFamily: FONT.extrabold },
 
-  title: { color: "#111827", fontSize: 30, fontWeight: "800", letterSpacing: -0.5, marginTop: 22 },
-  subtitle: { color: COLORS.muted, fontSize: 15, marginTop: 6 },
-  offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
+  title: { color: "#111827", fontSize: 30, fontFamily: FONT.extrabold, letterSpacing: -0.5, marginTop: 22 },
+  subtitle: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 15, marginTop: 6 },
+  offlineNote: { fontFamily: FONT.regular, backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
 
-  progressCard: { ...CARD, alignItems: "center", flexDirection: "row", gap: 16, marginTop: 18, padding: 16 },
-  dateTile: { alignItems: "center", backgroundColor: "#FFF3EA", borderColor: "#F8D3B8", borderRadius: 16, borderWidth: 1, justifyContent: "center", paddingVertical: 10, width: 88 },
-  dateWeekday: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
-  dateDay: { color: COLORS.heading, fontSize: 38, fontWeight: "800", lineHeight: 44 },
-  dateMonth: { color: COLORS.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
-  progressDivider: { alignSelf: "stretch", backgroundColor: "#ECE6DC", width: 1 },
+  heroCard: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 24, flexDirection: "row", gap: 16, marginTop: 18, padding: 16 },
+  dateTile: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 18, justifyContent: "center", paddingVertical: 10, width: 84 },
+  dateWeekday: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 1.2 },
+  dateDay: { color: COLORS.heading, fontSize: 36, fontFamily: FONT.extrabold, lineHeight: 42 },
+  dateMonth: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 1.2 },
+  heroLabel: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: FONT.medium },
+  heroValue: { color: "#FFFFFF", fontSize: 21, fontFamily: FONT.extrabold, marginTop: 3 },
+  heroAlert: { color: "#FFFFFF", fontSize: 12, fontFamily: FONT.bold, marginTop: 8 },
+
+  weekRow: { flexDirection: "row", gap: 6, marginTop: 14 },
+  weekDay: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, paddingVertical: 8 },
+  weekDayToday: { backgroundColor: COLORS.heading, borderColor: COLORS.heading },
+  weekName: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
+  weekNum: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold },
+  weekTextToday: { color: "#FFFFFF" },
+  weekDot: { backgroundColor: "transparent", borderRadius: 3, height: 6, marginTop: 2, width: 6 },
   progressBody: { flex: 1 },
-  progressLabel: { color: COLORS.muted, fontSize: 14 },
-  progressValue: { color: COLORS.heading, fontSize: 21, fontWeight: "800", marginTop: 4 },
-  progressTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, height: 8, marginTop: 12, overflow: "hidden" },
-  progressFill: { backgroundColor: COLORS.success, borderRadius: 4, height: 8 },
-  progressAlert: { color: "#D92D20", fontSize: 12, fontWeight: "700", marginTop: 8 },
+  
+  
+  progressTrack: { backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 4, height: 8, marginTop: 12, overflow: "hidden" },
+  progressFill: { backgroundColor: "#FFFFFF", borderRadius: 4, height: 8 },
+  
 
   ticketButton: { marginTop: 12 },
   stateWrap: { marginTop: 20 },
@@ -625,50 +657,50 @@ const styles = StyleSheet.create({
   filterItemDivider: { borderLeftColor: "#ECE6DC", borderLeftWidth: 1 },
   filterItemActive: { backgroundColor: COLORS.primary, borderRadius: 14, margin: 3 },
   filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4 },
-  filterLabel: { color: COLORS.heading, fontSize: 11, fontWeight: "700" },
+  filterLabel: { color: COLORS.heading, fontSize: 11, fontFamily: FONT.bold },
   filterLabelActive: { color: "#FFFFFF" },
   filterCount: { borderRadius: 10, minWidth: 18, paddingHorizontal: 5, paddingVertical: 1 },
-  filterCountText: { fontSize: 11, fontWeight: "800", textAlign: "center" },
+  filterCountText: { fontSize: 11, fontFamily: FONT.extrabold, textAlign: "center" },
 
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 24 },
-  sectionTitle: { color: COLORS.heading, fontSize: 19, fontWeight: "800" },
-  viewAll: { color: COLORS.primary, fontSize: 13, fontWeight: "700" },
+  sectionTitle: { color: COLORS.heading, fontSize: 19, fontFamily: FONT.extrabold },
+  viewAll: { color: COLORS.primary, fontSize: 13, fontFamily: FONT.bold },
   cardList: { gap: 10 },
 
   segment: { backgroundColor: "#EFE7DA", borderRadius: 12, flexDirection: "row", marginBottom: 12, padding: 3 },
   segmentItem: { alignItems: "center", borderRadius: 10, flex: 1, paddingVertical: 8 },
   segmentItemActive: { backgroundColor: "#FFFFFF" },
-  segmentText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  segmentText: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.bold },
   segmentTextActive: { color: COLORS.heading },
   archiveGroup: { marginBottom: 12 },
-  archiveMonth: { color: COLORS.muted, fontSize: 12, fontWeight: "800", letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" },
+  archiveMonth: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" },
 
-  projectCard: { ...CARD, alignItems: "center", flexDirection: "row", gap: 12, padding: 12 },
+  projectCard: { ...CARD, alignItems: "flex-start", flexDirection: "row", gap: 12, padding: 14 },
   projectCardSelected: { backgroundColor: "#FFF6EE", borderColor: COLORS.primary },
-  projectIcon: { alignItems: "center", backgroundColor: "#E8F0FB", borderRadius: 12, height: 56, justifyContent: "center", width: 56 },
-  projectIconText: { color: "#2F6FD0", fontSize: 26 },
+  projectIcon: { alignItems: "center", backgroundColor: "#E8F0FB", borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
+  projectIconText: { color: "#2F6FD0", fontSize: 22 },
   projectBody: { flex: 1 },
-  projectTopRow: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "space-between" },
-  projectName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "800" },
+  projectName: { color: COLORS.heading, fontSize: 15, lineHeight: 20, fontFamily: FONT.extrabold },
   projectProgressRow: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 10 },
   projectTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, flex: 1, height: 7, overflow: "hidden" },
   projectFill: { borderRadius: 4, height: 7 },
-  projectCount: { color: COLORS.muted, fontSize: 11, fontWeight: "600" },
-  projectPending: { color: COLORS.muted, fontSize: 11, marginTop: 6 },
-  projectMeta: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  projectCount: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
+  projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, marginTop: 6 },
+  projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   projectChip: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 16, marginBottom: 10, maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 6 },
-  projectChipText: { color: COLORS.primary, fontSize: 12, fontWeight: "800" },
+  projectChipText: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold },
 
+  projectPill: { alignSelf: "flex-start", marginTop: 6 },
   pill: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { fontSize: 11, fontWeight: "800" },
+  pillText: { fontSize: 11, fontFamily: FONT.extrabold },
 
   taskRow: { ...CARD, alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
   taskLead: { alignItems: "center", borderRadius: 16, borderWidth: 2.5, height: 32, justifyContent: "center", width: 32 },
-  taskLeadGlyph: { fontSize: 16, fontWeight: "900" },
+  taskLeadGlyph: { fontSize: 16, fontFamily: FONT.extrabold },
   taskBody: { flex: 1 },
-  taskName: { color: COLORS.heading, fontSize: 15, fontWeight: "800", lineHeight: 20 },
-  taskProject: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
+  taskName: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold, lineHeight: 20 },
+  taskProject: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, marginTop: 4 },
   taskRight: { alignItems: "flex-end", gap: 6 },
-  taskDue: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
+  taskDue: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.semibold },
 
 });

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname, type Href } from "expo-router";
 
-import { COLORS } from "@/constants/expense-flow-colors";
+import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 
@@ -31,38 +31,37 @@ export function SmBottomBar() {
   if (session?.user.role !== "Site Manager") return null;
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {TABS.map((tab) => {
-        const active = tab.match.includes(pathname);
-        return (
-          <Pressable
-            key={tab.label}
-            onPress={() => {
-              if (!active) router.replace(tab.href);
-            }}
-            style={styles.item}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={tab.label}
-          >
-            <IconSymbol name={tab.icon} size={22} color={active ? COLORS.primary : COLORS.muted} />
-            <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
-          </Pressable>
-        );
-      })}
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <View style={styles.pill}>
+        {TABS.map((tab) => {
+          const active = tab.match.includes(pathname);
+          return (
+            <Pressable
+              key={tab.label}
+              onPress={() => {
+                if (!active) router.replace(tab.href);
+              }}
+              style={[styles.item, active && styles.itemActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={tab.label}
+            >
+              <IconSymbol name={tab.icon} size={22} color={active ? "#FFFFFF" : "#CFC6BA"} />
+              {active ? <Text style={styles.label} numberOfLines={1}>{tab.label}</Text> : null}
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
+// A floating dark pill: the open tab is an orange capsule with its name, the
+// others are icons only (each still has an accessibility label).
 const styles = StyleSheet.create({
-  bar: {
-    backgroundColor: "#FFFCF8",
-    borderTopColor: "#E7DDCF",
-    borderTopWidth: 1,
-    flexDirection: "row",
-    paddingTop: 8,
-  },
-  item: { alignItems: "center", flex: 1, gap: 3, paddingVertical: 4 },
-  label: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
-  labelActive: { color: COLORS.primary },
+  wrap: { backgroundColor: COLORS.bgWarm, paddingHorizontal: 16, paddingTop: 8 },
+  pill: { alignItems: "center", backgroundColor: COLORS.heading, borderRadius: 32, flexDirection: "row", justifyContent: "space-between", padding: 6 },
+  item: { alignItems: "center", borderRadius: 26, flexDirection: "row", gap: 6, height: MIN_TAP + 4, justifyContent: "center", minWidth: MIN_TAP + 4, paddingHorizontal: 12 },
+  itemActive: { backgroundColor: COLORS.primary, paddingHorizontal: 16 },
+  label: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 13 },
 });
