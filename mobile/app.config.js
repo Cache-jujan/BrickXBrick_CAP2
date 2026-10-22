@@ -1,4 +1,6 @@
-import type { ExpoConfig } from "expo/config";
+// Plain JavaScript on purpose: EAS CLI and older Node versions read this file
+// without a TypeScript step, and TypeScript syntax here ("import type", ": Type")
+// makes `eas init` / `eas build` fail with "Unexpected token '{'".
 
 // Static bundle identifier and deep-link scheme.
 // NOTE: scheme must match the redirect URI configured in your OAuth
@@ -21,7 +23,8 @@ const env = {
 const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() ?? "";
 const allowCleartext = apiUrl.startsWith("http://");
 
-const config: ExpoConfig = {
+/** @type {import("expo/config").ExpoConfig} */
+const config = {
   name: env.appName,
   slug: env.appSlug,
   version: "1.0.0",
@@ -123,4 +126,4 @@ const config: ExpoConfig = {
   },
 };
 
-export default config;
+module.exports = config;
