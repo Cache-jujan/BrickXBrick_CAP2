@@ -17,8 +17,10 @@ import {
   useFonts,
 } from "@expo-google-fonts/plus-jakarta-sans";
 
-// Keep the splash screen up until the fonts are ready. The navigator itself is
-// always rendered: expo-router needs it mounted to handle the first redirect.
+// Keep the splash screen up until the fonts are ready, and do not draw any
+// screen before that. Text drawn with the phone's default font and then
+// switched to Plus Jakarta Sans keeps its old, narrower size on Android, so
+// the ends of words get cut off ("Brick x", "Sho", "Sign ...").
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
@@ -47,6 +49,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded, fontError]);
+
+  // Nothing is drawn until the fonts are ready (or have failed, in which case
+  // the system font is used from the start). The splash screen covers the wait.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <ExpenseDraftProvider>
