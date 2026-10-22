@@ -15,6 +15,12 @@ const env = {
   androidPackage: bundleId,
 };
 
+// A release build blocks plain http:// by default. Only allow it when the
+// backend address really is http (a LAN or test server); an https:// backend
+// (the deployed one) keeps the safer default.
+const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() ?? "";
+const allowCleartext = apiUrl.startsWith("http://");
+
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
@@ -99,6 +105,7 @@ const config: ExpoConfig = {
         android: {
           buildArchs: ["armeabi-v7a", "arm64-v8a"],
           minSdkVersion: 24,
+          usesCleartextTraffic: allowCleartext,
         },
       },
     ],
