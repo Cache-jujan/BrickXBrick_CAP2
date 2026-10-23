@@ -7,6 +7,7 @@ import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
+import { useLocale } from "@/lib/i18n-context";
 
 // The Purchaser gets Requests / Expenses / Account tabs. A Site Manager landing
 // here keeps the single screen with no tab bar. Account opens Settings (and
@@ -14,6 +15,7 @@ import { getSession } from "@/lib/auth";
 // The (tabs) folder name is kept because index.tsx, login.tsx and the OAuth
 // callback all redirect to "/(tabs)".
 export default function TabLayout() {
+  const { t } = useLocale();
   const session = getSession();
   if (!session || !["Purchaser", "Site Manager"].includes(session.user.role)) return <Redirect href="/login" />;
   const isPurchaser = session.user.role === "Purchaser";
@@ -39,14 +41,14 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: "Requests",
+            title: t("mobile.requests"),
             tabBarIcon: ({ color }) => <IconSymbol name="list.clipboard.fill" size={24} color={color} />,
           }}
         />
         <Tabs.Screen
           name="expenses"
           options={{
-            title: "Expenses",
+            title: t("mobile.expenses"),
             href: isPurchaser ? undefined : null,
             tabBarIcon: ({ color }) => <IconSymbol name="receipt" size={24} color={color} />,
           }}
@@ -54,7 +56,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="account"
           options={{
-            title: "Account",
+            title: t("mobile.account"),
             href: isPurchaser ? undefined : null,
             tabBarIcon: ({ color }) => <IconSymbol name="person.crop.circle" size={24} color={color} />,
           }}

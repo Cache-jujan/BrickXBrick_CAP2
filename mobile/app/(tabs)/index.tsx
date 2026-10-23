@@ -43,6 +43,7 @@ import { RejectedExpenses } from "@/components/rejected-expenses";
 import { fileFromExpense, ocrResultFromExpense } from "@/lib/resubmit";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
 import type { QueuedScan } from "@/components/scanned-receipts";
+import { useLocale } from "@/lib/i18n-context";
 
 // While a receipt is still being read, refresh the list this often.
 const SCAN_REFRESH_MS = 4000;
@@ -63,6 +64,7 @@ function toBucket(
 }
 
 export default function HomeScreen() {
+  const { t } = useLocale();
   const { setTicket, reset, startResubmit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
@@ -184,8 +186,8 @@ export default function HomeScreen() {
     : toBucket(t.status) !== null);
 
   const filterLabels: Record<FilterKey, string> = isSiteManager
-    ? { All: "All", Pending: "Pending", Completed: "Completed" }
-    : { All: "All", Pending: "Assigned", Completed: "Purchased" };
+    ? { All: t("common.all"), Pending: t("common.pending"), Completed: t("common.completed") }
+    : { All: t("common.all"), Pending: t("mobile.assigned"), Completed: t("mobile.purchased") };
 
   const visible = actionable
     .filter((t) => filter === "All" || toBucket(t.status) === filter)
@@ -250,11 +252,11 @@ export default function HomeScreen() {
     // (Purchaser) or Site Manager bottom bar handles the bottom inset.
     <SafeAreaView style={[styles.safeArea, isSiteManager && styles.safeAreaWarm]} edges={[]}>
       <View style={styles.header}>
-        <Text style={styles.brand}>{isSiteManager ? "Ready for expense capture" : "Requests"}</Text>
+        <Text style={styles.brand}>{t(isSiteManager ? "mobile.ready_for_expense" : "mobile.requests")}</Text>
         <Text style={styles.subtitle}>
           {isSiteManager
-            ? "Material requests that have been bought. Tap one to photograph its receipt and log the expense."
-            : "Materials assigned to you"}
+            ? t("mobile.material_requests_help")
+            : t("mobile.materials_assigned")}
         </Text>
       </View>
 
@@ -284,7 +286,7 @@ export default function HomeScreen() {
 
       {shownError && (
         <View style={styles.stateWrap}>
-          <StateCard kind="error" title="Couldn’t load requests" body={shownError} onRetry={load} />
+          <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />
         </View>
       )}
 
@@ -307,16 +309,16 @@ export default function HomeScreen() {
           {isSiteManager ? null : (
             <View style={styles.listHeaderRow}>
               <View style={styles.flex}>
-                <Text style={styles.sectionTitle}>{filter === "Completed" ? "Purchased" : "To purchase"}</Text>
-                <Text style={styles.sectionTotal}>{formatPeso(estimatedTotal)} est. total</Text>
+                <Text style={styles.sectionTitle}>{t(filter === "Completed" ? "mobile.purchased_section" : "mobile.to_purchase")}</Text>
+                <Text style={styles.sectionTotal}>{formatPeso(estimatedTotal)} {t("mobile.estimated_total")}</Text>
               </View>
               <Pressable
                 onPress={() => setSort((current) => (current === "due" ? "newest" : "due"))}
                 style={styles.sortButton}
                 accessibilityRole="button"
-                accessibilityLabel={`Sorted by ${sort === "due" ? "due date" : "newest"}. Tap to change.`}
+                accessibilityLabel={`${t("mobile.sorted_by")} ${t(sort === "due" ? "mobile.due_date" : "mobile.newest")}. ${t("mobile.tap_to_change")}`}
               >
-                <Text style={styles.sortText}>{sort === "due" ? "Due date" : "Newest"} ↓</Text>
+                <Text style={styles.sortText}>{t(sort === "due" ? "mobile.due_date" : "mobile.newest")} ↓</Text>
               </Pressable>
             </View>
           )}
@@ -332,11 +334,11 @@ export default function HomeScreen() {
           !loading ? (
             <StateCard
               kind="empty"
-              title={isSiteManager ? "No requests ready for expense capture" : "No requests in this view"}
+              title={t(isSiteManager ? "mobile.no_capture_requests" : "mobile.no_requests_view")}
               body={
                 isSiteManager
-                  ? "Material requests appear here once the purchase is done. Pull down to refresh."
-                  : "Requests assigned to you will appear here. Pull down to refresh."
+                  ? t("mobile.no_requests_capture_help")
+                  : t("mobile.no_requests_assigned")
               }
             />
           ) : null
@@ -359,9 +361,9 @@ export default function HomeScreen() {
           const urgency = urgencyFor(item.neededby);
 
           let chip: { label: string; tone: ChipTone };
-          if (item.status === "Resolved") chip = { label: "Purchased", tone: "success" };
-          else if (alreadyCaptured) chip = { label: "In progress", tone: "info" };
-          else chip = { label: "To purchase", tone: "primary" };
+          if (item.status === "Resolved") chip = { label: t("mobile.purchased"), tone: "success" };
+          else if (alreadyCaptured) chip = { label: t("common.in_progress"), tone: "info" };
+          else chip = { label: t("mobile.to_purchase"), tone: "primary" };
 
           const Card = (
             <View style={styles.card}>
@@ -387,7 +389,7 @@ export default function HomeScreen() {
                 <View style={styles.cardFooterRow}>
                   <Text style={styles.cardFooterText}>{new Date(item.createdat).toLocaleDateString()}</Text>
                   <AppButton
-                    label={alreadyCaptured ? "+ Add another expense" : "+ Add Expense"}
+                    label={t(alreadyCaptured ? "mobile.add_another_expense" : "mobile.add_expense")}
                     variant={alreadyCaptured ? "secondary" : "primary"}
                     fit
                     onPress={() => openTicket(item)}
@@ -415,7 +417,7 @@ export default function HomeScreen() {
               onPress={() => openTicket(item)}
               style={({ pressed }) => pressed && styles.pressed}
               accessibilityRole="button"
-              accessibilityLabel={`${item.subject}, ${chip.label}. Capture an expense.`}
+              accessibilityLabel={`${item.subject}, ${chip.label}. ${t("mobile.capture_expense")}`}
             >
               {Card}
             </Pressable>

@@ -13,15 +13,16 @@ import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { ExpenseActions } from "@/components/expense-actions";
 import { StateCard } from "@/components/state-card";
 import { StatusChip, type ChipTone } from "@/components/status-chip";
+import { useLocale } from "@/lib/i18n-context";
 
 type FilterKey = "All" | "Under review" | "Approved";
 const FILTER_KEYS: FilterKey[] = ["All", "Under review", "Approved"];
 
 // The API's "Pending" is shown to the Purchaser as "Under review".
 const STATUS: Record<MyExpense["status"], { label: string; tone: ChipTone }> = {
-  Pending: { label: "Under review", tone: "amber" },
-  Approved: { label: "Approved", tone: "success" },
-  Rejected: { label: "Rejected", tone: "error" },
+  Pending: { label: "mobile.under_review", tone: "amber" },
+  Approved: { label: "mobile.approved", tone: "success" },
+  Rejected: { label: "mobile.rejected", tone: "error" },
 };
 
 function matchesFilter(expense: MyExpense, filter: FilterKey) {
@@ -36,6 +37,7 @@ function shortDate(value: string | null) {
 }
 
 export default function ExpensesScreen() {
+  const { t } = useLocale();
   const { isOnline } = useNetwork();
   const [expenses, setExpenses] = useState<MyExpense[]>([]);
   const [projectsById, setProjectsById] = useState<Record<string, Project>>({});
@@ -77,8 +79,8 @@ export default function ExpensesScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Expenses</Text>
-        <Text style={styles.subtitle}>Receipts you have submitted</Text>
+        <Text style={styles.title}>{t("mobile.expenses")}</Text>
+        <Text style={styles.subtitle}>{t("mobile.receipts_submitted")}</Text>
       </View>
 
       <View style={styles.filterRow}>
@@ -90,7 +92,7 @@ export default function ExpensesScreen() {
             accessibilityRole="button"
             accessibilityState={{ selected: filter === key }}
           >
-            <Text style={[styles.pillText, filter === key && styles.pillTextActive]}>{key}</Text>
+            <Text style={[styles.pillText, filter === key && styles.pillTextActive]}>{t(key === "All" ? "common.all" : `mobile.${key === "Under review" ? "under_review" : key.toLowerCase()}`)}</Text>
           </Pressable>
         ))}
       </View>
@@ -102,7 +104,7 @@ export default function ExpensesScreen() {
       )}
       {shownError && (
         <View style={styles.stateWrap}>
-          <StateCard kind="error" title="Couldn’t load expenses" body={shownError} onRetry={load} />
+            <StateCard kind="error" title={t("mobile.expenses_load_error")} body={shownError} onRetry={load} />
         </View>
       )}
 
@@ -114,40 +116,38 @@ export default function ExpensesScreen() {
         ListHeaderComponent={
           <View style={styles.summary}>
             <View style={styles.flex}>
-              <Text style={styles.summaryLabel}>Submitted this month</Text>
+              <Text style={styles.summaryLabel}>{t("mobile.submitted_this_month")}</Text>
               <Text style={styles.summaryTotal}>{formatPeso(monthTotal)}</Text>
             </View>
             <View style={styles.summaryCounts}>
-              <Text style={styles.summaryCount}>{underReview} under review</Text>
-              <Text style={styles.summaryCount}>{approved} approved</Text>
+              <Text style={styles.summaryCount}>{t("mobile.under_review_count", { count: underReview })}</Text>
+              <Text style={styles.summaryCount}>{t("mobile.approved_count", { count: approved })}</Text>
             </View>
           </View>
         }
         ListEmptyComponent={
           !loading ? (
-            <StateCard kind="empty" title="No expenses in this view" body="Expenses you submit will appear here. Pull down to refresh." />
+            <StateCard kind="empty" title={t("mobile.no_expenses_view")} body={t("mobile.expenses_empty_help")} />
           ) : null
         }
         renderItem={({ item }) => {
           const status = STATUS[item.status];
           const split = (item.splitProjectCount ?? 0) > 1;
           const projectName = projectsById[item.projectID]?.name ?? "Unknown project";
-          const meta = split
-            ? `Split across ${item.splitProjectCount} projects`
-            : projectName;
+          const metaLabel = split ? t("mobile.split_across_projects", { count: item.splitProjectCount ?? 0 }) : projectName;
 
           return (
             <View style={styles.card}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardTitle} numberOfLines={2}>{item.vendorName?.trim() || "Receipt"}</Text>
+                <Text style={styles.cardTitle} numberOfLines={2}>{item.vendorName?.trim() || t("mobile.receipt")}</Text>
                 <Text style={styles.cardAmount}>{formatPeso(item.amount)}</Text>
               </View>
               <Text style={styles.cardMeta} numberOfLines={1}>
-                {[meta, shortDate(item.receiptDate ?? item.submittedAt)].filter(Boolean).join(" · ")}
+                {[metaLabel, shortDate(item.receiptDate ?? item.submittedAt)].filter(Boolean).join(" · ")}
               </Text>
               <View style={styles.chipRow}>
-                <StatusChip label={status.label} tone={status.tone} />
-                {split ? <StatusChip label="Split" tone="primary" /> : null}
+                <StatusChip label={t(status.label)} tone={status.tone} />
+                {split ? <StatusChip label={t("mobile.split")} tone="primary" /> : null}
               </View>
               {item.status === "Rejected" && item.rejectionReason ? (
                 <Text style={styles.reason}>{item.rejectionReason}</Text>

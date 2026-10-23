@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listTamperAlerts } from "../../api/blockchainApi";
 import { GridIcon, FolderIcon, UsersIcon, ChevronIcon } from "./icons";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 function ReceiptIcon() {
   return (
@@ -48,44 +49,45 @@ function AlertTriangleIcon() {
 // entirely for nav items that don't need a badge.
 const NAV_BY_ROLE = {
   "General Manager": [
-    { to: "/dashboard/gm", label: "Dashboard", icon: GridIcon },
-    { to: "/projects", label: "Projects", icon: FolderIcon },
-    { to: "/expenses", label: "Expenses", icon: ReceiptIcon },
-    { to: "/reports", label: "Reports", icon: ChartIcon },
-    { to: "/blockchain/alerts", label: "Tamper Alerts", icon: AlertTriangleIcon, alerts: "live" },
+    { to: "/dashboard/gm", label: "nav.dashboard", icon: GridIcon },
+    { to: "/projects", label: "nav.projects", icon: FolderIcon },
+    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon },
+    { to: "/reports", label: "nav.reports", icon: ChartIcon },
+    { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: AlertTriangleIcon, alerts: "live" },
   ],
   "Project Manager": [
-    { to: "/dashboard/pm", label: "Dashboard", icon: GridIcon },
-    { to: "/tickets/queue", label: "Tickets", icon: TicketIcon },
-    { to: "/tasks/progress-review", label: "Progress Review", icon: TicketIcon },
-    { to: "/projects", label: "Projects", icon: FolderIcon },
-    { to: "/expenses", label: "Expenses", icon: ReceiptIcon },
+    { to: "/dashboard/pm", label: "nav.dashboard", icon: GridIcon },
+    { to: "/tickets/queue", label: "nav.tickets", icon: TicketIcon },
+    { to: "/tasks/progress-review", label: "nav.progress_review", icon: TicketIcon },
+    { to: "/projects", label: "nav.projects", icon: FolderIcon },
+    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon },
   ],
   "Site Manager": [
-    { to: "/dashboard/sm", label: "Dashboard", icon: GridIcon },
-    { to: "/tickets/new", label: "Create Ticket", icon: TicketIcon },
+    { to: "/dashboard/sm", label: "nav.dashboard", icon: GridIcon },
+    { to: "/tickets/new", label: "nav.create_ticket", icon: TicketIcon },
   ],
   Purchaser: [
   {
     to: "/dashboard/purchaser",
-    label: "Dashboard",
+    label: "nav.dashboard",
     icon: GridIcon,
   },
   {
     to: "/expenses",
-    label: "My Expenses",
+    label: "nav.my_expenses",
     icon: ReceiptIcon,
   },
 ],
 
   "System Administrator": [
-    { to: "/dashboard/admin", label: "Dashboard", icon: GridIcon },
-    { to: "/admin/users", label: "User Accounts", icon: UsersIcon },
-    { to: "/blockchain/alerts", label: "Tamper Alerts", icon: AlertTriangleIcon, alerts: "live" },
+    { to: "/dashboard/admin", label: "nav.dashboard", icon: GridIcon },
+    { to: "/admin/users", label: "nav.user_accounts", icon: UsersIcon },
+    { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: AlertTriangleIcon, alerts: "live" },
   ],
 };
 
 export function Sidebar({ mobileOpen = false, onNavigate }) {
+  const { t } = useLocale();
   const { user } = useAuth();
   const links = NAV_BY_ROLE[user?.role] || [];
   const [collapsedPref, setCollapsed] = useState(false);
@@ -141,15 +143,15 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
               to={link.to}
               end={link.to.startsWith("/dashboard")}
               className={({ isActive }) => "sidebar-link" + (isActive ? " sidebar-link-active" : "")}
-              title={collapsed ? link.label : undefined}
+              title={collapsed ? t(link.label) : undefined}
               onClick={onNavigate}
             >
               <span className="sidebar-link-icon">
                 <Icon />
               </span>
-              {!collapsed && <span className="sidebar-link-label">{link.label}</span>}
+              {!collapsed && <span className="sidebar-link-label">{t(link.label)}</span>}
               {showBadge && (
-                <span className="sidebar-link-badge" aria-label={`${alertCount} open tamper alerts`}>
+                <span className="sidebar-link-badge" aria-label={`${alertCount} open ${t("nav.tamper_alerts")}`}>
                   {alertCount > 9 ? "9+" : alertCount}
                 </span>
               )}
@@ -162,14 +164,14 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
         type="button"
         className="sidebar-collapse-btn"
         onClick={() => setCollapsed((v) => !v)}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={t(collapsed ? "nav.expand_sidebar" : "nav.collapse_sidebar")}
       >
         <ChevronIcon open={!collapsed} />
-        {!collapsed && <span>Collapse</span>}
+        {!collapsed && <span>{t("nav.collapse")}</span>}
       </button>
 
       <div className="sidebar-footer">
-        {!collapsed && <p className="sidebar-footer-label">Signed in as</p>}
+        {!collapsed && <p className="sidebar-footer-label">{t("nav.signed_in_as")}</p>}
         <p className="sidebar-footer-role">{collapsed ? user?.role?.[0] : user?.role}</p>
       </div>
     </aside>

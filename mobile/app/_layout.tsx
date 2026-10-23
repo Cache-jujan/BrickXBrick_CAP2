@@ -7,6 +7,7 @@ import { ExpenseDraftProvider } from "@/lib/expense-draft-context";
 import { NetworkProvider } from "@/lib/sync/network-context";
 import { OfflineBanner, OfflineStripProvider } from "@/components/offline-banner";
 import { NotificationToast } from "@/components/notification-toast";
+import { LocaleProvider } from "@/lib/i18n-context";
 import { nextRouteAfterLogin, restoreSession } from "@/lib/auth";
 import {
   PlusJakartaSans_400Regular,
@@ -55,21 +56,23 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ExpenseDraftProvider>
-      <NetworkProvider>
-        <OfflineStripProvider>
-          <View style={{ flex: 1 }}>
-            <OfflineBanner />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="expense" />
-              <Stack.Screen name="oauth/callback" />
-              <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
-            </Stack>
-            <NotificationToast />
-          </View>
-        </OfflineStripProvider>
-      </NetworkProvider>
-    </ExpenseDraftProvider>
+    <LocaleProvider>
+      <ExpenseDraftProvider>
+        <NetworkProvider>
+          <OfflineStripProvider>
+            <View style={{ flex: 1 }}>
+              <OfflineBanner />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="expense" />
+                <Stack.Screen name="oauth/callback" />
+                <Stack.Screen name="terms" options={{ gestureEnabled: false }} />
+              </Stack>
+              <NotificationToast />
+            </View>
+          </OfflineStripProvider>
+        </NetworkProvider>
+      </ExpenseDraftProvider>
+    </LocaleProvider>
   );
 }
