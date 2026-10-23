@@ -1,0 +1,35 @@
+# EAS Build uploads the whole repository by default. The app only needs mobile/,
+# so everything else stays out of the upload (it is also what made the upload
+# fail on blockchain/cluster/*/geth.ipc, a socket file of the local blockchain node).
+# While this file exists, EAS uses it instead of .gitignore, so the usual
+# ignores are repeated below.
+
+# Other parts of the project
+/backend/
+/frontend/
+/blockchain/
+/infra/
+/docs/
+/.github/
+/.claude/
+/.vscode/
+/docker-compose.yml
+
+# Dependencies and generated output
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Local secrets and logs (EAS gets its settings from its own environment variables)
+.env
+.env.*
+!.env.example
+*.log
+*.ipc
+*.sock
+*.jks
+*.p12
+*.key
+*.pem
+.DS_Store

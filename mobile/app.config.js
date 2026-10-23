@@ -1,4 +1,6 @@
-import type { ExpoConfig } from "expo/config";
+// Plain JavaScript on purpose: EAS CLI and older Node versions read this file
+// without a TypeScript step, and TypeScript syntax here ("import type", ": Type")
+// makes `eas init` / `eas build` fail with "Unexpected token '{'".
 
 // Static bundle identifier and deep-link scheme.
 // NOTE: scheme must match the redirect URI configured in your OAuth
@@ -15,10 +17,20 @@ const env = {
   androidPackage: bundleId,
 };
 
-const config: ExpoConfig = {
+// A release build blocks plain http:// by default. Only allow it when the
+// backend address really is http (a LAN or test server); an https:// backend
+// (the deployed one) keeps the safer default.
+const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() ?? "";
+const allowCleartext = apiUrl.startsWith("http://");
+
+/** @type {import("expo/config").ExpoConfig} */
+const config = {
   name: env.appName,
   slug: env.appSlug,
   version: "1.0.0",
+  extra: {
+    eas: { projectId: "b44fc7f1-a37b-43b4-b806-266479320c7d" },
+  },
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,
@@ -99,6 +111,7 @@ const config: ExpoConfig = {
         android: {
           buildArchs: ["armeabi-v7a", "arm64-v8a"],
           minSdkVersion: 24,
+          usesCleartextTraffic: allowCleartext,
         },
       },
     ],
@@ -116,4 +129,4 @@ const config: ExpoConfig = {
   },
 };
 
-export default config;
+module.exports = config;
