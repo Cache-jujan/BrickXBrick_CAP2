@@ -26,7 +26,9 @@ const REJECT_CODE_BY_STATUS = { 400: "MISSING_PHOTO", 403: "TASK_NOT_YOURS", 404
 /**
  * Upload one queued photo. Returns the server URL.
  * Throws PhotoUploadRejected when retrying cannot help; throws a plain Error on
- * anything temporary (no network, 5xx, signed out), so the entry stays pending.
+ * anything temporary (no network, 5xx), so the entry stays pending. An expired
+ * sign-in (401) throws an Error with unauthorized = true; the entry also stays
+ * pending, but the sync stops and sends the user to sign in again.
  */
 export async function uploadTaskPhoto(taskId, photoPath) {
   const info = await FileSystem.getInfoAsync(photoPath);
@@ -50,6 +52,15 @@ export async function uploadTaskPhoto(taskId, photoPath) {
   }
 
   if (result.status >= 200 && result.status < 300 && body.photoUrl) return body.photoUrl;
+
+  // The saved sign-in has expired. Retrying with the same token can never work,
+  // so say so: the sync signs the user out and they sign in again, instead of
+  // the update waiting "to retry" for ever.
+  if (result.status === 401) {
+    const error = new Error("Sign-in expired");
+    error.unauthorized = true;
+    throw error;
+  }
 
   // A submission is already waiting for the PM's review (409 AWAITING_REVIEW).
   const code = body.details?.code === "AWAITING_REVIEW" ? "SUPERSEDED" : REJECT_CODE_BY_STATUS[result.status];

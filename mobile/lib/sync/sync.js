@@ -12,10 +12,13 @@
 //   - rejected   -> marked rejected, NOT retried (server wins, 10.7)
 //   - an id in neither list (the server could not check something, e.g. photo
 //     storage timed out) stays pending and goes again on the next sync
-//   - network / 401 / 5xx on the batch -> throws, rows stay pending
+//   - network / 5xx on the batch -> throws, rows stay pending
+//   - 401 (the sign-in token was refused) -> syncAllPending refreshes the sign-in
+//     and runs again once; if it cannot, it signs out (queue kept) or, when the
+//     refresh could not be tried (no connection), just stops and tries later
 
 import { API_URL, authHeaders } from "@/constants/api";
-import { getSession, handleUnauthorized } from "@/lib/auth";
+import { ensureFreshToken, getSession, handleUnauthorized, refreshSession } from "@/lib/auth";
 import {
   getPendingExpenses,
   markSynced,
@@ -51,6 +54,7 @@ async function uploadPendingPhotos(rows, upload) {
       setTaskUpdatePhotoUrl(row.update_id, url);
       ready.push({ ...row, server_photo_url: url });
     } catch (error) {
+      if (error?.unauthorized) throw error; // stop: syncAllPending decides what a refused sign-in means
       if (error instanceof PhotoUploadRejected) {
         markTaskUpdateRejected(row.update_id, error.code, error.message);
         rejectedItems.push({ kind: "task_update", id: row.update_id, code: error.code, message: error.message });
@@ -73,10 +77,7 @@ async function uploadQueuedScans(rows, upload, removeFile, result) {
       await removeFile(path);
       result.scans.uploaded += 1;
     } catch (error) {
-      if (error?.unauthorized) {
-        handleUnauthorized();
-        throw error; // stop: nothing else can be sent until they sign in again
-      }
+      if (error?.unauthorized) throw error; // stop: syncAllPending decides what a refused sign-in means
       if (error instanceof PhotoUploadRejected) {
         markScanRejected(row.scan_id, error.message);
         result.scans.rejected += 1;
@@ -89,12 +90,16 @@ async function uploadQueuedScans(rows, upload, removeFile, result) {
   }
 }
 
-// Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected},
-//           scans: {uploaded, rejected},
-//           rejectedItems: [{ kind, id, code, message }],
-//           postponedItems: [{ kind, id, message }] }  (not sent yet, will retry)
-// Throws if the batch request itself fails. `deps` is for tests.
-export async function syncAllPending(deps = {}) {
+function unauthorizedError() {
+  const error = new Error("Sign-in expired");
+  // @ts-ignore: a flag the callers look for, same as in task-photo.js
+  error.unauthorized = true;
+  return error;
+}
+
+// One pass over everything queued. Throws an error with unauthorized = true as
+// soon as the server refuses the sign-in token (the rows stay pending).
+async function syncOnce(deps) {
   const upload = deps.uploadTaskPhoto || uploadTaskPhoto;
   const uploadScan = deps.uploadQueuedScan || uploadQueuedScan;
   const removeFile = deps.deleteQueuedPhoto || deleteQueuedPhoto;
@@ -139,7 +144,7 @@ export async function syncAllPending(deps = {}) {
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ items }),
     });
-    if (res.status === 401) handleUnauthorized(); // sign-in expired; queue is kept
+    if (res.status === 401) throw unauthorizedError(); // the sign-in token was refused; queue is kept
     if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
 
     const body = await res.json();
@@ -182,4 +187,39 @@ export async function syncAllPending(deps = {}) {
   result.synced = result.expenses.synced + result.tasks.synced + result.scans.uploaded;
   result.rejected = result.expenses.rejected + result.tasks.rejected + result.scans.rejected;
   return result;
+}
+
+// Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected},
+//           scans: {uploaded, rejected},
+//           rejectedItems: [{ kind, id, code, message }],
+//           postponedItems: [{ kind, id, message }] }  (not sent yet, will retry)
+// Throws if the batch request itself fails. `deps` is for tests.
+//
+// A refused sign-in token (401) is not the end: the phone holds a refresh token,
+// so it gets a new sign-in token and runs the pass once more. Only when the
+// server says the sign-in is really over does the person go back to the sign-in
+// screen (their queue stays). If the refresh could not be tried (no connection),
+// nobody is signed out: the rows stay queued and the next run tries again.
+export async function syncAllPending(deps = {}) {
+  const ensureFresh = deps.ensureFreshToken || ensureFreshToken;
+  const refresh = deps.refreshSession || refreshSession;
+  const signOut = deps.handleUnauthorized || handleUnauthorized;
+
+  await ensureFresh();
+  try {
+    return await syncOnce(deps);
+  } catch (error) {
+    if (!error?.unauthorized) throw error;
+    const outcome = await refresh();
+    if (outcome === "refreshed") {
+      try {
+        return await syncOnce(deps);
+      } catch (again) {
+        if (again?.unauthorized) signOut(); // refreshed and still refused: over
+        throw again;
+      }
+    }
+    if (outcome !== "later") signOut(); // "rejected" or "unavailable": sign in again
+    throw error;
+  }
 }

@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { API_URL, setAuthToken } from "@/constants/api";
 import { initDb, kvDelete, kvGet, kvSet } from "@/lib/sync/db";
 import { fetchWithRetry } from "@/lib/retry-fetch";
+import { createTokenRefresher } from "@/lib/sync/token-refresh";
 
 export type MobileRole = "Purchaser" | "Site Manager";
 
@@ -20,6 +21,11 @@ export type MobileUser = {
 export type MobileSession = {
   token: string;
   user: MobileUser;
+  // Lets the app get a new token without asking for the password again
+  // (lib/sync/token-refresh.js). expiresAt is when `token` ends, in unix seconds.
+  // Missing on a sign-in saved before this existed: those behave as before.
+  refreshToken?: string;
+  expiresAt?: number;
 };
 
 let session: MobileSession | null = null;
@@ -49,6 +55,23 @@ export function setSession(nextSession: MobileSession | null) {
   setAuthToken(nextSession?.token ?? "");
   persistSession(nextSession);
   if (nextSession) sessionExpired = false;
+}
+
+// Keeps the sign-in alive: swaps the saved refresh token for a new token in the
+// background (see lib/sync/token-refresh.js for the possible answers).
+const refresher = createTokenRefresher({
+  getSession: () => session,
+  setSession: (next) => setSession(next),
+  apiUrl: API_URL,
+});
+
+export const refreshSession = refresher.refreshSession;
+
+// Call before sending something: refreshes first when the token is about to
+// end. Only a server that says the sign-in is over sends the person to the
+// sign-in screen; a refresh that could not be tried (offline) changes nothing.
+export async function ensureFreshToken() {
+  if ((await refresher.ensureFreshToken()) === "rejected") handleUnauthorized();
 }
 
 // Called once when the app starts (app/_layout.tsx), before any screen reads
@@ -111,6 +134,10 @@ export async function login(email: string, password: string): Promise<MobileSess
   const nextSession: MobileSession = {
     token: data.token,
     user: data.user,
+    // Absent when the server is older than the refresh route: the sign-in then
+    // lasts as long as the token, as before.
+    refreshToken: data.refreshToken,
+    expiresAt: data.expiresAt,
   };
   setSession(nextSession);
   return nextSession;

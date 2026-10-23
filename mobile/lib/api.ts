@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { API_URL, authHeaders, getAuthToken } from "../constants/api";
 import type { BackendLineItem } from "./expense-types";
 import { apiFetch } from "@/lib/http";
-import { handleUnauthorized } from "@/lib/auth";
+import { ensureFreshToken, handleUnauthorized } from "@/lib/auth";
 
 export type Ticket = {
   ticketid: string;
@@ -101,6 +101,7 @@ export async function submitTaskProgress(
   note: string,
   clientSubmissionId: string
 ) {
+  await ensureFreshToken(); // a token about to end is swapped before the upload starts
   const uploadResult = await FileSystem.uploadAsync(
     `${API_URL}/api/tasks/${taskId}/progress`,
     photo.uri,

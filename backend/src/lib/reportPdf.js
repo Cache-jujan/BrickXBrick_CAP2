@@ -81,6 +81,17 @@ function buildReportDocDefinition(summary, options) {
 
   const birRows = summary.projects.map((p) => [p.name, right(formatPhp(p.birDeductibleSpend))]);
 
+  // Cost variance to date = spend to date minus budget. Negative is under
+  // budget; positive (red) is over.
+  const varianceCell = (value, extra = {}) => money(value, { ...(value > 0 ? { color: "#b00020" } : {}), ...extra });
+  const varianceRows = summary.projects.map((p) => [
+    p.name,
+    money(p.budget),
+    money(p.cumulativeSpend),
+    varianceCell(p.varianceToDate),
+    right(formatPct(p.varianceToDatePct), { noWrap: true }),
+  ]);
+
   const content = [
     { text: "Brick x Brick - Financial Report", fontSize: 18, bold: true, margin: [0, 0, 0, 6] },
     { text: `${single ? "Project" : "Projects"}: ${names}`, fontSize: 10 },
@@ -110,6 +121,35 @@ function buildReportDocDefinition(summary, options) {
       fontSize: 8,
     },
     { text: "Budget left = budget minus this period's spend. Used to date = all approved spend up to the end date, as a share of the budget.", fontSize: 7, color: "#555555", margin: [0, 4, 0, 0] },
+    { text: "Cost variance (spend to date minus budget)", style: "section" },
+    single
+      ? {
+          text: [
+            { text: formatPhp(summary.projects[0].varianceToDate), bold: true },
+            ` (${formatPct(summary.projects[0].varianceToDatePct)} of the budget): ${summary.projects[0].varianceToDate > 0 ? "over" : "under"} budget, counting all approved spend up to ${summary.period.to}.`,
+          ],
+          fontSize: 9,
+        }
+      : {
+          table: {
+            headerRows: 1,
+            widths: ["*", "auto", "auto", "auto", "auto"],
+            body: [
+              [header("Project"), header("Budget", "right"), header("Spend to date", "right"), header("Cost variance", "right"), header("% of budget", "right")],
+              ...varianceRows,
+              [
+                { text: "Total", bold: true },
+                money(t.budget, { bold: true }),
+                money(t.cumulativeSpend, { bold: true }),
+                varianceCell(t.varianceToDate, { bold: true }),
+                right(formatPct(t.varianceToDatePct), { bold: true, noWrap: true }),
+              ],
+            ],
+          },
+          layout: "lightHorizontalLines",
+          fontSize: 8,
+        },
+    { text: "Negative = under budget, positive = over budget.", fontSize: 7, color: "#555555", margin: [0, 4, 0, 0] },
     { text: "Budget used to date", style: "section" },
     { image: chartImage, width: 480 },
     { text: "BIR tax-deductible spend (Formal receipts only)", style: "section" },

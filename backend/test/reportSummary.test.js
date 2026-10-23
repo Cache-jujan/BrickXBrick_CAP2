@@ -39,6 +39,28 @@ test("overrun: spend above budget gives overrun true and negative net", () => {
   assert.equal(row.utilizationPct, 125.01);
 });
 
+test("cost variance to date: all approved spend up to the end date minus the budget, in pesos and as a share of the budget", () => {
+  const summary = build(
+    [project(P1, 10000), project(P2, 4000)],
+    [spend(P1, 2500, "2026-09-15"), spend(P1, 1000), spend(P2, 5000)]
+  );
+  const [a, b] = summary.projects;
+  assert.equal(a.varianceToDate, -6500); // 3500 spent to date, 10000 budget: under budget
+  assert.equal(a.varianceToDatePct, -65);
+  assert.equal(b.varianceToDate, 1000); // 5000 spent, 4000 budget: over budget
+  assert.equal(b.varianceToDatePct, 25);
+  assert.equal(summary.totals.varianceToDate, -5500);
+  assert.equal(summary.totals.varianceToDatePct, -39.29);
+  // The period figures are untouched: the server's own cost variance is still period spend minus budget.
+  assert.equal(a.costVariance, -9000);
+});
+
+test("cost variance to date with budget 0 has no percentage, no crash or Infinity", () => {
+  const [row] = build([project(P1, 0)], [spend(P1, 100)]).projects;
+  assert.equal(row.varianceToDate, 100);
+  assert.equal(row.varianceToDatePct, null);
+});
+
 test("budget 0 gives null utilization, no crash or Infinity", () => {
   const summary = build([project(P1, 0)], [spend(P1, 100)]);
   assert.equal(summary.projects[0].utilizationPct, null);

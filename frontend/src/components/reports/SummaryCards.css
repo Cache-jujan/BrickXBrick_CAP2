@@ -5,6 +5,7 @@
 }
 
 .summary-card {
+  container-type: inline-size; /* lets the big figure shrink to fit the card (see .summary-card-value) */
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -17,11 +18,13 @@
   margin: 0 0 var(--space-2);
 }
 .summary-card-value {
-  font-size: var(--text-lg);
+  /* Never wider than the card: a figure such as -₱38,553,596.61 shrinks a little
+     instead of breaking onto two lines after its sign. */
+  font-size: min(var(--text-lg), 10.5cqw);
   font-weight: 700;
   color: var(--color-ink);
   margin: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 .summary-card-sub {
   font-size: var(--text-xs);

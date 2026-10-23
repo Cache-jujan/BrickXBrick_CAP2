@@ -2,6 +2,7 @@ import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { niceDay, projectSpan } from "../../utils/reportFilters";
 import { PESO_EXACT } from "../../utils/plainLanguage";
+import { signedPct, signedPeso, varianceWords } from "../../utils/variance";
 import "./ProjectReport.css";
 
 const pct = (value) => (value === null || value === undefined ? "n/a" : `${value.toFixed(1)}%`);
@@ -61,6 +62,11 @@ export function ProjectHero({ project, info, period }) {
             <dt>Remaining budget</dt>
             <dd>{PESO_EXACT.format(remaining)}</dd>
             <small>{remaining < 0 ? "Over budget" : "Budget minus spent to date"}</small>
+          </div>
+          <div className={project.varianceToDate > 0 ? "pr-negative" : ""}>
+            <dt>Cost variance</dt>
+            <dd>{signedPeso(project.varianceToDate)}</dd>
+            <small>{Number.isFinite(project.varianceToDate) ? `${varianceWords(project.varianceToDate)} (${signedPct(project.varianceToDatePct)}) · spent to date minus budget` : "Spent to date minus budget"}</small>
           </div>
           <div>
             <dt>Spent in this period</dt>
