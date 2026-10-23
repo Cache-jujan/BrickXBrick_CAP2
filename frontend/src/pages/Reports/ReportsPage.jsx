@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { anchorReport, downloadReportPdf, getReportSummary, saveBlob } from "../../api/reportsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useProjects } from "../../utils/useProjects";
-import { defaultReportRange, explainEmpty, spanOfProjects, validateReportFilters } from "../../utils/reportFilters";
+import { MAX_PROJECTS, defaultReportRange, explainEmpty, spanOfProjects, validateReportFilters } from "../../utils/reportFilters";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -10,6 +10,7 @@ import { BudgetChart } from "../../components/reports/BudgetChart";
 import { BudgetStands, ProjectHero } from "../../components/reports/ProjectReport";
 import { ProjectsTable } from "../../components/reports/ProjectsTable";
 import { SpendShare } from "../../components/reports/SpendShare";
+import { VarianceChart } from "../../components/reports/VarianceChart";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import "./ReportsPage.css";
@@ -49,6 +50,20 @@ export function ReportsPage() {
     const ids = filters.projectIds.includes(projectId)
       ? filters.projectIds.filter((id) => id !== projectId)
       : [...filters.projectIds, projectId];
+    let next = { ...filters, projectIds: ids };
+    if (!datesTouched.current) {
+      const span = spanOfProjects(projects.filter((p) => ids.includes(p.projectid)));
+      if (span) next = { ...next, from: span.from, to: span.to };
+    }
+    setFieldErrors({});
+    setFilters(next);
+  }
+
+  // The report is about projects that are running, so one click picks them all
+  // (at most MAX_PROJECTS, the report's limit). Dates follow like a manual pick.
+  const activeProjects = projects.filter((p) => p.status === "Active");
+  function selectActive() {
+    const ids = activeProjects.slice(0, MAX_PROJECTS).map((p) => p.projectid);
     let next = { ...filters, projectIds: ids };
     if (!datesTouched.current) {
       const span = spanOfProjects(projects.filter((p) => ids.includes(p.projectid)));
@@ -173,6 +188,8 @@ export function ReportsPage() {
         onDateChange={changeDate}
         onRangeChange={chooseRange}
         onClearProjects={clearProjects}
+        onSelectActive={selectActive}
+        activeCount={activeProjects.length}
         onUseProjectDates={useProjectDates}
         onSubmit={generate}
       />
@@ -284,6 +301,12 @@ export function ReportsPage() {
                   <SpendShare projects={summary.projects} total={summary.totals.periodSpend} />
                 </Card>
               </div>
+
+              <Card>
+                <h3 className="reports-section-title">Cost variance against budget</h3>
+                <p className="reports-chart-note">Spend to date minus budget, as a share of each project's budget. Green is under budget, red is over.</p>
+                <VarianceChart projects={summary.projects} />
+              </Card>
 
               <Card>
                 <h3 className="reports-section-title">Project breakdown</h3>

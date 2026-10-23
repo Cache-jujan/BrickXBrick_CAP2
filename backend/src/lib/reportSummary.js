@@ -44,6 +44,12 @@ function figures(budgetCents, periodCents, cumulativeCents, birCents) {
     birDeductibleSpend: toPesos(birCents),
     netPnL: toPesos(budgetCents - periodCents),
     costVariance: toPesos(periodCents - budgetCents),
+    // Spend to date (everything approved up to the end date) minus the budget:
+    // negative is under budget, positive is over. Unlike costVariance it does not
+    // depend on how long the chosen period is, so it stays meaningful for a
+    // one-month report on a year-long project.
+    varianceToDate: toPesos(cumulativeCents - budgetCents),
+    varianceToDatePct: percent(cumulativeCents - budgetCents, budgetCents),
     utilizationPct: percent(periodCents, budgetCents),
     cumulativeUtilizationPct: percent(cumulativeCents, budgetCents),
     overrun: periodCents > budgetCents,

@@ -1,4 +1,5 @@
 import { PESO_EXACT } from "../../utils/plainLanguage";
+import { signedPct, signedPeso, varianceWords } from "../../utils/variance";
 import "./ProjectsTable.css";
 
 const pct = (value) => (value === null || value === undefined ? "n/a" : `${value.toFixed(1)}%`);
@@ -7,9 +8,10 @@ const share = (part, whole) => (whole > 0 ? `${((part / whole) * 100).toFixed(0)
 /**
  * One row per project with every figure of the report, and the totals.
  * projects / totals: from GET /api/reports/summary.
- * "Budget left" is the budget minus the spend of THIS period (the same figure
- * the PDF calls Budget left); "Used to date" counts everything up to the end
- * of the period. Rows over budget turn red and say so in words.
+ * "Net P&L" is the budget minus the spend of THIS period (the same figure the
+ * PDF calls Budget left); "Cost variance" is spend to date minus budget, and
+ * "Used to date" counts everything up to the end of the period. Rows over
+ * budget turn red and say so in words.
  */
 export function ProjectsTable({ projects, totals }) {
   return (
@@ -21,7 +23,8 @@ export function ProjectsTable({ projects, totals }) {
             <th scope="col" className="num">Budget</th>
             <th scope="col" className="num">Spend in period</th>
             <th scope="col" className="num">Spend to date</th>
-            <th scope="col" className="num">Budget left</th>
+            <th scope="col" className="num">Net P&amp;L</th>
+            <th scope="col" className="num">Cost variance</th>
             <th scope="col" className="report-table-used">Used to date</th>
             <th scope="col" className="num">Tax-deductible</th>
           </tr>
@@ -37,10 +40,11 @@ export function ProjectsTable({ projects, totals }) {
               <td className="num">{PESO_EXACT.format(p.periodSpend)}</td>
               <td className="num">{PESO_EXACT.format(p.cumulativeSpend)}</td>
               <td className="num">{PESO_EXACT.format(p.netPnL)}</td>
+              <VarianceCell amount={p.varianceToDate} pct={p.varianceToDatePct} />
               <td className="report-table-used"><UsedBar value={p.cumulativeUtilizationPct} over={p.overrun} /></td>
               <td className="num">
                 {PESO_EXACT.format(p.birDeductibleSpend)}
-                <span className="report-table-sub">{share(p.birDeductibleSpend, p.periodSpend)} of period spend</span>
+                <span className="report-table-sub">{share(p.birDeductibleSpend, p.periodSpend)} of period</span>
               </td>
             </tr>
           ))}
@@ -52,15 +56,28 @@ export function ProjectsTable({ projects, totals }) {
             <td className="num">{PESO_EXACT.format(totals.periodSpend)}</td>
             <td className="num">{PESO_EXACT.format(totals.cumulativeSpend)}</td>
             <td className="num">{PESO_EXACT.format(totals.netPnL)}</td>
+            <VarianceCell amount={totals.varianceToDate} pct={totals.varianceToDatePct} />
             <td className="report-table-used"><UsedBar value={totals.cumulativeUtilizationPct} over={totals.overrun} /></td>
             <td className="num">
               {PESO_EXACT.format(totals.birDeductibleSpend)}
-              <span className="report-table-sub">{share(totals.birDeductibleSpend, totals.periodSpend)} of period spend</span>
+              <span className="report-table-sub">{share(totals.birDeductibleSpend, totals.periodSpend)} of period</span>
             </td>
           </tr>
         </tfoot>
       </table>
     </div>
+  );
+}
+
+// Spend to date minus budget: signed, red when over, with the share of the
+// budget and the words under it (never colour alone).
+function VarianceCell({ amount, pct }) {
+  const over = amount > 0;
+  return (
+    <td className={"num" + (over ? " report-table-variance-over" : "")}>
+      {signedPeso(amount)}
+      <span className="report-table-sub">{Number.isFinite(amount) ? `${varianceWords(amount)} (${signedPct(pct)})` : ""}</span>
+    </td>
   );
 }
 
