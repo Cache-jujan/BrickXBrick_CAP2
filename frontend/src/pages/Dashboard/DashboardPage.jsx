@@ -12,6 +12,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { SpendChart } from "../../components/dashboard/SpendChart";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./DashboardPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -46,11 +47,11 @@ export function DashboardPage() {
   return <Navigate to="/" replace />;
 }
 
-function greetingFor(date) {
+function greetingFor(date, t) {
   const hour = date.getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return t("dashboard.morning");
+  if (hour < 18) return t("dashboard.afternoon");
+  return t("dashboard.evening");
 }
 
 // "5 minutes ago", "3 hours ago", "2 days ago". Never in the future.
@@ -94,6 +95,7 @@ export function buildMonthlySeries(approved, openBudget, monthsBack, now = new D
 }
 
 function ProjectsOverview({ role, name, userId }) {
+  const { t } = useLocale();
   const canCreate = role === "General Manager";
   const canSeeAlerts = role === "General Manager"; // matches backend requireRole on /alerts
   const isPM = role === "Project Manager";
@@ -252,48 +254,48 @@ function ProjectsOverview({ role, name, userId }) {
 
   return (
     <div className="dashboard">
-      <section className="dash-hero" aria-label="Welcome">
+      <section className="dash-hero" aria-label={t("dashboard.welcome")}>
         <div className="dash-hero-text">
-          <h1>{greetingFor(now)}, {firstName}</h1>
+          <h1>{greetingFor(now, t)}, {firstName}</h1>
           <p>
             {role === "General Manager"
-              ? "Here's what's happening across your construction projects."
-              : "Here's what's happening across the projects you manage."}
+              ? t("dashboard.gm_intro")
+              : t("dashboard.pm_intro")}
           </p>
         </div>
         <div className="dash-hero-side">
           <span className="dash-hero-date"><CalendarIcon />{today}</span>
-          {canCreate && <Link to="/projects/new" className="btn btn-primary">+ Create project</Link>}
+          {canCreate && <Link to="/projects/new" className="btn btn-primary">{t("dashboard.create_project")}</Link>}
         </div>
         <SkylineArt />
       </section>
 
       {dataError && <Banner tone="error" title={dataError} />}
 
-      <section className="dash-kpis" aria-label="Summary">
+      <section className="dash-kpis" aria-label={t("dashboard.summary")}>
         <Kpi
           icon={<LayersIcon />}
-          label="Active projects"
+          label={t("dashboard.active_projects")}
           value={projectsLoading ? "—" : activeCount}
-          note={projectsLoading ? null : `${draftCount} in draft`}
+          note={projectsLoading ? null : t("dashboard.in_draft", { count: draftCount })}
         />
         <Kpi
           icon={<PesoIcon />}
-          label="Budget of open projects"
+          label={t("dashboard.open_budget")}
           value={projectsLoading ? "—" : PESO.format(openBudget)}
-          note="Draft and Active"
+          note={t("dashboard.draft_active")}
         />
         <Kpi
           icon={<WalletIcon />}
-          label="Approved spending"
+          label={t("dashboard.approved_spending")}
           value={expensesLoading ? "—" : PESO.format(openApproved)}
-          note={expensesLoading || !openBudget ? null : `${usedPct}% of open budget`}
+          note={expensesLoading || !openBudget ? null : t("dashboard.open_budget_pct", { percent: usedPct })}
         />
         <Kpi
           icon={<ClipboardIcon />}
-          label="Pending approvals"
+          label={t("dashboard.pending_approvals")}
           value={expensesLoading ? "—" : pending.length}
-          note={expensesLoading || !pending.length ? "Nothing pending" : `${PESO.format(pendingAmount)} waiting`}
+          note={expensesLoading || !pending.length ? t("dashboard.nothing_pending") : t("dashboard.waiting_amount", { amount: PESO.format(pendingAmount) })}
           to={pending.length ? "/expenses" : null}
           emphasis={pending.length > 0}
         />
@@ -303,46 +305,46 @@ function ProjectsOverview({ role, name, userId }) {
         <div className="dash-col">
           <section className="dash-panel">
             <header className="dash-panel-head">
-              <h2>Project financial overview</h2>
+              <h2>{t("dashboard.financial_overview")}</h2>
               <label className="dash-range">
-                <span className="sr-only">Period</span>
+                <span className="sr-only">{t("dashboard.period")}</span>
                 <select value={range} onChange={(e) => setRange(Number(e.target.value))}>
-                  {RANGES.map((r) => <option key={r} value={r}>Last {r} months</option>)}
+                  {RANGES.map((r) => <option key={r} value={r}>{t("dashboard.last_months", { count: r })}</option>)}
                 </select>
               </label>
             </header>
             {expensesLoading || projectsLoading ? (
-              <p className="dashboard-loading">Loading…</p>
+              <p className="dashboard-loading">{t("dashboard.loading")}</p>
             ) : openApprovedExpenses.length === 0 && openBudget === 0 ? (
-              <p className="dash-empty">No approved spending yet. The chart fills in as expenses are approved.</p>
+              <p className="dash-empty">{t("dashboard.no_approved_spending")}</p>
             ) : (
               <SpendChart months={months} />
             )}
             <p className="dash-footnote">
-              Approved expenses of open projects, by receipt month. Pending ones are added once a reviewer approves them.
+              {t("dashboard.chart_note")}
             </p>
           </section>
 
           <section className="dash-panel">
             <header className="dash-panel-head">
-              <h2>Recent expenses</h2>
-              <Link to="/expenses" className="dash-link">View all</Link>
+              <h2>{t("dashboard.recent_expenses")}</h2>
+              <Link to="/expenses" className="dash-link">{t("dashboard.view_all")}</Link>
             </header>
-            {!expensesError && expensesLoading && <p className="dashboard-loading">Loading expenses…</p>}
+            {!expensesError && expensesLoading && <p className="dashboard-loading">{t("dashboard.loading_expenses")}</p>}
             {!expensesError && !expensesLoading && recentExpenses.length === 0 && (
-              <p className="dash-empty">No expenses recorded yet.</p>
+              <p className="dash-empty">{t("dashboard.no_expenses")}</p>
             )}
             {!expensesError && !expensesLoading && recentExpenses.length > 0 && (
               <div className="table-scroll">
                 <table className="dash-table">
                   <thead>
                     <tr>
-                      <th>Vendor</th>
-                      <th>Project</th>
-                      <th>Category</th>
-                      <th className="num">Amount</th>
-                      <th>Status</th>
-                      <th>Date</th>
+                      <th>{t("dashboard.vendor")}</th>
+                      <th>{t("nav.project")}</th>
+                      <th>{t("dashboard.category")}</th>
+                      <th className="num">{t("dashboard.amount")}</th>
+                      <th>{t("dashboard.status")}</th>
+                      <th>{t("dashboard.date")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -366,13 +368,13 @@ function ProjectsOverview({ role, name, userId }) {
         <div className="dash-col">
           <section className="dash-panel">
             <header className="dash-panel-head">
-              <h2>Project status</h2>
-              <Link to="/projects" className="dash-link">View all</Link>
+              <h2>{t("dashboard.project_status")}</h2>
+              <Link to="/projects" className="dash-link">{t("dashboard.view_all")}</Link>
             </header>
-            {!projectsError && projectsLoading && <p className="dashboard-loading">Loading projects…</p>}
+            {!projectsError && projectsLoading && <p className="dashboard-loading">{t("dashboard.loading_projects")}</p>}
             {!projectsError && !projectsLoading && statusRows.length === 0 && (
               <p className="dash-empty">
-                {canCreate ? "No open projects. Create one once the client has signed the BOM." : "No open projects assigned to you."}
+                {t(canCreate ? "dashboard.no_open_projects_create" : "dashboard.no_open_projects_assigned")}
               </p>
             )}
             {!projectsError && !projectsLoading && statusRows.length > 0 && (
@@ -390,10 +392,10 @@ function ProjectsOverview({ role, name, userId }) {
                     </div>
                     <div className="dash-flags">
                       <span className={p.overBudget ? "dash-flag dash-flag-bad" : "dash-flag"}>
-                        {Math.round(p.pct)}% of budget used
+                        {t("dashboard.budget_used", { percent: Math.round(p.pct) })}
                       </span>
-                      {p.overBudget && <span className="dash-flag dash-flag-bad">Over budget</span>}
-                      {p.pastEnd && <span className="dash-flag dash-flag-bad">Past end date</span>}
+                      {p.overBudget && <span className="dash-flag dash-flag-bad">{t("dashboard.over_budget")}</span>}
+                      {p.pastEnd && <span className="dash-flag dash-flag-bad">{t("dashboard.past_end_date")}</span>}
                     </div>
                   </li>
                 ))}
@@ -413,8 +415,8 @@ function ProjectsOverview({ role, name, userId }) {
           {canSeeAlerts && (
             <section className="dash-panel">
               <header className="dash-panel-head">
-                <h2>Blockchain audit summary</h2>
-                <Link to="/blockchain/alerts" className="dash-link">Tamper alerts</Link>
+                <h2>{t("dashboard.audit_summary")}</h2>
+                <Link to="/blockchain/alerts" className="dash-link">{t("nav.tamper_alerts")}</Link>
               </header>
               <div className="dash-audit">
                 <div className={"dash-audit-card" + (tamperedCount > 0 ? " dash-audit-bad" : " dash-audit-good")}>

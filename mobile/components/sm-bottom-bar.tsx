@@ -5,6 +5,7 @@ import { router, usePathname, type Href } from "expo-router";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useLocale } from "@/lib/i18n-context";
 
 type Tab = {
   label: string;
@@ -15,15 +16,16 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { label: "Tasks", href: "/site-manager" as Href, icon: "list.clipboard.fill", match: ["/site-manager"] },
-  { label: "Receipt", href: "/(tabs)" as Href, icon: "camera.fill", match: ["/", "/index"] },
-  { label: "Requests", href: "/site-manager/my-requests" as Href, icon: "ticket.fill", match: ["/site-manager/my-requests"] },
-  { label: "Settings", href: "/settings" as Href, icon: "gearshape.fill", match: ["/settings"] },
+  { label: "mobile.tasks_nav", href: "/site-manager" as Href, icon: "list.clipboard.fill", match: ["/site-manager"] },
+  { label: "mobile.receipt_nav", href: "/(tabs)" as Href, icon: "camera.fill", match: ["/", "/index"] },
+  { label: "mobile.requests", href: "/site-manager/my-requests" as Href, icon: "ticket.fill", match: ["/site-manager/my-requests"] },
+  { label: "settings.title", href: "/settings" as Href, icon: "gearshape.fill", match: ["/settings"] },
 ];
 
 // Bottom navigation for Site Manager screens. It renders nothing for any other
 // role, so it is safe to drop into a screen Purchasers also use.
 export function SmBottomBar() {
+  const { t } = useLocale();
   const session = getSession();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -37,17 +39,17 @@ export function SmBottomBar() {
           const active = tab.match.includes(pathname);
           return (
             <Pressable
-              key={tab.label}
+              key={tab.href.toString()}
               onPress={() => {
                 if (!active) router.replace(tab.href);
               }}
               style={[styles.item, active && styles.itemActive]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={tab.label}
+              accessibilityLabel={t(tab.label)}
             >
               <IconSymbol name={tab.icon} size={22} color={active ? "#FFFFFF" : "#CFC6BA"} />
-              {active ? <Text style={styles.label} numberOfLines={1}>{tab.label}</Text> : null}
+              {active ? <Text style={styles.label} numberOfLines={1}>{t(tab.label)}</Text> : null}
             </Pressable>
           );
         })}

@@ -29,6 +29,7 @@ import { SetPasswordPage } from "./pages/Auth/SetPasswordPage";
 import { LegalPage } from "./pages/Legal/LegalPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
 import { MilestoneTimelinePreviewPage } from "./pages/Projects/MilestoneTimelinePreviewPage";
+import { LocaleProvider } from "./i18n/LocaleProvider";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
@@ -53,8 +54,9 @@ function AppShell() {
 /** Render the application routes with authentication, role guards and shared providers. */
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
+    <LocaleProvider>
+      <BrowserRouter>
+        <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -229,8 +231,9 @@ export default function App() {
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<RootRedirect />} />
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+        </AuthProvider>
+      </BrowserRouter>
+    </LocaleProvider>
   );
 }
 
