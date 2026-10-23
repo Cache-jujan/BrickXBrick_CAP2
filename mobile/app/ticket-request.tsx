@@ -233,7 +233,7 @@ export default function TicketRequestScreen() {
     if (card.bomItemID === NOT_IN_BOM) {
       if (!card.materialType.trim()) return "Enter the material.";
       if (!card.unit.trim()) return "Choose a unit.";
-      if (!card.notInBomReason.trim()) return "Say why it isn't in the BOM.";
+      if (!card.notInBomReason.trim()) return "Enter the reason for the request.";
     }
     if (card.requestedBudget === "" || !Number.isFinite(Number(card.requestedBudget)) || Number(card.requestedBudget) < 0) {
       return "Enter a requested budget of 0 or more.";
@@ -513,7 +513,7 @@ export default function TicketRequestScreen() {
 
             {isMR && notInBom && (
               <Field
-                label="Why isn't it in the BOM?"
+                label="Reason for request"
                 value={card.notInBomReason}
                 onChangeText={(v) => updateCard(card.id, { notInBomReason: v })}
                 placeholder="e.g. Additional fixture, billed separately"

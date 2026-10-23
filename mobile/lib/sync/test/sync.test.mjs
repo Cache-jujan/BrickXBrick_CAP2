@@ -168,10 +168,9 @@ test("the photo file is gone from the phone: rejected MISSING_PHOTO, no upload a
   assert.equal(q.getRejectedTaskUpdates()[0].error_code, "MISSING_PHOTO");
 });
 
-test("temporary upload failures (5xx, 401, no network) keep the entry pending and do not block other items", async () => {
+test("temporary upload failures (5xx, no network) keep the entry pending and do not block other items", async () => {
   for (const handler of [
     async () => ({ status: 500, body: "{}" }),
-    async () => ({ status: 401, body: "{}" }),
     async () => { throw new Error("Network request failed"); },
   ]) {
     setup();
@@ -185,6 +184,22 @@ test("temporary upload failures (5xx, 401, no network) keep the entry pending an
     assert.equal(q.getPendingTaskUpdateForTask("t1").server_photo_url, null); // will try again
     assert.equal(q.getRejectedTaskUpdates().length, 0);
   }
+});
+
+test("an expired sign-in (401) on a task photo stops the sync and signs out; the update stays queued", async () => {
+  setup();
+  const first = queueTask("t1");
+  queueTask("t2");
+  const before = unauthorized.calls;
+  let uploads = 0;
+  fs.uploadHandler = async () => (uploads++, { status: 401, body: "{}" });
+  await assert.rejects(syncAllPending(), (error) => error.unauthorized === true);
+  assert.equal(unauthorized.calls, before + 1); // sent to the sign-in screen once
+  assert.equal(uploads, 1); // nothing else is tried with a dead sign-in
+  assert.equal(calls.fetches.length, 0);
+  assert.equal(q.getPendingTaskUpdateCount(), 2); // both still queued
+  assert.equal(q.getPendingTaskUpdateForTask("t1").update_id, first.updateId);
+  assert.equal(q.getRejectedTaskUpdates().length, 0);
 });
 
 // ---- who sends what ---------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ export default function LoginScreen() {
       ? "Your sign-in expired. Please sign in again. Anything saved on your phone is kept and will be sent after you sign in."
       : ""
   );
-  const { isOnline } = useNetwork();
+  const { isOnline, syncNow } = useNetwork();
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
   // Which fields were empty on the last attempt; they get a red outline.
@@ -47,6 +47,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       const session = await login(email, password);
+      // Anything queued while signed out or offline is sent now, not up to 15 s later.
+      syncNow();
       // Terms of Use / Privacy Notice first if not yet accepted (app/terms.tsx).
       router.replace(nextRouteAfterLogin(session.user));
     } catch (err) {

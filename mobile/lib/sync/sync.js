@@ -51,6 +51,10 @@ async function uploadPendingPhotos(rows, upload) {
       setTaskUpdatePhotoUrl(row.update_id, url);
       ready.push({ ...row, server_photo_url: url });
     } catch (error) {
+      if (error?.unauthorized) {
+        handleUnauthorized();
+        throw error; // stop: nothing else can be sent until they sign in again
+      }
       if (error instanceof PhotoUploadRejected) {
         markTaskUpdateRejected(row.update_id, error.code, error.message);
         rejectedItems.push({ kind: "task_update", id: row.update_id, code: error.code, message: error.message });
