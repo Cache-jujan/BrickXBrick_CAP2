@@ -9,7 +9,7 @@ import { register } from "node:module";
 register("./hooks.mjs", import.meta.url);
 const shim = await import("./expo-sqlite-shim.mjs");
 const { fs } = await import("./file-system-shim.mjs");
-const { setSession, unauthorized } = await import("./auth-shim.mjs");
+const { setSession, unauthorized, refresh } = await import("./auth-shim.mjs");
 const q = await import("../db.js");
 const { syncAllPending } = await import("../sync.js");
 
@@ -40,6 +40,9 @@ function setup(session = SM) {
   serverReply = async (items) => syncAll(items);
   fakeFetch();
   setSession(session);
+  refresh.outcome = "unavailable";
+  refresh.calls = 0;
+  refresh.ensureCalls = 0;
   const origUpload = fs.uploadHandler;
   fs.uploadHandler = async (...args) => (calls.order.push("upload"), origUpload(...args));
 }
@@ -200,6 +203,76 @@ test("an expired sign-in (401) on a task photo stops the sync and signs out; the
   assert.equal(q.getPendingTaskUpdateCount(), 2); // both still queued
   assert.equal(q.getPendingTaskUpdateForTask("t1").update_id, first.updateId);
   assert.equal(q.getRejectedTaskUpdates().length, 0);
+});
+
+// ---- the sign-in refreshes itself ------------------------------------------------------------------
+
+test("a sync first makes sure the sign-in token is fresh", async () => {
+  setup();
+  queueTask("t1");
+  await syncAllPending();
+  assert.equal(refresh.ensureCalls, 1);
+});
+
+test("401 on a task photo, but the sign-in refreshes: the whole sync is tried again and the update is sent; nobody is signed out", async () => {
+  setup();
+  const { updateId } = queueTask("t1");
+  refresh.outcome = "refreshed";
+  const before = unauthorized.calls;
+  let attempt = 0;
+  fs.uploadHandler = async () => (++attempt === 1 ? { status: 401, body: "{}" } : { status: 201, body: JSON.stringify({ photoUrl: "https://r2/tasks/t1/a.jpg" }) });
+  const result = await syncAllPending();
+  assert.equal(refresh.calls, 1);
+  assert.equal(unauthorized.calls, before); // not signed out
+  assert.equal(result.tasks.synced, 1);
+  assert.deepEqual(calls.fetches[0].body.items.map((i) => i.uuid), [updateId]);
+  assert.equal(q.getPendingTaskUpdateCount(), 0);
+});
+
+test("401 on the batch itself, but the sign-in refreshes: the batch is sent again and goes through", async () => {
+  setup();
+  const { updateId } = queueTask("t1");
+  refresh.outcome = "refreshed";
+  let attempt = 0;
+  serverReply = async (items) => (++attempt === 1 ? { status: 401, body: {} } : syncAll(items));
+  const result = await syncAllPending();
+  assert.equal(calls.fetches.length, 2);
+  assert.equal(result.tasks.synced, 1);
+  assert.deepEqual(calls.fetches[1].body.items.map((i) => i.uuid), [updateId]);
+});
+
+test("401 again right after a successful refresh: signed out once, nothing lost", async () => {
+  setup();
+  queueTask("t1");
+  refresh.outcome = "refreshed";
+  const before = unauthorized.calls;
+  fs.uploadHandler = async () => ({ status: 401, body: "{}" });
+  await assert.rejects(syncAllPending(), (error) => error.unauthorized === true);
+  assert.equal(refresh.calls, 1); // refreshed once, not in a loop
+  assert.equal(unauthorized.calls, before + 1);
+  assert.equal(q.getPendingTaskUpdateCount(), 1);
+});
+
+test("401 and the server says the sign-in is over ('rejected'): signed out, queue kept", async () => {
+  setup();
+  queueTask("t1");
+  refresh.outcome = "rejected";
+  const before = unauthorized.calls;
+  fs.uploadHandler = async () => ({ status: 401, body: "{}" });
+  await assert.rejects(syncAllPending(), (error) => error.unauthorized === true);
+  assert.equal(unauthorized.calls, before + 1);
+  assert.equal(q.getPendingTaskUpdateCount(), 1);
+});
+
+test("401 but the refresh could not be tried ('later'): NOT signed out, queue kept, tried again on the next run", async () => {
+  setup();
+  queueTask("t1");
+  refresh.outcome = "later";
+  const before = unauthorized.calls;
+  fs.uploadHandler = async () => ({ status: 401, body: "{}" });
+  await assert.rejects(syncAllPending(), (error) => error.unauthorized === true);
+  assert.equal(unauthorized.calls, before); // still signed in
+  assert.equal(q.getPendingTaskUpdateCount(), 1);
 });
 
 // ---- who sends what ---------------------------------------------------------------------------------

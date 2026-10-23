@@ -8,7 +8,7 @@ import type { FileState } from "@/components/file-preview";
 import type { DraftMode } from "@/lib/expense-draft-context";
 import type { OcrResult, SelectedTicket } from "@/lib/expense-types";
 import { apiFetch } from "@/lib/http";
-import { handleUnauthorized } from "@/lib/auth";
+import { ensureFreshToken, handleUnauthorized } from "@/lib/auth";
 
 // What the app needs to pick the receipt up again later.
 export type ScanContext = {
@@ -39,6 +39,7 @@ async function readJson(res: Response, what: string) {
 }
 
 export async function startScan(file: NonNullable<FileState>, context: ScanContext): Promise<ReceiptScan> {
+  await ensureFreshToken(); // a token about to end is swapped before the upload starts
   const upload = await FileSystem.uploadAsync(`${API_URL}/api/receipts/scans`, file.uri, {
     httpMethod: "POST",
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,

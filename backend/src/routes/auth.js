@@ -1,6 +1,7 @@
 const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAnon } = require("../lib/supabaseAnon");
+const { refreshWithSupabase } = require("../lib/supabaseRefresh");
 const { termsFields } = require("./legal");
 
 const router = express.Router();
@@ -88,6 +89,9 @@ router.post("/login", async (req, res) => {
  
     return res.json({
       token: data.session.access_token,   // sub-point 6: JWT session
+      // The mobile app keeps itself signed in with these (POST /refresh below).
+      refreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at, // unix seconds
       user: {
         id: user.userid,
         name: user.name,
@@ -100,6 +104,59 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /refresh — swap a refresh token for a new access token, so the mobile
+// app stays signed in (and can send what it queued offline) without asking for
+// the password again.
+// Body: { refreshToken }
+// 200 { token, refreshToken, expiresAt }  the old refresh token is now used up:
+//                                          the app must keep the new one
+// 400 missing   401 not accepted (expired, used, revoked), sign in again
+// 403 deactivated   423 locked   503 Supabase unavailable, try again later
+router.post("/refresh", async (req, res) => {
+  const refreshToken = req.body && req.body.refreshToken;
+  if (typeof refreshToken !== "string" || refreshToken.trim() === "") {
+    return res.status(400).json({ error: "refreshToken is required" });
+  }
+
+  let result;
+  try {
+    result = await refreshWithSupabase(refreshToken);
+  } catch (err) {
+    console.error("Token refresh could not reach Supabase:", err.message);
+    return res.status(503).json({ error: "Could not refresh the sign-in right now. Try again shortly." });
+  }
+  if (!result.ok) {
+    return res.status(401).json({ error: "Sign-in expired. Please sign in again." });
+  }
+
+  try {
+    const found = await query(
+      `SELECT userid, status, lockoutuntil FROM users WHERE supabaseuserid = $1`,
+      [result.session.supabaseUserId]
+    );
+    if (found.rowCount === 0) {
+      return res.status(401).json({ error: "Sign-in expired. Please sign in again." });
+    }
+    const user = found.rows[0];
+    // Same checks as requireAuth and login: a deactivated or locked account
+    // must not keep itself alive with an old refresh token.
+    if (user.status !== "Active") {
+      return res.status(403).json({ error: "This account has been deactivated. Contact your System Administrator." });
+    }
+    if (user.lockoutuntil && new Date(user.lockoutuntil) > new Date()) {
+      return res.status(423).json({ error: "Account locked due to repeated failed logins.", lockoutUntil: user.lockoutuntil });
+    }
+    return res.json({
+      token: result.session.accessToken,
+      refreshToken: result.session.refreshToken,
+      expiresAt: result.session.expiresAt,
+    });
+  } catch (err) {
+    console.error("DB error in token refresh:", err.message);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
