@@ -4,11 +4,11 @@
 .report-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--text-sm);
+  font-size: 0.8125rem; /* 13px: eight columns have to fit the report card without sideways scrolling */
 }
 .report-table th,
 .report-table td {
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-2);
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
@@ -19,11 +19,16 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-ink-soft);
-  white-space: nowrap;
+  /* Headers may wrap onto two lines, so a column is as wide as its figures, not its heading. */
+  white-space: normal;
+  vertical-align: bottom;
+}
+.report-table thead th.num {
+  white-space: normal; /* beats .report-table .num below */
 }
 .report-table tbody th {
   font-weight: 600;
-  min-width: 180px;
+  min-width: 120px;
 }
 .report-table .num {
   text-align: right;
@@ -50,6 +55,7 @@
   background: #ffffff;
 }
 .report-table-sub {
+  white-space: normal; /* the words under a figure may wrap, so they do not widen the column */
   display: block;
   font-size: var(--text-xs);
   font-weight: 400;
@@ -57,7 +63,7 @@
 }
 
 .report-table-used {
-  min-width: 150px;
+  min-width: 96px;
 }
 .rt-bar {
   display: flex;
@@ -80,12 +86,17 @@
   background: var(--color-danger);
 }
 .rt-bar-text {
-  width: 52px;
+  width: 42px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--color-ink-soft);
 }
 .rt-bar-text-over {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.report-table-variance-over {
   color: var(--color-danger);
   font-weight: 700;
 }

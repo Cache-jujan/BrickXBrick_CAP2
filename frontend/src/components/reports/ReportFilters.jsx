@@ -27,6 +27,8 @@ export function ReportFilters({
   onDateChange,
   onRangeChange,
   onClearProjects,
+  onSelectActive,
+  activeCount = 0,
   onUseProjectDates,
   onSubmit,
 }) {
@@ -49,6 +51,11 @@ export function ReportFilters({
         </legend>
         <div className="report-filters-count">
           <span>{value.projectIds.length} of {MAX_PROJECTS} selected</span>
+          {activeCount > 0 && (
+            <button type="button" className="report-filters-clear" onClick={onSelectActive}>
+              Select all active{activeCount > MAX_PROJECTS ? ` (first ${MAX_PROJECTS})` : ""}
+            </button>
+          )}
           {value.projectIds.length > 0 && (
             <button type="button" className="report-filters-clear" onClick={onClearProjects}>Clear</button>
           )}
