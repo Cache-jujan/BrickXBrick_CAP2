@@ -1,6 +1,10 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const path = require("path");
 
 const config = getDefaultConfig(__dirname);
+
+// The web and mobile clients ship the same offline language catalog.
+config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, "../shared")];
 
 // expo-sqlite web support needs wasm treated as an asset
 config.resolver.assetExts.push("wasm");

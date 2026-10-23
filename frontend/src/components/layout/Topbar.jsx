@@ -11,6 +11,8 @@ import {
 import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
 import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
+import { useLocale } from "../../i18n/LocaleProvider";
+import { LanguageToggle } from "../../i18n/LanguageToggle";
 import "./Topbar.css";
 
 const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
@@ -22,22 +24,22 @@ const DROPDOWN_LIMIT = 8;
 // Each page renders its own <h1>, so the top bar only shows where the page
 // sits ("Projects / Edit project") instead of repeating the title.
 const PAGE_LABELS = [
-  { test: (p) => p.startsWith("/dashboard"), trail: ["Dashboard"] },
-  { test: (p) => p === "/projects", trail: ["Projects"] },
-  { test: (p) => p === "/projects/new", trail: ["Projects", "New project"] },
-  { test: (p) => /^\/projects\/[^/]+\/edit$/.test(p), trail: ["Projects", "Edit project"] },
-  { test: (p) => /^\/projects\/[^/]+\/bom$/.test(p), trail: ["Projects", "Bill of Materials"] },
-  { test: (p) => /^\/projects\/[^/]+$/.test(p), trail: ["Projects", "Project"] },
-  { test: (p) => p === "/expenses", trail: ["Finance", "Expenses"] },
-  { test: (p) => p === "/expenses/new", trail: ["Finance", "Submit expense"] },
-  { test: (p) => p === "/expenses/split", trail: ["Finance", "Split receipt"] },
-  { test: (p) => p === "/expenses/mine", trail: ["Finance", "My expenses"] },
-  { test: (p) => p.startsWith("/tickets/new"), trail: ["Tickets", "New ticket"] },
-  { test: (p) => p.startsWith("/tickets"), trail: ["Tickets"] },
-  { test: (p) => p.startsWith("/tasks/progress-review"), trail: ["Tasks", "Progress review"] },
-  { test: (p) => p === "/admin/users", trail: ["Administration", "User accounts"] },
-  { test: (p) => p === "/blockchain/alerts", trail: ["Record protection", "Tamper alerts"] },
-  { test: (p) => p === "/notifications", trail: ["Notifications"] },
+  { test: (p) => p.startsWith("/dashboard"), trail: ["nav.dashboard"] },
+  { test: (p) => p === "/projects", trail: ["nav.projects"] },
+  { test: (p) => p === "/projects/new", trail: ["nav.projects", "nav.new_project"] },
+  { test: (p) => /^\/projects\/[^/]+\/edit$/.test(p), trail: ["nav.projects", "nav.edit_project"] },
+  { test: (p) => /^\/projects\/[^/]+\/bom$/.test(p), trail: ["nav.projects", "nav.bill_of_materials"] },
+  { test: (p) => /^\/projects\/[^/]+$/.test(p), trail: ["nav.projects", "nav.project"] },
+  { test: (p) => p === "/expenses", trail: ["nav.finance", "nav.expenses"] },
+  { test: (p) => p === "/expenses/new", trail: ["nav.finance", "nav.submit_expense"] },
+  { test: (p) => p === "/expenses/split", trail: ["nav.finance", "nav.split_receipt"] },
+  { test: (p) => p === "/expenses/mine", trail: ["nav.finance", "nav.my_expenses"] },
+  { test: (p) => p.startsWith("/tickets/new"), trail: ["nav.tickets", "nav.new_ticket"] },
+  { test: (p) => p.startsWith("/tickets"), trail: ["nav.tickets"] },
+  { test: (p) => p.startsWith("/tasks/progress-review"), trail: ["nav.tasks", "nav.progress_review"] },
+  { test: (p) => p === "/admin/users", trail: ["nav.administration", "nav.user_accounts"] },
+  { test: (p) => p === "/blockchain/alerts", trail: ["nav.record_protection", "nav.tamper_alerts"] },
+  { test: (p) => p === "/notifications", trail: ["nav.notifications"] },
 ];
 
 function pageInfoFor(pathname) {
@@ -46,6 +48,7 @@ function pageInfoFor(pathname) {
 }
 
 export function Topbar({ onMenuClick }) {
+  const { t } = useLocale();
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -164,17 +167,17 @@ export function Topbar({ onMenuClick }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <button type="button" className="topbar-menu-btn" onClick={onMenuClick} aria-label="Open navigation">
+        <button type="button" className="topbar-menu-btn" onClick={onMenuClick} aria-label={t("nav.open_navigation")}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
           </svg>
         </button>
 
-        <nav className="topbar-trail" aria-label="Breadcrumb">
+        <nav className="topbar-trail" aria-label={t("nav.breadcrumb")}>
           <ol>
             {trail.map((item, i) => (
               <li key={item} aria-current={i === trail.length - 1 ? "page" : undefined}>
-                {item}
+                {t(item)}
               </li>
             ))}
           </ol>
@@ -183,11 +186,12 @@ export function Topbar({ onMenuClick }) {
         <span className="topbar-spacer" />
 
         <div className="topbar-actions">
+          <LanguageToggle />
           <div className="topbar-notif" ref={notifRef}>
             <button
               type="button"
               className="topbar-icon-btn"
-              aria-label="Notifications"
+              aria-label={t("nav.notifications")}
               aria-haspopup="true"
               aria-expanded={notifOpen}
               onClick={openNotifications}
@@ -201,10 +205,10 @@ export function Topbar({ onMenuClick }) {
             {notifOpen && (
               <div className="topbar-menu topbar-notif-menu" role="menu">
                 <div className="topbar-menu-header topbar-notif-header">
-                  <p className="topbar-menu-name">Notifications</p>
+                  <p className="topbar-menu-name">{t("nav.notifications")}</p>
                   {unreadCount > 0 && (
                     <button type="button" className="topbar-notif-markall" onClick={handleMarkAllRead}>
-                      Mark all read
+                      {t("notifications.mark_all_read")}
                     </button>
                   )}
                 </div>
@@ -212,8 +216,8 @@ export function Topbar({ onMenuClick }) {
                 <div className="topbar-notif-scroll">
                   {notifications.length === 0 ? (
                     <div className="topbar-notif-empty">
-                      <p>You're all caught up.</p>
-                      <p className="topbar-notif-empty-sub">New activity on your projects will show up here.</p>
+                          <p>{t("notifications.caught_up")}</p>
+                          <p className="topbar-notif-empty-sub">{t("notifications.empty_help")}</p>
                     </div>
                   ) : (
                     groupByDay(notifications).map(([label, items]) => (
@@ -251,7 +255,7 @@ export function Topbar({ onMenuClick }) {
                   className="topbar-notif-footer"
                   onClick={() => { setNotifOpen(false); navigate("/notifications"); }}
                 >
-                  See all notifications
+                  {t("notifications.see_all")}
                 </button>
               </div>
             )}
@@ -285,7 +289,7 @@ export function Topbar({ onMenuClick }) {
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                 >
-                  Terms &amp; Privacy
+                  {t("account.terms_privacy")}
                 </Link>
                 <button
                   type="button"
@@ -294,7 +298,7 @@ export function Topbar({ onMenuClick }) {
                   onClick={logout}
                 >
                   <LogoutIcon />
-                  Log out
+                  {t("account.logout")}
                 </button>
               </div>
             )}

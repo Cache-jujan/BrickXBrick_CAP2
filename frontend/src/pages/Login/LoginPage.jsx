@@ -6,6 +6,8 @@ import { extractErrorMessage } from "../../api/client";
 import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
+import { useLocale } from "../../i18n/LocaleProvider";
+import { LanguageToggle } from "../../i18n/LanguageToggle";
 import "./LoginPage.css";
 
 // Feature list mirrors what the backend actually supports today — RBAC
@@ -19,6 +21,7 @@ import "./LoginPage.css";
 // accounts are created by a System Administrator only (see adminUsers.js).
 // Do not add a "Continue with Google" or sign-up affordance here.
 export function LoginPage() {
+  const { t } = useLocale();
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,11 +65,10 @@ export function LoginPage() {
             </span>
           </div>
 
-          <div className="login-panel-copy">
-            <h1 className="login-headline">Construction projects, purchases and expenses in one record.</h1>
+        <div className="login-panel-copy">
+            <h1 className="login-headline">{t("login.story_title")}</h1>
             <p className="login-panel-tagline">
-              For General Managers, Project Managers, Site Managers and Purchasers.
-              Approved expenses are protected against later changes.
+              {t("login.story_body")}
             </p>
           </div>
 
@@ -77,15 +79,16 @@ export function LoginPage() {
       {/* Right — the sign-in form */}
       <div className="login-form-side">
         <div className="login-card">
-          <h2 className="login-title">Sign in</h2>
-          <p className="login-subtitle">Use the account your System Administrator created for you.</p>
+          <div className="login-language-row"><LanguageToggle /></div>
+          <h2 className="login-title">{t("login.title")}</h2>
+          <p className="login-subtitle">{t("login.subtitle")}</p>
 
           <form onSubmit={handleSubmit} noValidate className="login-form">
             {successMessage && <Banner tone="info" title={successMessage} />}
 
             <div className="login-field-icon-wrap">
               <Field
-                label="Email Address"
+                label={t("login.email")}
                 type="email"
                 required
                 autoComplete="email"
@@ -101,11 +104,11 @@ export function LoginPage() {
 
             <div className="login-field-icon-wrap login-password-field">
               <Field
-                label="Password"
+                label={t("login.password")}
                 type={showPassword ? "text" : "password"}
                 required
                 autoComplete="current-password"
-                placeholder="Enter your password"
+                placeholder={t("login.enter_password")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="login-field-icon"
@@ -117,7 +120,7 @@ export function LoginPage() {
                 type="button"
                 className="login-toggle"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={t(showPassword ? "login.hide" : "login.show")}
                 aria-pressed={showPassword}
               >
                 <EyeIcon open={showPassword} />
@@ -129,7 +132,7 @@ export function LoginPage() {
             </p>
 
             <Button type="submit" disabled={submitting} className="login-submit">
-              {submitting ? "Signing in…" : "Sign in"}
+              {submitting ? t("login.signing_in") : t("login.title")}
             </Button>
 
             {error && <Banner tone="error" title={error} />}

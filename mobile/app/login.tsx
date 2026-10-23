@@ -10,10 +10,12 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
 import { BrandMark } from "@/components/brand-mark";
+import { useLocale } from "@/lib/i18n-context";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
 export default function LoginScreen() {
+  const { locale, toggleLanguage, t } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -86,17 +88,28 @@ export default function LoginScreen() {
       <BrandMark size={300} style={styles.watermark} />
 
       <View style={styles.brand}>
-        <BrandMark size={34} />
-        <Text style={styles.brandName}>Brick x Brick</Text>
-      </View>
+        <View style={styles.brandMarkRow}>
+          <BrandMark size={34} />
+          <Text style={styles.brandName}>Brick x Brick</Text>
+        </View>
+        <Pressable
+          onPress={toggleLanguage}
+          style={styles.languageButton}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: locale === "ceb" }}
+          accessibilityLabel={t(locale === "ceb" ? "language.english_action" : "language.translate")}
+        >
+          <Text style={styles.languageButtonText}>{t(locale === "ceb" ? "language.english_action" : "language.translate")}</Text>
+        </Pressable>
+        </View>
 
       <View style={styles.heading}>
-        <Text style={styles.title}>Sign in</Text>
-        <Text style={styles.subtitle}>Use the account your System Administrator created for you.</Text>
+        <Text style={styles.title}>{t("login.title")}</Text>
+        <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>Email address</Text>
+        <Text style={styles.label}>{t("login.email")}</Text>
         <TextInput
           autoCapitalize="none"
           autoComplete="email"
@@ -112,14 +125,14 @@ export default function LoginScreen() {
           onSubmitEditing={() => passwordRef.current?.focus()}
         />
 
-        <Text style={[styles.label, styles.labelSpaced]}>Password</Text>
+        <Text style={[styles.label, styles.labelSpaced]}>{t("login.password")}</Text>
         <View style={[styles.inputRow, missing.password && !password && fieldErrorStyle]}>
           <TextInput
             ref={passwordRef}
             autoCapitalize="none"
             autoComplete="password"
             autoCorrect={false}
-            placeholder="Enter your password"
+            placeholder={t("login.enter_password")}
             placeholderTextColor={COLORS.muted}
             secureTextEntry={!showPassword}
             style={styles.inputInRow}
@@ -133,14 +146,14 @@ export default function LoginScreen() {
             hitSlop={8}
             style={styles.showButton}
             accessibilityRole="button"
-            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            accessibilityLabel={t(showPassword ? "login.hide" : "login.show")}
           >
-            <Text style={styles.showPassword}>{showPassword ? "Hide" : "Show"}</Text>
+            <Text style={styles.showPassword}>{t(showPassword ? "login.hide" : "login.show")}</Text>
           </Pressable>
         </View>
 
         <Pressable accessibilityRole="link" onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
-          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          <Text style={styles.forgotPasswordText}>{t("login.forgot")}</Text>
         </Pressable>
 
         {error ? (
@@ -149,7 +162,7 @@ export default function LoginScreen() {
           </Text>
         ) : null}
 
-        <AppButton label="Sign in" onPress={handleLogin} loading={submitting} />
+        <AppButton label={submitting ? t("login.signing_in") : t("login.title")} onPress={handleLogin} loading={submitting} />
       </View>
 
       <Text style={styles.footer}>© 2026 Brick x Brick</Text>
@@ -160,7 +173,10 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, overflow: "hidden", paddingBottom: 24, paddingHorizontal: 24, paddingTop: 20 },
   watermark: { opacity: 0.07, position: "absolute", right: -90, top: 70 },
-  brand: { alignItems: "center", flexDirection: "row", gap: 10 },
+  brand: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  brandMarkRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  languageButton: { borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, minHeight: 40, justifyContent: "center", paddingHorizontal: 10 },
+  languageButtonText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 11 },
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
   heading: { marginTop: 56 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 38, letterSpacing: -1 },

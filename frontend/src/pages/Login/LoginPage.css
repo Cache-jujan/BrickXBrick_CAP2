@@ -365,6 +365,12 @@
   box-shadow: none;
 }
 
+.login-language-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+}
+
 .login-title {
   font-size: var(--text-lg);
   text-align: left;

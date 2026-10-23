@@ -26,24 +26,18 @@ import { MainHeader } from "@/components/main-header";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
+import { useLocale } from "@/lib/i18n-context";
 
 type FilterKey = "Today" | "Upcoming" | "Past due" | "Completed";
 type CompletedView = "Recent" | "Archive";
 type DueTone = "late" | "today" | "soon" | "normal";
 
-const FILTERS: { key: FilterKey; label: string; icon: "calendar" | "clock.arrow.circlepath" | "exclamationmark.triangle.fill" | "checkmark.circle.fill"; tint: string; countBg: string }[] = [
-  { key: "Today", label: "Today", icon: "calendar", tint: COLORS.primary, countBg: "#FFE3D1" },
-  { key: "Upcoming", label: "Upcoming", icon: "clock.arrow.circlepath", tint: "#475569", countBg: "#E8ECF2" },
-  { key: "Past due", label: "Past Due", icon: "exclamationmark.triangle.fill", tint: "#DC2626", countBg: "#FDE2E0" },
-  { key: "Completed", label: "Completed", icon: "checkmark.circle.fill", tint: "#16A34A", countBg: "#DCFCE7" },
+const FILTERS: { key: FilterKey; icon: "calendar" | "clock.arrow.circlepath" | "exclamationmark.triangle.fill" | "checkmark.circle.fill"; tint: string; countBg: string }[] = [
+  { key: "Today", icon: "calendar", tint: COLORS.primary, countBg: "#FFE3D1" },
+  { key: "Upcoming", icon: "clock.arrow.circlepath", tint: "#475569", countBg: "#E8ECF2" },
+  { key: "Past due", icon: "exclamationmark.triangle.fill", tint: "#DC2626", countBg: "#FDE2E0" },
+  { key: "Completed", icon: "checkmark.circle.fill", tint: "#16A34A", countBg: "#DCFCE7" },
 ];
-
-const LIST_TITLES: Record<FilterKey, string> = {
-  Today: "Today's Tasks",
-  Upcoming: "Upcoming Tasks",
-  "Past due": "Past Due Tasks",
-  Completed: "Completed Tasks",
-};
 
 const PROJECTS_PREVIEW = 3;
 const TASKS_PREVIEW = 5;
@@ -79,11 +73,11 @@ function matchesFilter(task: AssignedTask, key: FilterKey, today: number) {
   return due < today;
 }
 
-function greeting() {
+function greeting(t: (key: string) => string) {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return t("mobile.good_morning");
+  if (hour < 18) return t("mobile.good_afternoon");
+  return t("mobile.good_evening");
 }
 
 function formatDay(value?: string | null) {
@@ -103,19 +97,19 @@ function rightLabel(task: AssignedTask): { text: string; tone: DueTone } {
 type Badge = { label: string; bg: string; fg: string; tone: "done" | "late" | "active" | "review" | "idle" };
 
 function badgeFor(task: AssignedTask, today: number): Badge {
-  if (isDone(task)) return { label: "Completed", bg: COLORS.successBg, fg: "#166534", tone: "done" };
+  if (isDone(task)) return { label: "common.completed", bg: COLORS.successBg, fg: "#166534", tone: "done" };
   // F10: an update saved on this phone and not sent yet.
-  if (getPendingTaskUpdateForTask(task.taskid)) return { label: "Queued on phone", bg: "#FFF8E6", fg: "#8A5A00", tone: "review" };
+  if (getPendingTaskUpdateForTask(task.taskid)) return { label: "mobile.queued_on_phone", bg: "#FFF8E6", fg: "#8A5A00", tone: "review" };
   // A submission is waiting for the PM; the task status itself does not
   // change until the PM acknowledges, so show it here.
-  if (task.pendingphotoevidenceurl) return { label: "In Review", bg: "#EAF2FF", fg: "#2563EB", tone: "review" };
-  if (task.latestreviewstatus === "Flagged") return { label: "Flagged", bg: "#FDE2E0", fg: "#B42318", tone: "late" };
+  if (task.pendingphotoevidenceurl) return { label: "common.in_review", bg: "#EAF2FF", fg: "#2563EB", tone: "review" };
+  if (task.latestreviewstatus === "Flagged") return { label: "common.flagged", bg: "#FDE2E0", fg: "#B42318", tone: "late" };
   const due = dueDay(task);
-  if (due !== null && due < today) return { label: "Overdue", bg: "#FDE2E0", fg: "#B42318", tone: "late" };
+  if (due !== null && due < today) return { label: "common.overdue", bg: "#FDE2E0", fg: "#B42318", tone: "late" };
   if (task.status === "In Progress" || Number(task.completionpercentage || 0) > 0) {
-    return { label: "In Progress", bg: "#FFF0E0", fg: "#C2410C", tone: "active" };
+    return { label: "common.in_progress", bg: "#FFF0E0", fg: "#C2410C", tone: "active" };
   }
-  return { label: "Not Started", bg: "#EDEFF3", fg: "#475569", tone: "idle" };
+  return { label: "common.not_started", bg: "#EDEFF3", fg: "#475569", tone: "idle" };
 }
 
 type ProjectSummary = {
@@ -127,6 +121,7 @@ type ProjectSummary = {
 };
 
 export default function SiteManagerHomeScreen() {
+  const { t } = useLocale();
   const session = getSession();
   const [tasks, setTasks] = useState<AssignedTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,14 +269,14 @@ export default function SiteManagerHomeScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <MainHeader tagline="Build Today. Better Tomorrow." />
+      <MainHeader tagline={t("mobile.tagline")} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTasks(true)} />}
       >
-        <Text style={styles.title}>{greeting()}, {firstName}.</Text>
-        <Text style={styles.subtitle}>Here’s your task progress.</Text>
+        <Text style={styles.title}>{greeting(t)}, {firstName}.</Text>
+        <Text style={styles.subtitle}>{t("mobile.tasks_subtitle")}</Text>
 
         {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
@@ -301,23 +296,23 @@ export default function SiteManagerHomeScreen() {
             <Text style={styles.dateMonth}>{dateMonth}</Text>
           </View>
           <View style={styles.progressBody}>
-            <Text style={styles.heroLabel}>Task progress</Text>
+            <Text style={styles.heroLabel}>{t("mobile.task_progress")}</Text>
             <Text style={styles.heroValue}>
-              {loading ? "…" : `${doneCount} of ${activeTasks.length} tasks`}
+              {loading ? "…" : t("mobile.tasks_count", { done: doneCount, total: activeTasks.length })}
             </Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${percent}%` }]} />
             </View>
             {!loading && (dueToday > 0 || overdue > 0) && (
               <Text style={styles.heroAlert}>
-                {[overdue > 0 && `${overdue} overdue`, dueToday > 0 && `${dueToday} due today`].filter(Boolean).join(" · ")}
+                {[overdue > 0 && t("mobile.overdue_count", { count: overdue }), dueToday > 0 && t("mobile.due_today_count", { count: dueToday })].filter(Boolean).join(" · ")}
               </Text>
             )}
           </View>
         </View>
 
         {/* This week: a dot marks a day with an open deadline */}
-        <View style={styles.weekRow} accessibilityLabel="This week">
+        <View style={styles.weekRow} accessibilityLabel={t("mobile.this_week")}>
           {weekDays.map((day) => (
             <View key={day.time} style={[styles.weekDay, day.isToday && styles.weekDayToday]}>
               <Text style={[styles.weekName, day.isToday && styles.weekTextToday]}>{day.name}</Text>
@@ -328,16 +323,16 @@ export default function SiteManagerHomeScreen() {
         </View>
 
         <AppButton
-          label="＋  Request a ticket"
+          label={t("mobile.request_ticket")}
           variant="primary"
           onPress={() => router.push("/ticket-request")}
-          accessibilityLabel="Request ticket"
+          accessibilityLabel={t("mobile.request_ticket_accessibility")}
           style={styles.ticketButton}
         />
 
         {/* Filter tabs */}
         <View style={styles.filterBar}>
-          {FILTERS.map(({ key, label, icon, tint, countBg }, index) => {
+          {FILTERS.map(({ key, icon, tint, countBg }, index) => {
             const active = filter === key;
             return (
               <Pressable
@@ -349,7 +344,7 @@ export default function SiteManagerHomeScreen() {
               >
                 <IconSymbol name={icon} size={22} color={active ? "#FFFFFF" : tint} />
                 <View style={styles.filterLabelRow}>
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.filterLabel, active && styles.filterLabelActive]}>{label}</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.filterLabel, active && styles.filterLabelActive]}>{t(({ Today: "mobile.filter_today", Upcoming: "mobile.filter_upcoming", "Past due": "mobile.filter_past_due", Completed: "mobile.filter_completed" } as const)[key])}</Text>
                   <View style={[styles.filterCount, { backgroundColor: active ? "rgba(255,255,255,0.28)" : countBg }]}>
                     <Text style={[styles.filterCountText, { color: active ? "#FFFFFF" : tint }]}>{counts[key]}</Text>
                   </View>
@@ -361,15 +356,15 @@ export default function SiteManagerHomeScreen() {
 
         {shownError ? (
           <View style={styles.stateWrap}>
-            <StateCard kind="error" title="Couldn’t load tasks" body={shownError} onRetry={() => loadTasks()} />
+          <StateCard kind="error" title={t("mobile.tasks_load_error")} body={shownError} onRetry={() => loadTasks()} />
           </View>
         ) : loading ? (
           <View style={styles.stateWrap}>
-            <StateCard kind="loading" body="Loading assigned tasks…" />
+          <StateCard kind="loading" body={t("mobile.tasks_loading")} />
           </View>
         ) : tasks.length === 0 ? (
           <View style={styles.stateWrap}>
-            <StateCard kind="empty" title="No tasks to show yet" body="Tasks assigned to you by your Project Manager will appear here." />
+          <StateCard kind="empty" title={t("mobile.no_tasks")} body={t("mobile.no_tasks_help")} />
           </View>
         ) : (
           <>
@@ -377,10 +372,10 @@ export default function SiteManagerHomeScreen() {
             {projects.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Your Projects</Text>
+                  <Text style={styles.sectionTitle}>{t("mobile.your_projects")}</Text>
                   {projects.length > PROJECTS_PREVIEW && (
                     <Pressable onPress={() => setShowAllProjects((v) => !v)} hitSlop={8}>
-                      <Text style={styles.viewAll}>{showAllProjects ? "Show less" : "View All"} ›</Text>
+                      <Text style={styles.viewAll}>{t(showAllProjects ? "common.show_less" : "common.view_all")} ›</Text>
                     </Pressable>
                   )}
                 </View>
@@ -392,10 +387,10 @@ export default function SiteManagerHomeScreen() {
                     const info = projectInfo.get(project.name);
                     const next = info?.next ? dueLabel(info.next.date) : null;
                     const tone = finished
-                      ? { label: "Done", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
+                      ? { label: "common.done_status", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
                       : project.atRisk
-                      ? { label: "At Risk", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
-                      : { label: "On Track", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success };
+                      ? { label: "common.at_risk", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
+                      : { label: "common.on_track", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success };
                     return (
                       <Pressable
                         key={project.name}
@@ -411,25 +406,25 @@ export default function SiteManagerHomeScreen() {
                         <View style={styles.projectBody}>
                           <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
                           <View style={[styles.pill, styles.projectPill, { backgroundColor: tone.bg }]}>
-                            <Text style={[styles.pillText, { color: tone.fg }]}>{tone.label}</Text>
+                          <Text style={[styles.pillText, { color: tone.fg }]}>{t(tone.label)}</Text>
                           </View>
                           <View style={styles.projectProgressRow}>
                             <View style={styles.projectTrack}>
                               <View style={[styles.projectFill, { width: `${pct}%`, backgroundColor: tone.bar }]} />
                             </View>
-                            <Text style={styles.projectCount}>{project.done} / {project.total} tasks</Text>
+                            <Text style={styles.projectCount}>{t("mobile.tasks_count", { done: project.done, total: project.total })}</Text>
                           </View>
                           <Text style={styles.projectPending}>
-                            {project.pending === 0 ? "No pending tasks" : `${project.pending} pending`}
+                            {project.pending === 0 ? t("mobile.no_pending_tasks") : t("mobile.pending_count", { count: project.pending })}
                           </Text>
                           {info?.startDate && (
                             <Text style={styles.projectMeta}>
-                              {formatDay(info.startDate)} – {info.endDate ? formatDay(info.endDate) : "no end date"}
+                              {formatDay(info.startDate)} – {info.endDate ? formatDay(info.endDate) : t("mobile.no_end_date")}
                             </Text>
                           )}
                           {info?.next && next && (
                             <Text style={[styles.projectMeta, DUE_TONE[next.tone]]} numberOfLines={2}>
-                              Nearest deadline: {info.next.label} · {next.text}
+                              {t("mobile.nearest_deadline")} {info.next.label} · {next.text}
                             </Text>
                           )}
                         </View>
@@ -442,10 +437,10 @@ export default function SiteManagerHomeScreen() {
 
             {/* Tasks for the active filter */}
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{showingArchive ? "Archive" : LIST_TITLES[filter]}</Text>
+              <Text style={styles.sectionTitle}>{t(showingArchive ? "mobile.task_archive" : ({ Today: "mobile.tasks_today", Upcoming: "mobile.tasks_upcoming", "Past due": "mobile.tasks_past_due", Completed: "mobile.tasks_completed" } as const)[filter])}</Text>
               {!showingArchive && visibleTasks.length > TASKS_PREVIEW && (
                 <Pressable onPress={() => setShowAllTasks((v) => !v)} hitSlop={8}>
-                  <Text style={styles.viewAll}>{showAllTasks ? "Show less" : "View All"} ›</Text>
+                  <Text style={styles.viewAll}>{t(showAllTasks ? "common.show_less" : "common.view_all")} ›</Text>
                 </Pressable>
               )}
             </View>
@@ -464,7 +459,7 @@ export default function SiteManagerHomeScreen() {
                       accessibilityState={{ selected: active }}
                     >
                       <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                        {view === "Recent" ? `Last ${ARCHIVE_AFTER_DAYS} days` : "Archive"} ({count})
+                        {view === "Recent" ? t("mobile.days_recent", { days: ARCHIVE_AFTER_DAYS }) : t("mobile.task_archive")} ({count})
                       </Text>
                     </Pressable>
                   );
@@ -481,13 +476,13 @@ export default function SiteManagerHomeScreen() {
             {visibleTasks.length === 0 ? (
               <StateCard
                 kind="empty"
-                title={showingArchive ? "Nothing archived yet" : `Nothing in “${filter}”`}
+                title={t(showingArchive ? "mobile.nothing_archived" : "mobile.no_tasks_in_filter", { filter: t(({ Today: "mobile.filter_today", Upcoming: "mobile.filter_upcoming", "Past due": "mobile.filter_past_due", Completed: "mobile.filter_completed" } as const)[filter]) })}
                 body={
                   showingArchive
-                    ? `Completed tasks move here ${ARCHIVE_AFTER_DAYS} days after they’re finished.`
+                    ? t("mobile.completed_archive_help", { days: ARCHIVE_AFTER_DAYS })
                     : projectFilter
-                    ? "No tasks match this project and filter."
-                    : "No tasks match this filter right now."
+                    ? t("mobile.no_tasks_project_filter")
+                    : t("mobile.no_tasks_filter")
                 }
               />
             ) : showingArchive ? (
@@ -513,6 +508,7 @@ export default function SiteManagerHomeScreen() {
 }
 
 function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
+  const { t } = useLocale();
   const badge = badgeFor(task, today);
   const right = rightLabel(task);
   const lead =
@@ -543,7 +539,7 @@ function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
       <View style={styles.taskRight}>
         <Text style={[styles.taskDue, DUE_TONE[right.tone]]}>{right.text}</Text>
         <View style={[styles.pill, { backgroundColor: badge.bg }]}>
-          <Text style={[styles.pillText, { color: badge.fg }]}>{badge.label}</Text>
+          <Text style={[styles.pillText, { color: badge.fg }]}>{t(badge.label)}</Text>
         </View>
       </View>
     </Pressable>
