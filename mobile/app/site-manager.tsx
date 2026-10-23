@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Redirect, router, useFocusEffect } from "expo-router";
+import { Redirect, router, useFocusEffect, type Href } from "expo-router";
 
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { type AssignedTask } from "@/lib/api";
@@ -327,6 +327,13 @@ export default function SiteManagerHomeScreen() {
           variant="primary"
           onPress={() => router.push("/ticket-request")}
           accessibilityLabel={t("mobile.request_ticket_accessibility")}
+          style={styles.ticketButton}
+        />
+        <AppButton
+          label="Progress check-in"
+          variant="secondary"
+          onPress={() => router.push("/site-manager/checkin" as Href)}
+          accessibilityLabel="Daily progress check-in"
           style={styles.ticketButton}
         />
 
