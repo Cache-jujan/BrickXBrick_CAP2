@@ -32,6 +32,7 @@ const META: Record<string, Meta> = {
   TaskAssigned:          { icon: "list.clipboard.fill", bg: "#EAF2FF", fg: "#2563EB", fallback: "A task was assigned to you." },
   TaskAcknowledged:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "Your task photo was accepted." },
   TaskFlagged:           { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallback: "Your task photo was flagged." },
+  CheckinFlagged:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallback: "Your Project Manager flagged a check-in." },
   ProjectAssigned:       { icon: "folder.fill",      bg: "#EAF2FF", fg: "#2563EB", fallback: "A project was assigned to you." },
   ProjectActivated:      { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A project was activated." },
   BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A Bill of Materials was approved." },
@@ -92,6 +93,7 @@ export function routeForNotification(n: AppNotification, role: "Purchaser" | "Si
     return "/(tabs)" as Href;
   }
   if (type === "Task" && role === "Site Manager") return `/site-manager/task/${n.relatedentityid}` as Href;
+  if (type === "Checkin" && role === "Site Manager") return "/site-manager/checkin" as Href;
   // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet —
   // mark read only (mirrors the web app's "Unknown -> mark read only").
   return null;

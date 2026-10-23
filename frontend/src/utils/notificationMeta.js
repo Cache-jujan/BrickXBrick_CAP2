@@ -27,6 +27,8 @@ export const NOTIFICATION_META = {
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallback: "A task was assigned to you." },
   TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallback: "A task photo was accepted." },
   TaskFlagged:         { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallback: "A task photo was flagged." },
+  CheckinIssue:        { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallback: "A check-in needs your action." },
+  CheckinFlagged:      { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallback: "A check-in was flagged." },
   ProjectAssigned:     { Icon: FolderIcon,       bg: "#EAF2FF", fg: "#2563EB", fallback: "A project was assigned to you." },
   ProjectActivated:    { Icon: RocketGlyph,      bg: "#DCFCE7", fg: "#16A34A", fallback: "A project was activated." },
   BOMApproved:         { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallback: "A Bill of Materials was approved." },
@@ -87,6 +89,9 @@ export function routeForNotification(n, role) {
   if (type === "Project") return `/projects/${n.relatedentityid}`;
   if (type === "Milestone") return n.milestone_projectid ? `/projects/${n.milestone_projectid}` : null;
   if (type === "Task") return n.task_projectid ? `/projects/${n.task_projectid}` : null;
+  if (type === "Checkin") {
+    return n.checkin_projectid ? `/projects/${n.checkin_projectid}/checkins?focus=${n.relatedentityid}` : null;
+  }
   if (type === "Expense") return "/expenses";
   if (n.type === "TamperAlert") return "/blockchain/alerts";
   return null;

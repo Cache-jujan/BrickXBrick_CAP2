@@ -144,6 +144,30 @@ export async function fetchAllAssignedTickets(role: "Purchaser" | "Site Manager"
   return res.json();
 }
 
+// ── daily progress check-ins (Site Manager) ──
+export type CheckinSlotName = "Morning" | "Midday" | "EndOfDay";
+export type CheckinSlot = {
+  slot: CheckinSlotName;
+  label: string;
+  window: string;
+  state: "Submitted" | "Open" | "Upcoming" | "Missed";
+  checkinId: string | null;
+};
+export type CheckinsToday = {
+  today: string;
+  now: string;
+  suggestedSlot: CheckinSlotName;
+  windows: Record<CheckinSlotName, string>;
+  projects: { projectId: string; name: string; slots: CheckinSlot[] }[];
+};
+
+export async function fetchCheckinsToday(): Promise<CheckinsToday> {
+  const res = await apiFetch(`${API_URL}/api/checkins/today`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to load check-ins (${res.status})`);
+  return data;
+}
+
 export async function fetchActiveProjects(): Promise<Project[]> {
   const res = await apiFetch(`${API_URL}/api/projects?status=Active`, {
     headers: authHeaders(),

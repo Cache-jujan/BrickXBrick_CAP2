@@ -90,6 +90,29 @@ export function initDb() {
       error_message    TEXT
     );
   `);
+  // Daily check-ins (Site Manager). Photos are files in the documents folder
+  // (paths in photo_paths); server_photo_urls fills in as each one uploads.
+  exec(`
+    CREATE TABLE IF NOT EXISTS offline_checkins (
+      client_id         TEXT PRIMARY KEY NOT NULL,
+      user_id           TEXT NOT NULL,
+      project_id        TEXT NOT NULL,
+      checkin_date      TEXT NOT NULL,
+      slot              TEXT NOT NULL,
+      captured_at       TEXT NOT NULL,
+      site_status       TEXT NOT NULL,
+      summary           TEXT NOT NULL,
+      issues            TEXT,
+      needs_pm_action   INTEGER NOT NULL DEFAULT 0,
+      task_ids          TEXT NOT NULL DEFAULT '[]',
+      photo_paths       TEXT NOT NULL DEFAULT '[]',
+      server_photo_urls TEXT NOT NULL DEFAULT '[]',
+      created_at        TEXT NOT NULL,
+      sync_status       TEXT NOT NULL DEFAULT 'PENDING',
+      error_code        TEXT,
+      error_message     TEXT
+    );
+  `);
   // Offline-first (app opens and shows your work with no connection):
   //   app_kv        small settings, e.g. the saved sign-in
   //   api_cache     the last answer the server gave for each screen, per user
@@ -135,6 +158,7 @@ export function purgeExpired() {
   run("DELETE FROM offline_expenses WHERE created_at < ? AND status != 'pending';", [cutoff]);
   run("DELETE FROM offline_task_updates WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
   run("DELETE FROM offline_scans WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
+  run("DELETE FROM offline_checkins WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
 }
 
 // ── the one queue rule ───────────────────────────────────────────────────────
@@ -171,9 +195,10 @@ export function evaluateEnqueue({
 // May one more entry be queued right now? Counts ALL queues, so the 100-entry
 // and 72-hour rules cannot drift apart. Pass replacingTaskId when a new task
 // submission will replace that task's pending one (so it does not count twice).
-export function canEnqueue({ replacingTaskId = null, now = Date.now() } = {}) {
+export function canEnqueue({ replacingTaskId = null, replacingCheckinId = null, now = Date.now() } = {}) {
   if (!db) return { allowed: false, reason: "NO_DB", message: "Offline storage is not ready yet." };
   const skip = replacingTaskId ?? "";
+  const skipCheckin = replacingCheckinId ?? "";
   const row = first(
     `SELECT COUNT(*) AS c, MIN(created_at) AS oldest FROM (
        SELECT created_at FROM offline_expenses WHERE status = 'pending'
@@ -182,8 +207,11 @@ export function canEnqueue({ replacingTaskId = null, now = Date.now() } = {}) {
         WHERE sync_status = 'PENDING' AND task_id != ?
        UNION ALL
        SELECT created_at FROM offline_scans WHERE sync_status = 'PENDING'
+       UNION ALL
+       SELECT created_at FROM offline_checkins
+        WHERE sync_status = 'PENDING' AND client_id != ?
      );`,
-    [skip]
+    [skip, skipCheckin]
   );
   return evaluateEnqueue({ pendingCount: row?.c ?? 0, oldestCreatedAt: row?.oldest ?? null, now });
 }
@@ -218,7 +246,7 @@ export function getPendingExpenseCount() {
 
 // Everything waiting to sync, all queues (for the offline banner).
 export function getPendingCount() {
-  return getPendingExpenseCount() + getPendingTaskUpdateCount() + getPendingScanCount();
+  return getPendingExpenseCount() + getPendingTaskUpdateCount() + getPendingScanCount() + getPendingCheckinCount();
 }
 
 // Mark a row as synced and record the timestamp.
@@ -380,6 +408,136 @@ export function dismissRejectedTaskUpdate(updateId) {
   return row ? row.photo_path : null;
 }
 
+
+// ── daily check-ins (Site Manager) ───────────────────────────────────────────
+// One pending check-in per person, project, day and slot: saving it again
+// replaces the waiting one (the server allows only one per slot anyway).
+
+const parseCheckin = (row) => ({
+  ...row,
+  needs_pm_action: !!row.needs_pm_action,
+  task_ids: JSON.parse(row.task_ids || "[]"),
+  photo_paths: JSON.parse(row.photo_paths || "[]"),
+  server_photo_urls: JSON.parse(row.server_photo_urls || "[]"),
+});
+
+// Returns { queued: true, replacedPhotoPaths } (files the caller deletes) or
+// { queued: false, reason, message }.
+export function queueCheckin({
+  clientId, userId, projectId, checkinDate, slot, capturedAt, siteStatus,
+  summary, issues = null, needsPmAction = false, taskIds = [], photoPaths = [],
+}) {
+  if (!db) return { queued: false, reason: "NO_DB", message: "Offline storage is not ready yet." };
+  purgeExpired();
+
+  const older = first(
+    `SELECT client_id, photo_paths FROM offline_checkins
+      WHERE user_id = ? AND project_id = ? AND checkin_date = ? AND slot = ? AND sync_status = 'PENDING';`,
+    [userId, projectId, checkinDate, slot]
+  );
+  const gate = canEnqueue({ replacingCheckinId: older ? older.client_id : null });
+  if (!gate.allowed) return { queued: false, reason: gate.reason, message: gate.message };
+
+  guarded((d) => {
+    d.execSync("BEGIN;");
+    try {
+      if (older) d.runSync("DELETE FROM offline_checkins WHERE client_id = ?;", [older.client_id]);
+      d.runSync(
+        `INSERT INTO offline_checkins
+           (client_id, user_id, project_id, checkin_date, slot, captured_at, site_status, summary, issues,
+            needs_pm_action, task_ids, photo_paths, created_at, sync_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING');`,
+        [
+          clientId, userId, projectId, checkinDate, slot, capturedAt, siteStatus, summary, issues,
+          needsPmAction ? 1 : 0, JSON.stringify(taskIds), JSON.stringify(photoPaths), new Date().toISOString(),
+        ]
+      );
+      d.execSync("COMMIT;");
+    } catch (error) {
+      try {
+        d.execSync("ROLLBACK;");
+      } catch {
+        // the connection itself is gone; nothing to roll back
+      }
+      throw error;
+    }
+  });
+  return { queued: true, replacedPhotoPaths: older ? JSON.parse(older.photo_paths || "[]") : [] };
+}
+
+export function getPendingCheckinCount() {
+  if (!db) return 0;
+  const row = first("SELECT COUNT(*) as c FROM offline_checkins WHERE sync_status = 'PENDING';");
+  return row ? row.c : 0;
+}
+
+/** @param {string | null} [userId] */
+export function getPendingCheckins(userId = null) {
+  if (!db) return [];
+  return all(
+    `SELECT * FROM offline_checkins
+      WHERE sync_status = 'PENDING' AND (? IS NULL OR user_id = ?)
+      ORDER BY created_at ASC;`,
+    [userId, userId]
+  ).map(parseCheckin);
+}
+
+// Slots already waiting on this phone for one day, so the screen can show
+// "saved on this phone" for them.
+export function getPendingCheckinSlots(userId, checkinDate) {
+  if (!db) return [];
+  return all(
+    "SELECT project_id, slot FROM offline_checkins WHERE sync_status = 'PENDING' AND user_id = ? AND checkin_date = ?;",
+    [userId, checkinDate]
+  );
+}
+
+export function setCheckinPhotoUrls(clientId, urls) {
+  if (!db) return;
+  run("UPDATE offline_checkins SET server_photo_urls = ? WHERE client_id = ?;", [JSON.stringify(urls), clientId]);
+}
+
+export function markCheckinSynced(clientId) {
+  if (!db) return;
+  run("UPDATE offline_checkins SET sync_status = 'SYNCED' WHERE client_id = ?;", [clientId]);
+}
+
+export function markCheckinRejected(clientId, code, message) {
+  if (!db) return;
+  run(
+    "UPDATE offline_checkins SET sync_status = 'REJECTED', error_code = ?, error_message = ? WHERE client_id = ?;",
+    [code || "UNKNOWN", message || "Rejected by server", clientId]
+  );
+}
+
+// Delete synced rows; returns their photo paths so the caller can delete the files.
+export function purgeSyncedCheckins() {
+  if (!db) return [];
+  const paths = all("SELECT photo_paths FROM offline_checkins WHERE sync_status = 'SYNCED';").flatMap((row) =>
+    JSON.parse(row.photo_paths || "[]")
+  );
+  run("DELETE FROM offline_checkins WHERE sync_status = 'SYNCED';");
+  return paths;
+}
+
+/** @param {string | null} [userId] */
+export function getRejectedCheckins(userId = null) {
+  if (!db) return [];
+  return all(
+    `SELECT * FROM offline_checkins
+      WHERE sync_status = 'REJECTED' AND (? IS NULL OR user_id = ?)
+      ORDER BY created_at DESC;`,
+    [userId, userId]
+  ).map(parseCheckin);
+}
+
+// The user has seen the rejection. Returns the photo paths to delete.
+export function dismissRejectedCheckin(clientId) {
+  if (!db) return [];
+  const row = first("SELECT photo_paths FROM offline_checkins WHERE client_id = ? AND sync_status = 'REJECTED';", [clientId]);
+  run("DELETE FROM offline_checkins WHERE client_id = ? AND sync_status = 'REJECTED';", [clientId]);
+  return row ? JSON.parse(row.photo_paths || "[]") : [];
+}
 
 // ── small settings (the saved sign-in) ───────────────────────────────────────
 

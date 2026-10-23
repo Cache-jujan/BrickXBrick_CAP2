@@ -28,6 +28,7 @@ const {
 const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
 const { screenExpense } = require("../lib/screenExpense");
 const { submitTaskProgress, taskPhotoExists, TaskProgressError } = require("../lib/taskProgress");
+const { submitCheckin, checkinPhotoExists, CheckinError } = require("../lib/dailyCheckin");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -51,8 +52,8 @@ class SyncRetry extends Error {}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// One queue, two kinds of items, each owned by one role.
-const ROLE_FOR_TYPE = { expense: "Purchaser", task_update: "Site Manager" };
+// One queue, three kinds of items, each owned by one role.
+const ROLE_FOR_TYPE = { expense: "Purchaser", task_update: "Site Manager", daily_checkin: "Site Manager" };
 
 // Process ONE queued expense. Returns the new expenseID, or throws SyncReject.
 // Mirrors POST /api/expenses: validate -> normalize -> insert -> screen.
@@ -259,10 +260,50 @@ async function syncTaskUpdate(user, uuid, data) {
   }
 }
 
+// Why a check-in failure is rejected, in the sync vocabulary (the phone shows these).
+const CHECKIN_REJECT_CODE = {
+  CHECKIN_EXISTS: "DUPLICATE_CHECKIN",
+  CLIENT_ID_IN_USE: "DUPLICATE_UUID",
+  PROJECT_NOT_FOUND: "PROJECT_NOT_FOUND",
+  NOT_YOUR_PROJECT: "NOT_YOUR_PROJECT",
+  PROJECT_NOT_ACTIVE: "PROJECT_NOT_ACTIVE",
+  TASK_NOT_FOUND: "TASK_NOT_FOUND",
+  MISSING_PHOTO: "MISSING_PHOTO",
+  TOO_OLD: "TOO_OLD",
+  INVALID_FIELDS: "INVALID_FIELDS",
+};
+
+// Process ONE queued daily check-in. `uuid` is the clientSubmissionId, so a
+// replay finds the saved row and reports synced. Photos were uploaded first
+// through POST /api/checkins/photo; data carries only their URLs.
+// data = { projectId, slot, capturedAt, siteStatus, summary, issues?,
+//          needsPmAction?, taskIds?, photoUrls? }
+async function syncDailyCheckin(user, uuid, data) {
+  try {
+    await submitCheckin({
+      user,
+      input: { ...(data || {}), clientSubmissionId: uuid },
+      // Rule the online route does not have: each photo must really be in storage.
+      verifyPhoto: async (url, projectId) => {
+        try {
+          return await checkinPhotoExists(url, projectId);
+        } catch (error) {
+          throw new SyncRetry(`could not check the photo: ${error.message}`);
+        }
+      },
+    });
+  } catch (error) {
+    if (error instanceof CheckinError) {
+      throw new SyncReject(CHECKIN_REJECT_CODE[error.code] || "SERVER_ERROR", error.message);
+    }
+    throw error;
+  }
+}
+
 // POST /api/sync — batch of queued offline actions.
-// Body: { items: [ { uuid, type: "expense" | "task_update", data: {...} }, ... ] }
+// Body: { items: [ { uuid, type: "expense" | "task_update" | "daily_checkin", data: {...} }, ... ] }
 // Any signed-in user may call it; each item is checked against ITS OWN role
-// (expense: Purchaser, task_update: Site Manager), so one wrong item never
+// (expense: Purchaser, task_update and daily_checkin: Site Manager), so one wrong item never
 // blocks the good ones.
 router.post("/", async (req, res, next) => {
   try {
@@ -301,6 +342,7 @@ router.post("/", async (req, res, next) => {
         }
 
         if (type === "expense") await syncExpense(req.user, uuid, item.data);
+        else if (type === "daily_checkin") await syncDailyCheckin(req.user, uuid, item.data);
         else await syncTaskUpdate(req.user, uuid, item.data);
         syncedIds.push(uuid);
       } catch (err) {

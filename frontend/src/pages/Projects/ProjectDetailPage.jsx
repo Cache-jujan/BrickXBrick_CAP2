@@ -460,6 +460,8 @@ export function ProjectDetailPage() {
   // project is closed or the task is completed.
   const canViewTaskDocuments = isGM || (user.role === "Project Manager" && project.projectmanagerid === user.id);
   const hasSiteManager = Boolean(project.sitemanagerid);
+  // Daily check-ins exist once a project has been activated: the GM and the owning PM can read them.
+  const showCheckinsLink = project.status !== "Draft" && (isGM || (user.role === "Project Manager" && project.projectmanagerid === user.id));
   const bom = bomInfo?.bom || null;
   const bomApproved = project.bomstatus === "Approved";
   const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
@@ -492,8 +494,12 @@ export function ProjectDetailPage() {
             {[project.clientname, project.projecttype, project.municipality].filter(Boolean).join(" · ")}
           </p>
         </div>
-        {isGM && !isClosed && (
+        {((isGM && !isClosed) || showCheckinsLink) && (
           <div className="page-header-actions">
+            {showCheckinsLink && (
+              <Link to={`/projects/${project.projectid}/checkins`} className="btn btn-secondary">Daily check-ins</Link>
+            )}
+            {isGM && !isClosed && (<>
             <Button variant="danger" onClick={() => openStatusDialog("cancel")}>Cancel project</Button>
             <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">Edit details</Link>
             {project.status === "Draft" && (
@@ -502,6 +508,7 @@ export function ProjectDetailPage() {
             {project.status === "Active" && (
               <Button onClick={() => openStatusDialog("complete")}>Mark as completed</Button>
             )}
+            </>)}
           </div>
         )}
       </header>

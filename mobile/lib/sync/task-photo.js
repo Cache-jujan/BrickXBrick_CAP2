@@ -68,6 +68,44 @@ export async function uploadTaskPhoto(taskId, photoPath) {
   throw new Error(`Photo upload failed (${result.status})`); // 401, 5xx...: try again later
 }
 
+// Why a 4xx from the check-in photo route is permanent.
+const CHECKIN_PHOTO_REJECT = { 403: "NOT_YOUR_PROJECT", 404: "PROJECT_NOT_FOUND", 409: "PROJECT_NOT_ACTIVE" };
+
+/**
+ * Upload one queued check-in photo (POST /api/checkins/photo). Returns the URL.
+ * Same contract as uploadTaskPhoto: PhotoUploadRejected = retrying cannot help,
+ * plain Error = temporary (stays queued), unauthorized = true on a refused sign-in.
+ */
+export async function uploadCheckinPhoto(projectId, photoPath) {
+  const info = await FileSystem.getInfoAsync(photoPath);
+  if (!info.exists) {
+    throw new PhotoUploadRejected("MISSING_PHOTO", "A photo file is no longer on this phone.");
+  }
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/checkins/photo`, photoPath, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "photo",
+    mimeType: mimeFromPath(photoPath),
+    parameters: { projectId },
+    headers: authHeaders(),
+  });
+  let body = {};
+  try {
+    body = JSON.parse(result.body || "{}");
+  } catch {
+    // a non-JSON error page; the status below decides
+  }
+  if (result.status >= 200 && result.status < 300 && body.photoUrl) return body.photoUrl;
+  if (result.status === 401) {
+    const error = new Error("Sign-in expired");
+    error.unauthorized = true;
+    throw error;
+  }
+  const code = result.status === 400 ? "MISSING_PHOTO" : CHECKIN_PHOTO_REJECT[result.status];
+  if (code) throw new PhotoUploadRejected(code, body.error || `Photo upload refused (${result.status})`);
+  throw new Error(`Photo upload failed (${result.status})`);
+}
+
 // Best effort: a file that is already gone is not an error.
 export async function deleteQueuedPhoto(path) {
   if (!path) return;

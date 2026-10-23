@@ -9,6 +9,7 @@ import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { ProjectsListPage } from "./pages/Projects/ProjectsListPage";
 import { CreateProjectPage } from "./pages/Projects/CreateProjectPage";
 import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
+import { ProjectCheckinsPage } from "./pages/Projects/ProjectCheckinsPage";
 import { EditProjectPage } from "./pages/Projects/EditProjectPage";
 import { BomPage } from "./pages/Projects/BomPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
@@ -138,6 +139,15 @@ export default function App() {
               element={
                 <RoleRoute allow={["General Manager", "Project Manager"]}>
                   <BomPage />
+                </RoleRoute>
+              }
+            />
+            {/* Daily progress check-ins: the owning PM reviews, the GM reads. */}
+            <Route
+              path="/projects/:id/checkins"
+              element={
+                <RoleRoute allow={WEB_BROADCAST_ROLES}>
+                  <ProjectCheckinsPage />
                 </RoleRoute>
               }
             />

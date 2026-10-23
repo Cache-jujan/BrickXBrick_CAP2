@@ -5,7 +5,8 @@
 //   1. for every pending task update with no server photo URL yet, upload its
 //      photo (POST /api/tasks/:id/photo) and save the URL on the row, so a
 //      failed batch never uploads the same photo twice;
-//   2. send ONE batch: { items: [{ uuid, type: "expense" | "task_update", data }] }
+//      (daily check-ins do the same for each of their photos, up to 3);
+//   2. send ONE batch: { items: [{ uuid, type: "expense" | "task_update" | "daily_checkin", data }] }
 //
 // Response: { syncedIds: [...], rejected: [{ id, code, message }] }
 //   - syncedIds  -> marked synced, then purged from SQLite (10.9)
@@ -32,8 +33,19 @@ import {
   getPendingScans,
   markScanUploaded,
   markScanRejected,
+  getPendingCheckins,
+  setCheckinPhotoUrls,
+  markCheckinSynced,
+  markCheckinRejected,
+  purgeSyncedCheckins,
 } from "@/lib/sync/db";
-import { PhotoUploadRejected, uploadTaskPhoto, uploadQueuedScan, deleteQueuedPhoto } from "@/lib/sync/task-photo";
+import {
+  PhotoUploadRejected,
+  uploadTaskPhoto,
+  uploadCheckinPhoto,
+  uploadQueuedScan,
+  deleteQueuedPhoto,
+} from "@/lib/sync/task-photo";
 import { devLog } from "@/lib/sync/log";
 
 // Step 1 for the task updates: make sure each has a server photo URL.
@@ -61,6 +73,34 @@ async function uploadPendingPhotos(rows, upload) {
       } else {
         devLog("[F10 sync] photo upload postponed:", error?.message ?? error);
         postponedItems.push({ kind: "task_update", id: row.update_id, message: error?.message ?? String(error) });
+      }
+    }
+  }
+  return { ready, rejectedItems, postponedItems };
+}
+
+// Step 1 for the check-ins: upload every photo that has no server URL yet.
+// URLs are saved after EACH photo, so a failed batch never uploads one twice.
+async function uploadCheckinPhotos(rows, upload) {
+  const ready = [];
+  const rejectedItems = [];
+  const postponedItems = [];
+  for (const row of rows) {
+    const urls = [...row.server_photo_urls];
+    try {
+      for (let i = urls.length; i < row.photo_paths.length; i += 1) {
+        urls.push(await upload(row.project_id, row.photo_paths[i]));
+        setCheckinPhotoUrls(row.client_id, urls);
+      }
+      ready.push({ ...row, server_photo_urls: urls });
+    } catch (error) {
+      if (error?.unauthorized) throw error;
+      if (error instanceof PhotoUploadRejected) {
+        markCheckinRejected(row.client_id, error.code, error.message);
+        rejectedItems.push({ kind: "daily_checkin", id: row.client_id, code: error.code, message: error.message });
+      } else {
+        devLog("[sync] check-in photo upload postponed:", error?.message ?? error);
+        postponedItems.push({ kind: "daily_checkin", id: row.client_id, message: error?.message ?? String(error) });
       }
     }
   }
@@ -102,6 +142,7 @@ function unauthorizedError() {
 async function syncOnce(deps) {
   const upload = deps.uploadTaskPhoto || uploadTaskPhoto;
   const uploadScan = deps.uploadQueuedScan || uploadQueuedScan;
+  const uploadCheckin = deps.uploadCheckinPhoto || uploadCheckinPhoto;
   const removeFile = deps.deleteQueuedPhoto || deleteQueuedPhoto;
   const session = (deps.getSession || getSession)();
 
@@ -111,6 +152,7 @@ async function syncOnce(deps) {
     expenses: { synced: 0, rejected: 0 },
     tasks: { synced: 0, rejected: 0 },
     scans: { uploaded: 0, rejected: 0 },
+    checkins: { synced: 0, rejected: 0 },
     rejectedItems: [],
     postponedItems: [],
   };
@@ -124,10 +166,17 @@ async function syncOnce(deps) {
   const expenseRows = role === "Purchaser" ? getPendingExpenses() : [];
   const taskRows = role === "Site Manager" ? getPendingTaskUpdates(session.user.id) : [];
 
+  const checkinRows = role === "Site Manager" ? getPendingCheckins(session.user.id) : [];
+
   const photos = await uploadPendingPhotos(taskRows, upload);
   result.tasks.rejected += photos.rejectedItems.length;
   result.rejectedItems.push(...photos.rejectedItems);
   result.postponedItems.push(...photos.postponedItems);
+
+  const checkinPhotos = await uploadCheckinPhotos(checkinRows, uploadCheckin);
+  result.checkins.rejected += checkinPhotos.rejectedItems.length;
+  result.rejectedItems.push(...checkinPhotos.rejectedItems);
+  result.postponedItems.push(...checkinPhotos.postponedItems);
 
   const items = [
     ...expenseRows.map((row) => ({ uuid: row.uuid, type: "expense", data: JSON.parse(row.payload) })),
@@ -135,6 +184,21 @@ async function syncOnce(deps) {
       uuid: row.update_id,
       type: "task_update",
       data: { taskId: row.task_id, photoUrl: row.server_photo_url, ...(row.note ? { note: row.note } : {}) },
+    })),
+    ...checkinPhotos.ready.map((row) => ({
+      uuid: row.client_id,
+      type: "daily_checkin",
+      data: {
+        projectId: row.project_id,
+        slot: row.slot,
+        capturedAt: row.captured_at,
+        siteStatus: row.site_status,
+        summary: row.summary,
+        ...(row.issues ? { issues: row.issues } : {}),
+        needsPmAction: row.needs_pm_action,
+        taskIds: row.task_ids,
+        photoUrls: row.server_photo_urls,
+      },
     })),
   ];
 
@@ -152,6 +216,7 @@ async function syncOnce(deps) {
     const rejected = body.rejected ?? [];
     const expenseIds = new Set(expenseRows.map((row) => row.uuid));
     const taskIds = new Set(photos.ready.map((row) => row.update_id));
+    const checkinIds = new Set(checkinPhotos.ready.map((row) => row.client_id));
 
     for (const id of syncedIds) {
       if (expenseIds.has(id)) {
@@ -160,6 +225,9 @@ async function syncOnce(deps) {
       } else if (taskIds.has(id)) {
         markTaskUpdateSynced(id);
         result.tasks.synced += 1;
+      } else if (checkinIds.has(id)) {
+        markCheckinSynced(id);
+        result.checkins.synced += 1;
       }
     }
     const answered = new Set([...syncedIds, ...rejected.map((r) => r.id)]);
@@ -168,8 +236,17 @@ async function syncOnce(deps) {
         result.postponedItems.push({ kind: "task_update", id: row.update_id, message: "The server could not check this update yet." });
       }
     }
+    for (const row of checkinPhotos.ready) {
+      if (!answered.has(row.client_id)) {
+        result.postponedItems.push({ kind: "daily_checkin", id: row.client_id, message: "The server could not check this check-in yet." });
+      }
+    }
     for (const r of rejected) {
-      if (expenseIds.has(r.id)) {
+      if (checkinIds.has(r.id)) {
+        markCheckinRejected(r.id, r.code, r.message);
+        result.checkins.rejected += 1;
+        result.rejectedItems.push({ kind: "daily_checkin", id: r.id, code: r.code, message: r.message });
+      } else if (expenseIds.has(r.id)) {
         markRejected(r.id, r.code, r.message);
         result.expenses.rejected += 1;
         result.rejectedItems.push({ kind: "expense", id: r.id, code: r.code, message: r.message });
@@ -183,14 +260,15 @@ async function syncOnce(deps) {
 
   purgeSynced();
   for (const path of purgeSyncedTaskUpdates()) await removeFile(path);
+  for (const path of purgeSyncedCheckins()) await removeFile(path);
 
-  result.synced = result.expenses.synced + result.tasks.synced + result.scans.uploaded;
-  result.rejected = result.expenses.rejected + result.tasks.rejected + result.scans.rejected;
+  result.synced = result.expenses.synced + result.tasks.synced + result.scans.uploaded + result.checkins.synced;
+  result.rejected = result.expenses.rejected + result.tasks.rejected + result.scans.rejected + result.checkins.rejected;
   return result;
 }
 
 // Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected},
-//           scans: {uploaded, rejected},
+//           scans: {uploaded, rejected}, checkins: {synced, rejected},
 //           rejectedItems: [{ kind, id, code, message }],
 //           postponedItems: [{ kind, id, message }] }  (not sent yet, will retry)
 // Throws if the batch request itself fails. `deps` is for tests.

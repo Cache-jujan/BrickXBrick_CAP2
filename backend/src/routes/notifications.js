@@ -40,7 +40,8 @@ router.get("/mine", async (req, res, next) => {
                     t.submittedBy AS ticket_submittedby,
                     t.createdAt   AS ticket_createdat,
                     m.projectId   AS milestone_projectid,
-                    tm.projectId  AS task_projectid
+                    tm.projectId  AS task_projectid,
+                    ck.projectId  AS checkin_projectid
                FROM notifications n
                LEFT JOIN tickets t
                  ON n.relatedEntityType = 'Ticket' AND t.ticketId = n.relatedEntityId
@@ -50,6 +51,8 @@ router.get("/mine", async (req, res, next) => {
                  ON n.relatedEntityType = 'Task' AND tk.taskId = n.relatedEntityId
                LEFT JOIN milestones tm
                  ON tk.milestoneId = tm.milestoneId
+               LEFT JOIN daily_progress_checkins ck
+                 ON n.relatedEntityType = 'Checkin' AND ck.checkinId = n.relatedEntityId
               WHERE ${where.join(" AND ")}
               ORDER BY n.createdAt DESC
               LIMIT $${params.length}`,
