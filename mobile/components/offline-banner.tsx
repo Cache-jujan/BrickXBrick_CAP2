@@ -19,15 +19,19 @@ const TONES = {
 // "all sent" strip once it has been up long enough.
 function useBannerState() {
   const { isOnline, pendingCount, syncing, lastSync } = useNetwork();
-  const [, setTick] = useState(0);
+  // The clock is state, not Date.now() in the render. The React Compiler keeps
+  // the last result of a call whose inputs have not changed, so a Date.now()
+  // inside render is read once and the "all sent" strip never hid.
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!lastSync) return;
-    const timer = setTimeout(() => setTick((t) => t + 1), SENT_SHOW_MS + 100);
+    setNow(Date.now());
+    const timer = setTimeout(() => setNow(Date.now()), SENT_SHOW_MS + 100);
     return () => clearTimeout(timer);
   }, [lastSync]);
 
-  return bannerState({ isOnline, pendingCount, syncing, lastSync, now: Date.now() });
+  return bannerState({ isOnline, pendingCount, syncing, lastSync, now });
 }
 
 // Lets screens know whether the strip is showing and how tall it is. While it
