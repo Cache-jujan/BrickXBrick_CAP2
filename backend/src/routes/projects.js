@@ -30,6 +30,7 @@ const {
   projectListScope,
   hideBudgetFrom,
 } = require("../lib/projectRules");
+const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -40,7 +41,8 @@ const PROJECT_COLUMNS = `projectid, createdby, name, description, clientname, st
   startdate, constructionstartdate, enddate, actualcompletiondate,
   activatedat, cancelledat, cancellationreason,
   projecttype, municipality, province, siteaddress,
-  budget, projectmanagerid, sitemanagerid`;
+  budget, projectmanagerid, sitemanagerid,
+  created_from_template_id, copied_from_project_id`;
 
 // p.-prefixed version for the joined detail queries.
 const DETAIL_COLUMNS = PROJECT_COLUMNS.split(",").map((c) => `p.${c.trim()}`).join(", ");
@@ -142,13 +144,27 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
 
     if (!projectManagerId) throw httpError(400, "projectManagerId is required");
 
+    const startRequest = parseStartRequest(req.body.start);
+
     const settings = await loadProjectSettings(query);
     await assertUniqueName(query, fields.name);
 
-    const project = await withTransaction(async (client) => {
+    const { project, structure, source } = await withTransaction(async (client) => {
       await assertManagerAvailable(client, { userId: projectManagerId, role: "Project Manager", settings });
       if (siteManagerId) {
         await assertManagerAvailable(client, { userId: siteManagerId, role: "Site Manager", settings });
+      }
+
+      // Template / copy: build the dated structure first so a bad choice fails
+      // before anything is written. It is copied once; nothing stays linked.
+      const sourceRows = await loadSource((text, params) => client.query(text, params), startRequest);
+      const built = buildStructure(sourceRows, startRequest, fields);
+      if (built.needsSiteManager && !siteManagerId) {
+        throw httpError(
+          400,
+          "Choose a Site Manager: this starting structure has construction tasks, which are assigned to the Site Manager.",
+          { fieldErrors: [{ field: "siteManagerId", message: "A Site Manager is required for a structure with construction tasks" }] }
+        );
       }
 
       const insert = await client.query(
@@ -156,8 +172,9 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
            (createdby, name, description, clientname, status,
             startdate, constructionstartdate, enddate,
             projecttype, municipality, province, siteaddress,
-            budget, projectmanagerid, sitemanagerid)
-         VALUES ($1, $2, $3, $4, 'Draft', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            budget, projectmanagerid, sitemanagerid,
+            created_from_template_id, copied_from_project_id)
+         VALUES ($1, $2, $3, $4, 'Draft', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          RETURNING ${PROJECT_COLUMNS}`,
         [
           req.user.id,
@@ -174,15 +191,30 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
           fields.budget,
           projectManagerId,
           siteManagerId,
+          startRequest.mode === "template" ? startRequest.templateId : null,
+          startRequest.mode === "copy" ? startRequest.sourceProjectId : null,
         ]
       );
       const created = insert.rows[0];
 
+      await insertStructure(client, {
+        projectId: created.projectid,
+        createdBy: projectManagerId,
+        siteManagerId,
+        structure: built,
+      });
+
+      // One summary line instead of a notification per task.
+      const startNote = built.counts.tasks
+        ? ` It starts with ${built.counts.milestones} milestones and ${built.counts.tasks} tasks from ${
+            startRequest.mode === "template" ? `the "${sourceRows.name}" template` : `"${sourceRows.name}"`
+          }; review the dates and owners.`
+        : "";
       await notifyProject(client, {
         recipientId: projectManagerId,
         type: "ProjectAssigned",
         projectId: created.projectid,
-        message: `You are the Project Manager of "${created.name}". Planning starts ${fields.startDate}; construction is targeted for ${fields.constructionStartDate}.`,
+        message: `You are the Project Manager of "${created.name}". Planning starts ${fields.startDate}; construction is targeted for ${fields.constructionStartDate}.${startNote}`,
       });
       if (siteManagerId) {
         await notifyProject(client, {
@@ -192,10 +224,21 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
           message: `You are the Site Manager of "${created.name}". Construction is targeted for ${fields.constructionStartDate}.`,
         });
       }
-      return created;
+      return { project: created, structure: built, source: sourceRows };
     });
 
-    res.status(201).json({ ...project, warnings: buildProjectWarnings(fields, settings) });
+    res.status(201).json({
+      ...project,
+      warnings: buildProjectWarnings(fields, settings),
+      structure: {
+        source: source ? { kind: source.kind, name: source.name } : null,
+        milestones: structure.counts.milestones,
+        tasks: structure.counts.tasks,
+        omittedMilestones: structure.omittedMilestones,
+        warningCount: structure.warnings.length,
+        warnings: structure.warnings.slice(0, 5),
+      },
+    });
   } catch (err) {
     sendError(res, err);
   }
@@ -578,6 +621,8 @@ const DETAIL_SELECT = `
          sm.name AS sitemanagername, sm.email AS sitemanageremail,
          pm.name AS projectmanagername, pm.email AS projectmanageremail,
          b.status AS bomstatus,
+         (SELECT t.name FROM project_templates t WHERE t.templateId = p.created_from_template_id) AS createdfromtemplatename,
+         (SELECT c.name FROM projects c WHERE c.projectId = p.copied_from_project_id) AS copiedfromprojectname,
          ROUND(COALESCE(AVG(m.completionPercentage), 0), 2) AS progress
     FROM projects p
     LEFT JOIN milestones m ON m.projectId = p.projectId
@@ -617,7 +662,7 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     await assertProjectAccess(project, req.user);
 
     const milestonesResult = await query(
-      "SELECT * FROM milestones WHERE projectId = $1 ORDER BY dueDate ASC",
+      "SELECT * FROM milestones WHERE projectId = $1 ORDER BY dueDate ASC, sortOrder ASC NULLS LAST",
       [req.params.id]
     );
     const milestones = milestonesResult.rows;
@@ -632,7 +677,7 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
            FROM tasks t
            LEFT JOIN users u ON u.userid = t.assignedto
           WHERE t.milestoneId = ANY($1)
-          ORDER BY t.dueDate ASC`,
+          ORDER BY t.dueDate ASC, t.sortOrder ASC NULLS LAST`,
         [milestoneIds]
       );
       tasks = tasksResult.rows;

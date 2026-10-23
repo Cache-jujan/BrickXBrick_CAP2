@@ -569,6 +569,12 @@ export function ProjectDetailPage() {
             <div><dt>Type</dt><dd>{project.projecttype || "Not set"}</dd></div>
             <div><dt>Location</dt><dd>{location || "Not set"}</dd></div>
             <div><dt>Client</dt><dd>{project.clientname}</dd></div>
+            {project.createdfromtemplatename && (
+              <div><dt>Started from</dt><dd>Template: {project.createdfromtemplatename}</dd></div>
+            )}
+            {project.copiedfromprojectname && (
+              <div><dt>Started from</dt><dd>Copy of {project.copiedfromprojectname}</dd></div>
+            )}
           </dl>
         </div>
       </section>
