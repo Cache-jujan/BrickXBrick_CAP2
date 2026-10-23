@@ -1,0 +1,45 @@
+.edit-timeline { max-width: 760px; display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--space-5)); }
+
+.et-list, .et-tasks { list-style: none; margin: 0; padding: 0; }
+.et-list { overflow-y: auto; flex: 1 1 auto; min-height: 0; margin-bottom: var(--space-3); padding-right: var(--space-1); }
+
+.et-phase { margin: var(--space-3) 0 var(--space-2); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-soft); }
+.et-list > .et-milestone:first-child .et-phase { margin-top: 0; }
+
+.et-milestone { padding: var(--space-2) 0 var(--space-3); border-bottom: 1px solid var(--color-border); }
+.et-tasks { margin: var(--space-2) 0 0 var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* number | name | due date | action */
+.et-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 150px 72px; align-items: center; gap: var(--space-2); }
+.et-row-milestone .et-name { font-weight: 600; }
+
+.edit-timeline .field-control { height: 38px; padding: 0 var(--space-3); font-size: var(--text-sm); min-width: 0; }
+.edit-timeline .field-control:disabled { background: var(--color-surface-muted); color: var(--color-ink-soft); }
+
+.et-num { font-size: var(--text-sm); font-weight: 700; color: var(--color-ink-soft); font-variant-numeric: tabular-nums; }
+.et-action { display: flex; justify-content: flex-end; }
+
+.et-link { background: none; border: none; padding: var(--space-1); font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-brick); cursor: pointer; }
+.et-link:hover:not(:disabled) { text-decoration: underline; }
+.et-link-danger { color: var(--color-danger); }
+.et-link:disabled { color: var(--color-ink-faint); cursor: not-allowed; text-decoration: none; }
+
+.et-pill { font-size: var(--text-xs); font-weight: 700; padding: 2px var(--space-2); border-radius: 999px; background: var(--color-status-active-bg); color: var(--color-status-active); }
+
+.et-removed .et-name, .et-removed .et-date { text-decoration: line-through; opacity: 0.6; }
+.et-hint, .et-error { margin: var(--space-1) 0 0 calc(36px + var(--space-2)); font-size: var(--text-xs); }
+.et-hint { color: var(--color-ink-soft); }
+.et-error { color: var(--color-danger); font-weight: 600; }
+
+.et-problems { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
+
+.edit-timeline .modal-actions { align-items: center; flex: 0 0 auto; }
+.et-count { margin-right: auto; font-size: var(--text-sm); color: var(--color-ink-soft); }
+
+@media (max-width: 600px) {
+  .et-row { grid-template-columns: 30px minmax(0, 1fr) 64px; }
+  .et-row .et-date { grid-column: 2 / 3; grid-row: 2; }
+  .et-row .et-action { grid-column: 3; grid-row: 1; }
+  .et-tasks { margin-left: var(--space-3); }
+  .et-hint, .et-error { margin-left: 0; }
+}

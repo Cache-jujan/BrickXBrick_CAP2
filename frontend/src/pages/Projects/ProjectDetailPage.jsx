@@ -23,6 +23,7 @@ import { Field } from "../../components/ui/Field";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { ProjectTimeline } from "../../components/milestones/ProjectTimeline";
 import { TaskDocumentsDialog } from "../../components/milestones/TaskDocumentsDialog";
+import { EditTimelineModal } from "../../components/milestones/EditTimelineModal";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
@@ -105,6 +106,8 @@ export function ProjectDetailPage() {
   // directly. { task } while a confirm dialog is open.
   // Planning-task documents dialog: the task whose files are open, or null.
   const [docsTask, setDocsTask] = useState(null);
+  // The PM's "Edit timeline" modal (rename, re-date, delete milestones and tasks).
+  const [timelineDialog, setTimelineDialog] = useState(false);
   const [completeDialog, setCompleteDialog] = useState(null);
   const [completeNote, setCompleteNote] = useState("");
   const [completeBusy, setCompleteBusy] = useState(false);
@@ -343,6 +346,21 @@ export function ProjectDetailPage() {
       setTaskError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
     } finally {
       setTaskBusy(false);
+    }
+  }
+
+  // The modal has already saved everything. Close it, show the first date
+  // warning (if any), and reload the project so the timeline matches.
+  async function handleTimelineSaved(result) {
+    setTimelineDialog(false);
+    const warnings = result.warnings || [];
+    setScheduleWarning(
+      warnings.length > 1 ? `${warnings[0]} (and ${warnings.length - 1} more)` : warnings[0] || ""
+    );
+    try {
+      setProject(await getProjectOverview(id));
+    } catch {
+      setScheduleWarning("Your changes were saved, but the page couldn't refresh. Reload to see them.");
     }
   }
 
@@ -645,6 +663,7 @@ export function ProjectDetailPage() {
           project={project}
           canManage={canManage}
           onAddMilestone={openMilestoneDialog}
+          onEditTimeline={() => setTimelineDialog(true)}
           onAddTask={openTaskDialog}
           onCompleteTask={openCompleteDialog}
           onOpenDocuments={canViewTaskDocuments ? setDocsTask : undefined}
@@ -945,6 +964,13 @@ export function ProjectDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {timelineDialog && (
+        <EditTimelineModal
+          project={project}
+          onClose={() => setTimelineDialog(false)}
+          onSaved={handleTimelineSaved}
+        />
       )}
       {docsTask && (
         <TaskDocumentsDialog
