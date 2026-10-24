@@ -24,6 +24,7 @@ export const NOTIFICATION_META = {
   ScheduleVarianceAlert: { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallback: "A milestone is behind schedule." },
   ExpenseRejected:     { Icon: ReceiptXGlyph,    bg: "#FFF5F3", fg: "#B42318", fallback: "An expense was rejected." },
   TamperAlert:         { Icon: ShieldAlertGlyph, bg: "#FDE8E8", fg: "#9F1239", fallback: "A record integrity issue was found." },
+  BlockchainOverdue:   { Icon: ShieldAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallback: "A blockchain record is overdue." },
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallback: "A task was assigned to you." },
   TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallback: "A task photo was accepted." },
   TaskFlagged:         { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallback: "A task photo was flagged." },
@@ -94,5 +95,6 @@ export function routeForNotification(n, role) {
   }
   if (type === "Expense") return "/expenses";
   if (n.type === "TamperAlert") return "/blockchain/alerts";
+  if (n.type === "BlockchainOverdue") return "/blockchain/alerts";
   return null;
 }
