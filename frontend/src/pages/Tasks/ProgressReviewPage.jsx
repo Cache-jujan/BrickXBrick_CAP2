@@ -6,22 +6,24 @@ import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProgressReviewPage.css";
 
-const DATE = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 // Common reasons a PM sends a photo back. "Other" opens a text box. The chosen
 // text is what the Site Manager sees on their phone.
 const FLAG_REASONS = [
-  "Photo is blurry or too dark",
-  "Photo doesn't show the finished work",
-  "Work is incomplete",
-  "Wrong task or location in the photo",
-  "Quality issue: work needs to be redone",
+  "review.reason_blurry",
+  "review.reason_unfinished",
+  "review.reason_incomplete",
+  "review.reason_wrong",
+  "review.reason_quality",
 ];
 const OTHER = "__other__";
 
 export function ProgressReviewPage() {
+  const { t, formatDate } = useLocale();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,7 +44,7 @@ export function ProgressReviewPage() {
     try {
       setSubmissions(await listProgressSubmissions());
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't load the progress-review queue."));
+      setError(extractErrorMessage(err, t("errors.load_review_queue")));
     } finally {
       setLoading(false);
     }
@@ -50,6 +52,7 @@ export function ProgressReviewPage() {
 
   useEffect(() => {
     loadQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   useEffect(() => {
@@ -70,9 +73,7 @@ export function ProgressReviewPage() {
     if (decision === "Flag" && !reason) {
       setMissingReasonId(submission.logid);
       setError(
-        picked.choice === OTHER
-          ? "Type the reason for flagging. The Site Manager sees it on their phone."
-          : "Choose a reason for flagging. The Site Manager sees it on their phone."
+        picked.choice === OTHER ? t("review.err_other") : t("review.err_choose")
       );
       return;
     }
@@ -84,7 +85,7 @@ export function ProgressReviewPage() {
       await reviewProgressSubmission(submission.logid, decision, reason);
       setSubmissions((current) => current.filter((item) => item.logid !== submission.logid));
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't review this progress submission."));
+      setError(extractErrorMessage(err, t("errors.review_failed")));
     } finally {
       setSubmittingId(null);
     }
@@ -94,22 +95,20 @@ export function ProgressReviewPage() {
     <div className="progress-review">
       <div className="progress-review-header">
         <div>
-          <h1>Task Progress Review</h1>
-          <p className="progress-review-subtitle">
-            Review Site Manager photo updates before marking tasks complete.
-          </p>
+          <h1>{t("review.title")}</h1>
+          <p className="progress-review-subtitle">{t("review.subtitle")}</p>
         </div>
         <Button variant="secondary" type="button" onClick={loadQueue} disabled={loading}>
-          Refresh
+          {t("review.refresh")}
         </Button>
       </div>
 
       {error && <Banner tone="error" title={error} />}
-      {loading && <p className="progress-review-loading">Loading progress submissions…</p>}
+      {loading && <p className="progress-review-loading">{t("review.loading")}</p>}
       {!loading && submissions.length === 0 && (
         <Card className="progress-review-empty">
-          <h2>Review queue is clear</h2>
-          <p>New Site Manager progress submissions will appear here.</p>
+          <h2>{t("review.clear_title")}</h2>
+          <p>{t("review.clear_body")}</p>
         </Card>
       )}
 
@@ -130,7 +129,7 @@ export function ProgressReviewPage() {
                   <div>
                     <div className="progress-review-meta">
                       <Badge status={submission.reviewstatus} />
-                      <span>Submitted {DATE.format(new Date(submission.createdat))}</span>
+                      <span>{t("review.submitted", { date: formatDate(submission.createdat, DATETIME_OPTIONS) })}</span>
                     </div>
                     <h2>{submission.taskname}</h2>
                     <p className="progress-review-context">
@@ -141,43 +140,43 @@ export function ProgressReviewPage() {
 
                 {submission.photoevidenceurl ? (
                   <a href={submission.photoevidenceurl} target="_blank" rel="noreferrer" className="progress-review-photo-link">
-                    <img src={submission.photoevidenceurl} alt={`Evidence for ${submission.taskname}`} className="progress-review-photo" />
-                    <span>Open full-size evidence photo</span>
+                    <img src={submission.photoevidenceurl} alt={t("review.evidence_alt", { name: submission.taskname })} className="progress-review-photo" />
+                    <span>{t("review.open_photo")}</span>
                   </a>
                 ) : (
-                  <p className="progress-review-no-photo">No evidence photo was returned.</p>
+                  <p className="progress-review-no-photo">{t("review.no_photo")}</p>
                 )}
 
                 {submission.note && (
                   <div className="progress-review-note">
-                    <strong>Site Manager note</strong>
+                    <strong>{t("review.sm_note")}</strong>
                     <p>{submission.note}</p>
                   </div>
                 )}
 
                 <div className="progress-review-actions">
                   <Button type="button" onClick={() => handleReview(submission, "Acknowledge")} disabled={isSubmitting}>
-                    {isSubmitting ? "Saving…" : "Acknowledge & Complete"}
+                    {isSubmitting ? t("common.saving") : t("review.acknowledge")}
                   </Button>
                   <div className="progress-review-flag">
                     <select
-                      aria-label="Reason for flagging"
+                      aria-label={t("review.flag_aria")}
                       className={missingReasonId === submission.logid && !picked.choice ? "progress-review-invalid" : undefined}
                       value={picked.choice || ""}
                       onChange={(event) => setPicked({ choice: event.target.value })}
                       disabled={isSubmitting}
                     >
-                      <option value="">Reason for flagging…</option>
-                      {FLAG_REASONS.map((r) => (
-                        <option key={r} value={r}>{r}</option>
+                      <option value="">{t("review.flag_placeholder")}</option>
+                      {FLAG_REASONS.map((key) => (
+                        <option key={key} value={t(key)}>{t(key)}</option>
                       ))}
-                      <option value={OTHER}>Other (type a reason)</option>
+                      <option value={OTHER}>{t("review.other")}</option>
                     </select>
                     {picked.choice === OTHER && (
                       <input
                         type="text"
-                        placeholder="Type the reason"
-                        aria-label="Other reason for flagging"
+                        placeholder={t("review.type_reason")}
+                        aria-label={t("review.other_aria")}
                         className={missingReasonId === submission.logid && !(picked.other || "").trim() ? "progress-review-invalid" : undefined}
                         value={picked.other || ""}
                         onChange={(event) => setPicked({ other: event.target.value })}
@@ -186,7 +185,7 @@ export function ProgressReviewPage() {
                       />
                     )}
                     <Button variant="danger" type="button" onClick={() => handleReview(submission, "Flag")} disabled={isSubmitting}>
-                      Flag
+                      {t("review.flag")}
                     </Button>
                   </div>
                 </div>

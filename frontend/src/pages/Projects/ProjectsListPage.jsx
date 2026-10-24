@@ -5,19 +5,17 @@ import { useProjects } from "../../utils/useProjects";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
 import { AssignmentLimitsCard } from "../../components/projects/AssignmentLimitsCard";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectsListPage.css";
 
 const STATUS_FILTERS = ["All", "Draft", "Active", "Completed", "Cancelled", "Archived"];
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
-const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "numeric" });
-
-function fmtDate(value) {
-  return value ? DATE.format(new Date(value)) : null;
-}
 
 export function ProjectsListPage() {
   const { user } = useAuth();
+  const { t, tv, formatDate } = useLocale();
+  const fmtDate = (value) => (value ? formatDate(value) : null);
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -45,17 +43,17 @@ export function ProjectsListPage() {
     <div>
       <div className="page-header">
         <div className="page-header-text">
-          <h1>Projects</h1>
+          <h1>{t("nav.projects")}</h1>
           {!loading && !error && (
             <p className="page-header-sub">
-              {visible.length} {visible.length === 1 ? "project" : "projects"}
-              {statusFilter !== "All" ? ` · ${statusFilter}` : ""}
+              {visible.length === 1 ? t("projects.count_one") : t("projects.count_other", { count: visible.length })}
+              {statusFilter !== "All" ? ` · ${tv("status", statusFilter)}` : ""}
             </p>
           )}
         </div>
         {canCreate && (
           <div className="page-header-actions">
-            <Link to="/projects/new" className="btn btn-primary">New project</Link>
+            <Link to="/projects/new" className="btn btn-primary">{t("nav.new_project")}</Link>
           </div>
         )}
       </div>
@@ -63,7 +61,7 @@ export function ProjectsListPage() {
       {canCreate && <AssignmentLimitsCard />}
 
       <div className="projects-toolbar">
-        <div className="projects-tabs" role="tablist" aria-label="Filter by status">
+        <div className="projects-tabs" role="tablist" aria-label={t("projects.filter_status")}>
           {STATUS_FILTERS.map((option) => (
             <button
               key={option}
@@ -73,38 +71,40 @@ export function ProjectsListPage() {
               className={"projects-tab" + (statusFilter === option ? " projects-tab-active" : "")}
               onClick={() => setStatusFilter(option)}
             >
-              {option}
+              {tv("status", option)}
             </button>
           ))}
         </div>
         <input
           type="search"
           className="projects-search"
-          placeholder="Search project, client, PM or town"
+          placeholder={t("projects.search_placeholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search projects"
+          aria-label={t("projects.search_label")}
         />
       </div>
 
       {error && <Banner tone="error" title={error} />}
 
-      {!error && loading && <p className="dashboard-loading">Loading projects…</p>}
+      {!error && loading && <p className="dashboard-loading">{t("dashboard.loading_projects")}</p>}
 
       {!error && !loading && visible.length === 0 && (
         <Banner
           tone="empty"
           title={
             search
-              ? "No projects match your search"
-              : `No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}projects`
+              ? t("projects.no_match")
+              : statusFilter === "All"
+              ? t("projects.none")
+              : t("projects.none_status", { status: tv("status", statusFilter).toLowerCase() })
           }
         >
           {search
-            ? "Try a different project, client, manager or town."
+            ? t("projects.try_different")
             : canCreate && statusFilter === "All"
-            ? "Create a project once the client has signed the BOM."
-            : "Projects assigned to you will appear here."}
+            ? t("projects.create_hint")
+            : t("projects.assigned_hint")}
         </Banner>
       )}
 
@@ -113,13 +113,13 @@ export function ProjectsListPage() {
           <table className="users-table projects-table">
             <thead>
               <tr>
-                <th>Project</th>
-                <th>Status</th>
+                <th>{t("nav.project")}</th>
+                <th>{t("dashboard.status")}</th>
                 <th>Project Manager</th>
                 <th>Site Manager</th>
-                <th>Location</th>
-                <th>Construction</th>
-                <th className="num">Budget</th>
+                <th>{t("projects.location")}</th>
+                <th>{t("projects.construction")}</th>
+                <th className="num">{t("projects.budget")}</th>
               </tr>
             </thead>
             <tbody>
@@ -140,17 +140,17 @@ export function ProjectsListPage() {
                     </td>
                     <td><Badge status={p.status} /></td>
                     <td>{p.projectmanagername || <span className="muted">—</span>}</td>
-                    <td>{p.sitemanagername || <span className="muted">Not assigned</span>}</td>
+                    <td>{p.sitemanagername || <span className="muted">{t("projects.not_assigned")}</span>}</td>
                     <td>{p.municipality || <span className="muted">—</span>}</td>
                     <td className="projects-dates">
                       {from || to ? (
                         <>
                           {from || "—"}
-                          <span className="muted"> to </span>
+                          <span className="muted"> {t("projects.to")} </span>
                           {to || "—"}
                         </>
                       ) : (
-                        <span className="muted">Not set</span>
+                        <span className="muted">{t("projects.not_set")}</span>
                       )}
                     </td>
                     <td className="num">{PESO.format(p.budget)}</td>

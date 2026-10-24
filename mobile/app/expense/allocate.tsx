@@ -24,6 +24,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
+import { useLocale } from "@/lib/i18n-context";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -36,6 +37,7 @@ const AMBER_BG = COLORS.amberBannerFill;
 
 /** Preview and submit a split receipt with request exclusions, fee moves and retry support. */
 export default function AllocateScreen() {
+  const { t, tv } = useLocale();
   const { draft, setCategory: setDraftCategory, reset } = useExpenseDraft();
   const { ocrResult } = draft;
 
@@ -127,11 +129,11 @@ export default function AllocateScreen() {
   async function handleSubmit() {
     if (!canSubmit || !category) return;
     if (!isOnline) {
-      return Alert.alert("You're offline", "A split receipt needs a connection to save. Reconnect and tap the button again; nothing is lost.");
+      return Alert.alert(t("mx.offline_title"), t("al.offline_split"));
     }
-    if (!receipt.receiptImageURL) return Alert.alert("Missing receipt image", "Please rescan the receipt.");
+    if (!receipt.receiptImageURL) return Alert.alert(t("mx.missing_image_title"), t("mx.missing_image_body"));
     const receiptTotal = Number(receipt.amount);
-    if (!Number.isFinite(receiptTotal)) return Alert.alert("Invalid total", "Go back and check the receipt total.");
+    if (!Number.isFinite(receiptTotal)) return Alert.alert(t("al.invalid_total"), t("mx.invalid_amount_body"));
 
     setSubmitting(true);
     setSubmitProblems([]);
@@ -159,7 +161,7 @@ export default function AllocateScreen() {
         setSubmitProblems(err.details.problems);
         setRefreshKey((k) => k + 1);
       } else {
-        Alert.alert("Submission failed", describeLoadError(err, true) ?? "Something went wrong. Please try again.");
+        Alert.alert(t("mx.submission_failed"), describeLoadError(err, true) ?? t("al.err_generic"));
       }
     } finally {
       setSubmitting(false);
@@ -193,52 +195,52 @@ export default function AllocateScreen() {
   const helperText = submitting
     ? null
     : loading
-      ? "Working out how this receipt splits…"
+      ? t("al.working")
       : !!error || !plan
-        ? "The split couldn't be worked out. Tap Check for new requests."
+        ? t("al.split_failed")
         : !plan.ok
-          ? "Match every line to a request to submit."
+          ? t("al.match_every")
           : !category
-            ? "Pick a category to submit."
+            ? t("al.pick_category")
             : null;
 
   // ---- After a successful submit -----------------------------------------
   if (result) {
-    const name = (id: string) => known[id]?.projectName ?? "Request";
+    const name = (id: string) => known[id]?.projectName ?? t("split.request");
     const screening = Object.values(result.screening ?? {});
     const flagged = screening.filter((s) => (s.flagTypes ?? []).length > 0).length;
     const notScreened = screening.filter((s) => s.flagTypes === null).length;
     return (
       <SafeAreaView style={styles.safeArea}>
-        <FlowHeader title="Submitted for approval" caption="Split receipt" hideBack />
+        <FlowHeader title={t("al.submitted_title")} caption={t("nav.split_receipt")} hideBack />
         <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.body}>{result.expenses.length} expenses were created from one receipt.</Text>
+          <Text style={styles.body}>{t("al.created", { count: result.expenses.length })}</Text>
 
-          <Text style={styles.sectionTitle}>Completed requests</Text>
-          {result.resolvedTicketIDs.length === 0 && <Text style={styles.muted}>None</Text>}
+          <Text style={styles.sectionTitle}>{t("split.completed_requests")}</Text>
+          {result.resolvedTicketIDs.length === 0 && <Text style={styles.muted}>{t("split.none")}</Text>}
           {result.resolvedTicketIDs.map((id) => (
             <Text key={id} style={[styles.body, { color: COLORS.success }]}>✓ {name(id)}</Text>
           ))}
 
-          <Text style={styles.sectionTitle}>Still open</Text>
-          {result.stillOpenTicketIDs.length === 0 && <Text style={styles.muted}>None</Text>}
+          <Text style={styles.sectionTitle}>{t("split.still_open")}</Text>
+          {result.stillOpenTicketIDs.length === 0 && <Text style={styles.muted}>{t("split.none")}</Text>}
           {result.stillOpenTicketIDs.map((id) => (
             <Text key={id} style={styles.body}>• {name(id)}</Text>
           ))}
 
           {flagged > 0 && (
             <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
-              <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>{flagged} portion(s) were flagged for PM review.</Text>
+              <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>{t("al.flagged", { count: flagged })}</Text>
             </View>
           )}
           {notScreened > 0 && (
             <View style={[styles.notice, { backgroundColor: RED_BG }]}>
-              <Text style={{ color: RED, fontSize: 12, fontFamily: FONT.regular }}>Screening didn't run for {notScreened} portion(s). Tell the PM.</Text>
+              <Text style={{ color: RED, fontSize: 12, fontFamily: FONT.regular }}>{t("split.not_screened_body", { count: notScreened })}</Text>
             </View>
           )}
 
           <TouchableOpacity style={styles.submitButton} onPress={finish}>
-            <Text style={styles.submitButtonText}>Done</Text>
+            <Text style={styles.submitButtonText}>{t("common.done")}</Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -248,16 +250,13 @@ export default function AllocateScreen() {
   // ---- Preview -------------------------------------------------------------
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Allocate to requests" caption="Split receipt · Step 3 of 3" step={{ current: 3, total: 3 }} />
+      <FlowHeader title={t("mx.allocate_title")} caption={t("mx.split_step", { current: 3, total: 3 })} step={{ current: 3, total: 3 }} />
       <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
 
         {loading && <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 12 }} />}
         {!isOnline ? (
           <View style={[styles.notice, { backgroundColor: COLORS.amberBannerFill }]}>
-            <Text style={{ color: COLORS.amberText, fontSize: 12, fontFamily: FONT.regular }}>
-              You're offline. Splitting a receipt needs a connection to check the open requests. This page refreshes
-              by itself when you're back online.
-            </Text>
+            <Text style={{ color: COLORS.amberText, fontSize: 12, fontFamily: FONT.regular }}>{t("al.offline_banner")}</Text>
           </View>
         ) : error ? (
           <View style={[styles.notice, { backgroundColor: RED_BG }]}>
@@ -269,10 +268,10 @@ export default function AllocateScreen() {
         {uncoveredLines.size > 0 && !loading && (
           <View style={styles.errorBox} accessibilityRole="alert">
             <Text style={styles.errorBoxText}>
-              No open request for these {uncoveredLines.size} {uncoveredLines.size === 1 ? "item" : "items"}. Ask the Site Manager to file one. Then check again.
+              {uncoveredLines.size === 1 ? t("al.no_open_one") : t("al.no_open_other", { count: uncoveredLines.size })}
             </Text>
-            <TouchableOpacity style={styles.checkButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel="Check for new requests">
-              <Text style={styles.checkButtonText}>Check for new requests</Text>
+            <TouchableOpacity style={styles.checkButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel={t("al.check_new")}>
+              <Text style={styles.checkButtonText}>{t("al.check_new")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -286,20 +285,20 @@ export default function AllocateScreen() {
         )}
 
         {needsRetry && !loading && uncoveredLines.size === 0 && (
-          <TouchableOpacity style={styles.retryButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel="Check for new requests">
-            <Text style={styles.retryButtonText}>Check for new requests</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={retryPreview} accessibilityRole="button" accessibilityLabel={t("al.check_new")}>
+            <Text style={styles.retryButtonText}>{t("al.check_new")}</Text>
           </TouchableOpacity>
         )}
 
         {plan && !plan.ok && excluded.length > 0 && (
           <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
             <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>
-              You switched off {excluded.length} request{excluded.length === 1 ? "" : "s"} below. Turn one back on if it should cover these lines.
+              {excluded.length === 1 ? t("al.off_one") : t("al.off_other", { count: excluded.length })}
             </Text>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Receipt lines</Text>
+        <Text style={styles.sectionTitle}>{t("al.receipt_lines")}</Text>
         {lineItems.map((line, lineIndex) => {
           const pieces = (plan?.portions ?? []).flatMap((p) =>
             p.lines.filter((l) => l.lineIndex === lineIndex).map((l) => ({ portion: p, line: l }))
@@ -313,29 +312,29 @@ export default function AllocateScreen() {
                 <Text style={styles.lineAmount}>{formatPeso(line.amount)}</Text>
               </View>
               <View style={styles.rowBetween}>
-                <Text style={styles.muted}>{isFee ? "Fee / VAT / delivery (qty 0)" : `Qty ${formatQty(line.quantity)}`}</Text>
-                {missing.length > 0 && <Text style={styles.notCoveredTag}>Not covered</Text>}
+                <Text style={styles.muted}>{isFee ? t("al.fee_line") : t("al.qty", { qty: formatQty(line.quantity) })}</Text>
+                {missing.length > 0 && <Text style={styles.notCoveredTag}>{t("al.not_covered")}</Text>}
               </View>
 
               {pieces.map(({ portion, line: piece }) => (
                 <Text key={`${portion.ticketID}-${lineIndex}`} style={styles.piece}>
                   {isFee
-                    ? `Rides on ${portion.projectName} · ${formatPeso(piece.amount)}`
-                    : `${portion.projectName} · ${formatQty(piece.quantity)} · ${formatPeso(piece.amount)} · ${
-                        portion.resolvesTicket ? "completes request" : `request stays open (${formatQty(portion.remainingAfter)} left)`
-                      }`}
+                    ? t("al.rides_on", { project: portion.projectName, amount: formatPeso(piece.amount) })
+                    : portion.resolvesTicket
+                      ? t("al.piece_done", { project: portion.projectName, qty: formatQty(piece.quantity), amount: formatPeso(piece.amount) })
+                      : t("al.piece_open", { project: portion.projectName, qty: formatQty(piece.quantity), amount: formatPeso(piece.amount), left: formatQty(portion.remainingAfter) })}
                 </Text>
               ))}
 
               {missing.map((piece, index) => (
                 <Text key={`missing-${index}`} style={[styles.piece, { color: RED }]}>
-                  {piece.quantity > 0 ? `${formatQty(piece.quantity)} · ${formatPeso(piece.amount)} left over` : `No request to ride on · ${formatPeso(piece.amount)}`}
+                  {piece.quantity > 0 ? t("al.left_over", { qty: formatQty(piece.quantity), amount: formatPeso(piece.amount) }) : t("al.no_ride", { amount: formatPeso(piece.amount) })}
                 </Text>
               ))}
 
               {isFee && (plan?.portions.length ?? 0) > 1 && (
                 <TouchableOpacity style={styles.linkButton} onPress={() => setMovingLine(movingLine === lineIndex ? null : lineIndex)}>
-                  <Text style={styles.link}>{movingLine === lineIndex ? "Cancel" : "Move"}</Text>
+                  <Text style={styles.link}>{movingLine === lineIndex ? t("common.cancel") : t("al.move")}</Text>
                 </TouchableOpacity>
               )}
               {movingLine === lineIndex && (
@@ -351,10 +350,10 @@ export default function AllocateScreen() {
           );
         })}
 
-        <Text style={styles.sectionTitle}>Requests on this receipt</Text>
+        <Text style={styles.sectionTitle}>{t("al.requests_on_receipt")}</Text>
         {requestIDs.length === 0 && !loading && (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>No open request matches these lines yet.</Text>
+            <Text style={styles.emptyText}>{t("al.no_request_match")}</Text>
           </View>
         )}
         {requestIDs.map((ticketID) => {
@@ -365,7 +364,7 @@ export default function AllocateScreen() {
             <View key={ticketID} style={[styles.card, isExcluded && { opacity: 0.6 }]}>
               <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.lineTitle}>{info?.projectName ?? "Request"}</Text>
+                  <Text style={styles.lineTitle}>{info?.projectName ?? t("split.request")}</Text>
                   <Text style={styles.muted}>{info?.materialType ?? ""}</Text>
                 </View>
                 {portion && <Text style={styles.lineAmount}>{formatPeso(portion.amount)}</Text>}
@@ -373,19 +372,19 @@ export default function AllocateScreen() {
               {portion?.overBudget && (
                 <View style={[styles.notice, { backgroundColor: AMBER_BG, marginTop: 6, marginBottom: 0 }]}>
                   <Text style={{ color: AMBER, fontSize: 12, fontFamily: FONT.regular }}>
-                    Over budget: {formatPeso(portion.amount)} vs {formatPeso(portion.remainingBudget)} left
+                    {t("al.over_budget", { amount: formatPeso(portion.amount), left: formatPeso(portion.remainingBudget) })}
                   </Text>
                 </View>
               )}
               <View style={[styles.rowBetween, styles.switchRow]}>
-                <Text style={styles.muted}>Not for this request</Text>
+                <Text style={styles.muted}>{t("split.not_for_request")}</Text>
                 <Switch value={isExcluded} onValueChange={(value) => toggleExcluded(ticketID, value)} />
               </View>
             </View>
           );
         })}
 
-        <Text style={styles.sectionTitle}>Category</Text>
+        <Text style={styles.sectionTitle}>{t("mx.category")}</Text>
         <View style={styles.chipRow}>
           {CATEGORIES.map((c) => (
             <TouchableOpacity
@@ -393,7 +392,7 @@ export default function AllocateScreen() {
               style={[styles.chip, !category && fieldErrorStyle, category === c && styles.chipActive]}
               onPress={() => { setCategory(c); setDraftCategory(c); }}
             >
-              <Text style={[styles.chipText, category === c && { color: COLORS.primary }]}>{c}</Text>
+              <Text style={[styles.chipText, category === c && { color: COLORS.primary }]}>{tv("category", c)}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -402,18 +401,18 @@ export default function AllocateScreen() {
 
       <View style={styles.footer}>
         <View style={styles.rowBetween}>
-          <Text style={styles.footerLabel}>Allocated {formatPeso(allocatedNumber)} of {formatPeso(linesTotalNumber)}</Text>
+          <Text style={styles.footerLabel}>{t("split.totals", { allocated: formatPeso(allocatedNumber), total: formatPeso(linesTotalNumber) })}</Text>
           {plan?.ok && progress >= 1 && <IconSymbol name="checkmark.circle.fill" size={18} color={COLORS.success} />}
         </View>
         <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}>
           <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
         </View>
         <TouchableOpacity style={[styles.submitButton, !canSubmit && { opacity: 0.5 }]} onPress={handleSubmit} disabled={!canSubmit} accessibilityRole="button" accessibilityState={{ disabled: !canSubmit }}>
-          <Text style={styles.submitButtonText}>{submitting ? "Submitting…" : "Submit split for approval"}</Text>
+          <Text style={styles.submitButtonText}>{submitting ? t("common.submitting") : t("split.submit_for_approval")}</Text>
         </TouchableOpacity>
         {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
       </View>
-      <LoadingOverlay visible={submitting} message="Submitting split…" detail="Creating one expense per request." />
+      <LoadingOverlay visible={submitting} message={t("split.submitting")} detail={t("split.creating")} />
     </SafeAreaView>
   );
 }

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useNetwork } from "@/lib/sync/network-context";
 import { bannerState, SENT_SHOW_MS } from "@/lib/sync/messages";
+import { useLocale } from "@/lib/i18n-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 
 const TONES = {
@@ -18,6 +19,7 @@ const TONES = {
 // lib/sync/messages.js (bannerState); this only adds the timer that hides the
 // "all sent" strip once it has been up long enough.
 function useBannerState() {
+  const { t } = useLocale();
   const { isOnline, pendingCount, syncing, lastSync } = useNetwork();
   // The clock is state, not Date.now() in the render. The React Compiler keeps
   // the last result of a call whose inputs have not changed, so a Date.now()
@@ -31,7 +33,7 @@ function useBannerState() {
     return () => clearTimeout(timer);
   }, [lastSync]);
 
-  return bannerState({ isOnline, pendingCount, syncing, lastSync, now });
+  return bannerState({ isOnline, pendingCount, syncing, lastSync, now, t });
 }
 
 // Lets screens know whether the strip is showing and how tall it is. While it

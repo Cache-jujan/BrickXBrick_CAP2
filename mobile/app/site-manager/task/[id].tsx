@@ -33,6 +33,7 @@ import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
+import { useLocale } from "@/lib/i18n-context";
 
 // A row of offline_task_updates (lib/sync/db.js).
 type QueuedUpdate = {
@@ -45,6 +46,7 @@ type QueuedUpdate = {
 };
 
 export default function SiteManagerTaskDetailScreen() {
+  const { t, tv, formatDate, intlLocale } = useLocale();
   const session = getSession();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [task, setTask] = useState<AssignedTask | null>(null);
@@ -95,7 +97,7 @@ export default function SiteManagerTaskDetailScreen() {
       const assignedTasks = result.data;
       const matchingTask = assignedTasks.find((item) => item.taskid === id);
       if (!matchingTask) {
-        throw new Error("This task is no longer assigned to your account.");
+        throw new Error(t("sm.err_not_assigned"));
       }
       taskRef.current = matchingTask;
       setTask(matchingTask);
@@ -111,14 +113,15 @@ export default function SiteManagerTaskDetailScreen() {
       if (!taskRef.current) {
         setError(
           onlineRef.current
-            ? describeLoadError(err, true) ?? "Unable to load this task."
-            : "You're offline, and your tasks haven't been saved on this phone yet. Open the app once with a connection; after that you can view tasks and add updates offline."
+            ? describeLoadError(err, true, t) ?? t("sm.err_load_task")
+            : t("sm.err_offline_first")
         );
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per task, not on a language change
   }, [id]);
 
   // A pop-up just announced something new (e.g. the PM reviewed a task).
@@ -161,17 +164,17 @@ export default function SiteManagerTaskDetailScreen() {
   const postponedHere = !!queued && !!lastSync?.result?.postponedItems?.some((p: { id: string }) => p.id === queued.update_id);
   const queuedStuck = postponedHere || (!!queued && !!lastSync?.error);
   const queuedTitle = !isOnline
-    ? "Saved on your phone"
+    ? t("mx.saved_phone_title")
     : queuedStuck
-      ? "Not sent yet — will retry automatically"
+      ? t("sm.q_stuck")
       : syncing
-        ? "Sending to your Project Manager…"
-        : "Waiting to send…";
+        ? t("sm.q_sending")
+        : t("sm.q_waiting");
   const queuedBody = !isOnline
-    ? "It will be sent to your Project Manager automatically when you're back online. You don't need to keep this screen open."
+    ? t("sm.qb_offline")
     : queuedStuck
-      ? "The server couldn't take it just now. It stays saved on your phone and is tried again every few seconds."
-      : "You're back online. This usually takes a few seconds.";
+      ? t("sm.qb_stuck")
+      : t("sm.qb_online");
 
   const evidenceUrl = task?.pendingphotoevidenceurl || task?.photoevidenceurl;
   // D-04: flag only ever lived on the log row — the SM had no way to see
@@ -181,7 +184,7 @@ export default function SiteManagerTaskDetailScreen() {
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Camera access needed", "Enable camera access in your phone settings to add task evidence.");
+      Alert.alert(t("mx.camera_needed_title"), t("sm.cam_msg"));
       return;
     }
 
@@ -220,7 +223,7 @@ export default function SiteManagerTaskDetailScreen() {
       });
       if (!result.queued) {
         await deleteQueuedPhoto(copiedPath);
-        setSubmitError(result.message ?? "Could not save this update offline. Reconnect and try again.");
+        setSubmitError(result.message ?? t("sm.err_offline_save"));
         return;
       }
       if (result.replacedPhotoPath) await deleteQueuedPhoto(result.replacedPhotoPath);
@@ -230,11 +233,11 @@ export default function SiteManagerTaskDetailScreen() {
       setNote("");
       setShowForm(false); // if they come back, the status card shows the queued update
       setSubmitted(false);
-      Alert.alert("Saved on your phone", "It will be sent to your Project Manager automatically when you're back online.");
+      Alert.alert(t("mx.saved_phone_title"), t("sm.saved_body"));
       router.replace("/site-manager");
     } catch (err) {
       if (copiedPath) await deleteQueuedPhoto(copiedPath);
-      setSubmitError(plainError(err, "Unable to save this update on your phone."));
+      setSubmitError(plainError(err, t("sm.err_save_phone"), t));
     } finally {
       setSubmitting(false);
     }
@@ -270,7 +273,7 @@ export default function SiteManagerTaskDetailScreen() {
       setNote("");
       setClientSubmissionId(null);
       setSubmitted(false);
-      Alert.alert("Submitted for review", "Your Project Manager can now review this progress update.");
+      Alert.alert(t("sm.submitted_alert_title"), t("sm.submitted_alert_body"));
       router.replace("/site-manager");
     } catch (err) {
       if (isNetworkError(err)) {
@@ -281,7 +284,7 @@ export default function SiteManagerTaskDetailScreen() {
         await queueOffline(submissionId);
         return;
       }
-      setSubmitError(plainError(err, "Unable to submit task progress."));
+      setSubmitError(plainError(err, t("sm.err_submit"), t));
       // Someone already sent a photo for this task (another phone, or a queued
       // update that just synced): reload so the "waiting for review" card shows.
       if ((err as { code?: string })?.code === "AWAITING_REVIEW") loadTask(true);
@@ -294,7 +297,7 @@ export default function SiteManagerTaskDetailScreen() {
     <KeyboardScreen
       scrollRef={scrollRef}
       background={COLORS.bgWarm}
-      header={<FlowHeader variant="bar" title="Task details" fallback="/site-manager" />}
+      header={<FlowHeader variant="bar" title={t("sm.title")} fallback="/site-manager" />}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTask(true)} />}
     >
@@ -302,80 +305,75 @@ export default function SiteManagerTaskDetailScreen() {
         {loading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={COLORS.primary} />
-            <Text style={styles.stateBody}>Loading task…</Text>
+            <Text style={styles.stateBody}>{t("sm.loading")}</Text>
           </View>
         ) : error ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Couldn’t load task</Text>
+            <Text style={styles.errorTitle}>{t("sm.cant_load")}</Text>
             <Text style={styles.errorBody}>{error}</Text>
             <Pressable onPress={() => loadTask()} style={styles.retryButton}>
-              <Text style={styles.retryText}>Try again</Text>
+              <Text style={styles.retryText}>{t("common.try_again")}</Text>
             </Pressable>
           </View>
         ) : task ? (
           <>
             {savedAt && (
               <Text style={styles.savedNote}>
-                {isOnline ? "Can't reach the server" : "You're offline"} · showing this task {savedAtLabel(savedAt)}.
+                {t("sm.showing_task", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt) })}
               </Text>
             )}
-            <Text style={styles.eyebrow}>TASK DETAILS</Text>
+            <Text style={styles.eyebrow}>{t("sm.eyebrow")}</Text>
             <Text style={styles.title}>{task.taskname}</Text>
             <View style={[styles.statusPill, task.status === "Completed" && styles.statusPillCompleted]}>
               <Text style={[styles.statusText, task.status === "Completed" && styles.statusTextCompleted]}>
-                {task.status}
+                {tv("status", task.status)}
               </Text>
             </View>
 
             <View style={styles.progressCard}>
-              <Text style={styles.cardLabel}>PROGRESS</Text>
+              <Text style={styles.cardLabel}>{t("sm.progress_label")}</Text>
               <Text style={styles.progressValue}>{Number(task.completionpercentage || 0)}%</Text>
               <Text style={styles.progressBody}>
-                {task.status === "Completed"
-                  ? "This task has been completed and acknowledged."
-                  : "Add a photo and note when the work is ready for PM review."}
+                {task.status === "Completed" ? t("sm.completed_ack") : t("sm.add_photo_note")}
               </Text>
             </View>
 
             <View style={styles.infoCard}>
-              {task.projectname && <InfoRow label="Project" value={task.projectname} />}
+              {task.projectname && <InfoRow label={t("nav.project")} value={task.projectname} />}
               {task.projectname && projectPending !== null && (
                 <InfoRow
-                  label="Pending in this project"
-                  value={`${projectPending} task${projectPending === 1 ? "" : "s"}`}
+                  label={t("sm.pending_in_project")}
+                  value={projectPending === 1 ? t("sm.tasks_one") : t("sm.tasks_other", { count: projectPending })}
                 />
               )}
-              {task.milestonename && <InfoRow label="Milestone" value={task.milestonename} />}
-              <InfoRow label="Due date" value={formatDate(task.duedate)} />
-              <InfoRow label="Task status" value={task.status} />
+              {task.milestonename && <InfoRow label={t("sm.milestone")} value={task.milestonename} />}
+              <InfoRow label={t("mobile.due_date")} value={formatDate(task.duedate)} />
+              <InfoRow label={t("sm.task_status")} value={tv("status", task.status)} />
             </View>
 
             {flagged && (
               <View style={styles.flagCard}>
-                <Text style={styles.flagTitle}>Flagged — resubmission needed</Text>
+                <Text style={styles.flagTitle}>{t("sm.flagged_title")}</Text>
                 {task.latestreviewreason && <Text style={styles.flagBody}>{task.latestreviewreason}</Text>}
               </View>
             )}
 
             {awaitingReview && (
               <View style={styles.reviewCard} accessibilityLiveRegion="polite">
-                <Text style={styles.reviewEyebrow}>CURRENT SUBMISSION</Text>
-                <Text style={styles.reviewTitle}>Waiting for your Project Manager's review</Text>
+                <Text style={styles.reviewEyebrow}>{t("sm.current_submission")}</Text>
+                <Text style={styles.reviewTitle}>{t("sm.waiting_review")}</Text>
                 {task.pendingsubmittedat ? (
-                  <Text style={styles.reviewMeta}>Submitted {formatDateTime(task.pendingsubmittedat)}</Text>
+                  <Text style={styles.reviewMeta}>{t("review.submitted", { date: `${formatDate(task.pendingsubmittedat)} ${new Date(task.pendingsubmittedat).toLocaleTimeString(intlLocale, { hour: "numeric", minute: "2-digit" })}` })}</Text>
                 ) : null}
                 {task.pendingnote ? <Text style={styles.reviewNote}>“{task.pendingnote}”</Text> : null}
-                <Text style={styles.reviewBody}>
-                  You can't send another photo for this task until it is reviewed. If your Project Manager flags it,
-                  you'll see why here and can submit a new photo.
-                </Text>
+                <Text style={styles.reviewBody}>{t("sm.cant_send_another")}</Text>
               </View>
             )}
 
             {evidenceUrl && (
               <View style={styles.evidenceCard}>
                 <Text style={styles.evidenceTitle}>
-                  {task.pendingphotoevidenceurl ? "Latest submitted evidence" : "Submitted evidence"}
+                  {task.pendingphotoevidenceurl ? t("sm.latest_evidence") : t("sm.evidence")}
                 </Text>
                 <Image source={{ uri: evidenceUrl }} style={styles.evidenceImage} />
               </View>
@@ -383,10 +381,10 @@ export default function SiteManagerTaskDetailScreen() {
 
             {rejectedHere.map((row) => (
               <View key={row.update_id} style={styles.flagCard}>
-                <Text style={styles.flagTitle}>Update not sent</Text>
-                <Text style={styles.flagBody}>{describeRejection(row.error_code ?? "", row.error_message ?? "")}</Text>
+                <Text style={styles.flagTitle}>{t("sm.update_not_sent")}</Text>
+                <Text style={styles.flagBody}>{describeRejection(row.error_code ?? "", row.error_message ?? "", t)}</Text>
                 <Pressable onPress={() => dismissRejected(row)} style={styles.dismissButton}>
-                  <Text style={styles.dismissText}>Dismiss</Text>
+                  <Text style={styles.dismissText}>{t("sm.dismiss")}</Text>
                 </Pressable>
               </View>
             ))}
@@ -402,7 +400,7 @@ export default function SiteManagerTaskDetailScreen() {
                 {queued.note ? <Text style={styles.queuedNote}>{queued.note}</Text> : null}
                 {!isOnline && !showForm && task.status !== "Completed" && (
                   <Pressable onPress={() => setShowForm(true)} style={styles.replaceButton}>
-                    <Text style={styles.replaceText}>Replace with a new photo</Text>
+                    <Text style={styles.replaceText}>{t("sm.replace_photo")}</Text>
                   </Pressable>
                 )}
               </View>
@@ -410,13 +408,13 @@ export default function SiteManagerTaskDetailScreen() {
 
             {task.status !== "Completed" && !awaitingReview && (!queued || showForm) && (
               <View style={styles.submissionSection}>
-                <Text style={styles.sectionTitle}>Progress update</Text>
-                <Text style={styles.sectionSubtitle}>Take one photo as evidence and add an optional note.</Text>
+                <Text style={styles.sectionTitle}>{t("sm.progress_update")}</Text>
+                <Text style={styles.sectionSubtitle}>{t("sm.one_photo")}</Text>
 
                 <View style={styles.photoActions}>
                   <Pressable onPress={takePhoto} style={styles.photoButton}>
                     <Text style={styles.photoButtonIcon}>⌾</Text>
-                    <Text style={styles.photoButtonText}>Take photo</Text>
+                    <Text style={styles.photoButtonText}>{t("mx.take_photo")}</Text>
                   </Pressable>
                 </View>
 
@@ -425,28 +423,28 @@ export default function SiteManagerTaskDetailScreen() {
                     <Image source={{ uri: photo.uri }} style={styles.previewImage} />
                     <View style={styles.previewFooter}>
                       <Text style={styles.previewName} numberOfLines={1}>
-                        {photo.fileName || "Task evidence photo"}
+                        {photo.fileName || t("sm.photo_name_fallback")}
                       </Text>
                       <Pressable onPress={() => { setPhoto(null); setClientSubmissionId(null); setSubmitted(false); setSubmitError(null); }}>
-                        <Text style={styles.removeText}>Remove</Text>
+                        <Text style={styles.removeText}>{t("common.remove")}</Text>
                       </Pressable>
                     </View>
                   </View>
                 ) : (
                   <View style={[styles.photoEmpty, triedSubmit && fieldErrorStyle]}>
                     <Text style={[styles.photoEmptyTitle, triedSubmit && styles.photoEmptyTitleError]}>
-                      {triedSubmit ? "A photo is required" : "No evidence photo selected"}
+                      {triedSubmit ? t("sm.photo_required") : t("sm.no_photo")}
                     </Text>
-                    <Text style={styles.photoEmptyBody}>JPEG or PNG photos will be accepted.</Text>
+                    <Text style={styles.photoEmptyBody}>{t("sm.jpeg_png")}</Text>
                   </View>
                 )}
 
-                <Text style={styles.noteLabel}>Note (optional)</Text>
+                <Text style={styles.noteLabel}>{t("pd.note_optional")}</Text>
                 <TextInput
                   multiline
                   numberOfLines={4}
                   maxLength={500}
-                  placeholder="Add context for your Project Manager"
+                  placeholder={t("sm.note_ph")}
                   placeholderTextColor={COLORS.muted}
                   style={styles.noteInput}
                   value={note}
@@ -456,21 +454,19 @@ export default function SiteManagerTaskDetailScreen() {
                 />
 
                 <BlockedReasons
-                  reasons={[triedSubmit && !photo && "Take a photo of the finished work. Your Project Manager needs it as evidence."]}
+                  reasons={[triedSubmit && !photo && t("sm.photo_needed_reason")]}
                 />
                 {submitError && (
-                  <BlockedReasons title="Your update wasn't sent:" reasons={[submitError]} />
+                  <BlockedReasons title={t("sm.not_sent_title")} reasons={[submitError]} />
                 )}
                 {submitted ? (
                   <View style={styles.successCard} accessibilityLiveRegion="polite">
-                    <Text style={styles.successTitle}>{sentFromQueue ? "Sent for review ✓" : "Submitted for review"}</Text>
+                    <Text style={styles.successTitle}>{sentFromQueue ? t("sm.sent_review") : t("sm.submitted_alert_title")}</Text>
                     <Text style={styles.successBody}>
-                      {sentFromQueue
-                        ? "Your saved update was sent when you came back online. Your Project Manager can now review it."
-                        : "Your Project Manager can now review this progress update."}
+                      {sentFromQueue ? t("sm.sent_body_queue") : t("sm.submitted_alert_body")}
                     </Text>
                     <Pressable onPress={() => router.replace("/site-manager")} style={styles.successBackButton}>
-                      <Text style={styles.successBackText}>Back to my tasks</Text>
+                      <Text style={styles.successBackText}>{t("sm.back_tasks_btn")}</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -479,7 +475,7 @@ export default function SiteManagerTaskDetailScreen() {
                     onPress={handleSubmit}
                     style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed, submitting && styles.submitButtonDisabled]}
                   >
-                    {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitButtonText}>{isOnline ? "Submit for PM review" : "Queue Update"}</Text>}
+                    {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitButtonText}>{isOnline ? t("sm.submit_pm") : t("sm.queue_update")}</Text>}
                   </Pressable>
                 )}
               </View>
@@ -497,16 +493,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <Text style={styles.infoValue}>{value}</Text>
     </View>
   );
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
 const styles = StyleSheet.create({

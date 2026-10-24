@@ -1,3 +1,4 @@
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./Badge.css";
 
 // Maps backend status strings to a visual tone. Falls back to "neutral"
@@ -18,6 +19,7 @@ const STATUS_TONE = {
 };
 
 export function Badge({ status, children }) {
+  const { tv } = useLocale();
   const tone = STATUS_TONE[status] || "neutral";
-  return <span className={`badge badge-${tone}`}>{children || status}</span>;
+  return <span className={`badge badge-${tone}`}>{children || tv("status", status)}</span>;
 }

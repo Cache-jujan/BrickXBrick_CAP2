@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BarController, BarElement, CategoryScale, Chart, LinearScale, Tooltip } from "chart.js";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./BudgetChart.css";
 
 // Register only what a bar chart needs, so the bundle stays small.
@@ -44,6 +45,7 @@ const valueLabels = {
  * finished chart, never a half-drawn one.
  */
 export const BudgetChart = forwardRef(function BudgetChart({ projects }, ref) {
+  const { t } = useLocale();
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -86,7 +88,7 @@ export const BudgetChart = forwardRef(function BudgetChart({ projects }, ref) {
             callbacks: {
               label: (item) => {
                 const p = projects[item.dataIndex];
-                return `${item.parsed.x.toFixed(2)}% of ${PESO.format(p.budget)} used (${PESO.format(p.cumulativeSpend)})`;
+                return t("rep.tooltip_used", { pct: item.parsed.x.toFixed(2), budget: PESO.format(p.budget), spend: PESO.format(p.cumulativeSpend) });
               },
             },
           },
@@ -102,15 +104,15 @@ export const BudgetChart = forwardRef(function BudgetChart({ projects }, ref) {
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [projects]);
+  }, [projects, t]);
 
   const description = projects
-    .map((p) => `${p.name}: ${p.cumulativeUtilizationPct === null ? "no budget set" : `${p.cumulativeUtilizationPct.toFixed(1)}% of budget used`}${p.overrun ? " (over budget)" : ""}`)
+    .map((p) => `${p.name}: ${p.cumulativeUtilizationPct === null ? t("rep.no_budget_lower") : t("rep.pct_budget_used", { pct: p.cumulativeUtilizationPct.toFixed(1) })}${p.overrun ? t("rep.over_paren") : ""}`)
     .join("; ");
 
   return (
     <div className="budget-chart" style={{ height: Math.max(150, projects.length * ROW_HEIGHT + CHART_PADDING) }}>
-      <canvas ref={canvasRef} role="img" aria-label={`Budget used to date. ${description}`} />
+      <canvas ref={canvasRef} role="img" aria-label={t("rep.budget_used_aria", { description })} />
     </div>
   );
 });

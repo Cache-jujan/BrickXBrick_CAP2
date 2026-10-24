@@ -11,6 +11,7 @@ import { getSession, homeRouteFor, logout, setTermsAccepted } from "@/lib/auth";
 import { loadLegalDocs } from "@/lib/cached-api";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { plainError } from "@/lib/sync/messages";
+import { useLocale } from "@/lib/i18n-context";
 
 type Section = { heading: string; paragraphs?: string[]; bullets?: string[] };
 type LegalDoc = { id: string; title: string; sections: Section[] };
@@ -30,13 +31,6 @@ const HIGHLIGHT_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   rights: "verified-user",
 };
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-function formatDate(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
-  return y && m && d ? `${MONTHS[m - 1]} ${d}, ${y}` : iso;
-}
-
 // "3. Your account" -> { num: "3", label: "Your account" }
 function splitHeading(heading: string) {
   const m = /^(\d+)\.\s*(.*)$/.exec(heading);
@@ -49,6 +43,7 @@ function splitHeading(heading: string) {
 //   /terms           read-only, opened from Settings
 // The text comes from the backend (GET /api/legal), the same as on the web.
 export default function TermsScreen() {
+  const { t, formatDate } = useLocale();
   const { accept } = useLocalSearchParams<{ accept?: string }>();
   const mustAccept = accept === "1";
   const session = getSession();
@@ -75,8 +70,9 @@ export default function TermsScreen() {
       setData(result.data);
       setSavedAt(result.fromCache ? result.savedAt : null);
     } catch {
-      setLoadError("Couldn't load the terms. Check your connection and try again.");
+      setLoadError(t("legal.load_error_net"));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the load callback must stay stable; a language change must not refetch
   }, []);
 
   useEffect(() => {
@@ -105,13 +101,13 @@ export default function TermsScreen() {
         // The terms changed while this screen was open: show the new version.
         setChecked(false);
         await load();
-        throw new Error(body.error || "The terms were updated. Please review the latest version.");
+        throw new Error(body.error || t("legal.err_updated"));
       }
-      if (!res.ok) throw new Error(body.error || "Couldn't save your acceptance. Please try again.");
+      if (!res.ok) throw new Error(body.error || t("legal.accept_error"));
       setTermsAccepted(data.version);
       router.replace(homeRouteFor(session.user.role));
     } catch (err) {
-      setError(plainError(err, "Couldn't save your acceptance. Please try again."));
+      setError(plainError(err, t("legal.accept_error"), t));
     } finally {
       setBusy(false);
     }
@@ -130,15 +126,15 @@ export default function TermsScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right", ...(mustAccept ? [] : (["bottom"] as const))]}>
       <FlowHeader
-        title={mustAccept ? "Before you continue" : "Terms & Privacy"}
-        caption={mustAccept ? "One-time review" : undefined}
+        title={mustAccept ? t("legal.before_continue") : t("account.terms_privacy")}
+        caption={mustAccept ? t("legal.eyebrow") : undefined}
         hideBack={mustAccept}
       />
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          {mustAccept && firstName ? <Text style={styles.eyebrow}>WELCOME, {firstName.toUpperCase()}</Text> : null}
-          <Text style={styles.heroTitle}>{mustAccept ? "Review and accept our terms" : "Terms & Privacy"}</Text>
+          {mustAccept && firstName ? <Text style={styles.eyebrow}>{t("legal.welcome_upper", { name: firstName.toUpperCase() })}</Text> : null}
+          <Text style={styles.heroTitle}>{mustAccept ? t("legal.title") : t("account.terms_privacy")}</Text>
           <Text style={styles.lede}>
             {mustAccept
               ? "Brick x Brick holds company records and your personal data, so we need your agreement first. You'll only be asked again if the terms change."
@@ -147,22 +143,22 @@ export default function TermsScreen() {
           {data ? (
             <View style={styles.metaRow}>
               <View style={styles.chip}>
-                <Text style={styles.chipText}>Version {data.version}</Text>
+                <Text style={styles.chipText}>{t("legal.version", { version: data.version })}</Text>
               </View>
-              <Text style={styles.meta}>Effective {formatDate(data.effectiveDate)}</Text>
+              <Text style={styles.meta}>{t("legal.effective", { date: formatDate(`${data.effectiveDate}T00:00:00`, { year: "numeric", month: "long", day: "numeric" }) })}</Text>
             </View>
           ) : null}
         </View>
 
         {savedAt ? (
-          <Text style={styles.savedNote}>Offline · showing the terms saved {savedAtLabel(savedAt)}.</Text>
+          <Text style={styles.savedNote}>{t("legal.offline_saved", { when: savedAtLabel(savedAt, new Date(), t) })}</Text>
         ) : null}
 
         {loadError ? (
           <View style={styles.errorCard}>
             <Text style={styles.error}>{loadError}</Text>
             <Pressable onPress={load} style={styles.secondaryButton} accessibilityRole="button">
-              <Text style={styles.secondaryText}>Try again</Text>
+              <Text style={styles.secondaryText}>{t("common.try_again")}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -173,7 +169,7 @@ export default function TermsScreen() {
           <>
             {data.highlights?.length ? (
               <View style={styles.glance}>
-                <Text style={styles.overline}>AT A GLANCE</Text>
+                <Text style={styles.overline}>{t("legal.glance_upper")}</Text>
                 {data.highlights.map((h) => (
                   <View key={h.id} style={styles.glanceCard}>
                     <View style={styles.glanceIcon}>
@@ -185,7 +181,7 @@ export default function TermsScreen() {
                     </View>
                   </View>
                 ))}
-                <Text style={styles.note}>This summary is here to help. The full text below is what you agree to.</Text>
+                <Text style={styles.note}>{t("legal.glance_note")}</Text>
               </View>
             ) : null}
 
@@ -249,13 +245,13 @@ export default function TermsScreen() {
                 accessibilityRole="button"
               >
                 <View>
-                  <Text style={styles.nextLabel}>Next</Text>
+                  <Text style={styles.nextLabel}>{t("common.next")}</Text>
                   <Text style={styles.nextTitle}>{nextDoc.title}</Text>
                 </View>
                 <MaterialIcons name="arrow-forward" size={20} color={TINT_INK} />
               </Pressable>
             ) : (
-              <Text style={styles.endNote}>End of the {doc.title}.</Text>
+              <Text style={styles.endNote}>{t("legal.end_note", { title: doc.title })}</Text>
             )}
           </>
         ) : null}
@@ -289,13 +285,13 @@ export default function TermsScreen() {
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
-                <Text style={styles.primaryText}>Agree and continue</Text>
+                <Text style={styles.primaryText}>{t("legal.agree_continue")}</Text>
                 <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
               </>
             )}
           </Pressable>
           <Pressable onPress={handleSignOut} hitSlop={8} accessibilityRole="button" style={styles.signOut}>
-            <Text style={styles.signOutText}>Sign out</Text>
+            <Text style={styles.signOutText}>{t("account.logout")}</Text>
           </Pressable>
         </SafeAreaView>
       ) : null}

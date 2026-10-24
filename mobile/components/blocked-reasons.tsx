@@ -1,20 +1,22 @@
 import { StyleSheet, Text, View } from "react-native";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 // Shown right above an action button that can't run yet, so the user sees
 // exactly why instead of a greyed-out button with no explanation.
 export function BlockedReasons({
   reasons,
-  title = "Before you can continue:",
+  title,
 }: {
   reasons: (string | false | null | undefined)[];
   title?: string;
 }) {
+  const { t } = useLocale();
   const list = reasons.filter((r): r is string => !!r);
   if (list.length === 0) return null;
   return (
     <View style={styles.box} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title}>{title ?? t("mx.before_continue")}</Text>
       {list.map((reason) => (
         <Text key={reason} style={styles.item}>
           • {reason}

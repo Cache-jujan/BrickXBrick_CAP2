@@ -4,6 +4,7 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import { parseNeededBy, shortDate, toDateText } from "@/lib/needed-by";
+import { useLocale } from "@/lib/i18n-context";
 
 type Props = {
   label: string;
@@ -15,6 +16,7 @@ type Props = {
 
 // Optional date picker: tap to choose a day (today or later), tap Clear to remove it.
 export function DateField({ label, value, onChange, hint }: Props) {
+  const { t, intlLocale } = useLocale();
   const [open, setOpen] = useState(false);
   const selected = parseNeededBy(value);
   const today = new Date();
@@ -33,15 +35,15 @@ export function DateField({ label, value, onChange, hint }: Props) {
           onPress={() => setOpen((v) => !v)}
           style={styles.button}
           accessibilityRole="button"
-          accessibilityLabel={selected ? `${label}: ${shortDate(selected)}. Change date` : `${label}: not set. Choose a date`}
+          accessibilityLabel={selected ? t("df.aria_set", { label, date: shortDate(selected, intlLocale) }) : t("df.aria_unset", { label })}
         >
           <Text style={[styles.value, !selected && styles.placeholder]}>
-            {selected ? selected.toLocaleDateString("en-PH", { day: "numeric", month: "long", year: "numeric" }) : "No date"}
+            {selected ? selected.toLocaleDateString(intlLocale, { day: "numeric", month: "long", year: "numeric" }) : t("df.no_date")}
           </Text>
         </Pressable>
         {selected && (
-          <Pressable onPress={() => { onChange(""); setOpen(false); }} style={styles.clear} accessibilityRole="button" accessibilityLabel="Clear date">
-            <Text style={styles.clearText}>Clear</Text>
+          <Pressable onPress={() => { onChange(""); setOpen(false); }} style={styles.clear} accessibilityRole="button" accessibilityLabel={t("df.clear_date")}>
+            <Text style={styles.clearText}>{t("rep.clear")}</Text>
           </Pressable>
         )}
       </View>

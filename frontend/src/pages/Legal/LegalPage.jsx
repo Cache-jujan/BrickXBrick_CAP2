@@ -12,12 +12,14 @@ import {
 } from "../../components/legal/LegalReader";
 import { PrintIcon } from "../../components/legal/LegalIcons";
 import { LegalBrand, ReadingProgress, readingMinutes } from "./LegalChrome";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./LegalPages.css";
 
 // /legal — Terms of Use and Privacy Notice, readable by anyone (linked from
 // the login page and from the user menu). ?doc=privacy opens the Privacy tab.
 export function LegalPage() {
   const { status } = useAuth();
+  const { t, formatDate } = useLocale();
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -27,24 +29,25 @@ export function LegalPage() {
   useEffect(() => {
     getLegalDocuments()
       .then(setData)
-      .catch((err) => setError(extractErrorMessage(err, "Couldn't load the terms. Please try again.")));
+      .catch((err) => setError(extractErrorMessage(err, t("legal.load_error"))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   return (
     <div className="legal-page">
       <header className="legal-header">
         <div className="legal-header-inner">
-          <Link to={signedIn ? "/" : "/login"} className="legal-brand-link" aria-label="Brick x Brick home">
+          <Link to={signedIn ? "/" : "/login"} className="legal-brand-link" aria-label={t("legal.home_aria")}>
             <LegalBrand />
           </Link>
           <div className="legal-header-actions">
             {data && (
               <button type="button" className="legal-text-btn legal-print" onClick={() => window.print()}>
-                <PrintIcon /> Print
+                <PrintIcon /> {t("legal.print")}
               </button>
             )}
             <Link to={signedIn ? "/" : "/login"} className="legal-back">
-              {signedIn ? "Back to Brick x Brick" : "Back to sign in"}
+              {signedIn ? t("legal.back_app") : t("auth.back_to_sign_in")}
             </Link>
           </div>
         </div>
@@ -53,18 +56,18 @@ export function LegalPage() {
 
       <main className="legal-main">
         <div className="legal-hero">
-          <p className="legal-eyebrow">Legal</p>
-          <h1>Terms &amp; Privacy</h1>
+          <p className="legal-eyebrow">{t("legal.eyebrow_label")}</p>
+          <h1>{t("account.terms_privacy")}</h1>
           <p className="legal-lede">
             How Brick x Brick may be used, and how your personal data is handled under the Data Privacy Act of
             2012 (RA 10173).
           </p>
           {data && (
             <p className="legal-meta">
-              <span className="legal-chip">Version {data.version}</span>
-              <span>Effective {formatEffectiveDate(data.effectiveDate)}</span>
+              <span className="legal-chip">{t("legal.version", { version: data.version })}</span>
+              <span>{t("legal.effective", { date: formatEffectiveDate(data.effectiveDate, formatDate) })}</span>
               <span className="legal-meta-dot" aria-hidden="true">·</span>
-              <span>About {readingMinutes(data)} min read</span>
+              <span>{t("legal.read_minutes", { minutes: readingMinutes(data) })}</span>
             </p>
           )}
         </div>

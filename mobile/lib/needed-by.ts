@@ -32,22 +32,30 @@ export function parseNeededBy(value?: string | null): Date | null {
 }
 
 /** "23 Oct" style label. */
-export function shortDate(date: Date) {
-  return date.toLocaleDateString("en-PH", { day: "numeric", month: "short" });
+export function shortDate(date: Date, intlLocale = "en-PH") {
+  return date.toLocaleDateString(intlLocale, { day: "numeric", month: "short" });
 }
 
-export function urgencyFor(value?: string | null, now = new Date()): Urgency {
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+// `t` and `intlLocale` (from useLocale) are optional: with them the label follows the chosen language.
+export function urgencyFor(value?: string | null, now = new Date(), t?: Translate, intlLocale = "en-PH"): Urgency {
   const due = parseNeededBy(value);
-  if (!due) return { label: "No due date", tone: "none", days: null };
+  if (!due) return { label: t ? t("due.none") : "No due date", tone: "none", days: null };
 
   const days = Math.round((due.getTime() - startOfDay(now).getTime()) / MS_PER_DAY);
   if (days < 0) {
     const late = Math.abs(days);
-    return { label: `Overdue by ${late} ${late === 1 ? "day" : "days"}`, tone: "late", days };
+    const label = t ? t(late === 1 ? "due.overdue_one" : "due.overdue_other", { count: late }) : `Overdue by ${late} ${late === 1 ? "day" : "days"}`;
+    return { label, tone: "late", days };
   }
-  if (days === 0) return { label: "Needed today", tone: "today", days };
-  if (days <= 3) return { label: `Due in ${days} ${days === 1 ? "day" : "days"}`, tone: "soon", days };
-  return { label: `Due ${shortDate(due)}`, tone: "normal", days };
+  if (days === 0) return { label: t ? t("due.needed_today") : "Needed today", tone: "today", days };
+  if (days <= 3) {
+    const label = t ? t(days === 1 ? "due.in_one" : "due.in_other", { count: days }) : `Due in ${days} ${days === 1 ? "day" : "days"}`;
+    return { label, tone: "soon", days };
+  }
+  const label = t ? t("ms.due", { date: shortDate(due, intlLocale) }) : `Due ${shortDate(due)}`;
+  return { label, tone: "normal", days };
 }
 
 /** Sort key: earliest due date first, tickets with no date last. */

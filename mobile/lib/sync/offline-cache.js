@@ -68,10 +68,12 @@ export async function withCache(key, userId, load, deps = {}) {
 const TIME = { hour: "numeric", minute: "2-digit" };
 
 // "Offline · showing your work as of 10:42 AM" (or with the date if older).
-export function savedAtLabel(savedAt, now = new Date()) {
+// `t` is optional (from useLocale): with it the "as of" wording follows the chosen language.
+export function savedAtLabel(savedAt, now = new Date(), t) {
   if (!savedAt) return "";
   const d = new Date(savedAt);
   const sameDay = d.toDateString() === now.toDateString();
   const time = d.toLocaleTimeString([], TIME);
+  if (t) return sameDay ? t("time.as_of", { time }) : t("time.as_of_date", { date: d.toLocaleDateString(), time });
   return sameDay ? `as of ${time}` : `as of ${d.toLocaleDateString()} ${time}`;
 }

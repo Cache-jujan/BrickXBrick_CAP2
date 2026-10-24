@@ -11,6 +11,7 @@ import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
 import "./SubmitExpensePage.css";
 import { BackLink } from "../../components/ui/BackLink";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 export const EMPTY_DRAFT = {
   vendorName: "",
@@ -24,8 +25,6 @@ export const EMPTY_DRAFT = {
   receiptImageURL: "",
   lineItems: [{ description: "", amount: "", quantity: "", unitPrice: "" }],
 };
-
-const VENDOR_FIELD_LABELS = { tin: "TIN", birPermitType: "BIR authority type", birPermitNumber: "BIR permit number" };
 
 function toDateInput(value) {
   if (!value) return "";
@@ -78,6 +77,7 @@ export function isSupportedReceipt(file) {
 /** Render the managers' receipt capture and expense submission flow for resolved tickets. */
 export function SubmitExpensePage() {
   const { user } = useAuth();
+  const { t, tv } = useLocale();
   const cameraInput = useRef(null);
   const imageInput = useRef(null);
   const pdfInput = useRef(null);
@@ -112,13 +112,14 @@ export function SubmitExpensePage() {
         const rows = await listExpenseLinkableTickets();
         if (active) setTickets(Array.isArray(rows) ? rows : []);
       } catch (error) {
-        if (active) setPageError(extractErrorMessage(error, "Couldn't load resolved procurement tickets."));
+        if (active) setPageError(extractErrorMessage(error, t("errors.load_tickets")));
       } finally {
         if (active) setLoadingTickets(false);
       }
     }
     loadTickets();
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   function setField(name, value) {
@@ -137,7 +138,7 @@ export function SubmitExpensePage() {
     setVendorInfo({ autoFilled: [], conflicts: [] });
     setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
     if (!isSupportedReceipt(file)) {
-      setPageError("Choose a JPG, PNG, or PDF receipt. HEIC and other formats are not accepted yet.");
+      setPageError(t("errors.receipt_type"));
       return;
     }
 
@@ -153,10 +154,10 @@ export function SubmitExpensePage() {
       });
       setOcrNotice(result.ocrError || "");
       if (!result.ocrError && result.confidence === "low") {
-        setOcrNotice("OCR confidence is low. Check every extracted value before submitting.");
+        setOcrNotice(t("submit.ocr_low"));
       }
     } catch (error) {
-      setPageError(extractErrorMessage(error, "Receipt upload failed. Please try again."));
+      setPageError(extractErrorMessage(error, t("errors.upload_failed")));
     } finally {
       busyRef.current = false;
       setScanning(false);
@@ -227,7 +228,7 @@ export function SubmitExpensePage() {
     setPageError("");
     setPageNotice("");
     if (!selectedTicket || !draft.receiptImageURL || !canSubmit) {
-      setPageError("Choose a resolved procurement ticket, upload a receipt, and complete the required fields.");
+      setPageError(t("errors.submit_incomplete"));
       return;
     }
 
@@ -253,7 +254,7 @@ export function SubmitExpensePage() {
         })),
       };
       const expense = await submitExpense(payload);
-      setPageNotice(`Expense submitted as Pending${expense.expenseID ? ` (${expense.expenseID})` : ""}.`);
+      setPageNotice(expense.expenseID ? t("submit.saved_pending_id", { id: expense.expenseID }) : t("submit.saved_pending"));
       setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
       setSelectedTicketId("");
       setReceiptName("");
@@ -261,7 +262,7 @@ export function SubmitExpensePage() {
       setVendorInfo({ autoFilled: [], conflicts: [] });
     } catch (error) {
       // Keep the draft so the user can fix the problem and retry.
-      setPageError(extractErrorMessage(error, "Expense submission failed. Please check the details and retry."));
+      setPageError(extractErrorMessage(error, t("errors.submit_failed")));
     } finally {
       busyRef.current = false;
       setSubmitting(false);
@@ -269,37 +270,37 @@ export function SubmitExpensePage() {
   }
 
   const vendorLabel = (label, field) =>
-    vendorInfo.autoFilled.includes(field) ? `${label} (from vendor list)` : label;
+    vendorInfo.autoFilled.includes(field) ? t("submit.from_vendor_list", { label }) : label;
+  const vendorFieldLabel = (field) =>
+    ({ tin: "TIN", birPermitType: t("submit.field_bir_type"), birPermitNumber: t("submit.field_bir_permit") })[field] || field;
 
   if (!user || !["General Manager", "Project Manager"].includes(user.role)) {
-    return <Banner tone="error" title="Not authorized">This submission page is for General Managers and Project Managers.</Banner>;
+    return <Banner tone="error" title={t("auth.not_authorized_title")}>{t("submit.not_authorized_body")}</Banner>;
   }
 
   return (
     <div className="submit-expense-page">
       <LoadingOverlay
         open={scanning || submitting}
-        message={scanning ? "Reading receipt…" : "Submitting expense…"}
-        detail={scanning ? "Uploading and running OCR. This can take a few seconds." : "Please don't close this page."}
+        message={scanning ? t("submit.reading") : t("submit.submitting")}
+        detail={scanning ? t("submit.scan_detail") : t("submit.dont_close")}
       />
       <div className="submit-expense-header">
         <div>
-          <BackLink to="/expenses">Back to expenses</BackLink>
-          <h1>Submit Expense</h1>
-          <p className="submit-expense-subtitle">
-            Upload a receipt, verify its details, and link it to a resolved procurement ticket.
-          </p>
+          <BackLink to="/expenses">{t("submit.back")}</BackLink>
+          <h1>{t("nav.submit_expense")}</h1>
+          <p className="submit-expense-subtitle">{t("submit.subtitle")}</p>
         </div>
         <span className="submit-expense-role">{user.role}</span>
       </div>
 
-      {pageError && <Banner tone="error" title="Could not continue">{pageError}</Banner>}
-      {pageNotice && <Banner tone="info" title="Submission saved">{pageNotice}</Banner>}
-      {ocrNotice && <Banner tone="warning" title="Review the receipt carefully">{ocrNotice}</Banner>}
+      {pageError && <Banner tone="error" title={t("submit.could_not_continue")}>{pageError}</Banner>}
+      {pageNotice && <Banner tone="info" title={t("submit.saved_title")}>{pageNotice}</Banner>}
+      {ocrNotice && <Banner tone="warning" title={t("submit.review_carefully")}>{ocrNotice}</Banner>}
       {vendorInfo.conflicts.length > 0 && (
-        <Banner tone="warning" title="Receipt differs from the vendor list">
-          {vendorInfo.conflicts.map((c) => `${VENDOR_FIELD_LABELS[c.field] || c.field}: receipt reads ${c.ocrValue}, vendor list has ${c.masterValue}`).join(" · ")}.
-          {" "}The vendor list value was used. Check the paper receipt.
+        <Banner tone="warning" title={t("submit.conflict_title")}>
+          {vendorInfo.conflicts.map((c) => t("submit.conflict", { field: vendorFieldLabel(c.field), ocr: c.ocrValue, master: c.masterValue })).join(" · ")}.
+          {" "}{t("submit.vendor_used")}
         </Banner>
       )}
 
@@ -308,8 +309,8 @@ export function SubmitExpensePage() {
           <section className="submit-expense-section" aria-labelledby="receipt-source-heading">
             <div className="submit-expense-section-heading">
               <div>
-                <h2 id="receipt-source-heading">1. Add receipt</h2>
-                <p>Use a camera-capable mobile browser, choose an image, or upload a PDF (10 MB maximum).</p>
+                <h2 id="receipt-source-heading">{t("submit.step1_title")}</h2>
+                <p>{t("submit.step1_help")}</p>
               </div>
               {receiptName && <span className="submit-expense-filename">{receiptName}</span>}
             </div>
@@ -319,10 +320,10 @@ export function SubmitExpensePage() {
             <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={handleReceiptPick} />
 
             <div className="submit-expense-upload-actions">
-              <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>Capture with camera</Button>
-              <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>Choose image</Button>
-              <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>Choose PDF</Button>
-              {scanning && <span className="submit-expense-progress" role="status">Uploading and scanning…</span>}
+              <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>{t("submit.capture_camera")}</Button>
+              <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>{t("submit.choose_image")}</Button>
+              <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>{t("submit.choose_pdf")}</Button>
+              {scanning && <span className="submit-expense-progress" role="status">{t("submit.uploading_scanning")}</span>}
             </div>
 
             {draft.receiptImageURL && (
@@ -330,18 +331,18 @@ export function SubmitExpensePage() {
                 {receiptName.toLowerCase().endsWith(".pdf") ? (
                   <iframe
                     className="submit-expense-pdf-preview"
-                    title="Uploaded receipt PDF preview"
+                    title={t("submit.pdf_preview_title")}
                     src={draft.receiptImageURL}
                   />
                 ) : (
                   <img
                     className="submit-expense-image-preview"
                     src={draft.receiptImageURL}
-                    alt="Uploaded receipt preview"
+                    alt={t("submit.image_preview_alt")}
                   />
                 )}
                 <a className="submit-expense-receipt-link" href={draft.receiptImageURL} target="_blank" rel="noreferrer">
-                  Open the uploaded receipt separately
+                  {t("submit.open_receipt")}
                 </a>
               </div>
             )}
@@ -352,35 +353,35 @@ export function SubmitExpensePage() {
           <section className="submit-expense-section" aria-labelledby="ticket-heading">
             <div className="submit-expense-section-heading">
               <div>
-                <h2 id="ticket-heading">2. Link procurement ticket</h2>
-                <p>Only resolved Material Request tickets are listed. The server checks your project access again at submission.</p>
+                <h2 id="ticket-heading">{t("submit.step2_title")}</h2>
+                <p>{t("submit.step2_help")}</p>
               </div>
             </div>
 
             <Field
               as="select"
-              label="Resolved procurement ticket"
+              label={t("submit.ticket_label")}
               required
               value={selectedTicketId}
               onChange={(event) => handleTicketChange(event.target.value)}
               disabled={loadingTickets || tickets.length === 0}
             >
-              <option value="">{loadingTickets ? "Loading tickets…" : "Choose a ticket"}</option>
+              <option value="">{loadingTickets ? t("submit.loading_tickets") : t("submit.choose_ticket")}</option>
               {tickets.map((ticket) => (
                 <option key={ticket.ticketID} value={ticket.ticketID}>
-                  {ticket.projectName} — {ticket.subject} ({ticket.vendorName || "vendor not specified"})
+                  {ticket.projectName} — {ticket.subject} ({ticket.vendorName || t("submit.vendor_not_specified")})
                 </option>
               ))}
             </Field>
             {selectedTicket && (
               <div className="submit-expense-ticket-context">
                 <strong>{selectedTicket.projectName}</strong>
-                <span>{selectedTicket.materialType || "Material Request"}</span>
-                {selectedTicket.quantity != null && <span>Requested quantity: {selectedTicket.quantity}</span>}
+                <span>{selectedTicket.materialType || t("submit.material_request")}</span>
+                {selectedTicket.quantity != null && <span>{t("submit.requested_quantity", { quantity: selectedTicket.quantity })}</span>}
               </div>
             )}
             {!loadingTickets && tickets.length === 0 && !pageError && (
-              <Banner tone="info" title="No resolved procurement tickets">A Purchaser must complete a Material Request before it can be linked here.</Banner>
+              <Banner tone="info" title={t("submit.no_tickets_title")}>{t("submit.no_tickets_body")}</Banner>
             )}
           </section>
         </Card>
@@ -389,41 +390,41 @@ export function SubmitExpensePage() {
           <section className="submit-expense-section" aria-labelledby="review-heading">
             <div className="submit-expense-section-heading">
               <div>
-                <h2 id="review-heading">3. Review and correct extracted fields</h2>
-                <p>OCR is a draft only. Confirm every value against the receipt before submitting.</p>
+                <h2 id="review-heading">{t("submit.step3_title")}</h2>
+                <p>{t("submit.step3_help")}</p>
               </div>
             </div>
 
             <div className="submit-expense-fields">
-              <Field label="Vendor / store name" required value={draft.vendorName} onChange={(event) => setField("vendorName", event.target.value)} />
-              <Field label="Receipt total (₱)" required type="number" min="0" step="0.01" value={draft.amount} onChange={(event) => setField("amount", event.target.value)} />
-              <Field label="Receipt date" required type="date" value={draft.receiptDate} onChange={(event) => setField("receiptDate", event.target.value)} />
-              <Field as="select" label="Expense category" required value={draft.category} onChange={(event) => setField("category", event.target.value)}>
-                <option value="Materials">Materials</option>
-                <option value="Equipment">Equipment</option>
-                <option value="Other">Other</option>
+              <Field label={t("submit.vendor_name")} required value={draft.vendorName} onChange={(event) => setField("vendorName", event.target.value)} />
+              <Field label={t("submit.receipt_total")} required type="number" min="0" step="0.01" value={draft.amount} onChange={(event) => setField("amount", event.target.value)} />
+              <Field label={t("my_expenses.receipt_date")} required type="date" value={draft.receiptDate} onChange={(event) => setField("receiptDate", event.target.value)} />
+              <Field as="select" label={t("submit.expense_category")} required value={draft.category} onChange={(event) => setField("category", event.target.value)}>
+                <option value="Materials">{tv("category", "Materials")}</option>
+                <option value="Equipment">{tv("category", "Equipment")}</option>
+                <option value="Other">{tv("category", "Other")}</option>
               </Field>
               <Field label={vendorLabel("TIN", "tin")} value={draft.tin} onChange={(event) => setField("tin", event.target.value)} />
-              <Field label={vendorLabel("BIR authority type", "birPermitType")} value={draft.birPermitType} onChange={(event) => setField("birPermitType", event.target.value)} placeholder="Permit, PTU, or ATP" />
-              <Field label={vendorLabel("BIR permit number", "birPermitNumber")} value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
+              <Field label={vendorLabel(t("submit.field_bir_type"), "birPermitType")} value={draft.birPermitType} onChange={(event) => setField("birPermitType", event.target.value)} placeholder="Permit, PTU, or ATP" />
+              <Field label={vendorLabel(t("submit.field_bir_permit"), "birPermitNumber")} value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
               <Field label="OR / SI number" value={draft.birNumber} onChange={(event) => setField("birNumber", event.target.value)} />
             </div>
 
             <div className="submit-expense-items-heading">
               <div>
-                <h3>Receipt line items</h3>
-                <p>At least one line item with a description and amount is required.</p>
+                <h3>{t("submit.line_items_title")}</h3>
+                <p>{t("submit.line_items_help")}</p>
               </div>
-              <Button type="button" variant="secondary" onClick={addLineItem}>Add item</Button>
+              <Button type="button" variant="secondary" onClick={addLineItem}>{t("common.add_item")}</Button>
             </div>
             <div className="submit-expense-items">
               {draft.lineItems.map((item, index) => (
                 <div className="submit-expense-item-row" key={`item-${index}`}>
-                  <Field label={`Item ${index + 1}`} required value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder="Description" />
-                  <Field label="Item amount (₱)" required type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
-                  <Field label="Quantity (0 for delivery, VAT, fees)" required type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
-                  <Field label="Unit price (₱)" type="number" min="0" step="0.01" placeholder="Calculated" value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
-                  <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={`Remove item ${index + 1}`}>Remove</Button>
+                  <Field label={t("submit.item_n", { n: index + 1 })} required value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder={t("submit.description")} />
+                  <Field label={t("submit.item_amount")} required type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
+                  <Field label={t("submit.quantity_help")} required type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
+                  <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
+                  <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
                 </div>
               ))}
             </div>
@@ -431,8 +432,8 @@ export function SubmitExpensePage() {
         </Card>
 
         <div className="submit-expense-footer">
-          <p>Submitting creates a Pending expense for review. Approval and blockchain recording are separate steps.</p>
-          <Button type="submit" disabled={!canSubmit}>{submitting ? "Submitting…" : "Submit expense"}</Button>
+          <p>{t("submit.footer_note")}</p>
+          <Button type="submit" disabled={!canSubmit}>{submitting ? t("common.submitting") : t("nav.submit_expense")}</Button>
         </div>
       </form>
     </div>

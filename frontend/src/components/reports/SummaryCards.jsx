@@ -1,5 +1,6 @@
 import { PESO_EXACT } from "../../utils/plainLanguage";
 import { signedPct, signedPeso, varianceWords } from "../../utils/variance";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./SummaryCards.css";
 
 const pct = (value) => (value === null || value === undefined ? "n/a" : `${value.toFixed(1)}%`);
@@ -11,40 +12,41 @@ const pct = (value) => (value === null || value === undefined ? "n/a" : `${value
  * is spend to date minus budget. Both turn red when spend is above budget.
  */
 export function SummaryCards({ totals, periodTo }) {
+  const { t } = useLocale();
   const negative = totals.netPnL < 0;
   const used = totals.cumulativeUtilizationPct;
   return (
     <div className="summary-cards">
       <article className="summary-card">
-        <h3>Total budget</h3>
+        <h3>{t("rep.total_budget")}</h3>
         <p className="summary-card-value">{PESO_EXACT.format(totals.budget)}</p>
-        <p className="summary-card-sub">Across the projects you chose</p>
+        <p className="summary-card-sub">{t("rep.across")}</p>
       </article>
 
       <article className="summary-card">
-        <h3>Spend in this period</h3>
+        <h3>{t("rep.spend_period")}</h3>
         <p className="summary-card-value">{PESO_EXACT.format(totals.periodSpend)}</p>
         <p className="summary-card-sub">
-          {PESO_EXACT.format(totals.cumulativeSpend)} in total up to {periodTo}
+          {t("rep.in_total_up_to", { amount: PESO_EXACT.format(totals.cumulativeSpend), date: periodTo })}
         </p>
       </article>
 
       <article className={"summary-card" + (negative ? " summary-card-negative" : "")}>
-        <h3>Net P&amp;L</h3>
+        <h3>{t("rep.net_pnl")}</h3>
         <p className="summary-card-value">{PESO_EXACT.format(totals.netPnL)}</p>
-        <p className="summary-card-sub">{negative ? "Over budget" : "Budget left after this period's spend"}</p>
+        <p className="summary-card-sub">{negative ? t("dashboard.over_budget") : t("rep.budget_left")}</p>
       </article>
 
       <article className={"summary-card" + (totals.varianceToDate > 0 ? " summary-card-negative" : "")}>
-        <h3>Cost variance</h3>
+        <h3>{t("rep.cost_variance")}</h3>
         <p className="summary-card-value">{signedPeso(totals.varianceToDate)}</p>
         <span className="summary-card-bar" aria-hidden="true">
           <span className="summary-card-bar-fill" style={{ width: `${used === null || used === undefined ? 0 : Math.min(100, used)}%` }} />
         </span>
         <p className="summary-card-sub">
           {used === null || used === undefined || !Number.isFinite(totals.varianceToDate)
-            ? "No budget set"
-            : `${varianceWords(totals.varianceToDate)} (${signedPct(totals.varianceToDatePct)}) · ${pct(used)} of the budget used to date`}
+            ? t("rep.no_budget")
+            : t("rep.variance_summary", { words: varianceWords(totals.varianceToDate, t), pct: signedPct(totals.varianceToDatePct), used: pct(used) })}
         </p>
       </article>
     </div>

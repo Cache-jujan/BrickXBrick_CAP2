@@ -12,6 +12,7 @@ import { kvGet, kvSet } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { pickNewNotifications } from "@/lib/sync/new-notifications";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 const POLL_MS = 20_000;
 const SHOW_MS = 6_000;
@@ -23,6 +24,7 @@ type Role = "Purchaser" | "Site Manager";
 // It works while the app is open. Banners while the app is closed would need
 // real push notifications (expo-notifications), which isn't in the stack.
 export function NotificationToast() {
+  const { t } = useLocale();
   const { isOnline } = useNetwork();
   const insets = useSafeAreaInsets();
   const [shown, setShown] = useState<{ n: AppNotification; more: number; role: Role } | null>(null);
@@ -75,7 +77,8 @@ export function NotificationToast() {
   }, []);
 
   if (!shown) return null;
-  const { icon, bg, fg, fallback } = metaFor(shown.n.type);
+  const { icon, bg, fg, fallbackKey } = metaFor(shown.n.type);
+  const message = shown.n.message || t(fallbackKey);
 
   function open() {
     if (!shown) return;
@@ -90,18 +93,18 @@ export function NotificationToast() {
       style={[styles.wrap, { top: insets.top + 8, transform: [{ translateY: slide }] }]}
       accessibilityLiveRegion="polite"
     >
-      <Pressable onPress={open} style={styles.card} accessibilityRole="button" accessibilityLabel={`New notification: ${shown.n.message || fallback}`}>
+      <Pressable onPress={open} style={styles.card} accessibilityRole="button" accessibilityLabel={t("mn.new_notification", { message })}>
         <View style={[styles.icon, { backgroundColor: bg }]}>
           <IconSymbol name={icon} size={16} color={fg} />
         </View>
         <View style={styles.body}>
-          <Text style={styles.title}>BrickXBrick · now</Text>
+          <Text style={styles.title}>{t("mn.now")}</Text>
           <Text style={styles.message} numberOfLines={2}>
-            {shown.n.message || fallback}
+            {message}
           </Text>
-          {shown.more > 0 && <Text style={styles.more}>+{shown.more} more in Notifications</Text>}
+          {shown.more > 0 && <Text style={styles.more}>{t("mn.more_in", { count: shown.more })}</Text>}
         </View>
-        <Pressable onPress={hide} hitSlop={12} accessibilityRole="button" accessibilityLabel="Dismiss">
+        <Pressable onPress={hide} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("mn.dismiss")}>
           <Text style={styles.close}>×</Text>
         </Pressable>
       </Pressable>

@@ -48,7 +48,7 @@ function pageInfoFor(pathname) {
 }
 
 export function Topbar({ onMenuClick }) {
-  const { t } = useLocale();
+  const { t, tv, formatDate } = useLocale();
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -222,10 +222,10 @@ export function Topbar({ onMenuClick }) {
                   ) : (
                     groupByDay(notifications).map(([label, items]) => (
                       <div key={label} className="topbar-notif-group">
-                        <p className="topbar-notif-group-label">{label}</p>
+                        <p className="topbar-notif-group-label">{tv("notifications.group", label)}</p>
                         <ul className="topbar-notif-list">
                           {items.map((n) => {
-                            const { Icon, bg, fg, fallback } = metaFor(n.type);
+                            const { Icon, bg, fg, fallbackKey } = metaFor(n.type);
                             const clickable = !n.isread || routeForNotification(n, user?.role);
                             return (
                               <li
@@ -237,8 +237,8 @@ export function Topbar({ onMenuClick }) {
                                   <Icon />
                                 </span>
                                 <span className="topbar-notif-body">
-                                  <p className="topbar-notif-message">{humanizeNotification(n.message) || fallback}</p>
-                                  <p className="topbar-notif-time">{relativeTime(n.createdat)}</p>
+                                  <p className="topbar-notif-message">{humanizeNotification(n.message, t) || t(fallbackKey)}</p>
+                                  <p className="topbar-notif-time">{relativeTime(n.createdat, t, formatDate)}</p>
                                 </span>
                                 {!n.isread && <span className="topbar-notif-dot" aria-hidden="true" />}
                               </li>

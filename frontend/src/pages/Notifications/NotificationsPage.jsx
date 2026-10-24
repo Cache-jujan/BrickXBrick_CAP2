@@ -10,6 +10,7 @@ import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
 import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
 import { useAuth } from "../../context/AuthContext";
+import { useLocale } from "../../i18n/LocaleProvider";
 import { Banner } from "../../components/ui/Banner";
 import "./NotificationsPage.css";
 
@@ -17,6 +18,7 @@ const PAGE_SIZE = 30;
 
 export function NotificationsPage() {
   const { user } = useAuth();
+  const { t, tv, formatDate } = useLocale();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState("Unread"); // "Unread" | "All"
@@ -34,9 +36,9 @@ export function NotificationsPage() {
         setItems(rows);
         setHasMore(rows.length === PAGE_SIZE);
       })
-      .catch((err) => setError(extractErrorMessage(err, "Could not load your notifications.")))
+      .catch((err) => setError(extractErrorMessage(err, t("errors.load_notifications"))))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(tab); }, [tab, load]);
 
@@ -68,7 +70,7 @@ export function NotificationsPage() {
         setItems((prev) => [...prev, ...rows]);
         setHasMore(rows.length === PAGE_SIZE);
       })
-      .catch((err) => setError(extractErrorMessage(err, "Could not load more notifications.")))
+      .catch((err) => setError(extractErrorMessage(err, t("errors.load_more_notifications"))))
       .finally(() => setLoadingMore(false));
   }
 
@@ -98,12 +100,12 @@ export function NotificationsPage() {
     <div className="notifications-page">
       <div className="notifications-heading">
         <div>
-          <p className="notifications-eyebrow">ACTIVITY</p>
-          <h1>Notifications</h1>
+          <p className="notifications-eyebrow">{t("notifications.eyebrow")}</p>
+          <h1>{t("nav.notifications")}</h1>
         </div>
         {((tab === "All" && unreadCount > 0) || (tab === "Unread" && items.length > 0)) && (
           <button type="button" className="notifications-markall" onClick={handleMarkAllRead}>
-            Mark all read
+            {t("notifications.mark_all_read")}
           </button>
         )}
       </div>
@@ -118,20 +120,18 @@ export function NotificationsPage() {
             className={"notifications-tab" + (tab === key ? " notifications-tab-active" : "")}
             onClick={() => setTab(key)}
           >
-            {key}
+            {key === "Unread" ? t("notifications.tab_unread") : t("common.all")}
           </button>
         ))}
       </div>
 
       {error && <Banner tone="error" title={error} />}
 
-      {!error && loading && <p className="dashboard-loading">Loading…</p>}
+      {!error && loading && <p className="dashboard-loading">{t("common.loading")}</p>}
 
       {!error && !loading && items.length === 0 && (
-        <Banner tone="empty" title={tab === "Unread" ? "You're all caught up" : "No notifications yet"}>
-          {tab === "Unread"
-            ? "Nothing new to review right now."
-            : "Activity on your projects, tickets and tasks will show up here."}
+        <Banner tone="empty" title={tab === "Unread" ? t("notifications.caught_up_title") : t("notifications.none_yet")}>
+          {tab === "Unread" ? t("notifications.nothing_new") : t("notifications.empty_all")}
         </Banner>
       )}
 
@@ -139,10 +139,10 @@ export function NotificationsPage() {
         <>
           {grouped.map(([label, rows]) => (
             <div key={label} className="notifications-group">
-              <p className="notifications-group-label">{label}</p>
+              <p className="notifications-group-label">{tv("notifications.group", label)}</p>
               <ul className="notifications-list">
                 {rows.map((n) => {
-                  const { Icon, bg, fg, fallback } = metaFor(n.type);
+                  const { Icon, bg, fg, fallbackKey } = metaFor(n.type);
                   const clickable = !n.isread || routeForNotification(n, user?.role);
                   return (
                     <li
@@ -154,8 +154,8 @@ export function NotificationsPage() {
                         <Icon />
                       </span>
                       <span className="notifications-row-body">
-                        <p className="notifications-row-message">{humanizeNotification(n.message) || fallback}</p>
-                        <p className="notifications-row-time">{relativeTime(n.createdat)}</p>
+                        <p className="notifications-row-message">{humanizeNotification(n.message, t) || t(fallbackKey)}</p>
+                        <p className="notifications-row-time">{relativeTime(n.createdat, t, formatDate)}</p>
                       </span>
                       {!n.isread && <span className="notifications-row-dot" aria-hidden="true" />}
                     </li>
@@ -167,7 +167,7 @@ export function NotificationsPage() {
 
           {hasMore && (
             <button type="button" className="notifications-loadmore" onClick={loadMore} disabled={loadingMore}>
-              {loadingMore ? "Loading…" : "Load more"}
+              {loadingMore ? t("common.loading") : t("common.load_more")}
             </button>
           )}
         </>

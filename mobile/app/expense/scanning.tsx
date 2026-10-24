@@ -9,6 +9,7 @@ import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { dismissScan, fetchScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
 import { useNetwork } from "@/lib/sync/network-context";
+import { useLocale } from "@/lib/i18n-context";
 
 const POLL_MS = 2000;
 // Past this the user is offered to type it in instead of waiting.
@@ -19,6 +20,7 @@ const RED = COLORS.errorText;
 // or closing the app, doesn't stop it; the receipt waits under "Scanned
 // receipts" on the Requests tab.
 export default function ScanningScreen() {
+  const { t } = useLocale();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { openReady, openManual } = useOpenScan();
   const [scan, setScan] = useState<ReceiptScan | null>(null);
@@ -77,39 +79,37 @@ export default function ScanningScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Reading receipt" caption="Step 1 of 3" onBack={() => router.replace("/")} />
+      <FlowHeader title={t("mx.reading_receipt")} caption={t("mx.step_n", { current: 1, total: 3 })} onBack={() => router.replace("/")} />
 
       <View style={styles.container}>
         <View style={styles.card}>
-          <Step state="done" label="Photo uploaded" />
+          <Step state="done" label={t("mx.step_photo_uploaded")} />
           <Step
             state={failed ? "failed" : scan?.status === "Ready" ? "done" : "active"}
-            label={failed ? "Couldn't read the receipt" : "Reading the details"}
+            label={failed ? t("mx.step_failed") : t("mx.step_reading")}
             detail={scan?.status === "Scanning" ? `${elapsed}s` : undefined}
           />
-          <Step state={scan?.status === "Ready" ? "done" : "waiting"} label="Ready to review" />
+          <Step state={scan?.status === "Ready" ? "done" : "waiting"} label={t("mx.step_ready")} />
         </View>
 
         {failed ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeText}>{scan?.errorMessage ?? "Couldn't read this receipt."}</Text>
+            <Text style={styles.noticeText}>{scan?.errorMessage ?? t("mx.scan_failed")}</Text>
           </View>
         ) : (
           <View style={styles.notice}>
             <IconSymbol name="info.circle.fill" size={18} color={COLORS.muted} />
             <Text style={styles.noticeText}>
-              Usually 5–15 seconds. You can leave this screen or close the app — we&apos;ll keep reading it. Find it under
-              <Text style={styles.bold}> Scanned receipts</Text> on the Requests tab.
+              {t("mx.scan_wait_a")}
+              <Text style={styles.bold}> {t("mx.scanned_receipts")}</Text> {t("mx.scan_wait_b")}
             </Text>
           </View>
         )}
 
-        {slow && <Text style={styles.slowText}>Taking longer than usual. You can wait, or type the details in now.</Text>}
+        {slow && <Text style={styles.slowText}>{t("mx.slow")}</Text>}
         {loadError && !failed && (
           <Text style={styles.slowText}>
-            {isOnline
-              ? "Can't reach the server right now. Still trying…"
-              : "You're offline. Your receipt is already uploaded and keeps being read on the server; this screen updates when you're back online."}
+            {isOnline ? t("mx.server_retry") : t("mx.scan_offline")}
           </Text>
         )}
       </View>
@@ -117,16 +117,16 @@ export default function ScanningScreen() {
       <View style={styles.footer}>
         {(failed || slow) && scan && (
           <Pressable style={[styles.button, styles.primary]} onPress={() => openManual(scan, { replace: true })} accessibilityRole="button">
-            <Text style={styles.primaryText}>Type it in instead</Text>
+            <Text style={styles.primaryText}>{t("mx.type_instead")}</Text>
           </Pressable>
         )}
         {failed ? (
           <Pressable style={[styles.button, styles.secondary]} onPress={discard} accessibilityRole="button">
-            <Text style={[styles.secondaryText, { color: RED }]}>Discard this receipt</Text>
+            <Text style={[styles.secondaryText, { color: RED }]}>{t("mx.discard_receipt")}</Text>
           </Pressable>
         ) : (
           <Pressable style={[styles.button, styles.secondary]} onPress={() => router.replace("/")} accessibilityRole="button">
-            <Text style={styles.secondaryText}>Back to Requests — keep reading</Text>
+            <Text style={styles.secondaryText}>{t("mx.back_keep_reading")}</Text>
           </Pressable>
         )}
       </View>

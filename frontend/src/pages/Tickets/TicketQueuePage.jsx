@@ -15,25 +15,27 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { TicketForm } from "../../components/tickets/TicketForm";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./TicketQueuePage.css";
 
-const DATE = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
-const DAY = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" });
-const TIME = new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" });
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
+const DAY_OPTIONS = { dateStyle: "medium" };
+const TIME_OPTIONS = { hour: "numeric", minute: "2-digit" };
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
 const QTY = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 });
 
+// The label shown for each type comes from the catalog: tv("tickettype", type).
 const TYPE_META = {
-  "Material Request": { key: "material", label: "Material Request" },
-  "Work Item": { key: "work", label: "Work Item" },
-  Report: { key: "report", label: "Report" },
+  "Material Request": { key: "material" },
+  "Work Item": { key: "work" },
+  Report: { key: "report" },
 };
 
 // The three status views the PM moves a ticket through.
 const TABS = [
-  { key: "Pending", label: "Needs action" },
-  { key: "Acknowledged", label: "With purchaser" },
-  { key: "History", label: "History" },
+  { key: "Pending", labelKey: "tq.tab_pending" },
+  { key: "Acknowledged", labelKey: "tq.tab_ack" },
+  { key: "History", labelKey: "tq.tab_history" },
 ];
 
 const TYPE_FILTERS = ["All", "Material Request", "Work Item", "Report"];
@@ -47,12 +49,7 @@ const UNIT_OPTIONS = [
 
 // Quick-pick reasons for rejecting — keeps the reason the SM sees consistent
 // and readable. The PM can still add a note (or write a note alone).
-const REJECT_REASONS = [
-  "Quantity exceeds BOM",
-  "Duplicate request",
-  "Wrong material",
-  "Not needed this phase",
-];
+const REJECT_REASONS = ["tq.reason_qty", "tq.reason_dup", "tq.reason_wrong", "tq.reason_phase"];
 
 // A batch submitted from mobile is several tickets created in one transaction,
 // so every ticket in it shares an exact createdAt. Group by submitter+createdAt.
@@ -61,6 +58,8 @@ function groupKey(t) {
 }
 
 export function TicketQueuePage() {
+  // `t` is used as a loop variable for tickets throughout this file, so the translate function is `tr`.
+  const { t: tr, tv } = useLocale();
   const [activeTab, setActiveTab] = useState("Pending");
   const [tickets, setTickets] = useState([]);
   const [purchasers, setPurchasers] = useState([]);
@@ -126,7 +125,7 @@ export function TicketQueuePage() {
         return next;
       });
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't load tickets."));
+      setError(extractErrorMessage(err, tr("errors.load_tickets_q")));
       setTickets([]);
     } finally {
       setLoading(false);
@@ -177,13 +176,13 @@ export function TicketQueuePage() {
   async function handleAcknowledge(ticket) {
     const assignedTo = assignments[ticket.ticketid];
     if (!assignedTo) {
-      setError("Choose a Purchaser before assigning this ticket.");
+      setError(tr("tq.err_choose_purchaser"));
       return;
     }
     const budgetText = approvedBudgets[ticket.ticketid] ?? "";
     const approvedBudget = ticket.tickettype === "Material Request" ? Number(budgetText) : undefined;
     if (ticket.tickettype === "Material Request" && (budgetText === "" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
-      setError("Enter a confirmed budget of 0 or more before acknowledging this Material Request.");
+      setError(tr("tq.err_budget"));
       return;
     }
     setSubmittingId(ticket.ticketid);
@@ -192,7 +191,7 @@ export function TicketQueuePage() {
       await acknowledgeTicket(ticket.ticketid, assignedTo, approvedBudget, neededByDates[ticket.ticketid]);
       removeFromView(ticket.ticketid);
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't acknowledge this ticket."));
+      setError(extractErrorMessage(err, tr("errors.ack_failed")));
     } finally {
       setSubmittingId(null);
     }
@@ -205,7 +204,7 @@ export function TicketQueuePage() {
     const actionable = group.filter((t) => t.tickettype !== "Report");
     const missing = actionable.filter((t) => !assignments[t.ticketid]);
     if (missing.length > 0) {
-      setError("Choose a Purchaser on every request in this batch first (or assign them one by one).");
+      setError(tr("tq.err_batch_purchaser"));
       return;
     }
     setError("");
@@ -215,7 +214,7 @@ export function TicketQueuePage() {
       const budgetText = approvedBudgets[t.ticketid] ?? "";
       const approvedBudget = t.tickettype === "Material Request" ? Number(budgetText) : undefined;
       if (t.tickettype === "Material Request" && (budgetText === "" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
-        failures.push(`${t.subject}: budget`);
+        failures.push(tr("tq.batch_budget_fail", { subject: t.subject }));
         continue;
       }
       try {
@@ -223,11 +222,11 @@ export function TicketQueuePage() {
         await acknowledgeTicket(t.ticketid, assignments[t.ticketid], approvedBudget, neededByDates[t.ticketid]);
         removeFromView(t.ticketid);
       } catch (err) {
-        failures.push(`${t.subject}: ${extractErrorMessage(err, "failed")}`);
+        failures.push(`${t.subject}: ${extractErrorMessage(err, tr("tq.failed"))}`);
       }
     }
     setSubmittingId(null);
-    if (failures.length > 0) setError(`Some requests couldn't be assigned — ${failures.join("; ")}`);
+    if (failures.length > 0) setError(tr("tq.batch_failures", { list: failures.join("; ") }));
   }
 
   async function handleResolve(ticket) {
@@ -237,7 +236,7 @@ export function TicketQueuePage() {
       await resolveTicket(ticket.ticketid);
       removeFromView(ticket.ticketid);
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't resolve this report."));
+      setError(extractErrorMessage(err, tr("errors.resolve_failed")));
     } finally {
       setSubmittingId(null);
     }
@@ -265,7 +264,7 @@ export function TicketQueuePage() {
     if (!reject) return;
     const reason = composedReason(reject);
     if (!reason) {
-      setRejectError("Pick a reason or write one so the Site Manager knows what to fix.");
+      setRejectError(tr("tq.err_reject_reason"));
       return;
     }
     setRejectBusy(true);
@@ -275,7 +274,7 @@ export function TicketQueuePage() {
       removeFromView(reject.ticket.ticketid);
       setReject(null);
     } catch (err) {
-      setRejectError(extractErrorMessage(err, "Couldn't reject this ticket."));
+      setRejectError(extractErrorMessage(err, tr("errors.reject_failed")));
     } finally {
       setRejectBusy(false);
     }
@@ -313,30 +312,30 @@ export function TicketQueuePage() {
     const isWork = t.tickettype === "Work Item";
     const onBom = t.bomitemid != null;
 
-    if (!editForm.subject.trim()) { setEditError("Subject is required."); return; }
+    if (!editForm.subject.trim()) { setEditError(tr("tf.err_subject")); return; }
     const payload = {
       subject: editForm.subject.trim(),
       description: editForm.description.trim() || undefined,
     };
     if (isMR || isWork) {
       const q = Number(editForm.quantity);
-      if (!Number.isFinite(q) || q <= 0) { setEditError("Enter a quantity greater than 0."); return; }
+      if (!Number.isFinite(q) || q <= 0) { setEditError(tr("tf.err_quantity")); return; }
       payload.quantity = q;
       payload.vendorName = editForm.vendorName;
     }
     if (isMR) {
       const b = Number(editForm.requestedBudget);
-      if (!Number.isFinite(b) || b < 0) { setEditError("Enter a requested budget of 0 or more."); return; }
+      if (!Number.isFinite(b) || b < 0) { setEditError(tr("tf.err_requested_budget")); return; }
       payload.requestedBudget = b;
     }
     if ((isMR && !onBom) || isWork) {
-      if (!editForm.materialType.trim()) { setEditError("Material is required."); return; }
-      if (!editForm.unit.trim()) { setEditError("Choose a unit."); return; }
+      if (!editForm.materialType.trim()) { setEditError(tr("tq.err_material")); return; }
+      if (!editForm.unit.trim()) { setEditError(tr("tq.err_unit")); return; }
       payload.materialType = editForm.materialType.trim();
       payload.unit = editForm.unit;
     }
     if (isMR && !onBom) {
-      if (!editForm.notInBomReason.trim()) { setEditError("Give a reason it isn't in the BOM."); return; }
+      if (!editForm.notInBomReason.trim()) { setEditError(tr("tf.err_reason")); return; }
       payload.notInBomReason = editForm.notInBomReason.trim();
     }
 
@@ -349,7 +348,7 @@ export function TicketQueuePage() {
       setEditing(null);
       setEditForm(null);
     } catch (err) {
-      setEditError(extractErrorMessage(err, "Couldn't save the changes."));
+      setEditError(extractErrorMessage(err, tr("errors.save_changes")));
     } finally {
       setEditBusy(false);
     }
@@ -410,15 +409,13 @@ export function TicketQueuePage() {
     <div className="ticket-queue">
       <div className="ticket-queue-header">
         <div>
-          <h1>Tickets</h1>
-          <p className="ticket-queue-subtitle">
-            Requests from the field land here. Confirm a budget and assign a Purchaser, or resolve a report — or raise a new ticket yourself.
-          </p>
+          <h1>{tr("nav.tickets")}</h1>
+          <p className="ticket-queue-subtitle">{tr("tq.subtitle")}</p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>New ticket</Button>
+        <Button type="button" onClick={() => setCreateOpen(true)}>{tr("nav.new_ticket")}</Button>
       </div>
 
-      <div className="ticket-tabs" role="tablist" aria-label="Ticket status">
+      <div className="ticket-tabs" role="tablist" aria-label={tr("tq.status_aria")}>
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -428,7 +425,7 @@ export function TicketQueuePage() {
             className={"ticket-tab" + (activeTab === tab.key ? " ticket-tab-active" : "")}
             onClick={() => { setActiveTab(tab.key); setActiveType("All"); }}
           >
-            {tab.label}
+            {tr(tab.labelKey)}
           </button>
         ))}
       </div>
@@ -437,7 +434,7 @@ export function TicketQueuePage() {
 
       {!loading && tickets.length > 0 && (
         <div className="ticket-queue-controls">
-          <div className="ticket-queue-filters" role="tablist" aria-label="Filter by type">
+          <div className="ticket-queue-filters" role="tablist" aria-label={tr("tq.filter_type")}>
             {TYPE_FILTERS.map((type) => {
               const count = type === "All" ? counts.All : counts[type] || 0;
               if (type !== "All" && count === 0) return null;
@@ -455,7 +452,7 @@ export function TicketQueuePage() {
                   }
                   onClick={() => setActiveType(type)}
                 >
-                  {type === "All" ? "All" : meta.label}
+                  {type === "All" ? tr("common.all") : tv("tickettype", type)}
                   <span className="ticket-filter-count">{count}</span>
                 </button>
               );
@@ -464,9 +461,9 @@ export function TicketQueuePage() {
 
           {projects.length > 1 && (
             <label className="ticket-project-filter">
-              <span>Project</span>
+              <span>{tr("nav.project")}</span>
               <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-                <option value="All">All projects</option>
+                <option value="All">{tr("tq.all_projects")}</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -476,22 +473,22 @@ export function TicketQueuePage() {
         </div>
       )}
 
-      {loading && <p className="ticket-queue-loading">Loading tickets…</p>}
+      {loading && <p className="ticket-queue-loading">{tr("tq.loading")}</p>}
 
       {!loading && tickets.length === 0 && (
         <div className="ticket-queue-empty">
-          <h2>{activeTab === "Pending" ? "You’re all caught up" : activeTab === "Acknowledged" ? "Nothing with a purchaser" : "No history yet"}</h2>
+          <h2>{activeTab === "Pending" ? tr("tq.empty_pending") : activeTab === "Acknowledged" ? tr("tq.empty_ack") : tr("tq.empty_hist")}</h2>
           <p>
-            {activeTab === "Pending" && "New requests from Site Managers will appear here. You can also raise one yourself with “New ticket”."}
-            {activeTab === "Acknowledged" && "Tickets you’ve assigned to a Purchaser will show here until they’re resolved."}
-            {activeTab === "History" && "Resolved and rejected tickets will be listed here."}
+            {activeTab === "Pending" && tr("tq.empty_pending_body")}
+            {activeTab === "Acknowledged" && tr("tq.empty_ack_body")}
+            {activeTab === "History" && tr("tq.empty_hist_body")}
           </p>
         </div>
       )}
 
       {!loading && tickets.length > 0 && visibleTickets.length === 0 && (
         <div className="ticket-queue-empty ticket-queue-empty-filtered">
-          <p>Nothing matches this filter.</p>
+          <p>{tr("tq.no_match")}</p>
         </div>
       )}
 
@@ -571,8 +568,8 @@ export function TicketQueuePage() {
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-create-title">
           <div className="modal modal-ticket">
             <div className="modal-head">
-              <h2 id="ticket-create-title" className="modal-title">New ticket</h2>
-              <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} aria-label="Close">×</button>
+              <h2 id="ticket-create-title" className="modal-title">{tr("nav.new_ticket")}</h2>
+              <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} aria-label={tr("pd.close")}>×</button>
             </div>
             <TicketForm onSuccess={handleCreated} onClose={() => setCreateOpen(false)} onCancel={() => setCreateOpen(false)} />
           </div>
@@ -584,12 +581,13 @@ export function TicketQueuePage() {
 
 // ---- BOM context strip (on-BOM Material Requests) ----
 function BomStrip({ ticket }) {
+  const { t: tr } = useLocale();
   if (ticket.tickettype !== "Material Request" || ticket.bomitemid == null || ticket.bomUnitCost == null) {
     if (ticket.tickettype === "Material Request" && ticket.notinbom) {
       return (
         <div className="bom-strip bom-strip-off">
-          <span className="bom-strip-tag">Not in BOM</span>
-          <span className="bom-strip-reason">{ticket.notinbomreason || "No reason given."}</span>
+          <span className="bom-strip-tag">{tr("tq.not_in_bom")}</span>
+          <span className="bom-strip-reason">{ticket.notinbomreason || tr("tq.no_reason")}</span>
         </div>
       );
     }
@@ -604,16 +602,16 @@ function BomStrip({ ticket }) {
   const unit = ticket.bomUnit || ticket.unit || "";
   return (
     <div className={"bom-strip" + (over > 0 ? " bom-strip-over" : "")}>
-      <span className="bom-strip-tag">BOM</span>
-      <span className="bom-strip-fact">{QTY.format(bomQty)} {unit} @ {PESO.format(unitCost)}</span>
+      <span className="bom-strip-tag">{tr("tq.bom_tag")}</span>
+      <span className="bom-strip-fact">{tr("tq.bom_fact", { qty: QTY.format(bomQty), unit, price: PESO.format(unitCost) })}</span>
       <span className="bom-strip-sep">·</span>
-      <span className="bom-strip-fact">already requested {QTY.format(already)}</span>
+      <span className="bom-strip-fact">{tr("tq.already", { qty: QTY.format(already) })}</span>
       <span className="bom-strip-sep">·</span>
-      <span className="bom-strip-fact">this request {QTY.format(thisQty)}</span>
+      <span className="bom-strip-fact">{tr("tq.this_request", { qty: QTY.format(thisQty) })}</span>
       <span className="bom-strip-arrow">→</span>
       {over > 0
-        ? <span className="bom-strip-flag">{QTY.format(over)} {unit} over BOM</span>
-        : <span className="bom-strip-ok">{QTY.format(bomQty - projected)} {unit} left</span>}
+        ? <span className="bom-strip-flag">{tr("tq.over_bom", { qty: QTY.format(over), unit })}</span>
+        : <span className="bom-strip-ok">{tr("tq.left", { qty: QTY.format(bomQty - projected), unit })}</span>}
     </div>
   );
 }
@@ -637,7 +635,8 @@ function TicketCard(props) {
     neededByDates, setNeededByDates,
     submittingId, highlightId, activeTab, onAcknowledge, onResolve, onReject, onEdit, inBatch,
   } = props;
-  const meta = TYPE_META[ticket.tickettype] || { key: "work", label: ticket.tickettype };
+  const { t: tr, tv, formatDate } = useLocale();
+  const meta = TYPE_META[ticket.tickettype] || { key: "work" };
   const isReport = ticket.tickettype === "Report";
   const busy = submittingId === ticket.ticketid || (typeof submittingId === "string" && submittingId.startsWith("batch:"));
   const focus = String(ticket.ticketid) === String(highlightId);
@@ -650,27 +649,27 @@ function TicketCard(props) {
       <div className="ticket-card-head">
         <div className="ticket-card-head-main">
           <div className="ticket-card-tags">
-            <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{meta.label}</span>
+            <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{tv("tickettype", ticket.tickettype)}</span>
             <Badge status={ticket.status} />
-            {ticket.resubmittedfromid && <span className="ticket-resubmit-pill">Resubmission</span>}
-            {ticket.wasResubmitted && <span className="ticket-resubmit-pill ticket-resubmit-pill-done">Resubmitted</span>}
+            {ticket.resubmittedfromid && <span className="ticket-resubmit-pill">{tr("tq.resubmission")}</span>}
+            {ticket.wasResubmitted && <span className="ticket-resubmit-pill ticket-resubmit-pill-done">{tr("tq.resubmitted")}</span>}
           </div>
           <h2 className="ticket-card-subject">{ticket.subject}</h2>
           <p className="ticket-card-context">
-            {(ticket.projectname || ticket.projectName)} · Submitted by {ticket.submittedbyname || "Site Manager"}
+            {tr("tq.submitted_by", { project: ticket.projectname || ticket.projectName, name: ticket.submittedbyname || "Site Manager" })}
           </p>
         </div>
         <div className="ticket-card-head-side">
-          <time className="ticket-card-date" dateTime={ticket.createdat}>{DATE.format(new Date(ticket.createdat))}</time>
+          <time className="ticket-card-date" dateTime={ticket.createdat}>{formatDate(ticket.createdat, DATETIME_OPTIONS)}</time>
           {activeTab === "Pending" && (
-            <button type="button" className="ticket-card-edit" onClick={() => onEdit(ticket)} disabled={busy}>Edit</button>
+            <button type="button" className="ticket-card-edit" onClick={() => onEdit(ticket)} disabled={busy}>{tr("tq.edit")}</button>
           )}
         </div>
       </div>
 
       {ticket.resubmittedfromid && ticket.resubmitOfReason && (
         <p className="ticket-resubmit-note">
-          Previously rejected: “{ticket.resubmitOfReason}”
+          {tr("tq.prev_rejected", { reason: ticket.resubmitOfReason })}
         </p>
       )}
 
@@ -678,12 +677,12 @@ function TicketCard(props) {
 
       {!isReport && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
         <dl className="ticket-card-facts">
-          <div><dt>Material</dt><dd>{ticket.materialtype || "—"}</dd></div>
-          <div><dt>Quantity</dt><dd>{ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
-          <div><dt>Preferred vendor</dt><dd>{ticket.vendorname || "—"}</dd></div>
-          <div><dt>Needed by</dt><dd>{ticket.neededby ? DAY.format(new Date(ticket.neededby)) : "Not given"}</dd></div>
+          <div><dt>{tr("tq.material")}</dt><dd>{ticket.materialtype || "—"}</dd></div>
+          <div><dt>{tr("bom.aria_quantity")}</dt><dd>{ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
+          <div><dt>{tr("tq.pref_vendor")}</dt><dd>{ticket.vendorname || "—"}</dd></div>
+          <div><dt>{tr("tq.needed_by")}</dt><dd>{ticket.neededby ? formatDate(ticket.neededby, DAY_OPTIONS) : tr("tq.not_given")}</dd></div>
           {ticket.tickettype === "Material Request" && (
-            <div><dt>SM requested budget</dt><dd>{ticket.requestedbudget == null ? "Not provided" : PESO.format(Number(ticket.requestedbudget))}</dd></div>
+            <div><dt>{tr("tq.sm_requested")}</dt><dd>{ticket.requestedbudget == null ? tr("tq.not_provided") : PESO.format(Number(ticket.requestedbudget))}</dd></div>
           )}
         </dl>
       )}
@@ -694,31 +693,31 @@ function TicketCard(props) {
       {activeTab === "Pending" && (
         isReport ? (
           <div className="ticket-card-foot ticket-card-foot-report">
-            <p className="ticket-card-context">Issue report — resolve it once it has been handled on site.</p>
+            <p className="ticket-card-context">{tr("tq.report_note")}</p>
             <div className="ticket-card-actions">
               <Button type="button" disabled={busy} onClick={() => onResolve(ticket)}>
-                {busy ? "Resolving…" : "Resolve report"}
+                {busy ? tr("tq.resolving") : tr("tq.resolve_report")}
               </Button>
-              <button type="button" className="ticket-reject-link" onClick={() => onReject(ticket)} disabled={busy}>Reject</button>
+              <button type="button" className="ticket-reject-link" onClick={() => onReject(ticket)} disabled={busy}>{tr("expenses.reject")}</button>
             </div>
           </div>
         ) : (
           <div className="ticket-card-foot">
             <div className="ticket-card-assign">
               <Field
-                label="Assign Purchaser"
+                label={tr("tq.assign_purchaser")}
                 as="select"
                 value={assignments[ticket.ticketid] || ""}
                 disabled={busy || purchasers.length === 0}
                 onChange={(e) => setAssignments((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
               >
-                <option value="">Select a Purchaser</option>
+                <option value="">{tr("tf.select_purchaser")}</option>
                 {purchasers.map((p) => (
                   <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>
                 ))}
               </Field>
               <Field
-                label="Needed by (optional)"
+                label={tr("tq.needed_by_opt")}
                 type="date"
                 min={todayInputValue()}
                 value={neededByDates[ticket.ticketid] ?? toInputDate(ticket.neededby)}
@@ -727,7 +726,7 @@ function TicketCard(props) {
               />
               {ticket.tickettype === "Material Request" && (
                 <Field
-                  label="Approved budget (₱)"
+                  label={tr("tq.approved_budget")}
                   type="number"
                   min="0"
                   step="0.01"
@@ -739,29 +738,29 @@ function TicketCard(props) {
             </div>
             <div className="ticket-card-actions">
               <Button type="button" disabled={!assignments[ticket.ticketid] || busy} onClick={() => onAcknowledge(ticket)}>
-                {busy ? "Assigning…" : "Acknowledge & Assign"}
+                {busy ? tr("tq.assigning") : tr("tq.ack_assign")}
               </Button>
-              <button type="button" className="ticket-reject-link" onClick={() => onReject(ticket)} disabled={busy}>Reject</button>
+              <button type="button" className="ticket-reject-link" onClick={() => onReject(ticket)} disabled={busy}>{tr("expenses.reject")}</button>
             </div>
-            {purchasers.length === 0 && <p className="ticket-card-warning">There are no active Purchasers available to assign.</p>}
+            {purchasers.length === 0 && <p className="ticket-card-warning">{tr("tq.no_purchasers")}</p>}
           </div>
         )
       )}
 
       {activeTab === "Acknowledged" && (
         <div className="ticket-card-foot ticket-card-foot-info">
-          <span className="ticket-assigned-to">With {ticket.assignedtoname || "a purchaser"}</span>
-          {ticket.approvedbudget != null && <span className="ticket-approved-budget">Budget {PESO.format(Number(ticket.approvedbudget))}</span>}
+          <span className="ticket-assigned-to">{tr("tq.with", { name: ticket.assignedtoname || tr("tq.a_purchaser") })}</span>
+          {ticket.approvedbudget != null && <span className="ticket-approved-budget">{tr("tq.budget", { amount: PESO.format(Number(ticket.approvedbudget)) })}</span>}
         </div>
       )}
 
       {activeTab === "History" && (
         <div className="ticket-card-foot ticket-card-foot-info">
           {ticket.status === "Resolved" ? (
-            <span className="ticket-hist-ok">Resolved{ticket.resolvedbyname ? ` by ${ticket.resolvedbyname}` : ""}</span>
+            <span className="ticket-hist-ok">{ticket.resolvedbyname ? tr("tq.resolved_by", { name: ticket.resolvedbyname }) : tv("status", "Resolved")}</span>
           ) : (
             <span className="ticket-hist-reject">
-              Rejected{ticket.resolvedbyname ? ` by ${ticket.resolvedbyname}` : ""}
+              {ticket.resolvedbyname ? tr("tq.rejected_by", { name: ticket.resolvedbyname }) : tr("tq.rejected")}
               {ticket.rejectionreason ? ` — ${ticket.rejectionreason}` : ""}
             </span>
           )}
@@ -774,6 +773,7 @@ function TicketCard(props) {
 // ---- Batch block: a group of tickets submitted together ----
 function BatchBlock(props) {
   const { tickets, purchasers, setAssignments, submittingId, onAssignAll } = props;
+  const { t: tr, formatDate } = useLocale();
   const first = tickets[0];
   const actionable = tickets.filter((t) => t.tickettype !== "Report");
   const busy = submittingId === `batch:${groupKey(first)}`;
@@ -793,20 +793,20 @@ function BatchBlock(props) {
     <section className="ticket-batch">
       <header className="ticket-batch-head">
         <div>
-          <span className="ticket-batch-count">{tickets.length} requests</span>
+          <span className="ticket-batch-count">{tr("tq.batch_count", { count: tickets.length })}</span>
           <span className="ticket-batch-meta">
-            {first.submittedbyname || "Site Manager"} · {(first.projectname || first.projectName)} · {TIME.format(new Date(first.createdat))}
+            {first.submittedbyname || "Site Manager"} · {(first.projectname || first.projectName)} · {formatDate(first.createdat, TIME_OPTIONS)}
           </span>
         </div>
         {actionable.length > 0 && (
           <label className="ticket-batch-assign">
-            <span>Assign all to</span>
+            <span>{tr("tq.assign_all_to")}</span>
             <select value={batchPurchaser} disabled={busy || purchasers.length === 0} onChange={(e) => applyToAll(e.target.value)}>
-              <option value="">Choose a Purchaser…</option>
+              <option value="">{tr("tq.choose_purchaser")}</option>
               {purchasers.map((p) => (<option key={p.userid} value={p.userid}>{p.name}</option>))}
             </select>
             <Button type="button" disabled={busy} onClick={() => onAssignAll(tickets)}>
-              {busy ? "Assigning…" : "Assign all"}
+              {busy ? tr("tq.assigning") : tr("tq.assign_all")}
             </Button>
           </label>
         )}
@@ -822,40 +822,44 @@ function BatchBlock(props) {
 
 // ---- Reject modal ----
 function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSubmit }) {
+  const { t: tr } = useLocale();
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-reject-title">
       <div className="modal modal-narrow">
         <div className="modal-head">
-          <h2 id="ticket-reject-title" className="modal-title">Reject request</h2>
-          <button type="button" className="modal-close" onClick={onCancel} aria-label="Close">×</button>
+          <h2 id="ticket-reject-title" className="modal-title">{tr("tq.reject_title")}</h2>
+          <button type="button" className="modal-close" onClick={onCancel} aria-label={tr("pd.close")}>×</button>
         </div>
-        <p className="modal-sub">“{state.ticket.subject}” — the Site Manager will see your reason.</p>
+        <p className="modal-sub">{tr("tq.reject_sub", { subject: state.ticket.subject })}</p>
         {error && <Banner tone="error" title={error} />}
         <div className="reject-chips">
-          {REJECT_REASONS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={"reject-chip" + (state.chips.has(r) ? " reject-chip-on" : "")}
-              aria-pressed={state.chips.has(r)}
-              onClick={() => onToggleChip(r)}
-            >
-              {r}
-            </button>
-          ))}
+          {REJECT_REASONS.map((key) => {
+            const r = tr(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={"reject-chip" + (state.chips.has(r) ? " reject-chip-on" : "")}
+                aria-pressed={state.chips.has(r)}
+                onClick={() => onToggleChip(r)}
+              >
+                {r}
+              </button>
+            );
+          })}
         </div>
         <Field
-          label="Add a note (optional)"
+          label={tr("tq.add_note")}
           as="textarea"
           rows={3}
           value={state.note}
           onChange={(e) => onNote(e.target.value)}
-          placeholder="Anything else the Site Manager should know"
+          placeholder={tr("tq.note_ph")}
         />
         <div className="modal-actions">
-          <Button variant="secondary" type="button" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button variant="secondary" type="button" onClick={onCancel} disabled={busy}>{tr("common.cancel")}</Button>
           <Button variant="danger" type="button" onClick={onSubmit} disabled={busy}>
-            {busy ? "Rejecting…" : "Reject request"}
+            {busy ? tr("tq.rejecting") : tr("tq.reject_title")}
           </Button>
         </div>
       </div>
@@ -865,6 +869,7 @@ function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSub
 
 // ---- Edit modal ----
 function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendors, onCancel, onSave }) {
+  const { t: tr } = useLocale();
   const t = editing.ticket;
   const isReport = t.tickettype === "Report";
   const isMR = t.tickettype === "Material Request";
@@ -876,49 +881,49 @@ function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendor
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-edit-title">
       <div className="modal modal-ticket">
         <div className="modal-head">
-          <h2 id="ticket-edit-title" className="modal-title">Edit ticket</h2>
-          <button type="button" className="modal-close" onClick={onCancel} aria-label="Close">×</button>
+          <h2 id="ticket-edit-title" className="modal-title">{tr("tq.edit_title")}</h2>
+          <button type="button" className="modal-close" onClick={onCancel} aria-label={tr("pd.close")}>×</button>
         </div>
         {editError && <Banner tone="error" title={editError} />}
         <div className="edit-grid">
-          <Field label="Subject" value={editForm.subject} onChange={upd("subject")} required />
-          <Field label="Description" as="textarea" rows={2} value={editForm.description} onChange={upd("description")} />
+          <Field label={tr("tf.subject")} value={editForm.subject} onChange={upd("subject")} required />
+          <Field label={tr("submit.description")} as="textarea" rows={2} value={editForm.description} onChange={upd("description")} />
           {(isMR || isWork) && (
             <div className="edit-row">
-              <Field label="Quantity" type="number" min="0" step="0.01" value={editForm.quantity} onChange={upd("quantity")} required />
+              <Field label={tr("bom.aria_quantity")} type="number" min="0" step="0.01" value={editForm.quantity} onChange={upd("quantity")} required />
               {onBom ? (
-                <Field label="Unit (from BOM)" value={t.unit || ""} disabled readOnly />
+                <Field label={tr("tq.unit_from_bom")} value={t.unit || ""} disabled readOnly />
               ) : (
-                <Field label="Unit" as="select" value={editForm.unit} onChange={upd("unit")} required>
-                  <option value="">Choose…</option>
+                <Field label={tr("bom.col_unit")} as="select" value={editForm.unit} onChange={upd("unit")} required>
+                  <option value="">{tr("tq.choose")}</option>
                   {UNIT_OPTIONS.map((u) => (<option key={u} value={u}>{u}</option>))}
                 </Field>
               )}
             </div>
           )}
           {(isMR && !onBom) || isWork ? (
-            <Field label="Material" value={editForm.materialType} onChange={upd("materialType")} required />
+            <Field label={tr("tq.material")} value={editForm.materialType} onChange={upd("materialType")} required />
           ) : null}
           {isMR && onBom && (
-            <Field label="Material (locked to BOM)" value={t.materialtype || ""} disabled readOnly />
+            <Field label={tr("tq.material_locked")} value={t.materialtype || ""} disabled readOnly />
           )}
           {isMR && !onBom && (
-            <Field label="Reason it isn’t in the BOM" as="textarea" rows={2} value={editForm.notInBomReason} onChange={upd("notInBomReason")} required />
+            <Field label={tr("tf.not_in_bom_reason")} as="textarea" rows={2} value={editForm.notInBomReason} onChange={upd("notInBomReason")} required />
           )}
           {(isMR || isWork) && (
-            <Field label="Preferred vendor" as="select" value={editForm.vendorName} onChange={upd("vendorName")}>
-              <option value="">None</option>
+            <Field label={tr("tq.pref_vendor")} as="select" value={editForm.vendorName} onChange={upd("vendorName")}>
+              <option value="">{tr("split.none")}</option>
               {vendors.map((v) => (<option key={v.vendorID} value={v.vendorName}>{v.vendorName}</option>))}
             </Field>
           )}
           {isMR && (
-            <Field label="SM requested budget (₱)" type="number" min="0" step="0.01" value={editForm.requestedBudget} onChange={upd("requestedBudget")} required />
+            <Field label={tr("tq.sm_budget")} type="number" min="0" step="0.01" value={editForm.requestedBudget} onChange={upd("requestedBudget")} required />
           )}
-          {isReport && <p className="modal-sub">Reports only carry a subject and description.</p>}
+          {isReport && <p className="modal-sub">{tr("tq.report_only")}</p>}
         </div>
         <div className="modal-actions">
-          <Button variant="secondary" type="button" onClick={onCancel} disabled={editBusy}>Cancel</Button>
-          <Button type="button" onClick={onSave} disabled={editBusy}>{editBusy ? "Saving…" : "Save changes"}</Button>
+          <Button variant="secondary" type="button" onClick={onCancel} disabled={editBusy}>{tr("common.cancel")}</Button>
+          <Button type="button" onClick={onSave} disabled={editBusy}>{editBusy ? tr("common.saving") : tr("projects.save_changes")}</Button>
         </div>
       </div>
     </div>

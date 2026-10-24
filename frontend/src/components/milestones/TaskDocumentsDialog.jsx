@@ -8,11 +8,12 @@ import {
   listTaskDocuments,
   uploadTaskDocument,
 } from "../../api/taskDocumentsApi";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./TaskDocumentsDialog.css";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
-const DATE = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 function formatSize(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -22,6 +23,7 @@ function formatSize(bytes) {
 // Documents for one Planning task. canEdit is false when the task is already
 // completed or the project is closed: the list is then read-only.
 export function TaskDocumentsDialog({ task, canEdit, onClose }) {
+  const { t, formatDate } = useLocale();
   const [documents, setDocuments] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,7 +33,7 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
     try {
       setDocuments(await listTaskDocuments(task.taskid));
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't load the documents."));
+      setError(extractErrorMessage(err, t("docs.err_load")));
       setDocuments((current) => current || []);
     }
   }
@@ -46,11 +48,11 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
     event.target.value = ""; // allow picking the same file again
     if (!file) return;
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError("Attach a PDF, JPEG or PNG file. Export Word or Excel files to PDF first.");
+      setError(t("docs.err_type"));
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError("That file is larger than 10 MB.");
+      setError(t("docs.err_size"));
       return;
     }
     setBusy(true);
@@ -59,7 +61,7 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
       await uploadTaskDocument(task.taskid, file);
       await load();
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't attach the file. Please try again."));
+      setError(extractErrorMessage(err, t("docs.err_attach")));
     } finally {
       setBusy(false);
     }
@@ -77,19 +79,19 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
       else window.location.assign(url);
     } catch (err) {
       if (tab) tab.close();
-      setError(extractErrorMessage(err, "Couldn't open that document."));
+      setError(extractErrorMessage(err, t("docs.err_open")));
     }
   }
 
   async function handleRemove(doc) {
-    if (!window.confirm(`Remove "${doc.fileName}"?`)) return;
+    if (!window.confirm(t("docs.confirm_remove", { name: doc.fileName }))) return;
     setBusy(true);
     setError("");
     try {
       await deleteTaskDocument(task.taskid, doc.documentID);
       await load();
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't remove the document."));
+      setError(extractErrorMessage(err, t("docs.err_remove")));
     } finally {
       setBusy(false);
     }
@@ -98,14 +100,14 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
   return (
     <div className="modal-overlay" role="presentation" onClick={() => { if (!busy) onClose(); }}>
       <div className="modal task-docs" role="dialog" aria-modal="true" aria-labelledby="task-docs-title" onClick={(ev) => ev.stopPropagation()}>
-        <h2 id="task-docs-title" className="modal-title">Documents: {task.taskname}</h2>
+        <h2 id="task-docs-title" className="modal-title">{t("docs.title", { name: task.taskname })}</h2>
 
         {error && <Banner tone="error" title={error} />}
 
         {documents === null ? (
-          <p className="modal-body">Loading…</p>
+          <p className="modal-body">{t("common.loading")}</p>
         ) : documents.length === 0 ? (
-          <p className="modal-body">No documents attached yet.</p>
+          <p className="modal-body">{t("docs.none")}</p>
         ) : (
           <ul className="task-docs-list">
             {documents.map((doc) => (
@@ -115,12 +117,12 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
                     {doc.fileName}
                   </button>
                   <span className="task-docs-meta">
-                    {formatSize(doc.sizeBytes)} · {doc.uploadedByName || "Unknown"} · {DATE.format(new Date(doc.uploadedAt))}
+                    {formatSize(doc.sizeBytes)} · {doc.uploadedByName || t("tamper.unknown_user")} · {formatDate(doc.uploadedAt, DATETIME_OPTIONS)}
                   </span>
                 </div>
                 {canEdit && (
                   <button type="button" className="task-docs-remove" onClick={() => handleRemove(doc)} disabled={busy}>
-                    Remove
+                    {t("common.remove")}
                   </button>
                 )}
               </li>
@@ -129,7 +131,7 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
         )}
 
         {!canEdit && documents !== null && (
-          <p className="task-docs-locked">Documents can't be changed because this task is completed or the project is closed.</p>
+          <p className="task-docs-locked">{t("docs.locked")}</p>
         )}
 
         <input
@@ -140,14 +142,14 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
           hidden
         />
         <div className="modal-actions">
-          <Button variant="secondary" onClick={onClose} disabled={busy}>Close</Button>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>{t("pd.close")}</Button>
           {canEdit && (
             <Button onClick={() => inputRef.current?.click()} disabled={busy}>
-              {busy ? "Working…" : "Attach file"}
+              {busy ? t("common.working") : t("docs.attach")}
             </Button>
           )}
         </div>
-        {canEdit && <p className="task-docs-hint">PDF, JPEG or PNG, up to 10 MB.</p>}
+        {canEdit && <p className="task-docs-hint">{t("docs.hint")}</p>}
       </div>
     </div>
   );

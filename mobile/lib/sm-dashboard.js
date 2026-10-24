@@ -27,15 +27,21 @@ export function daysUntil(value, now = new Date()) {
 
 /**
  * "Due today", "Due tomorrow", "Due in 5 days", "Overdue by 2 days".
+ * `t` (from useLocale) is optional: with it the text follows the chosen language.
  * @returns {{ text: string, tone: "late" | "today" | "soon" | "normal" }}
  */
-export function dueLabel(value, now = new Date()) {
+export function dueLabel(value, now = new Date(), t) {
   const days = daysUntil(value, now);
-  if (days === null) return { text: "No due date", tone: "normal" };
-  if (days < 0) return { text: `Overdue by ${-days} day${days === -1 ? "" : "s"}`, tone: "late" };
-  if (days === 0) return { text: "Due today", tone: "today" };
-  if (days === 1) return { text: "Due tomorrow", tone: "soon" };
-  return { text: `Due in ${days} days`, tone: days <= 3 ? "soon" : "normal" };
+  if (days === null) return { text: t ? t("due.none") : "No due date", tone: "normal" };
+  if (days < 0) {
+    const text = t
+      ? t(days === -1 ? "due.overdue_one" : "due.overdue_other", { count: -days })
+      : `Overdue by ${-days} day${days === -1 ? "" : "s"}`;
+    return { text, tone: "late" };
+  }
+  if (days === 0) return { text: t ? t("due.today") : "Due today", tone: "today" };
+  if (days === 1) return { text: t ? t("due.tomorrow") : "Due tomorrow", tone: "soon" };
+  return { text: t ? t("due.in_other", { count: days }) : `Due in ${days} days`, tone: days <= 3 ? "soon" : "normal" };
 }
 
 function completedOn(task) {

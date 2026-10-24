@@ -5,6 +5,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import type { MyExpense } from "@/lib/api";
 import { formatPeso } from "@/lib/money";
+import { useLocale } from "@/lib/i18n-context";
 
 const RED = COLORS.errorText;
 const RED_BG = COLORS.errorFill;
@@ -13,30 +14,31 @@ const RED_BG = COLORS.errorFill;
 // screen with the receipt's values, ready to correct and resubmit. Renders
 // nothing when there are none.
 export function RejectedExpenses({ expenses, onFix }: { expenses: MyExpense[]; onFix: (expense: MyExpense) => void }) {
+  const { t } = useLocale();
   if (expenses.length === 0) return null;
 
   return (
     <View style={styles.box}>
-      <Text style={styles.title}>Rejected: fix and resubmit</Text>
+      <Text style={styles.title}>{t("re.title")}</Text>
       {expenses.map((expense) => (
         <Pressable
           key={expense.expenseID}
           onPress={() => onFix(expense)}
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel={`${expense.vendorName ?? "Receipt"}, ${formatPeso(expense.amount)}, rejected. Fix and resubmit.`}
+          accessibilityLabel={t("re.aria", { vendor: expense.vendorName ?? t("mobile.receipt"), amount: formatPeso(expense.amount) })}
         >
           <View style={styles.flex}>
             <Text style={styles.rowTitle} numberOfLines={1}>
-              {expense.vendorName ?? "Receipt"} · {formatPeso(expense.amount)}
+              {expense.vendorName ?? t("mobile.receipt")} · {formatPeso(expense.amount)}
             </Text>
             <Text style={styles.reason} numberOfLines={3}>
-              {expense.rejectionReason ? `"${expense.rejectionReason}"` : "No reason was given."}
+              {expense.rejectionReason ? `"${expense.rejectionReason}"` : t("rv.no_reason")}
             </Text>
           </View>
           <View style={styles.pill}>
             <IconSymbol name="exclamationmark.triangle.fill" size={14} color={RED} />
-            <Text style={styles.pillText}>Fix ›</Text>
+            <Text style={styles.pillText}>{t("re.fix")}</Text>
           </View>
         </Pressable>
       ))}

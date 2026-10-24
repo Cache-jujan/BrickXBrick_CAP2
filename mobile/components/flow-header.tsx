@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { BackButton } from "@/components/back-button";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 type Props = {
   title: string;
@@ -24,6 +25,7 @@ type Props = {
 
 // One header for every pushed screen: back chevron, title, step caption.
 export function FlowHeader({ title, caption, hideBack, onBack, fallback, step, right, variant = "title" }: Props) {
+  const { t } = useLocale();
   const bar = variant === "bar";
   return (
     <View>
@@ -36,7 +38,7 @@ export function FlowHeader({ title, caption, hideBack, onBack, fallback, step, r
         {right ? <View style={styles.right}>{right}</View> : null}
       </View>
       {step ? (
-        <View style={styles.progress} accessibilityLabel={`Step ${step.current} of ${step.total}`}>
+        <View style={styles.progress} accessibilityLabel={t("mx.step_n", { current: step.current, total: step.total })}>
           {Array.from({ length: step.total }, (_, i) => (
             <View key={i} style={[styles.bar, i < step.current && styles.barFilled]} />
           ))}

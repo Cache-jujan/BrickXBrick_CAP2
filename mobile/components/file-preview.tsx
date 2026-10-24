@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, View } from "react-native";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 
 // Shared file-state shape — imported by index.tsx too, so it only lives here.
@@ -18,13 +19,14 @@ export type FileState =
  * pdf picked -> file icon + name/size row
  */
 export function FilePreview({ file }: { file: FileState }) {
+  const { t } = useLocale();
   if (!file) {
     return (
       <View style={styles.emptyState}>
         <Text style={styles.emptyIcon}>☁️</Text>
-        <Text style={styles.emptyText}>No file chosen yet</Text>
+        <Text style={styles.emptyText}>{t("fp.no_file")}</Text>
         <Text style={styles.emptySubtext}>
-          Tap an option above to attach a file
+          {t("fp.tap_option")}
         </Text>
       </View>
     );

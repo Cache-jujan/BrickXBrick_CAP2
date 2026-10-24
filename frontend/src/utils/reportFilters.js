@@ -13,19 +13,20 @@ function parseDay(value) {
 }
 
 // Returns { projectIds?, from?, to? } with a message per bad field; {} when fine.
-export function validateReportFilters({ projectIds, from, to }) {
+// `t` is the translate function from useLocale().
+export function validateReportFilters({ projectIds, from, to }, t) {
   const errors = {};
-  if (projectIds.length === 0) errors.projectIds = "Select at least one project.";
-  else if (projectIds.length > MAX_PROJECTS) errors.projectIds = `Select at most ${MAX_PROJECTS} projects.`;
+  if (projectIds.length === 0) errors.projectIds = t("rep.err_select_one");
+  else if (projectIds.length > MAX_PROJECTS) errors.projectIds = t("rep.err_select_max", { max: MAX_PROJECTS });
 
   const fromTime = parseDay(from);
   const toTime = parseDay(to);
-  if (fromTime === null) errors.from = "Pick a start date.";
-  if (toTime === null) errors.to = "Pick an end date.";
+  if (fromTime === null) errors.from = t("rep.err_start");
+  if (toTime === null) errors.to = t("rep.err_end");
   if (fromTime !== null && toTime !== null) {
-    if (fromTime > toTime) errors.from = "The start date must be on or before the end date.";
+    if (fromTime > toTime) errors.from = t("rep.err_order");
     else if ((toTime - fromTime) / DAY_MS + 1 > MAX_RANGE_DAYS) {
-      errors.to = `The date range can be at most ${MAX_RANGE_DAYS} days.`;
+      errors.to = t("rep.err_range", { max: MAX_RANGE_DAYS });
     }
   }
   return errors;
@@ -40,16 +41,17 @@ export function defaultReportRange(now = new Date()) {
 
 // One-click periods for the Reports screen, as the GM's local calendar dates.
 // "Last 3 months" runs from the first of the month two months ago to today.
+// `labelKey` is a catalog key; the caller translates it.
 export function quickRanges(now = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
   const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const y = now.getFullYear();
   const m = now.getMonth();
   return [
-    { label: "This month", from: iso(new Date(y, m, 1)), to: iso(now) },
-    { label: "Last month", from: iso(new Date(y, m - 1, 1)), to: iso(new Date(y, m, 0)) },
-    { label: "Last 3 months", from: iso(new Date(y, m - 2, 1)), to: iso(now) },
-    { label: "This year", from: iso(new Date(y, 0, 1)), to: iso(now) },
+    { labelKey: "rep.range_this_month", from: iso(new Date(y, m, 1)), to: iso(now) },
+    { labelKey: "rep.range_last_month", from: iso(new Date(y, m - 1, 1)), to: iso(new Date(y, m, 0)) },
+    { labelKey: "rep.range_last_3", from: iso(new Date(y, m - 2, 1)), to: iso(now) },
+    { labelKey: "rep.range_this_year", from: iso(new Date(y, 0, 1)), to: iso(now) },
   ];
 }
 
@@ -94,36 +96,35 @@ export function spanOfProjects(projects, today = defaultReportRange().to) {
 }
 
 const NICE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "numeric" });
-export function niceDay(day) {
+// `formatDate` (from useLocale) makes the month names follow the language; without it, English.
+export function niceDay(day, formatDate) {
   if (!day) return "";
   const [y, m, d] = day.split("-").map(Number);
-  return NICE.format(new Date(y, m - 1, d));
+  const date = new Date(y, m - 1, d);
+  return formatDate ? formatDate(date) : NICE.format(date);
 }
 
 // Plain-language reasons a report came back empty, so the GM is never left with
 // a bare "nothing found". `selected` are the chosen projects (from the list).
-export function explainEmpty({ selected, from, to, pendingExpenses }) {
+export function explainEmpty({ selected, from, to, pendingExpenses, t, formatDate }) {
   const reasons = [];
-  if (from === to) reasons.push(`You chose a single day (${niceDay(from)}). Try a wider range.`);
+  const day = (value) => niceDay(value, formatDate);
+  if (from === to) reasons.push(t("rep.empty_single_day", { day: day(from) }));
   for (const project of selected) {
     const { start, end } = projectSpan(project);
     if (project.status === "Draft") {
-      reasons.push(`${project.name} is still a Draft, and expenses are only recorded once a project is Active.`);
+      reasons.push(t("rep.empty_draft", { name: project.name }));
     } else if (start && to < start) {
-      reasons.push(`${project.name} starts on ${niceDay(start)}, which is after your end date (${niceDay(to)}).`);
+      reasons.push(t("rep.empty_starts_after", { name: project.name, start: day(start), to: day(to) }));
     } else if (end && from > end) {
-      reasons.push(`${project.name} finished on ${niceDay(end)}, which is before your start date (${niceDay(from)}).`);
+      reasons.push(t("rep.empty_finished_before", { name: project.name, end: day(end), from: day(from) }));
     }
   }
   if (pendingExpenses > 0) {
-    reasons.push(
-      `${pendingExpenses} ${pendingExpenses === 1 ? "expense is" : "expenses are"} still waiting for approval in this period. They will count once a manager approves them.`
-    );
+    reasons.push(pendingExpenses === 1 ? t("rep.empty_pending_one") : t("rep.empty_pending_other", { count: pendingExpenses }));
   }
   if (reasons.length === 0) {
-    reasons.push(
-      "No approved expense has a receipt date inside this range. Expenses are placed by the date printed on the receipt, not the date they were entered."
-    );
+    reasons.push(t("rep.empty_default"));
   }
   return reasons;
 }

@@ -8,12 +8,14 @@ import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import "./CreateTaskPage.css";
 import { BackLink } from "../../components/ui/BackLink";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 const EMPTY_FORM = { taskName: "", dueDate: "" };
 
 export function CreateTaskPage() {
   const { id: projectId, milestoneId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -26,8 +28,8 @@ export function CreateTaskPage() {
 
   function validate() {
     const errors = {};
-    if (!form.taskName.trim()) errors.taskName = "Task Name is required.";
-    if (!form.dueDate) errors.dueDate = "Due date is required.";
+    if (!form.taskName.trim()) errors.taskName = t("ms.err_task_name");
+    if (!form.dueDate) errors.dueDate = t("ms.err_due");
     return errors;
   }
 
@@ -49,7 +51,7 @@ export function CreateTaskPage() {
       });
       navigate(`/projects/${projectId}`, { replace: true });
     } catch (err) {
-      setFormError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
+      setFormError(extractErrorMessage(err, t("errors.create_task")));
     } finally {
       setSubmitting(false);
     }
@@ -57,25 +59,23 @@ export function CreateTaskPage() {
 
   return (
     <div className="create-task">
-      <BackLink to={`/projects/${projectId}`}>Back to project</BackLink>
-      <h1 className="create-task-title">Add Task</h1>
-      <p className="create-task-subtitle">
-        Assigned automatically to this project's Site Manager.
-      </p>
+      <BackLink to={`/projects/${projectId}`}>{t("projects.back_one")}</BackLink>
+      <h1 className="create-task-title">{t("pd.add_task_btn")}</h1>
+      <p className="create-task-subtitle">{t("pd.task_auto_help")}</p>
 
       <Card className="create-task-card">
         <form onSubmit={handleSubmit} noValidate>
           <Field
-            label="Task Name"
+            label={t("pd.task_name")}
             required
-            placeholder="Enter task name"
+            placeholder={t("pd.task_ph")}
             value={form.taskName}
             error={fieldErrors.taskName}
             onChange={(e) => updateField("taskName", e.target.value)}
           />
 
           <Field
-            label="Due Date"
+            label={t("mobile.due_date")}
             required
             type="date"
             value={form.dueDate}
@@ -87,10 +87,10 @@ export function CreateTaskPage() {
 
           <div className="create-task-actions">
             <Link to={`/projects/${projectId}`} className="btn btn-secondary">
-              Cancel
+              {t("common.cancel")}
             </Link>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding…" : "Add Task"}
+              {submitting ? t("pd.adding") : t("pd.add_task_btn")}
             </Button>
           </div>
         </form>

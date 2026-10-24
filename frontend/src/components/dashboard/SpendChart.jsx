@@ -3,6 +3,7 @@ import {
   BarController, BarElement, CategoryScale, Chart, Filler, Legend,
   LineController, LineElement, LinearScale, PointElement, Tooltip,
 } from "chart.js";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 // Register only what this chart needs, so the bundle stays small.
 Chart.register(BarController, BarElement, LineController, LineElement, PointElement,
@@ -31,6 +32,7 @@ function compact(value) {
  * there is no budget to compare against.
  */
 export function SpendChart({ months }) {
+  const { t } = useLocale();
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -40,7 +42,7 @@ export function SpendChart({ months }) {
     const datasets = [
       {
         type: "bar",
-        label: "Approved spending (month)",
+        label: t("dashboard.chart_spend"),
         data: months.map((m) => m.spend),
         backgroundColor: SPEND_COLOR,
         borderRadius: 4,
@@ -49,7 +51,7 @@ export function SpendChart({ months }) {
       },
       {
         type: "line",
-        label: "Total approved so far",
+        label: t("dashboard.chart_total"),
         data: months.map((m) => m.cumulative),
         borderColor: CUMULATIVE_COLOR,
         backgroundColor: CUMULATIVE_COLOR,
@@ -62,7 +64,7 @@ export function SpendChart({ months }) {
     if (hasRemaining) {
       datasets.push({
         type: "line",
-        label: "Budget left, open projects (right axis)",
+        label: t("dashboard.chart_left"),
         yAxisID: "y1",
         data: months.map((m) => m.remaining),
         borderColor: REMAINING_COLOR,
@@ -102,10 +104,10 @@ export function SpendChart({ months }) {
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [months]);
+  }, [months, t]);
 
   return (
-    <div className="dash-chart" role="img" aria-label="Monthly approved spending against the budget of open projects">
+    <div className="dash-chart" role="img" aria-label={t("dashboard.chart_aria")}>
       <canvas ref={canvasRef} />
     </div>
   );

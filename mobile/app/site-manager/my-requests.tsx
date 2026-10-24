@@ -22,6 +22,7 @@ import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { MainHeader } from "@/components/main-header";
 import { Screen } from "@/components/screen";
+import { useLocale } from "@/lib/i18n-context";
 
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
@@ -34,6 +35,7 @@ const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
 };
 
 export default function MyRequestsScreen() {
+  const { t, tv } = useLocale();
   const session = getSession();
   const { setTicket, reset } = useExpenseDraft();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
@@ -65,7 +67,7 @@ export default function MyRequestsScreen() {
       setProjectsById(byId);
       setTickets(ticketList);
     } catch (err) {
-      setError(plainError(err, "Unable to load your requests."));
+      setError(plainError(err, t("mr.err_load"), t));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -119,15 +121,15 @@ export default function MyRequestsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightId, tickets]);
 
-  function openExpenseCapture(t: Ticket) {
+  function openExpenseCapture(ticket: Ticket) {
     reset();
-    const project = projectsById[t.projectid];
+    const project = projectsById[ticket.projectid];
     setTicket({
-      ticketId: t.ticketid,
-      projectId: t.projectid,
-      projectName: project?.name ?? "Unknown project",
-      subject: t.subject,
-      budget: t.approvedbudget == null ? undefined : String(t.approvedbudget),
+      ticketId: ticket.ticketid,
+      projectId: ticket.projectid,
+      projectName: project?.name ?? t("mr.unknown_project"),
+      subject: ticket.subject,
+      budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
     });
     router.push("/expense/capture");
   }
@@ -142,7 +144,7 @@ export default function MyRequestsScreen() {
   return (
     <Screen
       background={COLORS.bgWarm}
-      header={<MainHeader title="My requests" />}
+      header={<MainHeader title={t("mr.title")} />}
       footer={<SmBottomBar />}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -155,7 +157,7 @@ export default function MyRequestsScreen() {
             style={[styles.chip, filter === key && styles.chipActive]}
           >
             <Text style={[styles.chipText, filter === key && styles.chipTextActive]}>
-              {key} ({counts[key]})
+              {key === "All" ? t("common.all") : tv("status", key)} ({counts[key]})
             </Text>
           </Pressable>
         ))}
@@ -163,10 +165,10 @@ export default function MyRequestsScreen() {
 
       {error ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Couldn't load your requests</Text>
+          <Text style={styles.errorTitle}>{t("mr.cant_load")}</Text>
           <Text style={styles.errorBody}>{error}</Text>
           <Pressable onPress={() => load()} style={styles.retryButton}>
-            <Text style={styles.retryText}>Try again</Text>
+            <Text style={styles.retryText}>{t("common.try_again")}</Text>
           </Pressable>
         </View>
       ) : (
@@ -181,19 +183,19 @@ export default function MyRequestsScreen() {
             loading ? (
               <View style={styles.emptyCard}>
                 <ActivityIndicator color={COLORS.primary} />
-                <Text style={styles.emptyBody}>Loading your requests…</Text>
+                <Text style={styles.emptyBody}>{t("mr.loading")}</Text>
               </View>
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>
-                  {filter === "All" ? "No requests yet" : `No ${filter.toLowerCase()} requests`}
+                  {filter === "All" ? t("mr.none") : t("mr.none_status", { status: tv("status", filter).toLowerCase() })}
                 </Text>
                 <Text style={styles.emptyBody}>
                   {filter === "All"
-                    ? "Tickets you submit will show up here as your Project Manager works through them."
+                    ? t("mr.all_body")
                     : filter === "Rejected"
-                      ? "Nothing's been rejected — nice."
-                      : "Nothing in this view right now."}
+                      ? t("mr.none_rejected")
+                      : t("mr.none_view")}
                 </Text>
               </View>
             )
@@ -223,6 +225,7 @@ function RequestCard({
   highlighted: boolean;
   onExpenseCapture: () => void;
 }) {
+  const { t, tv, formatDate } = useLocale();
   const statusColors = STATUS_COLORS[ticket.status] ?? { bg: "#F1E9DD", fg: COLORS.muted };
   const isRejected = ticket.status === "Rejected";
   const isResolvedMR = ticket.status === "Resolved" && ticket.tickettype === "Material Request";
@@ -236,22 +239,22 @@ function RequestCard({
   } else if (ticket.materialtype) {
     metaBits.push(ticket.materialtype);
   }
-  if (ticket.approvedbudget != null) metaBits.push(`Approved ${formatPeso(ticket.approvedbudget)}`);
-  else if (ticket.requestedbudget != null) metaBits.push(`Requested ${formatPeso(ticket.requestedbudget)}`);
+  if (ticket.approvedbudget != null) metaBits.push(t("mr.approved_amt", { amount: formatPeso(ticket.approvedbudget) }));
+  else if (ticket.requestedbudget != null) metaBits.push(t("mr.requested_amt", { amount: formatPeso(ticket.requestedbudget) }));
 
   const body = (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={styles.cardTopRow}>
-        <Text style={styles.cardType}>{ticket.tickettype}</Text>
+        <Text style={styles.cardType}>{tv("tickettype", ticket.tickettype)}</Text>
         <View style={[styles.statusPill, { backgroundColor: statusColors.bg }]}>
-          <Text style={[styles.statusPillText, { color: statusColors.fg }]}>{ticket.status}</Text>
+          <Text style={[styles.statusPillText, { color: statusColors.fg }]}>{tv("status", ticket.status)}</Text>
         </View>
       </View>
 
       <Text style={styles.cardSubject} numberOfLines={2}>{ticket.subject}</Text>
 
       <Text style={styles.cardMeta} numberOfLines={1}>
-        {(project?.name ?? "Project")} · {new Date(ticket.createdat).toLocaleDateString()}
+        {(project?.name ?? t("nav.project"))} · {formatDate(ticket.createdat)}
       </Text>
 
       {metaBits.length > 0 && (
@@ -261,21 +264,21 @@ function RequestCard({
       {isRejected && (
         <View style={styles.rejectionBlock}>
           <Text style={styles.rejectionLabel}>
-            Rejected{ticket.rejectedbyrole ? ` by ${ticket.rejectedbyrole}` : ""}
+            {ticket.rejectedbyrole ? t("tr.rejected_by", { role: ticket.rejectedbyrole }) : t("tq.rejected")}
           </Text>
           <Text style={styles.rejectionReason}>
-            {ticket.rejectionreason?.trim() || "No reason given."}
+            {ticket.rejectionreason?.trim() || t("tq.no_reason")}
           </Text>
           {wasResubmitted ? (
             <View style={styles.resubmittedPill}>
-              <Text style={styles.resubmittedPillText}>Resubmitted ✓</Text>
+              <Text style={styles.resubmittedPillText}>{t("mr.resubmitted_check")}</Text>
             </View>
           ) : (
             <Pressable
               onPress={() => router.push(`/ticket-request?resubmitFrom=${ticket.ticketid}`)}
               style={styles.fixButton}
             >
-              <Text style={styles.fixButtonText}>Fix & resubmit</Text>
+              <Text style={styles.fixButtonText}>{t("tr.fix_resubmit")}</Text>
             </Pressable>
           )}
         </View>
@@ -285,12 +288,12 @@ function RequestCard({
         <View style={styles.captureBlock}>
           {alreadyCaptured && (
             <Text style={styles.capturedNote}>
-              {expenseCount} expense{expenseCount === 1 ? "" : "s"} captured · {formatPeso(ticket.expensetotal)}
+              {expenseCount === 1 ? t("mr.captured_one", { total: formatPeso(ticket.expensetotal) }) : t("mr.captured_other", { count: expenseCount, total: formatPeso(ticket.expensetotal) })}
             </Text>
           )}
           <View style={[styles.captureButton, alreadyCaptured && styles.captureButtonSecondary]}>
             <Text style={[styles.captureButtonText, alreadyCaptured && styles.captureButtonTextSecondary]}>
-              {alreadyCaptured ? "+ Add another expense" : "+ Add Expense"}
+              {alreadyCaptured ? t("mobile.add_another_expense") : t("mobile.add_expense")}
             </Text>
           </View>
         </View>

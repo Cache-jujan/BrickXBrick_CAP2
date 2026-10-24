@@ -55,7 +55,7 @@ export default function ExpensesScreen() {
       setSavedAt(expenseResult.fromCache ? expenseResult.savedAt : null);
       setProjectsById(Object.fromEntries(projectResult.data.map((p) => [p.projectid, p])));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(err instanceof Error ? err.message : t("errors.something"));
     } finally {
       setLoading(false);
     }
@@ -99,7 +99,7 @@ export default function ExpensesScreen() {
 
       {savedAt && (
         <Text style={styles.offlineNote}>
-          {isOnline ? "Can't reach the server" : "You're offline"} · showing your expenses {savedAtLabel(savedAt)}.
+          {t("ex.offline_showing", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t) })}
         </Text>
       )}
       {shownError && (
@@ -133,7 +133,7 @@ export default function ExpensesScreen() {
         renderItem={({ item }) => {
           const status = STATUS[item.status];
           const split = (item.splitProjectCount ?? 0) > 1;
-          const projectName = projectsById[item.projectID]?.name ?? "Unknown project";
+          const projectName = projectsById[item.projectID]?.name ?? t("mr.unknown_project");
           const metaLabel = split ? t("mobile.split_across_projects", { count: item.splitProjectCount ?? 0 }) : projectName;
 
           return (

@@ -13,10 +13,10 @@ import { SpendShare } from "../../components/reports/SpendShare";
 import { VarianceChart } from "../../components/reports/VarianceChart";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ReportsPage.css";
 
-const STAMP = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" });
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const STAMP_OPTIONS = { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" };
 
 // FUNCTION F11 — Financial Analytics and Reporting (General Manager only).
 // Generate asks GET /api/reports/summary; the server does all the maths, this
@@ -24,6 +24,7 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 // whatever is currently typed in the form, so a half-edited date never makes
 // the numbers look like they belong to a different period.
 export function ReportsPage() {
+  const { t, formatDate } = useLocale();
   const { projects, loading: projectsLoading, error: projectsError } = useProjects();
   const [filters, setFilters] = useState(() => ({ projectIds: [], ...defaultReportRange() }));
   const [fieldErrors, setFieldErrors] = useState({});
@@ -105,7 +106,7 @@ export function ReportsPage() {
   }
 
   async function generate() {
-    const errors = validateReportFilters(filters);
+    const errors = validateReportFilters(filters, t);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -119,7 +120,7 @@ export function ReportsPage() {
     } catch (err) {
       setSummary(null);
       setGenerated(null);
-      setError(extractErrorMessage(err, "Couldn't generate the report."));
+      setError(extractErrorMessage(err, t("errors.report_failed")));
     } finally {
       setSubmitting(false);
     }
@@ -145,7 +146,7 @@ export function ReportsPage() {
       saveBlob(result.blob, result.filename);
       setExportResult({ reportId: result.reportId, anchorStatus: result.anchorStatus, retrying: false, retryMessage: "" });
     } catch (err) {
-      setExportError(extractErrorMessage(err, "Couldn't export the report."));
+      setExportError(extractErrorMessage(err, t("errors.export_failed")));
     } finally {
       setExporting(false);
     }
@@ -161,10 +162,10 @@ export function ReportsPage() {
         ...r,
         retrying: false,
         anchorStatus: result.anchorStatus,
-        retryMessage: result.anchorStatus === "Confirmed" ? "" : "The blockchain is still unavailable. Please try again in a few minutes.",
+        retryMessage: result.anchorStatus === "Confirmed" ? "" : t("rep.anchor_unavailable"),
       }));
     } catch (err) {
-      setExportResult((r) => ({ ...r, retrying: false, retryMessage: extractErrorMessage(err, "Couldn't reach the blockchain. Please try again.") }));
+      setExportResult((r) => ({ ...r, retrying: false, retryMessage: extractErrorMessage(err, t("errors.anchor_failed")) }));
     }
   }
 
@@ -172,8 +173,8 @@ export function ReportsPage() {
     <div className="reports-page">
       <div className="page-header">
         <div className="page-header-text">
-          <h1>Reports</h1>
-          <p className="page-header-sub">Budget against spend for up to five projects, over a date range.</p>
+          <h1>{t("nav.reports")}</h1>
+          <p className="page-header-sub">{t("rep.subtitle")}</p>
         </div>
       </div>
 
@@ -196,14 +197,14 @@ export function ReportsPage() {
 
       {!summary && !submitting && problems.length === 0 && (
         <div className="reports-placeholder">
-          <p className="reports-placeholder-title">Your report will appear here</p>
-          <p>Choose one or more projects and a period, then select Generate report. You will see the budget against spend, a table of every project and the tax-deductible spending, and you can export it as a PDF.</p>
+          <p className="reports-placeholder-title">{t("rep.placeholder_title")}</p>
+          <p>{t("rep.placeholder_body")}</p>
         </div>
       )}
 
       {problems.length > 0 && (
         <div ref={problemsRef}>
-          <Banner tone="error" title="The report was not generated">
+          <Banner tone="error" title={t("rep.not_generated")}>
             <ul className="reports-problems">
               {problems.map((message) => (
                 <li key={message}>{message}</li>
@@ -216,11 +217,11 @@ export function ReportsPage() {
       {summary && summary.empty && (
         <Banner
           tone="empty"
-          title="No approved expenses in this period"
+          title={t("rep.empty_title")}
           action={
             selectedProjects.length > 0 && (
               <Button variant="secondary" onClick={useProjectDates}>
-                Use project dates
+                {t("rep.use_project_dates")}
               </Button>
             )
           }
@@ -231,6 +232,8 @@ export function ReportsPage() {
               from: summary.period.from,
               to: summary.period.to,
               pendingExpenses: summary.warnings.pendingExpenses,
+              t,
+              formatDate,
             }).map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
@@ -239,28 +242,28 @@ export function ReportsPage() {
       )}
 
       {summary && !summary.empty && (
-        <section className="reports-results" aria-label="Report results">
+        <section className="reports-results" aria-label={t("rep.results_aria")}>
           <div className="reports-results-head">
             <div>
-              <h2 className="reports-results-title">{singleProject ? "Project report" : "Report results"}</h2>
+              <h2 className="reports-results-title">{singleProject ? t("rep.title_project") : t("rep.title_results")}</h2>
               <p className="reports-stamp">
-                {summary.period.from} to {summary.period.to} · figures as of {STAMP.format(new Date(summary.generatedAt))} (Manila time)
+                {t("rep.stamp", { from: summary.period.from, to: summary.period.to, time: formatDate(summary.generatedAt, STAMP_OPTIONS) })}
               </p>
             </div>
             <div className="reports-export">
               <Button onClick={exportPdf} disabled={exporting}>
-                {exporting ? "Preparing PDF…" : "Export PDF"}
+                {exporting ? t("rep.preparing_pdf") : t("rep.export_pdf")}
               </Button>
-              <span className="reports-export-note">Saved as a record; figures always match the system.</span>
+              <span className="reports-export-note">{t("rep.export_note")}</span>
             </div>
           </div>
 
           {(warnings.pendingExpenses > 0 || warnings.fraudFlaggedExpenses > 0) && (
-            <Banner tone="warning" title="These figures may change">
+            <Banner tone="warning" title={t("rep.may_change")}>
               <p>
                 {[
-                  warnings.pendingExpenses > 0 && `${plural(warnings.pendingExpenses, "expense is", "expenses are")} waiting for approval and not counted`,
-                  warnings.fraudFlaggedExpenses > 0 && `${plural(warnings.fraudFlaggedExpenses, "expense carries", "expenses carry")} an unresolved fraud flag`,
+                  warnings.pendingExpenses > 0 && (warnings.pendingExpenses === 1 ? t("rep.pending_one") : t("rep.pending_other", { count: warnings.pendingExpenses })),
+                  warnings.fraudFlaggedExpenses > 0 && (warnings.fraudFlaggedExpenses === 1 ? t("rep.fraud_one") : t("rep.fraud_other", { count: warnings.fraudFlaggedExpenses })),
                 ]
                   .filter(Boolean)
                   .join("; ")}
@@ -274,13 +277,13 @@ export function ReportsPage() {
               <ProjectHero project={summary.projects[0]} info={projects.find((p) => p.projectid === summary.projects[0].projectId)} period={summary.period} />
               <div className="reports-grid">
                 <Card>
-                  <h3 className="reports-section-title">Where the budget stands</h3>
-                  <p className="reports-chart-note">Spend before and during the period against what is left.</p>
+                  <h3 className="reports-section-title">{t("rep.budget_stands")}</h3>
+                  <p className="reports-chart-note">{t("rep.budget_stands_note")}</p>
                   <BudgetStands project={summary.projects[0]} />
                 </Card>
                 <Card>
-                  <h3 className="reports-section-title">Budget used to date</h3>
-                  <p className="reports-chart-note">Also printed in the PDF.</p>
+                  <h3 className="reports-section-title">{t("rep.budget_used")}</h3>
+                  <p className="reports-chart-note">{t("rep.also_pdf")}</p>
                   <BudgetChart ref={chartRef} projects={summary.projects} />
                 </Card>
               </div>
@@ -291,26 +294,26 @@ export function ReportsPage() {
 
               <div className="reports-grid">
                 <Card>
-                  <h3 className="reports-section-title">Budget used to date</h3>
-                  <p className="reports-chart-note">Each bar fills as a project spends its budget. Red means over budget. Also printed in the PDF.</p>
+                  <h3 className="reports-section-title">{t("rep.budget_used")}</h3>
+                  <p className="reports-chart-note">{t("rep.budget_used_note")}</p>
                   <BudgetChart ref={chartRef} projects={summary.projects} />
                 </Card>
                 <Card>
-                  <h3 className="reports-section-title">Where this period's spend went</h3>
-                  <p className="reports-chart-note">Share of the period spend by project.</p>
+                  <h3 className="reports-section-title">{t("rep.spend_went")}</h3>
+                  <p className="reports-chart-note">{t("rep.spend_share_note")}</p>
                   <SpendShare projects={summary.projects} total={summary.totals.periodSpend} />
                 </Card>
               </div>
 
               <Card>
-                <h3 className="reports-section-title">Cost variance against budget</h3>
-                <p className="reports-chart-note">Spend to date minus budget, as a share of each project's budget. Green is under budget, red is over.</p>
+                <h3 className="reports-section-title">{t("rep.variance_title")}</h3>
+                <p className="reports-chart-note">{t("rep.variance_note")}</p>
                 <VarianceChart projects={summary.projects} />
               </Card>
 
               <Card>
-                <h3 className="reports-section-title">Project breakdown</h3>
-                <p className="reports-chart-note">Tax-deductible counts only receipts classed Formal-Tax-Deductible, within the chosen dates.</p>
+                <h3 className="reports-section-title">{t("rep.breakdown")}</h3>
+                <p className="reports-chart-note">{t("rep.breakdown_note")}</p>
                 <ProjectsTable projects={summary.projects} totals={summary.totals} />
               </Card>
             </>
@@ -319,25 +322,22 @@ export function ReportsPage() {
           {exportError && <Banner tone="error" title={exportError} />}
 
           {exportResult && exportResult.anchorStatus === "Confirmed" && (
-            <Banner tone="success" title="Report downloaded and secured">
-              A tamper-proof copy of this report's fingerprint is now on the blockchain.
+            <Banner tone="success" title={t("rep.secured_title")}>
+              {t("rep.secured_body")}
             </Banner>
           )}
 
           {exportResult && exportResult.anchorStatus !== "Confirmed" && (
             <Banner
               tone="warning"
-              title="Report downloaded, but not yet secured on the blockchain"
+              title={t("rep.pending_title")}
               action={
                 <Button variant="secondary" onClick={retryAnchor} disabled={exportResult.retrying}>
-                  {exportResult.retrying ? "Trying…" : "Try again"}
+                  {exportResult.retrying ? t("rep.trying") : t("common.try_again")}
                 </Button>
               }
             >
-              <p>
-                The blockchain network was unavailable, so this report is saved as Pending. Your PDF is fine and says
-                "Pending" in its footer. Use Try again once the network is back; no new PDF is needed.
-              </p>
+              <p>{t("rep.pending_body")}</p>
               {exportResult.retryMessage && <p>{exportResult.retryMessage}</p>}
             </Banner>
           )}

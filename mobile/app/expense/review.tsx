@@ -40,6 +40,7 @@ import { loadOpenRequests } from "@/lib/cached-api";
 import { BlockedReasons } from "@/components/blocked-reasons";
 import { phoneReachableUrl } from "@/lib/receipt-scans";
 import { KeyboardAvoider } from "@/components/keyboard-avoider";
+import { useLocale } from "@/lib/i18n-context";
 
 const RED = COLORS.errorText;
 const AMBER = COLORS.amberText;
@@ -51,6 +52,8 @@ const CONFIDENCE_KEY: Record<string, string> = {
   birNumber: "orSiNumber", amount: "amount", receiptDate: "date",
 };
 const FIELD_LABEL: Record<string, string> = { tin: "TIN", birPermitNumber: "BIR permit" };
+// The Field component compares its error to this to show the red "Required" tag.
+const REQUIRED = "__required__";
 
 function makeId() { return Math.random().toString(36).slice(2, 10); }
 // Case, spacing and punctuation don't count as renaming a line.
@@ -58,6 +61,7 @@ function simpleText(text: string) { return text.toLowerCase().replace(/[^a-z0-9]
 
 /** Review and correct scanned receipt fields and totals before ticket linking or allocation. */
 export default function ReviewScreen() {
+  const { t, intlLocale } = useLocale();
   const { draft, setOcrResult } = useExpenseDraft();
   const result = draft.ocrResult;
 
@@ -90,7 +94,7 @@ export default function ReviewScreen() {
           mine.map((r) => ({
             key: r.ticketID,
             name: r.materialType,
-            detail: `${r.projectName} · ${r.remainingQuantity} still needed · ${r.subject}`,
+            detail: t("rv.material_detail", { project: r.projectName, qty: r.remainingQuantity, subject: r.subject }),
             bomItemID: r.bomItemID ?? null,
           }))
         );
@@ -100,6 +104,7 @@ export default function ReviewScreen() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the ticket changes, not on a language change
   }, [ticketId]);
 
   useEffect(() => {
@@ -157,18 +162,18 @@ export default function ReviewScreen() {
   const totalCents = toCents(amount);
   const linesCents = namedItems.reduce((sum, it) => sum + (toCents(it.price) ?? 0), 0);
   const totalsMatch = totalCents !== null && linesCents === totalCents;
-  const dateProblem = receiptDateProblem(receiptDate);
+  const dateProblem = receiptDateProblem(receiptDate, t);
   const vendorMissing = vendorName.trim().length === 0;
   const canContinue = allLinesValid && totalsMatch && !dateProblem && !vendorMissing;
   // Everything still blocking Continue. Shown above the button once the user
   // has tapped it, next to the red outlines on the fields themselves.
   const blockedReasons = [
-    vendorMissing && "Enter the store or vendor name.",
+    vendorMissing && t("rv.err_vendor"),
     dateProblem,
-    namedItems.length === 0 && "Add at least one item.",
-    namedItems.length > 0 && !allLinesValid && "Every item needs a quantity and an amount (use 0 for delivery, VAT and fees).",
-    totalCents === null && "Enter the receipt total.",
-    allLinesValid && totalCents !== null && !totalsMatch && "The items must add up to the receipt total.",
+    namedItems.length === 0 && t("rv.err_add_item"),
+    namedItems.length > 0 && !allLinesValid && t("rv.err_lines"),
+    totalCents === null && t("rv.err_total"),
+    allLinesValid && totalCents !== null && !totalsMatch && t("rv.err_match"),
   ];
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
   // One-tap way out when the lines won't add up (rounding, unlisted VAT or
@@ -204,7 +209,7 @@ export default function ReviewScreen() {
   function fixLabel() {
     if (!fix) return "";
     const gap = formatPesoCents(fix.gapCents);
-    return fix.kind === "add" ? `Add ${gap} adjustment line` : `Take ${gap} discount off "${fix.itemName}"`;
+    return fix.kind === "add" ? t("rv.fix_add", { gap }) : t("rv.fix_discount", { gap, item: fix.itemName });
   }
 
   function setDate(date: Date) {
@@ -230,16 +235,16 @@ export default function ReviewScreen() {
   /** Validate receipt fields and totals, save corrected values and open the next flow step. */
   function handleContinue() {
     setTriedContinue(true);
-    if (vendorMissing) return Alert.alert("Vendor required", "Enter the store or vendor name.");
-    if (dateProblem) return Alert.alert("Check the date", dateProblem);
-    if (namedItems.length === 0) return Alert.alert("Add at least one item", "Every expense needs at least one line item.");
-    if (!allLinesValid) return Alert.alert("Check the line items", "Every line needs a quantity and an amount. Use 0 for delivery, VAT and fees.");
+    if (vendorMissing) return Alert.alert(t("rv.vendor_required"), t("rv.err_vendor"));
+    if (dateProblem) return Alert.alert(t("rv.check_date"), dateProblem);
+    if (namedItems.length === 0) return Alert.alert(t("rv.add_one_title"), t("rv.add_one_body"));
+    if (!allLinesValid) return Alert.alert(t("rv.check_lines"), t("rv.check_lines_body"));
     if (!totalsMatch) {
-      if (!fix) return Alert.alert("Totals don't match", "The line items must add up to the receipt total. Check each amount against the paper receipt.");
+      if (!fix) return Alert.alert(t("rv.totals_mismatch"), t("rv.totals_body"));
       return Alert.alert(
-        "Totals don't match",
-        `The line items are ${formatPesoCents(fix.gapCents)} ${fix.kind === "add" ? "short of" : "over"} the receipt total. Check the paper receipt, or adjust it and a Project Manager will review it.`,
-        [{ text: "Check again", style: "cancel" }, { text: fixLabel(), onPress: applyFix }]
+        t("rv.totals_mismatch"),
+        t(fix.kind === "add" ? "rv.totals_gap_short" : "rv.totals_gap_over", { gap: formatPesoCents(fix.gapCents) }),
+        [{ text: t("rv.check_again"), style: "cancel" }, { text: fixLabel(), onPress: applyFix }]
       );
     }
     const clean = (text: string) => Number(text.replace(/,/g, "").trim());
@@ -266,20 +271,20 @@ export default function ReviewScreen() {
     if (!file) return;
     if (file.type === "image") return setZoomOpen(true);
     const url = result?.receiptImageURL ? phoneReachableUrl(result.receiptImageURL) : null;
-    if (!url) return Alert.alert("Can't open the PDF", "The file isn't uploaded yet. Go back and scan it again.");
-    Linking.openURL(url).catch(() => Alert.alert("Can't open the PDF", "No app on this phone could open it."));
+    if (!url) return Alert.alert(t("rv.cant_open_pdf"), t("rv.pdf_not_uploaded"));
+    Linking.openURL(url).catch(() => Alert.alert(t("rv.cant_open_pdf"), t("rv.no_pdf_app")));
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title="Review receipt" caption={isSplit ? "Split receipt · Step 2 of 3" : "Step 2 of 3"} step={{ current: 2, total: 3 }} />
+      <FlowHeader title={t("mx.review_receipt")} caption={isSplit ? t("mx.split_step", { current: 2, total: 3 }) : t("mx.step_n", { current: 2, total: 3 })} step={{ current: 2, total: 3 }} />
       <KeyboardAvoider style={styles.flex}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft.resubmit && (
             <View style={styles.rejectBox}>
-              <Text style={styles.rejectTitle}>Your Project Manager rejected this expense</Text>
-              <Text style={styles.rejectReason}>{draft.resubmit.reason ? `"${draft.resubmit.reason}"` : "No reason was given."}</Text>
-              <Text style={styles.rejectHint}>Fix what they pointed out, then resubmit.</Text>
+              <Text style={styles.rejectTitle}>{t("rv.rejected_title")}</Text>
+              <Text style={styles.rejectReason}>{draft.resubmit.reason ? `"${draft.resubmit.reason}"` : t("rv.no_reason")}</Text>
+              <Text style={styles.rejectHint}>{t("rv.fix_hint")}</Text>
             </View>
           )}
 
@@ -288,7 +293,7 @@ export default function ReviewScreen() {
               onPress={openReceiptFile}
               style={({ pressed }) => [styles.thumbRow, pressed && styles.pressed]}
               accessibilityRole="button"
-              accessibilityLabel={file.type === "image" ? "Receipt file. Tap to enlarge the photo." : "Receipt file. Tap to open the PDF."}
+              accessibilityLabel={file.type === "image" ? t("rv.file_aria_image") : t("rv.file_aria_pdf")}
             >
               {file.type === "image" ? (
                 <Image source={{ uri: file.uri }} style={styles.thumb} resizeMode="cover" />
@@ -296,9 +301,9 @@ export default function ReviewScreen() {
                 <View style={[styles.thumb, styles.thumbPdf]}><IconSymbol name="doc.fill" size={26} color={COLORS.errorText} /></View>
               )}
               <View style={styles.flex}>
-                <Text style={styles.thumbTitle}>Receipt file</Text>
+                <Text style={styles.thumbTitle}>{t("rv.receipt_file")}</Text>
                 <Text style={styles.thumbName} numberOfLines={1}>{file.name}{file.type === "pdf" && file.size ? ` · ${file.size}` : ""}</Text>
-                <Text style={styles.thumbHint}>Tap to open. Compare each value with the paper receipt.</Text>
+                <Text style={styles.thumbHint}>{t("rv.tap_open")}</Text>
               </View>
             </Pressable>
           )}
@@ -307,17 +312,15 @@ export default function ReviewScreen() {
             <View style={styles.banner}>
               <IconSymbol name="exclamationmark.triangle.fill" size={18} color={COLORS.amberText} />
               <View style={styles.flex}>
-                <Text style={styles.bannerTitle}>{hasChecks ? "Check the amber fields" : "Informal receipt"}</Text>
+                <Text style={styles.bannerTitle}>{hasChecks ? t("rv.check_amber") : t("rv.informal")}</Text>
                 {hasChecks && (
                   <Text style={styles.bannerText}>
-                    {readNoItems
-                      ? "The scan couldn't read the line items, so type each one from the receipt. "
-                      : "The scan was not sure about these. Compare each one with the paper receipt. "}
+                    {readNoItems ? t("rv.no_items_read") : t("rv.not_sure")}
                   </Text>
                 )}
                 {!bir.formal && (
                   <Text style={styles.bannerText}>
-                    No {bir.missing.join(" or ")} entered. It is an informal receipt: still OK to submit, but it won&apos;t count as tax-deductible. Fill them in if the paper shows them.
+                    {t("rv.informal_note", { missing: bir.missing.join(` ${t("mx.or")} `) })}
                   </Text>
                 )}
               </View>
@@ -325,50 +328,50 @@ export default function ReviewScreen() {
           ) : (
             <View style={[styles.birBadge, styles.birFormal]}>
               <IconSymbol name="checkmark.seal.fill" size={16} color={COLORS.success} />
-              <Text style={[styles.birText, { color: COLORS.success }]}>Formal · tax-deductible</Text>
+              <Text style={[styles.birText, { color: COLORS.success }]}>{t("rv.formal")}</Text>
             </View>
           )}
 
           {conflicts.length > 0 && (
             <View style={styles.warnBox}>
-              <Text style={styles.warnTitle}>Receipt differs from the vendor list</Text>
+              <Text style={styles.warnTitle}>{t("submit.conflict_title")}</Text>
               {conflicts.map((c) => (
                 <Text key={c.field} style={styles.warnLine}>
-                  {FIELD_LABEL[c.field] ?? c.field}: receipt reads {c.ocrValue}, vendor list has {c.masterValue}
+                  {t("submit.conflict", { field: FIELD_LABEL[c.field] ?? c.field, ocr: c.ocrValue ?? "", master: c.masterValue ?? "" })}
                 </Text>
               ))}
-              <Text style={styles.warnLine}>The vendor list value is filled in. Check the paper receipt before continuing.</Text>
+              <Text style={styles.warnLine}>{t("rv.vendor_list_filled")}</Text>
             </View>
           )}
 
-          <Section title="Vendor & tax">
-            <Field label="Vendor" value={vendorName} onChangeText={edit("vendorName", setVendorName)} check={isLowConfidence("vendorName")} error={vendorMissing ? "Required" : null} />
+          <Section title={t("rv.section_vendor")}>
+            <Field label={t("dashboard.vendor")} value={vendorName} onChangeText={edit("vendorName", setVendorName)} check={isLowConfidence("vendorName")} error={vendorMissing ? REQUIRED : null} />
             <View style={styles.pair}>
               <Field style={styles.half} label="TIN" value={tin} onChangeText={edit("tin", setTin)} keyboardType="numbers-and-punctuation" check={isLowConfidence("tin")} fromVendorList={autoFilled.includes("tin")} />
-              <Field style={styles.half} label="BIR permit" value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" check={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
+              <Field style={styles.half} label={t("rv.bir_permit")} value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" check={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
             </View>
             <Field label="OR / SI number" value={birNumber} onChangeText={edit("birNumber", setBirNumber)} autoCapitalize="characters" check={isLowConfidence("birNumber")} />
           </Section>
 
-          <Section title="Amount & date">
+          <Section title={t("rv.section_amount")}>
             <View style={styles.pair}>
-              <Field style={styles.half} label="Total (₱)" value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? "Enter the total" : null} />
+              <Field style={styles.half} label={t("rv.total_php")} value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? t("rv.enter_total") : null} />
               {Platform.OS === "web" ? (
                 // The native picker has no web build, so the web preview keeps a typed date.
-                <Field style={styles.half} label="Date" value={receiptDate} onChangeText={edit("receiptDate", setReceiptDate)} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" check={isLowConfidence("receiptDate")} error={dateProblem} />
+                <Field style={styles.half} label={t("dashboard.date")} value={receiptDate} onChangeText={edit("receiptDate", setReceiptDate)} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" check={isLowConfidence("receiptDate")} error={dateProblem} />
               ) : (
                 <View style={[styles.field, styles.half]}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.fieldLabel}>Date</Text>
-                    {isLowConfidence("receiptDate") && <Text style={styles.checkTag}>Check</Text>}
+                    <Text style={styles.fieldLabel}>{t("dashboard.date")}</Text>
+                    {isLowConfidence("receiptDate") && <Text style={styles.checkTag}>{t("rv.check_tag")}</Text>}
                   </View>
                   <Pressable
                     onPress={openDatePicker}
                     style={[styles.input, styles.dateInput, isLowConfidence("receiptDate") && styles.inputLow, !!dateProblem && styles.inputError]}
                     accessibilityRole="button"
-                    accessibilityLabel={`Receipt date, ${formatReceiptDate(receiptDate)}. Tap to change.`}
+                    accessibilityLabel={t("rv.date_aria", { date: formatReceiptDate(receiptDate, intlLocale) })}
                   >
-                    <Text style={styles.dateText} numberOfLines={1}>{formatReceiptDate(receiptDate)}</Text>
+                    <Text style={styles.dateText} numberOfLines={1}>{formatReceiptDate(receiptDate, intlLocale)}</Text>
                     <IconSymbol name="calendar" size={18} color={COLORS.muted} />
                   </Pressable>
                 </View>
@@ -388,15 +391,15 @@ export default function ReviewScreen() {
             )}
             {dateProblem && Platform.OS !== "web" ? <Text style={styles.errorHint}>{dateProblem}</Text> : null}
             {!result.receiptDate && isLowConfidence("receiptDate") && Platform.OS !== "web" ? (
-              <Text style={styles.lowHint}>No date was read, so it is set to today. Tap to change it.</Text>
+              <Text style={styles.lowHint}>{t("rv.no_date_today")}</Text>
             ) : null}
           </Section>
 
           <Section
-            title={`Line items (${items.length})`}
-            action={<Pressable onPress={addItem} hitSlop={8} style={styles.addButton} accessibilityRole="button"><Text style={styles.addLink}>+ Add item</Text></Pressable>}
+            title={t("rv.line_items", { count: items.length })}
+            action={<Pressable onPress={addItem} hitSlop={8} style={styles.addButton} accessibilityRole="button"><Text style={styles.addLink}>+ {t("common.add_item")}</Text></Pressable>}
           >
-            <Text style={styles.hint}>Qty is required. Use 0 for delivery, VAT and fees.</Text>
+            <Text style={styles.hint}>{t("rv.qty_hint")}</Text>
             {items.map((item, index) => {
               const named = item.name.trim().length > 0;
               const qtyBad = named && toHundredths(item.quantity) === null;
@@ -405,36 +408,36 @@ export default function ReviewScreen() {
                 <View key={item.id} style={[styles.itemCard, !!item.ocr && styles.itemCardOcr]}>
                   <View style={styles.itemTop}>
                     <View style={styles.itemLabelRow}>
-                      <Text style={styles.itemIndex}>Item {index + 1}</Text>
-                      {item.ocr && <Text style={styles.checkTag}>Check</Text>}
+                      <Text style={styles.itemIndex}>{t("submit.item_n", { n: index + 1 })}</Text>
+                      {item.ocr && <Text style={styles.checkTag}>{t("rv.check_tag")}</Text>}
                     </View>
-                    <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={`Remove item ${index + 1}`}>
-                      <Text style={styles.removeText}>Remove</Text>
+                    <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={t("submit.remove_item_n", { n: index + 1 })}>
+                      <Text style={styles.removeText}>{t("common.remove")}</Text>
                     </Pressable>
                   </View>
-                  <TextInput style={styles.input} placeholder="Item name" placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null })} />
+                  <TextInput style={styles.input} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null })} />
                   {item.scanned && simpleText(item.scanned) !== simpleText(item.name) && (
                     <Text style={styles.scannedNote}>
-                      Receipt says: &quot;{item.scanned}&quot;. The Project Manager will see this change.
+                      {t("rv.receipt_says", { scanned: item.scanned })}
                     </Text>
                   )}
                   {materials.length > 0 && (
-                    <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Choose a requested material for item ${index + 1}`}>
-                      <Text style={styles.pickButtonText}>Match to a requested material</Text>
+                    <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
+                      <Text style={styles.pickButtonText}>{t("rv.match_material")}</Text>
                       <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
                     </Pressable>
                   )}
                   <View style={styles.itemRow}>
                     <View style={styles.itemQty}>
-                      <Text style={styles.miniLabel}>Qty</Text>
+                      <Text style={styles.miniLabel}>{t("split.col_qty")}</Text>
                       <TextInput style={[styles.input, qtyBad && styles.inputError]} placeholder="0" placeholderTextColor={COLORS.muted} value={item.quantity} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "quantity", v)} />
                     </View>
                     <View style={styles.itemAmount}>
-                      <Text style={styles.miniLabel}>Unit price (₱)</Text>
-                      <TextInput style={styles.input} placeholder="Calculated" placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", v)} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
+                      <Text style={styles.miniLabel}>{t("submit.unit_price")}</Text>
+                      <TextInput style={styles.input} placeholder={t("submit.calculated")} placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", v)} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
                     </View>
                     <View style={styles.itemAmount}>
-                      <Text style={styles.miniLabel}>Line amount (₱)</Text>
+                      <Text style={styles.miniLabel}>{t("rv.line_amount")}</Text>
                       <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "price", v)} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
                     </View>
                   </View>
@@ -448,18 +451,18 @@ export default function ReviewScreen() {
           <View style={styles.totalsRow}>
             {totalsMatch && <IconSymbol name="checkmark.circle.fill" size={16} color={COLORS.success} />}
             <Text style={[styles.totalsLine, { color: totalsMatch ? COLORS.success : RED }]}>
-              Lines {formatPesoCents(linesCents)} of {totalCents === null ? "—" : formatPesoCents(totalCents)}
+              {t("rv.lines_of", { lines: formatPesoCents(linesCents), total: totalCents === null ? "—" : formatPesoCents(totalCents) })}
             </Text>
           </View>
           {fix && (
             <Pressable onPress={applyFix} style={({ pressed }) => [styles.fixButton, pressed && styles.pressed]} accessibilityRole="button">
               <Text style={styles.fixButtonText}>{fixLabel()}</Text>
-              <Text style={styles.fixButtonHint}>A Project Manager will review the adjustment.</Text>
+              <Text style={styles.fixButtonHint}>{t("rv.fix_hint2")}</Text>
             </Pressable>
           )}
           {triedContinue && <BlockedReasons reasons={blockedReasons} />}
           <Pressable style={[styles.submitButton, !canContinue && styles.submitButtonDisabled]} onPress={handleContinue} accessibilityRole="button" accessibilityState={{ disabled: !canContinue }}>
-            <Text style={styles.submitButtonText}>Looks correct, continue</Text>
+            <Text style={styles.submitButtonText}>{t("rv.continue")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoider>
@@ -476,9 +479,9 @@ export default function ReviewScreen() {
 
       {file?.type === "image" && (
         <Modal visible={zoomOpen} transparent animationType="fade" onRequestClose={() => setZoomOpen(false)}>
-          <Pressable style={styles.zoomBackdrop} onPress={() => setZoomOpen(false)} accessibilityLabel="Close the enlarged photo">
+          <Pressable style={styles.zoomBackdrop} onPress={() => setZoomOpen(false)} accessibilityLabel={t("rv.close_photo")}>
             <Image source={{ uri: file.uri }} style={styles.zoomImage} resizeMode="contain" />
-            <Text style={styles.zoomHint}>Tap anywhere to close</Text>
+            <Text style={styles.zoomHint}>{t("rv.tap_close")}</Text>
           </Pressable>
         </Modal>
       )}
@@ -499,7 +502,8 @@ function Section({ title, action, children }: { title: string; action?: React.Re
 }
 
 function VendorListBadge() {
-  return <Text style={styles.vendorBadge}>From vendor list</Text>;
+  const { t } = useLocale();
+  return <Text style={styles.vendorBadge}>{t("rv.from_vendor_list")}</Text>;
 }
 
 type FieldProps = {
@@ -518,12 +522,13 @@ type FieldProps = {
 };
 
 function Field({ label, value, onChangeText, onBlur, keyboardType, autoCapitalize, placeholder, check, fromVendorList, error, style }: FieldProps) {
-  const required = error === "Required";
+  const { t } = useLocale();
+  const required = error === REQUIRED;
   return (
     <View style={[styles.field, style]}>
       <View style={styles.labelRow}>
         <Text style={styles.fieldLabel}>{label}</Text>
-        {required ? <Text style={styles.requiredTag}>Required</Text> : fromVendorList ? <VendorListBadge /> : check ? <Text style={styles.checkTag}>Check</Text> : null}
+        {required ? <Text style={styles.requiredTag}>{t("mx.required_tag")}</Text> : fromVendorList ? <VendorListBadge /> : check ? <Text style={styles.checkTag}>{t("rv.check_tag")}</Text> : null}
       </View>
       <TextInput
         style={[styles.input, check && !error && styles.inputLow, !!error && styles.inputError, required && styles.inputRequired]}

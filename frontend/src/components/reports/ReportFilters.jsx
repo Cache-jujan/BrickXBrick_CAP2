@@ -2,13 +2,16 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { MAX_PROJECTS, niceDay, projectSpan, quickRanges, spanOfProjects } from "../../utils/reportFilters";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ReportFilters.css";
 
-function spanText(project) {
+function spanText(project, t, formatDate) {
   const { start, end } = projectSpan(project);
-  if (!start && !end) return "No dates set";
-  const finish = project.actualcompletiondate ? "finished" : "target finish";
-  return `Starts ${start ? niceDay(start) : "—"} · ${end ? `${finish} ${niceDay(end)}` : "no finish date"}`;
+  if (!start && !end) return t("rep.no_dates");
+  const startText = start ? niceDay(start, formatDate) : "—";
+  if (!end) return t("rep.span_starts_open", { start: startText });
+  const finish = project.actualcompletiondate ? t("rep.finished") : t("rep.target_finish");
+  return t("rep.span_starts", { start: startText, finish, end: niceDay(end, formatDate) });
 }
 
 /**
@@ -32,6 +35,7 @@ export function ReportFilters({
   onUseProjectDates,
   onSubmit,
 }) {
+  const { t, formatDate } = useLocale();
   const atLimit = value.projectIds.length >= MAX_PROJECTS;
   const selected = projects.filter((p) => value.projectIds.includes(p.projectid));
   const span = spanOfProjects(selected);
@@ -47,24 +51,24 @@ export function ReportFilters({
       <div className="report-filters-layout">
       <fieldset className="report-filters-projects">
         <legend>
-          Projects <span className="report-filters-hint">(choose 1 to {MAX_PROJECTS})</span>
+          {t("nav.projects")} <span className="report-filters-hint">{t("rep.choose_range", { max: MAX_PROJECTS })}</span>
         </legend>
         <div className="report-filters-count">
-          <span>{value.projectIds.length} of {MAX_PROJECTS} selected</span>
+          <span>{t("rep.n_selected", { count: value.projectIds.length, max: MAX_PROJECTS })}</span>
           {activeCount > 0 && (
             <button type="button" className="report-filters-clear" onClick={onSelectActive}>
-              Select all active{activeCount > MAX_PROJECTS ? ` (first ${MAX_PROJECTS})` : ""}
+              {activeCount > MAX_PROJECTS ? t("rep.select_active_first", { max: MAX_PROJECTS }) : t("rep.select_active")}
             </button>
           )}
           {value.projectIds.length > 0 && (
-            <button type="button" className="report-filters-clear" onClick={onClearProjects}>Clear</button>
+            <button type="button" className="report-filters-clear" onClick={onClearProjects}>{t("rep.clear")}</button>
           )}
         </div>
 
-        {projectsLoading && <p className="report-filters-note">Loading projects…</p>}
+        {projectsLoading && <p className="report-filters-note">{t("dashboard.loading_projects")}</p>}
         {projectsError && <p className="report-filters-error">{projectsError}</p>}
         {!projectsLoading && !projectsError && projects.length === 0 && (
-          <p className="report-filters-note">There are no projects to report on yet.</p>
+          <p className="report-filters-note">{t("rep.no_projects")}</p>
         )}
 
         <ul className="report-filters-list">
@@ -77,7 +81,7 @@ export function ReportFilters({
                   <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggleProject(project.projectid)} />
                   <span className="report-filters-text">
                     <span className="report-filters-name">{project.name}</span>
-                    <span className="report-filters-dates-line">{spanText(project)}</span>
+                    <span className="report-filters-dates-line">{spanText(project, t, formatDate)}</span>
                   </span>
                   <Badge status={project.status} />
                 </label>
@@ -89,25 +93,25 @@ export function ReportFilters({
       </fieldset>
 
       <div className="report-filters-side">
-      <p className="report-filters-side-title">Period</p>
-      <div className="report-filters-quick" role="group" aria-label="Quick periods">
+      <p className="report-filters-side-title">{t("dashboard.period")}</p>
+      <div className="report-filters-quick" role="group" aria-label={t("rep.quick_periods")}>
         {quickRanges().map((range) => {
           const active = value.from === range.from && value.to === range.to;
           return (
             <button
-              key={range.label}
+              key={range.labelKey}
               type="button"
               className={"report-filters-chip" + (active ? " report-filters-chip-active" : "")}
               onClick={() => onRangeChange(range.from, range.to)}
             >
-              {range.label}
+              {t(range.labelKey)}
             </button>
           );
         })}
       </div>
       <div className="report-filters-dates">
         <Field
-          label="From"
+          label={t("rep.from")}
           type="date"
           required
           value={value.from}
@@ -115,7 +119,7 @@ export function ReportFilters({
           onChange={(event) => onDateChange("from", event.target.value)}
         />
         <Field
-          label="To"
+          label={t("rep.to")}
           type="date"
           required
           value={value.to}
@@ -125,18 +129,18 @@ export function ReportFilters({
       </div>
       {span && (
         <p className="report-filters-note">
-          The projects you chose run from {niceDay(span.from)} to {niceDay(span.to)}.
-          {span.trimmed ? " A report can cover at most 366 days, so the range was cut there." : ""}
+          {t("rep.projects_run", { from: niceDay(span.from, formatDate), to: niceDay(span.to, formatDate) })}
+          {span.trimmed ? ` ${t("rep.trimmed")}` : ""}
         </p>
       )}
       <div className="report-filters-submit">
         {span && (
           <Button type="button" variant="secondary" onClick={onUseProjectDates}>
-            Use project dates
+            {t("rep.use_project_dates")}
           </Button>
         )}
         <Button type="submit" disabled={submitting}>
-          {submitting ? "Generating…" : "Generate report"}
+          {submitting ? t("rep.generating") : t("rep.generate")}
         </Button>
       </div>
       </div>

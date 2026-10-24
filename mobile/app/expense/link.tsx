@@ -17,10 +17,12 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { formatPeso } from "@/lib/money";
 import { KeyboardAvoider } from "@/components/keyboard-avoider";
+import { useLocale } from "@/lib/i18n-context";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
 
 export default function LinkScreen() {
+  const { t, tv } = useLocale();
   const { draft, setCategory: setDraftCategory, setNotes: setDraftNotes, reset } = useExpenseDraft();
   const { isOnline, refreshPendingCount } = useNetwork();
   const { ticket, ocrResult } = draft;
@@ -47,20 +49,20 @@ export default function LinkScreen() {
     // 1) Validate everything BEFORE touching the ticket, so a bad draft can't leave it Resolved.
     const amountNum = typeof ocrResult.amount === "number" ? ocrResult.amount : Number(ocrResult.amount);
     if (!Number.isFinite(amountNum)) {
-      return Alert.alert("Invalid amount", "Go back and check the receipt total.");
+      return Alert.alert(t("mx.invalid_amount_title"), t("mx.invalid_amount_body"));
     }
     if (!ocrResult.receiptImageURL) {
-      return Alert.alert("Missing receipt image", "Please rescan the receipt.");
+      return Alert.alert(t("mx.missing_image_title"), t("mx.missing_image_body"));
     }
     const lineItems = ocrResult.lineItems ?? [];
     if (lineItems.length === 0) {
-      return Alert.alert("No line items", "Add at least one item on the Review screen.");
+      return Alert.alert(t("mx.no_items_title"), t("mx.no_items_body"));
     }
 
     // Resubmitting a Rejected expense needs the server (it edits the existing row),
     // so it can't be queued offline.
     if (!isOnline && draft.resubmit) {
-      return Alert.alert("You're offline", "Reconnect to resubmit a rejected expense.");
+      return Alert.alert(t("mx.offline_title"), t("mx.offline_resubmit"));
     }
 
     busyRef.current = true;
@@ -69,7 +71,7 @@ export default function LinkScreen() {
       // F10 — offline: queue the expense in SQLite instead of POSTing.
       // The server (POST /api/sync) runs the full validation + screening on reconnect.
       if (!isOnline) {
-        if (!ticket) throw new Error("This receipt isn't linked to a request. Open the request and try again.");
+        if (!ticket) throw new Error(t("mx.not_linked"));
 
         const gate = canEnqueue();
         if (!gate.allowed) throw new Error(gate.message);
@@ -87,12 +89,12 @@ export default function LinkScreen() {
           lineItems,
         });
         if (!queued) {
-          throw new Error("Could not save this expense offline. Reconnect to sync before saving more.");
+          throw new Error(t("mx.offline_save_failed"));
         }
 
         refreshPendingCount();
         if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
-        Alert.alert("Saved offline", "Your expense will be submitted automatically when you're back online.");
+        Alert.alert(t("mx.saved_offline_title"), t("mx.saved_offline_body"));
         router.replace("/");
         reset();
         return;
@@ -111,13 +113,13 @@ export default function LinkScreen() {
           birPermitNumber: ocrResult.birPermitNumber,
           lineItems,
         });
-        Alert.alert("Expense resubmitted", "Your Project Manager will review it again.");
+        Alert.alert(t("mx.resubmitted_title"), t("mx.resubmitted_body"));
         router.replace("/");
         reset();
         return;
       }
 
-      if (!ticket) throw new Error("This receipt isn't linked to a request. Open the request and try again.");
+      if (!ticket) throw new Error(t("mx.not_linked"));
 
       // 2) Purchasers resolve the ticket after capture. Site Managers arrive
       // only through their own already-resolved Material Request tickets.
@@ -146,7 +148,7 @@ export default function LinkScreen() {
 
       // Submitted: take it off "Scanned receipts" so it can't be sent twice.
       if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
-      Alert.alert("Expense submitted", "Your expense was submitted successfully.");
+      Alert.alert(t("mx.submitted_title"), t("mx.submitted_body"));
       router.replace("/");
       reset();
     } catch (err) {
@@ -154,12 +156,9 @@ export default function LinkScreen() {
         // The connection dropped mid-submit. Don't show the raw server error.
         // It may or may not have reached the server, so don't save a second copy
         // offline either (that could create a duplicate expense).
-        Alert.alert(
-          "Connection lost",
-          "We couldn't reach the server, so we can't confirm this expense went through. Check your connection, then look in your expenses before trying again."
-        );
+        Alert.alert(t("mx.conn_lost_title"), t("mx.conn_lost_body"));
       } else {
-        Alert.alert("Submission failed", err instanceof Error ? err.message : String(err));
+        Alert.alert(t("mx.submission_failed"), err instanceof Error ? err.message : String(err));
       }
     } finally {
       busyRef.current = false;
@@ -170,60 +169,60 @@ export default function LinkScreen() {
   const itemCount = (ocrResult.lineItems ?? []).length;
 
   const submitLabel = !category
-    ? "Pick a category"
+    ? t("mx.pick_category")
     : draft.resubmit
-      ? "Resubmit for approval"
+      ? t("mx.resubmit_approval")
       : isOnline
-        ? "Submit for approval"
-        : "Save offline";
+        ? t("mx.submit_approval")
+        : t("mx.save_offline");
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title={draft.resubmit ? "Resubmit expense" : "Link & submit"} caption="Step 3 of 3" />
+      <FlowHeader title={draft.resubmit ? t("mx.resubmit_title") : t("mx.link_submit")} caption={t("mx.step_n", { current: 3, total: 3 })} />
       <KeyboardAvoider style={styles.flex}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           {ticket ? (
             <View style={styles.ticketCard}>
-              <Text style={styles.ticketBadge}>{draft.resubmit ? "Original request" : "✓ Linked to this request"}</Text>
+              <Text style={styles.ticketBadge}>{draft.resubmit ? t("mx.original_request") : t("mx.linked")}</Text>
               <Text style={styles.ticketSubject}>{ticket.subject}</Text>
               <Text style={styles.ticketMeta}>{ticket.projectName}</Text>
-              {ticket.budget && <Text style={styles.ticketBudget}>Approved budget {formatPeso(ticket.budget)}</Text>}
+              {ticket.budget && <Text style={styles.ticketBudget}>{t("mx.approved_budget", { amount: formatPeso(ticket.budget) })}</Text>}
             </View>
           ) : null}
 
           <View style={styles.receiptCard}>
-            <Text style={styles.receiptVendor} numberOfLines={1}>{ocrResult.vendorName || "Vendor"}</Text>
-            <Text style={styles.ticketMeta}>{ocrResult.receiptDate} · {itemCount} item{itemCount === 1 ? "" : "s"}</Text>
+            <Text style={styles.receiptVendor} numberOfLines={1}>{ocrResult.vendorName || t("dashboard.vendor")}</Text>
+            <Text style={styles.ticketMeta}>{itemCount === 1 ? t("mx.receipt_meta_one", { date: ocrResult.receiptDate ?? "" }) : t("mx.receipt_meta_other", { date: ocrResult.receiptDate ?? "", count: itemCount })}</Text>
           </View>
 
           <Text style={[styles.fieldLabel, triedSubmit && !category && styles.fieldLabelError]}>
-            Category{triedSubmit && !category ? " — required" : ""}
+            {t("mx.category")}{triedSubmit && !category ? t("mx.required_suffix") : ""}
           </Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((c) => (
               <Pressable key={c} style={[styles.categoryChip, triedSubmit && !category && fieldErrorStyle, category === c && styles.categoryChipActive]} onPress={() => { setCategory(c); setDraftCategory(c); }}>
-                <Text style={[styles.categoryChipText, category === c && styles.categoryChipTextActive]}>{c}</Text>
+                <Text style={[styles.categoryChipText, category === c && styles.categoryChipTextActive]}>{tv("category", c)}</Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>Notes (optional)</Text>
-          <TextInput style={styles.notesInput} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder="Add delivery details, invoice note, or field comments..." placeholderTextColor={COLORS.muted} />
+          <Text style={styles.fieldLabel}>{t("mx.notes_optional")}</Text>
+          <TextInput style={styles.notesInput} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder={t("mx.notes_ph")} placeholderTextColor={COLORS.muted} />
         </ScrollView>
 
         <View style={styles.footer}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Receipt total</Text>
+            <Text style={styles.summaryLabel}>{t("mx.receipt_total")}</Text>
             <Text style={styles.summaryAmount}>{formatPeso(ocrResult.amount)}</Text>
           </View>
-          <BlockedReasons reasons={[triedSubmit && !category && "Pick a category for this expense: Materials, Equipment or Other."]} />
+          <BlockedReasons reasons={[triedSubmit && !category && t("mx.pick_category_hint")]} />
           <Pressable style={[styles.submitButton, (!category || submitting) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={submitting} accessibilityRole="button">
             <Text style={styles.submitButtonText}>{submitLabel}</Text>
           </Pressable>
         </View>
       </KeyboardAvoider>
 
-      <LoadingOverlay visible={submitting} message={draft.resubmit ? "Resubmitting expense…" : isOnline ? "Submitting expense…" : "Saving offline…"} detail={isOnline ? "Running the screening checks." : "Queuing on this device."} />
+      <LoadingOverlay visible={submitting} message={draft.resubmit ? t("mx.resubmitting") : isOnline ? t("submit.submitting") : t("mx.saving_offline")} detail={isOnline ? t("mx.screening") : t("mx.queuing")} />
     </SafeAreaView>
   );
 }

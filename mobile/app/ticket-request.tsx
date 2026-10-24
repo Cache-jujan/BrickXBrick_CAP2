@@ -31,6 +31,7 @@ import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
 import type { Cached } from "@/lib/cached-api";
+import { useLocale } from "@/lib/i18n-context";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -106,6 +107,7 @@ function prefilledCard(id: string, t: Ticket): Card {
 }
 
 export default function TicketRequestScreen() {
+  const { t, tv } = useLocale();
   const session = getSession();
   // Optional query param: when present, this screen is in "fix & resubmit"
   // mode — one card prefilled from the rejected ticket, project locked,
@@ -157,11 +159,11 @@ export default function TicketRequestScreen() {
         if (resubmitId) {
           const orig = (results[2] as Cached<Ticket[]>).data.find((t) => t.ticketid === resubmitId);
           if (!orig) {
-            setError("The request you're resubmitting is no longer available.");
+            setError(t("tr.err_resubmit_gone"));
             return;
           }
           if (orig.status !== "Rejected") {
-            setError("This request has already been handled — only rejected requests can be resubmitted.");
+            setError(t("tr.err_handled"));
             return;
           }
           setResubmitOf(orig);
@@ -174,8 +176,9 @@ export default function TicketRequestScreen() {
           setProject(projectList[0]);
         }
       })
-      .catch((err) => setError(plainError(err, "Unable to load request options.")))
+      .catch((err) => setError(plainError(err, t("errors.load_options"), t)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per role/ticket; a language change must not refetch
   }, [session?.user.role, resubmitId]);
 
   // Load the approved BOM items once a project is chosen (for the item picker).
@@ -217,26 +220,26 @@ export default function TicketRequestScreen() {
   function validateCard(card: Card): string | null {
     const qty = Number(card.quantity);
     if (card.ticketType === "Report") {
-      if (!card.reportText.trim()) return "Describe the issue.";
+      if (!card.reportText.trim()) return t("tr.v_describe");
       return null;
     }
     // Material Request / Work Item share quantity.
-    if (!card.quantity || !Number.isFinite(qty) || qty <= 0) return "Enter a quantity greater than 0.";
+    if (!card.quantity || !Number.isFinite(qty) || qty <= 0) return t("tf.err_quantity");
 
     if (card.ticketType === "Work Item") {
-      if (!card.materialType.trim()) return "Enter what's needed.";
-      if (!card.unit.trim()) return "Choose a unit.";
+      if (!card.materialType.trim()) return t("tr.v_needed");
+      if (!card.unit.trim()) return t("tq.err_unit");
       return null;
     }
     // Material Request
-    if (!card.bomItemID) return "Pick a BOM item, or “Not in the BOM”.";
+    if (!card.bomItemID) return t("tf.err_bom_item");
     if (card.bomItemID === NOT_IN_BOM) {
-      if (!card.materialType.trim()) return "Enter the material.";
-      if (!card.unit.trim()) return "Choose a unit.";
-      if (!card.notInBomReason.trim()) return "Enter the reason for the request.";
+      if (!card.materialType.trim()) return t("tr.v_material");
+      if (!card.unit.trim()) return t("tq.err_unit");
+      if (!card.notInBomReason.trim()) return t("tr.v_reason");
     }
     if (card.requestedBudget === "" || !Number.isFinite(Number(card.requestedBudget)) || Number(card.requestedBudget) < 0) {
-      return "Enter a requested budget of 0 or more.";
+      return t("tf.err_requested_budget");
     }
     return null;
   }
@@ -307,8 +310,8 @@ export default function TicketRequestScreen() {
   // The button stays tappable while the form is incomplete: tapping it shows
   // what's missing (list above the button, red outline on each ticket).
   const blockedReasons = [
-    !project && "Choose a project first.",
-    ...cardErrors.map((e, i) => e && (cards.length > 1 ? `Ticket ${i + 1}: ${e}` : e)),
+    !project && t("tr.choose_project"),
+    ...cardErrors.map((e, i) => e && (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
   ];
 
   async function handleSubmit() {
@@ -322,7 +325,7 @@ export default function TicketRequestScreen() {
       const created = await createTicketsBatch(withResubmitTag(cards.map(buildPayload)));
       setSent({ count: created.length, resubmit: !!resubmitOf });
     } catch (err) {
-      setError(plainError(err, "Unable to submit the tickets."));
+      setError(plainError(err, t("errors.submit_tickets"), t));
     } finally {
       setSubmitting(false);
     }
@@ -337,17 +340,17 @@ export default function TicketRequestScreen() {
         <View style={styles.sentCard} accessibilityLiveRegion="polite">
           <View style={styles.sentIcon}><Text style={styles.sentIconText}>✓</Text></View>
           <Text style={styles.sentTitle}>
-            {sent.resubmit ? "Request resubmitted" : sent.count > 1 ? "Tickets submitted" : "Ticket submitted"}
+            {sent.resubmit ? t("tr.resubmitted") : sent.count > 1 ? t("tr.tickets_submitted") : t("tr.ticket_submitted")}
           </Text>
           <Text style={styles.sentBody}>
             {sent.resubmit
-              ? "Your updated request was sent to your Project Manager."
-              : `${sent.count} ${sent.count > 1 ? "requests were" : "request was"} sent to your Project Manager. You'll be notified when they review it.`}
+              ? t("tr.resubmit_body")
+              : sent.count > 1 ? t("tr.sent_other", { count: sent.count }) : t("tr.sent_one")}
           </Text>
         </View>
-        <AppButton label="View my requests" onPress={() => router.replace("/site-manager/my-requests" as Href)} style={styles.sentButton} />
+        <AppButton label={t("tr.view_mine")} onPress={() => router.replace("/site-manager/my-requests" as Href)} style={styles.sentButton} />
         <AppButton
-          label={sent.resubmit ? "Back to tasks" : "Request another ticket"}
+          label={sent.resubmit ? t("tr.back_tasks") : t("tr.request_another")}
           variant="secondary"
           onPress={() => {
             if (sent.resubmit) { router.replace("/site-manager" as Href); return; }
@@ -365,7 +368,7 @@ export default function TicketRequestScreen() {
   if (loading) {
     return (
       <Shell>
-        <View style={styles.loadingCard}><ActivityIndicator color={COLORS.primary} /><Text style={styles.muted}>Loading…</Text></View>
+        <View style={styles.loadingCard}><ActivityIndicator color={COLORS.primary} /><Text style={styles.muted}>{t("common.loading")}</Text></View>
       </Shell>
     );
   }
@@ -373,9 +376,9 @@ export default function TicketRequestScreen() {
   if (projects.length === 0) {
     return (
       <Shell>
-        <Text style={styles.title}>Request a ticket</Text>
+        <Text style={styles.title}>{t("tr.title_request")}</Text>
         <View style={styles.loadingCard}>
-          <Text style={styles.muted}>You don't have an active project yet. Tickets appear here once a project is assigned to you.</Text>
+          <Text style={styles.muted}>{t("tr.no_project")}</Text>
         </View>
       </Shell>
     );
@@ -385,8 +388,8 @@ export default function TicketRequestScreen() {
   if (!project) {
     return (
       <Shell>
-        <Text style={styles.title}>Which project?</Text>
-        <Text style={styles.subtitle}>Choose the project you're raising tickets for.</Text>
+        <Text style={styles.title}>{t("tr.which_project")}</Text>
+        <Text style={styles.subtitle}>{t("tr.which_help")}</Text>
         {projects.map((p) => (
           <Pressable key={p.projectid} style={styles.projectChoice} onPress={() => setProject(p)}>
             <Text style={styles.projectChoiceName}>{p.name}</Text>
@@ -400,12 +403,12 @@ export default function TicketRequestScreen() {
   // Form.
   return (
     <Shell>
-      <Text style={styles.title}>{resubmitOf ? "Fix & resubmit" : "Request tickets"}</Text>
+      <Text style={styles.title}>{resubmitOf ? t("tr.fix_resubmit") : t("tr.request_tickets")}</Text>
       <View style={styles.projectBar}>
         <Text style={styles.projectBarName} numberOfLines={1}>{project.name}</Text>
         {!resubmitOf && projects.length > 1 && (
           <Pressable onPress={() => { setProject(null); setCards([emptyCard("c1")]); cardSeq.current = 1; }}>
-            <Text style={styles.changeLink}>Change</Text>
+            <Text style={styles.changeLink}>{t("pd.change")}</Text>
           </Pressable>
         )}
       </View>
@@ -413,20 +416,20 @@ export default function TicketRequestScreen() {
       {resubmitOf && (
         <View style={styles.rejectionBanner}>
           <Text style={styles.rejectionBannerLabel}>
-            Rejected{resubmitOf.rejectedbyrole ? ` by ${resubmitOf.rejectedbyrole}` : ""}
+            {resubmitOf.rejectedbyrole ? t("tr.rejected_by", { role: resubmitOf.rejectedbyrole }) : t("tq.rejected")}
           </Text>
           <Text style={styles.rejectionBannerReason}>
-            {resubmitOf.rejectionreason?.trim() || "No reason given."}
+            {resubmitOf.rejectionreason?.trim() || t("tq.no_reason")}
           </Text>
           <Text style={styles.rejectionBannerHint}>
-            Fix what's needed below, then resubmit — this will replace the rejected request.
+            {t("tr.fix_below")}
           </Text>
         </View>
       )}
 
       {savedAt && (
         <Text style={styles.offlineNote}>
-          Offline · the project, BOM and vendor lists are the copy saved {savedAtLabel(savedAt)}. You can fill the form, but submitting needs a connection.
+          {t("tr.offline_note", { when: savedAtLabel(savedAt) })}
         </Text>
       )}
 
@@ -443,10 +446,10 @@ export default function TicketRequestScreen() {
         return (
           <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index] && fieldErrorStyle]}>
             <View style={styles.ticketCardHead}>
-              <Text style={styles.ticketCardTitle}>Ticket {index + 1}</Text>
+              <Text style={styles.ticketCardTitle}>{t("tr.ticket_card", { n: index + 1 })}</Text>
               {cards.length > 1 && (
                 <Pressable onPress={() => removeCard(card.id)} hitSlop={8}>
-                  <Text style={styles.removeLink}>Remove</Text>
+                  <Text style={styles.removeLink}>{t("common.remove")}</Text>
                 </Pressable>
               )}
             </View>
@@ -455,35 +458,36 @@ export default function TicketRequestScreen() {
             ) : null}
 
             <Dropdown
-              label="Type"
-              value={card.ticketType}
+              label={t("tr.type")}
+              value={tv("tickettype", card.ticketType)}
               open={openKey === k("type")}
               onToggle={() => setOpenKey(openKey === k("type") ? null : k("type"))}
-              options={TICKET_TYPES.map((t) => ({
-                key: t,
-                label: t,
-                onPress: () => { updateCard(card.id, { ticketType: t }); setOpenKey(null); },
+              options={TICKET_TYPES.map((type) => ({
+                key: type,
+                label: tv("tickettype", type),
+                onPress: () => { updateCard(card.id, { ticketType: type }); setOpenKey(null); },
               }))}
             />
 
             {isReport && (
               <Field
-                label="What's the issue?"
+                label={t("tr.issue")}
                 value={card.reportText}
                 onChangeText={(v) => updateCard(card.id, { reportText: v })}
-                placeholder="Describe what happened on site and what needs attention"
+                placeholder={t("tr.issue_ph")}
                 multiline
               />
             )}
 
             {isMR && (
               <Dropdown
-                label="BOM item"
+                label={t("tf.bom_item")}
+                placeholder={!notInBom && !bomItems.find((it) => it.bomItemId === card.bomItemID)}
                 value={
                   notInBom
-                    ? "Not in the BOM"
+                    ? t("tr.not_in_bom_value")
                     : bomItems.find((it) => it.bomItemId === card.bomItemID)?.description ||
-                      (bomLoading ? "Loading items…" : "Select a BOM item")
+                      (bomLoading ? t("tr.loading_items") : t("tf.select_bom"))
                 }
                 open={openKey === k("bom")}
                 onToggle={() => setOpenKey(openKey === k("bom") ? null : k("bom"))}
@@ -495,7 +499,7 @@ export default function TicketRequestScreen() {
                   })),
                   {
                     key: NOT_IN_BOM,
-                    label: "— Not in the BOM —",
+                    label: t("tf.not_in_bom"),
                     onPress: () => { updateCard(card.id, { bomItemID: NOT_IN_BOM }); setOpenKey(null); },
                   },
                 ]}
@@ -504,19 +508,19 @@ export default function TicketRequestScreen() {
 
             {((isMR && notInBom) || isWork) && (
               <Field
-                label="Material"
+                label={t("tq.material")}
                 value={card.materialType}
                 onChangeText={(v) => updateCard(card.id, { materialType: v })}
-                placeholder={isWork ? "e.g. Cement" : "e.g. Pendant light"}
+                placeholder={isWork ? t("tf.material_type_ph_cement") : t("tf.material_type_ph_light")}
               />
             )}
 
             {isMR && notInBom && (
               <Field
-                label="Reason for request"
+                label={t("tr.reason_label")}
                 value={card.notInBomReason}
                 onChangeText={(v) => updateCard(card.id, { notInBomReason: v })}
-                placeholder="e.g. Additional fixture, billed separately"
+                placeholder={t("tf.not_in_bom_reason_ph")}
                 multiline
               />
             )}
@@ -525,7 +529,7 @@ export default function TicketRequestScreen() {
               <View style={styles.qtyRow}>
                 <View style={styles.qtyCol}>
                   <Field
-                    label="Quantity"
+                    label={t("bom.aria_quantity")}
                     value={card.quantity}
                     onChangeText={(v) => updateCard(card.id, { quantity: v })}
                     placeholder="0"
@@ -535,13 +539,14 @@ export default function TicketRequestScreen() {
                 <View style={styles.unitCol}>
                   {onBomUnit ? (
                     <View>
-                      <Text style={styles.label}>Unit</Text>
+                      <Text style={styles.label}>{t("bom.col_unit")}</Text>
                       <View style={styles.readonlyBox}><Text style={styles.readonlyText}>{onBomUnit}</Text></View>
                     </View>
                   ) : (
                     <Dropdown
-                      label="Unit"
-                      value={card.unit || "Unit"}
+                      label={t("bom.col_unit")}
+                      placeholder={!card.unit}
+                      value={card.unit || t("bom.col_unit")}
                       open={openKey === k("unit")}
                       onToggle={() => setOpenKey(openKey === k("unit") ? null : k("unit"))}
                       options={UNIT_OPTIONS.map((u) => ({
@@ -557,12 +562,13 @@ export default function TicketRequestScreen() {
 
             {!isReport && (
               <Dropdown
-                label="Preferred vendor (optional)"
-                value={card.vendorName || "Not sure yet"}
+                label={t("tr.vendor_optional")}
+                placeholder={!card.vendorName}
+                value={card.vendorName || t("tr.not_sure")}
                 open={openKey === k("vendor")}
                 onToggle={() => setOpenKey(openKey === k("vendor") ? null : k("vendor"))}
                 options={[
-                  { key: "__none__", label: "Not sure yet", onPress: () => { updateCard(card.id, { vendorName: "" }); setOpenKey(null); } },
+                  { key: "__none__", label: t("tr.not_sure"), onPress: () => { updateCard(card.id, { vendorName: "" }); setOpenKey(null); } },
                   ...vendors.map((v) => ({
                     key: v.vendorID,
                     label: v.vendorName,
@@ -574,16 +580,16 @@ export default function TicketRequestScreen() {
 
             {!isReport && (
               <DateField
-                label="Needed by (optional)"
+                label={t("tq.needed_by_opt")}
                 value={card.neededBy}
                 onChange={(v) => updateCard(card.id, { neededBy: v })}
-                hint="The Project Manager may adjust this date."
+                hint={t("tr.date_hint")}
               />
             )}
 
             {isMR && (
               <Field
-                label="Requested budget (PHP)"
+                label={t("tr.requested_budget")}
                 value={card.requestedBudget}
                 onChangeText={(v) => updateCard(card.id, { requestedBudget: v })}
                 placeholder="0.00"
@@ -596,7 +602,7 @@ export default function TicketRequestScreen() {
 
       {!resubmitOf && (
         <Pressable onPress={addCard} style={styles.addButton}>
-          <Text style={styles.addButtonText}>＋ Add another ticket</Text>
+          <Text style={styles.addButtonText}>{t("tr.add_another")}</Text>
         </Pressable>
       )}
 
@@ -604,10 +610,10 @@ export default function TicketRequestScreen() {
       <Pressable onPress={handleSubmit} disabled={submitting} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
           {submitting
-            ? resubmitOf ? "Resubmitting…" : "Submitting…"
+            ? resubmitOf ? t("tr.resubmitting") : t("common.submitting")
             : resubmitOf
-              ? "Resubmit request"
-              : cards.length > 1 ? `Submit ${cards.length} tickets` : "Submit ticket"}
+              ? t("tr.resubmit_btn")
+              : cards.length > 1 ? t("tr.submit_n", { count: cards.length }) : t("tf.submit_ticket")}
         </Text>
       </Pressable>
     </Shell>
@@ -615,10 +621,11 @@ export default function TicketRequestScreen() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const { t } = useLocale();
   return (
     <KeyboardScreen
       background={COLORS.bgWarm}
-      header={<FlowHeader variant="bar" title="Ticket request" fallback="/site-manager" />}
+      header={<FlowHeader variant="bar" title={t("tr.header")} fallback="/site-manager" />}
       contentContainerStyle={styles.content}
     >
       <Text style={styles.eyebrow}>SITE MANAGER</Text>
@@ -627,8 +634,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Dropdown({ label, value, open, disabled, onToggle, options }: { label: string; value: string; open: boolean; disabled?: boolean; onToggle: () => void; options: { key: string; label: string; onPress: () => void }[] }) {
-  const isPlaceholder = value.startsWith("Select") || value === "Unit" || value === "Not sure yet" || value === "Loading items…";
+function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = false, onToggle, options }: { label: string; value: string; open: boolean; disabled?: boolean; placeholder?: boolean; onToggle: () => void; options: { key: string; label: string; onPress: () => void }[] }) {
+  const { t } = useLocale();
   return (
     <View style={styles.dropdownWrap}>
       <Text style={styles.label}>{label}</Text>
@@ -641,7 +648,7 @@ function Dropdown({ label, value, open, disabled, onToggle, options }: { label: 
         // 260px. nestedScrollEnabled lets Android scroll it inside the page.
         <View style={styles.dropdownMenu}>
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-            {options.length === 0 ? <Text style={styles.noOptions}>No options available</Text> : options.map((option) => (
+            {options.length === 0 ? <Text style={styles.noOptions}>{t("tr.no_options")}</Text> : options.map((option) => (
               <Pressable key={option.key} onPress={option.onPress} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{option.label}</Text></Pressable>
             ))}
           </ScrollView>

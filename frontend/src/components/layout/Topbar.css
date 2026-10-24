@@ -47,23 +47,6 @@
   gap: var(--space-3);
 }
 
-.topbar-actions .language-toggle {
-  min-width: 42px;
-  padding-inline: 8px;
-}
-
-@media (min-width: 601px) {
-  .topbar-actions .language-toggle > span:last-child {
-    display: inline;
-  }
-}
-
-@media (max-width: 900px) {
-  .topbar-actions .language-toggle > span:last-child {
-    display: none;
-  }
-}
-
 .topbar-icon-btn {
   position: relative;
   width: 40px;

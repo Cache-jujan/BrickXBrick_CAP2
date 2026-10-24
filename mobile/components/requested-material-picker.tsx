@@ -7,6 +7,7 @@ import { FlatList, Modal, Pressable, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 export type RequestedMaterial = {
   key: string;
@@ -23,12 +24,13 @@ type Props = {
 };
 
 export function RequestedMaterialPicker({ visible, materials, onSelect, onClose }: Props) {
+  const { t } = useLocale();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close the list" />
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t("rv.close_list")} />
       <SafeAreaView edges={["bottom"]} style={styles.sheet}>
-        <Text style={styles.title}>Requested materials</Text>
-        <Text style={styles.subtitle}>From the Site Managers&apos; material requests.</Text>
+        <Text style={styles.title}>{t("rv.requested_materials")}</Text>
+        <Text style={styles.subtitle}>{t("rv.from_sm")}</Text>
         <FlatList
           data={materials}
           keyExtractor={(m) => m.key}
@@ -46,7 +48,7 @@ export function RequestedMaterialPicker({ visible, materials, onSelect, onClose 
           )}
         />
         <Pressable onPress={onClose} style={styles.cancel} accessibilityRole="button">
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t("common.cancel")}</Text>
         </Pressable>
       </SafeAreaView>
     </Modal>

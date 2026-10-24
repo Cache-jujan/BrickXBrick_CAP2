@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectCard.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -9,13 +10,8 @@ const PESO = new Intl.NumberFormat("en-PH", {
   maximumFractionDigits: 0,
 });
 
-const DATE = new Intl.DateTimeFormat("en-PH", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
-
 export function ProjectCard({ project }) {
+  const { t, formatDate } = useLocale();
   return (
     <Card className="project-card">
       <Link to={`/projects/${project.projectid}`} className="project-card-link">
@@ -29,8 +25,8 @@ export function ProjectCard({ project }) {
           <span aria-hidden="true">·</span>
           <span>
             {project.constructionstartdate
-              ? `Construction ${DATE.format(new Date(project.constructionstartdate))}`
-              : `Development ${DATE.format(new Date(project.startdate))}`}
+              ? t("projects.construction_on", { date: formatDate(project.constructionstartdate) })
+              : t("projects.development_on", { date: formatDate(project.startdate) })}
           </span>
           {project.municipality && (
             <>
