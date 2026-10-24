@@ -16,6 +16,24 @@ const TASK_REASONS = {
   INVALID_FIELDS: "This update was not valid. Please submit it again.",
 };
 
+// Daily check-in rejections (kind "daily_checkin").
+const CHECKIN_REASONS = {
+  DUPLICATE_CHECKIN: "A check-in for this slot was already sent, so this one was not needed.",
+  TOO_OLD: "This check-in was saved more than 3 days ago and can no longer be sent.",
+  NOT_YOUR_PROJECT: "You are no longer the Site Manager of this project, so the check-in was not sent.",
+  PROJECT_NOT_FOUND: "This project no longer exists.",
+  PROJECT_NOT_ACTIVE: "This project is no longer active, so check-ins can't be added.",
+  TASK_NOT_FOUND: "A task you linked is no longer assigned to you, so the check-in was not sent.",
+  MISSING_PHOTO: "A photo could not be used. Please make the check-in again.",
+  DUPLICATE_UUID: "This check-in was already sent from another device.",
+  INVALID_FIELDS: "This check-in was not valid. Please make it again.",
+  WRONG_ROLE: "This account can't send check-ins.",
+};
+
+export function describeCheckinRejection(code, serverMessage) {
+  return CHECKIN_REASONS[code] || serverMessage || "The server could not accept this check-in.";
+}
+
 // The text to show for a rejected task update. Unknown codes fall back to the
 // server's own message.
 export function describeRejection(code, serverMessage) {
@@ -37,6 +55,7 @@ export function buildSyncSummary(result) {
   const lines = [];
   if (result.expenses.synced > 0) lines.push(`${plural(result.expenses.synced, "expense", "expenses")} synced`);
   if (result.tasks.synced > 0) lines.push(`${plural(result.tasks.synced, "task update", "task updates")} sent for review`);
+  if (result.checkins?.synced > 0) lines.push(`${plural(result.checkins.synced, "check-in", "check-ins")} sent`);
   if (result.scans?.uploaded > 0) {
     lines.push(`${plural(result.scans.uploaded, "receipt", "receipts")} uploaded for reading (see Scanned receipts)`);
   }
@@ -46,7 +65,9 @@ export function buildSyncSummary(result) {
     const reasons = (result.rejectedItems || []).slice(0, MAX_REASONS).map((item) =>
       item.kind === "task_update"
         ? `• ${describeRejection(item.code, item.message)}`
-        : item.kind === "scan"
+        : item.kind === "daily_checkin"
+          ? `• ${describeCheckinRejection(item.code, item.message)}`
+          : item.kind === "scan"
           ? `• Receipt photo: ${item.message}`
           : `• ${item.code}: ${item.message}`
     );

@@ -58,9 +58,27 @@ export function projectToForm(project) {
  * Shared Create/Edit Project form (F2).
  *   mode="create": includes the optional Site Manager picker
  *   mode="edit":   the Site Manager is changed from the project page instead
- * onSubmit(payload) must return a promise; its rejection is shown as a banner.
+ * onSubmit(payload, form) must return a promise; its rejection is shown as a
+ * banner. `form` is the raw field state, so a wizard can bring the user back.
  */
-export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLabel, busyLabel, cancelTo, budgetLocked = false }) {
+export function ProjectForm({
+  mode,
+  projectId,
+  initialValues,
+  onSubmit,
+  submitLabel,
+  busyLabel,
+  cancelTo,
+  budgetLocked = false,
+  // Create only: content shown under the form fields (the document checklist),
+  // the project type fixed by a chosen template, and a Site Manager that must be
+  // chosen because the starting structure has construction tasks.
+  extraSection = null,
+  lockProjectType = false,
+  siteManagerRequired = false,
+  onCancel = null,
+  cancelLabel = "Cancel",
+}) {
   const [form, setForm] = useState(initialValues || EMPTY_PROJECT_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -122,6 +140,9 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
       errors.endDate = "Completion can't be before construction starts.";
     }
     if (!form.projectManagerId) errors.projectManagerId = "Select a Project Manager.";
+    if (mode === "create" && siteManagerRequired && !form.siteManagerId) {
+      errors.siteManagerId = "Select a Site Manager. The chosen starting point has construction tasks, which go to the Site Manager.";
+    }
     return errors;
   }
 
@@ -152,7 +173,7 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
 
     setSubmitting(true);
     try {
-      await onSubmit(payload);
+      await onSubmit(payload, form);
     } catch (err) {
       setFormError(extractErrorMessage(err, "Couldn't save the project. Please try again."));
       setSubmitting(false);
@@ -192,7 +213,7 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
               required
               value={form.projectType}
               error={fieldErrors.projectType}
-              disabled={!options}
+              disabled={!options || lockProjectType}
               onChange={(e) => updateField("projectType", e.target.value)}
             >
               <option value="">{options ? "Select a project type" : "Loading…"}</option>
@@ -326,11 +347,13 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
 
           {mode === "create" && (
             <ManagerPicker
-              label="Site Manager (required before activation)"
+              label={siteManagerRequired ? "Site Manager" : "Site Manager (required before activation)"}
+              required={siteManagerRequired}
               managers={siteManagers}
               loading={loadingLists}
               value={form.siteManagerId}
-              emptyOptionLabel="None yet (assign later)"
+              error={fieldErrors.siteManagerId}
+              emptyOptionLabel={siteManagerRequired ? "Select a Site Manager" : "None yet (assign later)"}
               onChange={(v) => updateField("siteManagerId", v)}
             />
           )}
@@ -338,12 +361,20 @@ export function ProjectForm({ mode, projectId, initialValues, onSubmit, submitLa
         </div>
       </div>
 
+      {extraSection}
+
       <div className="pf-actions">
         {formError ? <Banner tone="error" title={formError} /> : <span className="pf-actions-note">Fields marked * are required.</span>}
         <div className="pf-actions-buttons">
-          <Link to={cancelTo} className="btn btn-secondary">
-            Cancel
-          </Link>
+          {onCancel ? (
+            <button type="button" className="btn btn-secondary" onClick={onCancel}>
+              {cancelLabel}
+            </button>
+          ) : (
+            <Link to={cancelTo} className="btn btn-secondary">
+              Cancel
+            </Link>
+          )}
           <Button type="submit" disabled={submitting}>
             {submitting ? busyLabel : submitLabel}
           </Button>

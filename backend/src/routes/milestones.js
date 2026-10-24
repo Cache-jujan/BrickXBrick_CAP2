@@ -5,6 +5,8 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 const { dateWindowWarning } = require("../lib/scheduleWindows");
+const { isUUID } = require("../lib/uuid");
+const { parseTimelineChanges, applyTimelineChanges, loadTimelineLocks } = require("../lib/timelineEdit");
 
 const MILESTONE_PHASES = ["Planning", "Construction"];
 
@@ -186,6 +188,50 @@ router.get("/attention", requireRole("Project Manager"), async (req, res, next) 
             [req.user.id]
         );
         res.json(result.rows);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /timeline/locks?projectId= — the tasks of this project that cannot be
+// deleted (they have a progress submission or attached documents), so the
+// "Edit timeline" modal can say so before the PM tries. Owning PM only, on a
+// Draft or Active project, like the edit itself. Declared before "/:id".
+// -> { locks: { [taskId]: "progress" | "documents" } }
+router.get("/timeline/locks", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const { projectId } = req.query;
+        if (!isUUID(projectId)) {
+            const err = new Error("projectId query parameter must be a valid id");
+            err.status = 400;
+            throw err;
+        }
+        await getOwnedProject(projectId, req.user.id);
+        res.json({ locks: await loadTimelineLocks(query, projectId) });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PATCH /timeline — the PM's "Edit timeline" save: rename, re-date and delete
+// milestones and tasks of one project in a single all-or-nothing transaction.
+// body: { projectID,
+//         milestones: [{ milestoneID, name?, dueDate?, remove? }],
+//         tasks:      [{ taskID, taskName?, dueDate?, remove? }] }
+// 409 (with details.errors) when something can't be saved: a completed task, or
+// a task with progress or documents being deleted. Nothing is saved then.
+router.patch("/timeline", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const { projectID } = req.body || {};
+        if (!isUUID(projectID)) {
+            const err = new Error("projectID is required");
+            err.status = 400;
+            throw err;
+        }
+        const changes = parseTimelineChanges(req.body);
+        const project = await getOwnedProject(projectID, req.user.id);
+        const result = await withTransaction((client) => applyTimelineChanges(client, project, changes));
+        res.json(result);
     } catch (err) {
         next(err);
     }

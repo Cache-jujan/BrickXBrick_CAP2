@@ -316,7 +316,7 @@ test("nothing pending: no network call at all", async () => {
   setup();
   const result = await syncAllPending();
   assert.equal(calls.fetches.length, 0);
-  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, scans: { uploaded: 0, rejected: 0 }, rejectedItems: [], postponedItems: [] });
+  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, scans: { uploaded: 0, rejected: 0 }, checkins: { synced: 0, rejected: 0 }, rejectedItems: [], postponedItems: [] });
 });
 
 test("expenses still sync exactly as before (response shape unchanged)", async () => {

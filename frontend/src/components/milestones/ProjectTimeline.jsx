@@ -262,7 +262,7 @@ function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask, onO
   );
 }
 
-export const ProjectTimeline = memo(function ProjectTimeline({ project, canManage = false, onAddMilestone, onAddTask, onCompleteTask, onOpenDocuments }) {
+export const ProjectTimeline = memo(function ProjectTimeline({ project, canManage = false, onAddMilestone, onEditTimeline, onAddTask, onCompleteTask, onOpenDocuments }) {
   const milestones = useMemo(() => (Array.isArray(project?.milestones) ? project.milestones : []), [project]);
   const [hovered, setHovered] = useState(null);
   const leaveTimer = useRef(null);
@@ -301,7 +301,14 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
           <h2 id="project-timeline-title">Project Timeline</h2>
           <p>Swimlanes by phase · hover a milestone bar for details</p>
         </div>
-        {canManage && <button type="button" className="project-timeline-add" onClick={onAddMilestone}>+ Add milestone</button>}
+        {canManage && (
+          <div className="project-timeline-actions">
+            {onEditTimeline && milestones.length > 0 && (
+              <button type="button" className="project-timeline-add" onClick={onEditTimeline}>Edit timeline</button>
+            )}
+            <button type="button" className="project-timeline-add" onClick={onAddMilestone}>+ Add milestone</button>
+          </div>
+        )}
       </header>
 
       <div className="project-timeline-scroll">

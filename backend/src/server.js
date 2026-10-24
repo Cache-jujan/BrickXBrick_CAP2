@@ -13,6 +13,8 @@ const { termsFields } = legalRoutes;
 const expenseRoutes = require("./routes/expenses");
 const milestoneRoutes = require("./routes/milestones");
 const projectRoutes = require("./routes/projects");
+const projectTemplateRoutes = require("./routes/projectTemplates");
+const checkinRoutes = require("./routes/checkins");
 const bomRoutes = require("./routes/bom");
 const receiptRoutes = require("./routes/receipts");
 const syncRoutes = require("./routes/sync");
@@ -51,6 +53,8 @@ app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Noti
 app.use("/api/admin/users", adminUsers);          // F1 account management
 app.use("/api/projects/:projectId/bom", bomRoutes); // F2 bill of materials
 app.use("/api/projects", projectRoutes);          // F2 projects
+app.use("/api/project-templates", projectTemplateRoutes); // F2 start screen: templates / copy a past project
+app.use("/api/checkins", checkinRoutes);          // daily progress check-ins
 app.use("/api/milestones", milestoneRoutes);      // F3 milestones
 app.use("/api/tasks", taskRoutes);                // F3 tasks
 app.use("/api/tickets", ticketRoutes);            // F4 tickets
