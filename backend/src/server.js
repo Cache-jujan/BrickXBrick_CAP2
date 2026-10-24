@@ -23,6 +23,7 @@ const ticketRoutes = require("./routes/tickets");
 const blockchainRoutes = require("./routes/blockchain");
 const reportRoutes = require("./routes/reports");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("./lib/blockchainService");
+const { flagOverduePending } = require("./lib/blockchainOverdue");
 const { runIntegrityScan } = require("./lib/integrityCheck");
 const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
@@ -109,6 +110,7 @@ async function retryPendingBlockchainWrites() {
               WHERE e.blockchainStatus = 'Pending' AND e.status = 'Approved'
                 AND NOT EXISTS (SELECT 1 FROM BlockchainLogs bl
                                  WHERE bl.expenseID = e.expenseID AND bl.eventType = 'ExpenseApproved')
+              ORDER BY e.approvedAt NULLS FIRST
               LIMIT 20`
         );
         for (const expense of pending.rows) {
@@ -126,6 +128,8 @@ async function retryPendingBlockchainWrites() {
                 console.log(`Retry still failing for ${expense.expenseid}: ${e.message}`);
             }
         }
+        // 72-hour rule: tell the GMs / System Administrators about anything still waiting.
+        await flagOverduePending();
     } catch (e) {
         console.error("Retry pass failed:", e.message);
     } finally {
