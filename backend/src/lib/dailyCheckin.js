@@ -385,6 +385,55 @@ async function loadToday(user, { now = new Date(), query = db.query } = {}) {
   };
 }
 
+/**
+ * One check-in as its Site Manager sent it, with the Project Manager's review
+ * (Acknowledged, or Flagged with the comment) if there is one. Only the Site
+ * Manager who sent it may read it here; anyone else gets 404, so ids are not
+ * probed. Same shape as one entry of loadProjectCheckins, plus projectId/projectName.
+ */
+async function loadCheckinDetail(user, checkinId, { query = db.query } = {}) {
+  if (!isUUID(checkinId)) throw new CheckinError(404, "CHECKIN_NOT_FOUND", "Check-in not found");
+  const found = await query(
+    `SELECT c.checkinId, c.projectId, p.name AS projectName, c.slot, to_char(c.checkinDate, 'YYYY-MM-DD') AS day,
+            c.capturedAt, c.submittedAt, c.siteStatus, c.summary, c.issues, c.needsPmAction, c.onTime,
+            r.decision, r.comment AS reviewComment, r.reviewedAt, ru.name AS reviewedByName
+       FROM daily_progress_checkins c
+       JOIN projects p ON p.projectId = c.projectId
+       LEFT JOIN daily_progress_reviews r ON r.checkinId = c.checkinId
+       LEFT JOIN users ru ON ru.userId = r.reviewedBy
+      WHERE c.checkinId = $1 AND c.submittedBy = $2`,
+    [checkinId, user.id]
+  );
+  if (found.rowCount === 0) throw new CheckinError(404, "CHECKIN_NOT_FOUND", "Check-in not found");
+  const r = found.rows[0];
+  const photos = await query("SELECT photoUrl FROM daily_checkin_photos WHERE checkinId = $1 ORDER BY sortOrder", [checkinId]);
+  const tasks = await query(
+    `SELECT t.taskId, t.taskName FROM daily_checkin_tasks ct JOIN tasks t ON t.taskId = ct.taskId
+      WHERE ct.checkinId = $1 ORDER BY t.taskName`,
+    [checkinId]
+  );
+  return {
+    checkinId: r.checkinid,
+    projectId: r.projectid,
+    projectName: r.projectname,
+    day: r.day,
+    slot: r.slot,
+    slotLabel: SLOT_LABEL[r.slot],
+    capturedAt: r.capturedat,
+    submittedAt: r.submittedat,
+    siteStatus: r.sitestatus,
+    summary: r.summary,
+    issues: r.issues,
+    needsPmAction: r.needspmaction,
+    onTime: r.ontime,
+    photos: photos.rows.map((x) => x.photourl),
+    tasks: tasks.rows.map((x) => ({ taskId: x.taskid, taskName: x.taskname })),
+    review: r.decision
+      ? { decision: r.decision, comment: r.reviewcomment, reviewedAt: r.reviewedat, reviewedByName: r.reviewedbyname }
+      : null,
+  };
+}
+
 // ---- Project Manager: list + review ----------------------------------------------
 
 function addDaysIso(iso, days) {
@@ -572,6 +621,7 @@ module.exports = {
   photoKeyOk,
   submitCheckin,
   loadToday,
+  loadCheckinDetail,
   loadProjectCheckins,
   reviewCheckin,
 };

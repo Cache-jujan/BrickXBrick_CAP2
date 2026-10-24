@@ -40,12 +40,17 @@ export default function RootLayout() {
   // sign-in, send each role to its own home once (a Site Manager to their
   // tasks), the same place signing in would have taken them.
   const navReady = !!useRootNavigationState()?.key;
+  // Nothing is drawn until the fonts are ready (below), so the screens do not
+  // exist before then. Going to a screen while they do not exist leaves the
+  // navigator and the router disagreeing about where we are, and the navigator
+  // then rewrites its state on every render ("Maximum update depth exceeded").
+  const screensDrawn = fontsLoaded || !!fontError;
   const sentHome = useRef(false);
   useEffect(() => {
-    if (!navReady || !restored || sentHome.current) return;
+    if (!screensDrawn || !navReady || !restored || sentHome.current) return;
     sentHome.current = true;
     router.replace(nextRouteAfterLogin(restored.user));
-  }, [navReady, restored]);
+  }, [screensDrawn, navReady, restored]);
   // If the fonts fail to load, carry on with the system font.
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});

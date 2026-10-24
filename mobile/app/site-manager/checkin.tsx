@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
-import { Redirect, Stack, router, useFocusEffect } from "expo-router";
+import { Redirect, Stack, router, useFocusEffect, type Href } from "expo-router";
 
 import { AppButton } from "@/components/app-button";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
@@ -78,7 +78,7 @@ export default function SiteManagerCheckinScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [pendingSlots, setPendingSlots] = useState<{ project_id: string; slot: string }[]>([]);
+  const [pendingSlots, setPendingSlots] = useState<{ client_id: string; project_id: string; slot: string }[]>([]);
   const [rejected, setRejected] = useState<RejectedCheckin[]>([]);
 
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export default function SiteManagerCheckinScreen() {
   const readLocal = useCallback(() => {
     const user = getSession()?.user.id;
     if (!user) return;
-    setPendingSlots(getPendingCheckinSlots(user, manilaDate()) as { project_id: string; slot: string }[]);
+    setPendingSlots(getPendingCheckinSlots(user, manilaDate()) as { client_id: string; project_id: string; slot: string }[]);
     setRejected((getRejectedCheckins(user) as RejectedCheckin[]) ?? []);
   }, []);
 
@@ -238,9 +238,9 @@ export default function SiteManagerCheckinScreen() {
       slotChosenRef.current = false;
       if (isOnline) {
         syncNow();
-        Alert.alert("Check-in saved", "It is being sent to your Project Manager now.");
+        Alert.alert("Check-in saved", "It is being sent to your Project Manager now.", [{ text: "OK", onPress: goBack }]);
       } else {
-        Alert.alert("Saved on your phone", "It will be sent automatically when you're back online.");
+        Alert.alert("Saved on your phone", "It will be sent automatically when you're back online.", [{ text: "OK", onPress: goBack }]);
       }
     } catch (err) {
       for (const path of copied) await deleteQueuedPhoto(path);
@@ -248,6 +248,10 @@ export default function SiteManagerCheckinScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function goBack() {
+    router.replace("/site-manager");
   }
 
   async function dismiss(row: RejectedCheckin) {
@@ -308,8 +312,14 @@ export default function SiteManagerCheckinScreen() {
             </View>
           ))}
 
-          <Text style={styles.label}>Project</Text>
-          <View style={styles.chipRow}>
+          <Text style={styles.label}>{today.projects.length === 1 ? "Checking in for" : "Project"}</Text>
+          {today.projects.length === 1 && (
+            <View style={styles.projectCard}>
+              <Text style={styles.projectName}>{today.projects[0].name}</Text>
+              <Text style={styles.hint}>This is your only active project.</Text>
+            </View>
+          )}
+          <View style={[styles.chipRow, today.projects.length === 1 && { display: "none" }]}>
             {today.projects.map((p) => (
               <Pressable
                 key={p.projectId}
@@ -322,7 +332,11 @@ export default function SiteManagerCheckinScreen() {
               </Pressable>
             ))}
           </View>
-          {triedSubmit && !projectId && <Text style={styles.fieldError}>Choose a project.</Text>}
+          {today.projects.length > 1 && (
+            <Text style={projectId ? styles.hint : styles.fieldError}>
+              {projectId ? `Checking in for ${project?.name ?? ""}.` : "Choose which project this check-in is for."}
+            </Text>
+          )}
 
           {project && (
             <>
@@ -335,6 +349,17 @@ export default function SiteManagerCheckinScreen() {
                     <Pressable
                       key={s.slot}
                       onPress={() => {
+                        // A slot already sent (or saved on this phone) opens what was sent.
+                        const sentId =
+                          s.state === "Queued"
+                            ? pendingSlots.find((p) => p.project_id === project.projectId && p.slot === s.slot)?.client_id
+                            : s.state === "Submitted"
+                              ? s.checkinId
+                              : null;
+                        if (sentId) {
+                          router.push(`/site-manager/checkin/${sentId}` as Href);
+                          return;
+                        }
                         slotChosenRef.current = true;
                         setSlot(s.slot);
                       }}
@@ -480,6 +505,8 @@ const styles = StyleSheet.create({
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 24 },
   muted: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 14 },
   hint: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12 },
+  projectCard: { backgroundColor: COLORS.primaryTint, borderColor: COLORS.primary, borderWidth: 1, borderRadius: 12, padding: 12, gap: 2 },
+  projectName: { color: COLORS.primaryTintText, fontFamily: FONT.extrabold, fontSize: 16 },
   savedNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, padding: 8, borderRadius: 8, fontFamily: FONT.medium, fontSize: 12 },
   label: { color: COLORS.heading, fontFamily: FONT.bold, fontSize: 14, marginTop: 12 },
   card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 14, padding: 16, gap: 6 },

@@ -16,6 +16,7 @@ const {
   checkinPhotoExists,
   submitCheckin,
   reviewCheckin,
+  loadCheckinDetail,
 } = require("../src/lib/dailyCheckin");
 
 const ID = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -287,4 +288,29 @@ test("review: only the project's Project Manager; a Flag needs a comment and tel
   const acked = reviewDb();
   await reviewCheckin({ user: { id: ID(2) }, checkinId: ID(600), decision: "Acknowledged" }, acked);
   assert.ok(!acked.calls.some((c) => c.sql.startsWith("INSERT INTO notifications")), "acknowledging is quiet");
+});
+
+test("detail: the Site Manager reads their own check-in with the PM's review; anyone else gets 404", async () => {
+  const row = {
+    checkinid: ID(600), projectid: PROJECT, projectname: "Tower A", slot: "Morning", day: "2026-10-23",
+    capturedat: "2026-10-23T00:10:00Z", submittedat: "2026-10-23T00:11:00Z", sitestatus: "Delayed", summary: "Rain",
+    issues: "No cement", needspmaction: true, ontime: true,
+    decision: "Flagged", reviewcomment: "Call the supplier", reviewedat: "2026-10-23T02:00:00Z", reviewedbyname: "Pat PM",
+  };
+  const calls = [];
+  const query = async (sql, params) => {
+    calls.push(params);
+    if (sql.includes("FROM daily_progress_checkins c")) return params[1] === SM.id ? { rowCount: 1, rows: [row] } : { rowCount: 0, rows: [] };
+    if (sql.includes("daily_checkin_photos")) return { rowCount: 1, rows: [{ photourl: "https://r2.test/checkins/p/a.jpg" }] };
+    return { rowCount: 1, rows: [{ taskid: ID(7), taskname: "Pour slab" }] };
+  };
+
+  const got = await loadCheckinDetail(SM, ID(600), { query });
+  assert.equal(got.slotLabel, "Morning");
+  assert.deepEqual(got.photos, ["https://r2.test/checkins/p/a.jpg"]);
+  assert.deepEqual(got.tasks, [{ taskId: ID(7), taskName: "Pour slab" }]);
+  assert.deepEqual([got.review.decision, got.review.comment], ["Flagged", "Call the supplier"]);
+
+  await assert.rejects(loadCheckinDetail({ id: ID(9) }, ID(600), { query }), (e) => e.code === "CHECKIN_NOT_FOUND");
+  await assert.rejects(loadCheckinDetail(SM, "nope", { query }), (e) => e.code === "CHECKIN_NOT_FOUND");
 });

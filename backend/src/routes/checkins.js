@@ -22,6 +22,7 @@ const {
   CheckinError,
   submitCheckin,
   loadToday,
+  loadCheckinDetail,
   loadProjectCheckins,
   reviewCheckin,
 } = require("../lib/dailyCheckin");
@@ -46,6 +47,16 @@ function receivePhoto(req, res, next) {
 router.get("/today", requireRole("Site Manager"), async (req, res, next) => {
   try {
     res.json(await loadToday(req.user));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /:id — one check-in the Site Manager sent, with the PM's review (if any).
+// A single-segment id never clashes with /today or /project/:projectId.
+router.get("/:id", requireRole("Site Manager"), async (req, res, next) => {
+  try {
+    res.json(await loadCheckinDetail(req.user, req.params.id));
   } catch (err) {
     next(err);
   }

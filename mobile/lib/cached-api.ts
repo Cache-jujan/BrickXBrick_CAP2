@@ -9,6 +9,7 @@ import {
   fetchApprovedVendors,
   fetchAssignedTasks,
   fetchBomItems,
+  fetchCheckinDetail,
   fetchCheckinsToday,
   fetchMyExpenses,
   fetchNotifications,
@@ -27,6 +28,7 @@ export const loadAssignedTasks = () => cached("tasks:assigned", fetchAssignedTas
 export const loadAssignedTickets = (role: "Purchaser" | "Site Manager") =>
   cached(`tickets:${role}`, () => fetchAllAssignedTickets(role));
 export const loadCheckinsToday = () => cached("checkins:today", fetchCheckinsToday);
+export const loadCheckinDetail = (checkinId: string) => cached(`checkin:${checkinId}`, () => fetchCheckinDetail(checkinId));
 export const loadActiveProjects = () => cached("projects:active", fetchActiveProjects);
 export const loadOpenRequests = () => cached("allocations:open-requests", fetchOpenRequests);
 export const loadMyExpenses = () => cached("expenses:mine", fetchMyExpenses);

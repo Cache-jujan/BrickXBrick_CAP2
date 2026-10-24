@@ -423,6 +423,14 @@ const parseCheckin = (row) => ({
 
 // Returns { queued: true, replacedPhotoPaths } (files the caller deletes) or
 // { queued: false, reason, message }.
+/**
+ * @param {{
+ *   clientId: string, userId: string, projectId: string, checkinDate: string,
+ *   slot: string, capturedAt: string, siteStatus: string, summary: string,
+ *   issues?: string | null, needsPmAction?: boolean, taskIds?: string[], photoPaths?: string[],
+ * }} checkin
+ * @returns {{ queued: boolean, reason?: string, message?: string, replacedPhotoPaths?: string[] }}
+ */
 export function queueCheckin({
   clientId, userId, projectId, checkinDate, slot, capturedAt, siteStatus,
   summary, issues = null, needsPmAction = false, taskIds = [], photoPaths = [],
@@ -487,9 +495,17 @@ export function getPendingCheckins(userId = null) {
 export function getPendingCheckinSlots(userId, checkinDate) {
   if (!db) return [];
   return all(
-    "SELECT project_id, slot FROM offline_checkins WHERE sync_status = 'PENDING' AND user_id = ? AND checkin_date = ?;",
+    "SELECT client_id, project_id, slot FROM offline_checkins WHERE sync_status = 'PENDING' AND user_id = ? AND checkin_date = ?;",
     [userId, checkinDate]
   );
+}
+
+// One waiting check-in by its phone-side id, or null (already sent, or not this user's).
+/** @param {string} clientId @param {string} userId */
+export function getPendingCheckinById(clientId, userId) {
+  if (!db) return null;
+  const row = first("SELECT * FROM offline_checkins WHERE client_id = ? AND user_id = ? AND sync_status = 'PENDING';", [clientId, userId]);
+  return row ? parseCheckin(row) : null;
 }
 
 export function setCheckinPhotoUrls(clientId, urls) {

@@ -6,7 +6,7 @@
 // NOTE: scheme must match the redirect URI configured in your OAuth
 // provider (Supabase) — update that dashboard setting to
 // "brickxbrick://oauth/callback" if it isn't already.
-const bundleId = "com.app.receiptcapturemobile";
+const bundleId = "com.fourloop.brickxbrick";
 const scheme = "brickxbrick";
 
 const env = {
@@ -27,6 +27,7 @@ const allowCleartext = apiUrl.startsWith("http://");
 const config = {
   name: env.appName,
   slug: env.appSlug,
+  owner: "cache-jujan",
   version: "1.0.0",
   extra: {
     eas: { projectId: "b44fc7f1-a37b-43b4-b806-266479320c7d" },
@@ -126,6 +127,11 @@ const config = {
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
+  },
+  extra: {
+    eas: {
+      projectId: "ecca3f5b-5be2-440f-b12c-0d9a12581a46",
+    },
   },
 };
 

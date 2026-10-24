@@ -3,6 +3,7 @@
 // same things again; this only saves the Site Manager a failed round trip.
 
 export const SLOTS = ["Morning", "Midday", "EndOfDay"];
+/** @type {Record<"Morning" | "Midday" | "EndOfDay", string>} */
 export const SLOT_LABEL = { Morning: "Morning", Midday: "Midday", EndOfDay: "End of day" };
 export const SITE_STATUSES = ["On Track", "Delayed", "Blocked"];
 export const MAX_PHOTOS = 3;
@@ -16,7 +17,16 @@ export function manilaDate(when = new Date()) {
 }
 
 // What is still missing, in plain words ([] = ready to save).
+/**
+ * @param {{
+ *   projectId: string | null, slot: string | null, siteStatus: string | null,
+ *   summary?: string | null, issues?: string | null, needsPmAction?: boolean,
+ *   taskIds?: string[], photoCount?: number,
+ * }} input
+ * @returns {string[]}
+ */
 export function checkinProblems({ projectId, slot, siteStatus, summary, issues, needsPmAction, taskIds = [], photoCount = 0 }) {
+  /** @type {string[]} */
   const problems = [];
   if (!projectId) problems.push("Choose a project.");
   if (!SLOTS.includes(slot)) problems.push("Choose Morning, Midday or End of day.");
@@ -33,6 +43,12 @@ export function checkinProblems({ projectId, slot, siteStatus, summary, issues, 
 
 // "Saved on this phone" slots win over the server's view, so a slot whose
 // check-in is queued is not offered twice.
+/**
+ * @param {import("../api").CheckinSlot[]} serverSlots
+ * @param {{ project_id: string, slot: string }[]} pendingSlots
+ * @param {string} projectId
+ * @returns {(Omit<import("../api").CheckinSlot, "state"> & { state: import("../api").CheckinSlot["state"] | "Queued" })[]}
+ */
 export function slotStates(serverSlots, pendingSlots, projectId) {
   const queued = new Set(pendingSlots.filter((p) => p.project_id === projectId).map((p) => p.slot));
   return serverSlots.map((s) => (s.state !== "Submitted" && queued.has(s.slot) ? { ...s, state: "Queued" } : s));

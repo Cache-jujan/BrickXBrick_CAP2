@@ -161,6 +161,32 @@ export type CheckinsToday = {
   projects: { projectId: string; name: string; slots: CheckinSlot[] }[];
 };
 
+// One check-in as the Site Manager sent it, with the Project Manager's review.
+export type CheckinDetail = {
+  checkinId: string;
+  projectId: string;
+  projectName: string;
+  day: string;
+  slot: CheckinSlotName;
+  slotLabel: string;
+  submittedAt: string;
+  siteStatus: string;
+  summary: string;
+  issues: string | null;
+  needsPmAction: boolean;
+  onTime: boolean;
+  photos: string[];
+  tasks: { taskId: string; taskName: string }[];
+  review: { decision: "Acknowledged" | "Flagged"; comment: string | null; reviewedAt: string; reviewedByName: string | null } | null;
+};
+
+export async function fetchCheckinDetail(checkinId: string): Promise<CheckinDetail> {
+  const res = await apiFetch(`${API_URL}/api/checkins/${checkinId}`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to load this check-in (${res.status})`);
+  return data;
+}
+
 export async function fetchCheckinsToday(): Promise<CheckinsToday> {
   const res = await apiFetch(`${API_URL}/api/checkins/today`, { headers: authHeaders() });
   const data = await res.json().catch(() => ({}));

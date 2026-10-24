@@ -19,6 +19,25 @@ const RANGES = [
   { days: 30, label: "Last 30 days" },
 ];
 
+// One photo thumbnail. If the image cannot load (offline, expired or blocked
+// link), show a labelled placeholder instead of a broken-image icon.
+function CheckinPhoto({ url, index }) {
+  const [failed, setFailed] = useState(false);
+  const label = `Check-in photo ${index + 1}`;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" title={failed ? "Photo could not be loaded. Click to try opening it." : label}>
+      {failed ? (
+        <span className="checkin-photo-missing" role="img" aria-label={`${label} could not be loaded`}>
+          <strong>Photo {index + 1}</strong>
+          <span>Could not be loaded</span>
+        </span>
+      ) : (
+        <img src={url} alt={label} loading="lazy" onError={() => setFailed(true)} />
+      )}
+    </a>
+  );
+}
+
 // "2026-10-23" -> "Fri, Oct 23". Parsed as a plain calendar day, so the
 // viewer's time zone can never shift it.
 function dayLabel(iso) {
@@ -42,13 +61,16 @@ export function ProjectCheckinsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [onlyOpen, setOnlyOpen] = useState(false);
+  // "todo" = waiting for the PM (not reviewed, or flagged and waiting on the Site Manager).
+  // "history" = acknowledged, kept out of the way so the list does not pile up.
+  const [view, setView] = useState("todo");
   // Which check-in has its review form open, with its draft.
   const [flagging, setFlagging] = useState(null);
   const [flagComment, setFlagComment] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [actionError, setActionError] = useState("");
   const focusedRef = useRef(false);
+  const isDone = (c) => c.review?.decision === "Acknowledged";
 
   // Only the Project Manager of the project may review; the backend enforces it too.
   const canReview = user.role === "Project Manager";
@@ -78,16 +100,24 @@ export function ProjectCheckinsPage() {
   // Coming from a notification: scroll to that check-in once, and show it.
   useEffect(() => {
     if (!focusId || focusedRef.current || !data) return;
+    const target = data.checkins.find((c) => c.checkinId === focusId);
+    if (target && isDone(target) && view !== "history") {
+      setView("history");
+      return;
+    }
     const el = document.getElementById(`checkin-${focusId}`);
     if (el) {
       focusedRef.current = true;
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [focusId, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, data, view]);
 
+  const historyCount = useMemo(() => (data?.checkins || []).filter(isDone).length, [data]);
+  const todoCount = (data?.checkins.length || 0) - historyCount;
   const visible = useMemo(
-    () => (data?.checkins || []).filter((c) => !onlyOpen || !c.review),
-    [data, onlyOpen]
+    () => (data?.checkins || []).filter((c) => (view === "history" ? isDone(c) : !isDone(c))),
+    [data, view]
   );
 
   async function submitReview(checkin, decision, comment) {
@@ -210,14 +240,23 @@ export function ProjectCheckinsPage() {
 
       <div className="section-head">
         <h2>Check-ins</h2>
-        <label className="checkins-filter">
-          <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Not yet reviewed only
-        </label>
+        <div className="checkins-tabs" role="tablist" aria-label="Check-ins">
+          <button type="button" role="tab" aria-selected={view === "todo"} className={view === "todo" ? "is-on" : ""} onClick={() => setView("todo")}>
+            To review ({todoCount})
+          </button>
+          <button type="button" role="tab" aria-selected={view === "history"} className={view === "history" ? "is-on" : ""} onClick={() => setView("history")}>
+            History ({historyCount})
+          </button>
+        </div>
       </div>
 
       {visible.length === 0 ? (
-        <Banner tone="empty" title={onlyOpen ? "Nothing waiting for review" : "No check-ins in this range"}>
-          {onlyOpen ? "Every check-in in this range has been reviewed." : "Check-ins sent by the Site Manager will appear here."}
+        <Banner tone="empty" title={view === "history" ? "No acknowledged check-ins yet" : data.checkins.length ? "Nothing waiting for review" : "No check-ins in this range"}>
+          {view === "history"
+            ? "Check-ins you acknowledge are moved here."
+            : data.checkins.length
+              ? "Every check-in in this range has been acknowledged. Find them under History."
+              : "Check-ins sent by the Site Manager will appear here."}
         </Banner>
       ) : (
         <div className="checkins-list">
@@ -255,9 +294,7 @@ export function ProjectCheckinsPage() {
                 {c.photos.length > 0 && (
                   <div className="checkin-photos">
                     {c.photos.map((url, i) => (
-                      <a key={url} href={url} target="_blank" rel="noreferrer">
-                        <img src={url} alt={`Check-in photo ${i + 1}`} loading="lazy" />
-                      </a>
+                      <CheckinPhoto key={url} url={url} index={i} />
                     ))}
                   </div>
                 )}

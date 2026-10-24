@@ -93,7 +93,10 @@ export function routeForNotification(n: AppNotification, role: "Purchaser" | "Si
     return "/(tabs)" as Href;
   }
   if (type === "Task" && role === "Site Manager") return `/site-manager/task/${n.relatedentityid}` as Href;
-  if (type === "Checkin" && role === "Site Manager") return "/site-manager/checkin" as Href;
+  if (type === "Checkin" && role === "Site Manager") {
+    // A flag points at one check-in: open what was sent, with the PM's comment.
+    return (n.relatedentityid ? `/site-manager/checkin/${n.relatedentityid}` : "/site-manager/checkin") as Href;
+  }
   // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet —
   // mark read only (mirrors the web app's "Unknown -> mark read only").
   return null;
