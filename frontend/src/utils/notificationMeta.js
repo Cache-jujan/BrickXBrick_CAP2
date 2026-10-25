@@ -23,6 +23,7 @@ export const NOTIFICATION_META = {
   TicketRejected:      { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.ticket_rejected" },
   ScheduleVarianceAlert: { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.schedule_variance" },
   ExpenseRejected:     { Icon: ReceiptXGlyph,    bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.expense_rejected" },
+  ExpenseApproved:     { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.expense_approved" },
   TamperAlert:         { Icon: ShieldAlertGlyph, bg: "#FDE8E8", fg: "#9F1239", fallbackKey: "notif.fallback.tamper_alert" },
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_assigned" },
   TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.task_acknowledged" },

@@ -29,6 +29,7 @@ const META: Record<string, Meta> = {
   TicketRejected:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.ticket_rejected" },
   ScheduleVarianceAlert: { icon: "clock.fill",       bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.schedule_variance" },
   ExpenseRejected:       { icon: "receipt",          bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.expense_rejected" },
+  ExpenseApproved:       { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.expense_approved" },
   TamperAlert:           { icon: "shield.lefthalf.filled", bg: "#FDE8E8", fg: "#9F1239", fallbackKey: "notif.fallback.tamper_alert" },
   TaskAssigned:          { icon: "list.clipboard.fill", bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_assigned" },
   TaskAcknowledged:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.task_acknowledged" },
