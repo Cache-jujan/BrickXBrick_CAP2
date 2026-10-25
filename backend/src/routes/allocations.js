@@ -181,6 +181,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
         if (earlier) return earlier;
       }
       const openTickets = await loadOpenRequests(req.user, client);
+      const statusByTicket = new Map(openTickets.map((row) => [row.ticketID, row.status]));
 
       // 4b. Plan. Not ok means nothing gets written.
       const plan = planAllocation(body.lineItems, openTickets, {
@@ -238,8 +239,8 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
           stillOpenTicketIDs.push(portion.ticketID);
           continue;
         }
-        // A Site Manager's requests are already Resolved by the Purchaser.
-        if (req.user.role === "Site Manager") {
+        // Already Resolved by the Purchaser (a Site Manager records the receipt afterwards).
+        if (statusByTicket.get(portion.ticketID) === "Resolved") {
           resolvedTicketIDs.push(portion.ticketID);
           continue;
         }
@@ -286,8 +287,8 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
 // POST /trip-cost — a cost with no request to match (gas, toll, delivery). The Purchaser
 // ticks the projects the trip served and the receipt is split evenly between them: one
 // ticketless expense per project, each approved by that project's Project Manager.
-// Only projects where the Purchaser has an open request can be charged.
-router.post("/trip-cost", requireRole("Purchaser"), async (req, res, next) => {
+// Only projects where the caller has an open request can be charged.
+router.post("/trip-cost", requireRole("Purchaser", "Site Manager"), async (req, res, next) => {
   try {
     const { receiptImageURL, vendorName, receiptDate, reason } = req.body ?? {};
     const clientReceiptID = req.body?.commonReceiptID == null ? null : String(req.body.commonReceiptID).toLowerCase();

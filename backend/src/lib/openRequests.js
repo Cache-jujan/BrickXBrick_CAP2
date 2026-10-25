@@ -10,8 +10,8 @@
 //   Purchaser       -> requests assigned to them
 //   Project Manager -> requests on projects they manage (backup actor)
 //   General Manager -> every open request (backup actor)
-//   Site Manager    -> their own requests that the Purchaser already marked Resolved
-//                      (they record the receipt afterwards)
+//   Site Manager    -> every open request on the projects they manage, Acknowledged
+//                      or Resolved, whoever submitted it
 
 const { query } = require("./db");
 
@@ -26,14 +26,15 @@ function ticketScope(user) {
     throw error;
   }
   if (user.role === "Purchaser") return { clause: "t.assignedto = $1", params: [user.id] };
-  if (user.role === "Site Manager") return { clause: "t.submittedby = $1 AND p.sitemanagerid = $1", params: [user.id] };
+  if (user.role === "Site Manager") return { clause: "p.sitemanagerid = $1", params: [user.id] };
   if (user.role === "Project Manager") return { clause: "p.projectmanagerid = $1", params: [user.id] };
   return { clause: "TRUE", params: [] };
 }
 
-// A Site Manager records the receipt after the Purchaser resolved the request.
+// A Site Manager can also buy for a request still waiting on the Purchaser, or record
+// the receipt after the Purchaser resolved it.
 function statusFor(user) {
-  return user.role === "Site Manager" ? "'Resolved'" : "'Acknowledged'";
+  return user.role === "Site Manager" ? "IN ('Acknowledged', 'Resolved')" : "= 'Acknowledged'";
 }
 
 function buildOpenRequestsQuery(user) {
@@ -44,6 +45,7 @@ function buildOpenRequestsQuery(user) {
            p.name          AS "projectName",
            p.budgetallowancepct AS "budgetAllowancePct",
            t.subject,
+           t.status,
            t.materialtype  AS "materialType",
            t.bomitemid     AS "bomItemID",
            t.vendorname    AS "vendorName",
@@ -57,11 +59,11 @@ function buildOpenRequestsQuery(user) {
       LEFT JOIN expenses e ON e.ticketid = t.ticketid
      WHERE ${scope.clause}
        AND t.tickettype = 'Material Request'
-       AND t.status = ${statusFor(user)}
+       AND t.status ${statusFor(user)}
        AND p.status = 'Active'
        AND t.materialtype IS NOT NULL
        AND t.quantity IS NOT NULL
-     GROUP BY t.ticketid, p.name, p.budgetallowancepct
+     GROUP BY t.ticketid, t.status, p.name, p.budgetallowancepct
     HAVING t.quantity - COALESCE(SUM(e.quantity) FILTER (WHERE e.status <> 'Rejected'), 0) > 0
      ORDER BY t.createdat, t.ticketid`;
   return { text, params: scope.params };
@@ -78,7 +80,7 @@ function buildLockQuery(user) {
       JOIN projects p ON p.projectid = t.projectid
      WHERE ${scope.clause}
        AND t.tickettype = 'Material Request'
-       AND t.status = ${statusFor(user)}
+       AND t.status ${statusFor(user)}
      ORDER BY t.ticketid
        FOR UPDATE OF t`;
   return { text, params: scope.params };

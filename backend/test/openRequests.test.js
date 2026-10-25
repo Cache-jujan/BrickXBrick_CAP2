@@ -18,10 +18,12 @@ test("General Manager (backup actor) sees every open request", () => {
   assert.deepEqual(ticketScope({ id: USER, role: "General Manager" }), { clause: "TRUE", params: [] });
 });
 
-test("Site Manager sees their own requests on their project, once Resolved", () => {
+test("Site Manager sees every open request on their projects, Acknowledged or Resolved", () => {
   const scope = ticketScope({ id: USER, role: "Site Manager" });
-  assert.deepEqual(scope, { clause: "t.submittedby = $1 AND p.sitemanagerid = $1", params: [USER] });
-  assert.match(buildOpenRequestsQuery({ id: USER, role: "Site Manager" }).text, /t.status = 'Resolved'/);
+  assert.deepEqual(scope, { clause: "p.sitemanagerid = $1", params: [USER] });
+  const sm = buildOpenRequestsQuery({ id: USER, role: "Site Manager" }).text;
+  assert.match(sm, /t.status IN \('Acknowledged', 'Resolved'\)/);
+  assert.match(sm, /t\.status,/);
   assert.match(buildOpenRequestsQuery({ id: USER, role: "Purchaser" }).text, /t.status = 'Acknowledged'/);
 });
 
