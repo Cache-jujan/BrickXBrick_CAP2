@@ -24,6 +24,7 @@ export const NOTIFICATION_META = {
   ScheduleVarianceAlert: { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.schedule_variance" },
   ExpenseRejected:     { Icon: ReceiptXGlyph,    bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.expense_rejected" },
   ExpenseApproved:     { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.expense_approved" },
+  BlockchainOverdue:   { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.blockchain_overdue" },
   TamperAlert:         { Icon: ShieldAlertGlyph, bg: "#FDE8E8", fg: "#9F1239", fallbackKey: "notif.fallback.tamper_alert" },
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_assigned" },
   TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.task_acknowledged" },
@@ -97,8 +98,12 @@ export function routeForNotification(n, role) {
   if (type === "Checkin") {
     return n.checkin_projectid ? `/projects/${n.checkin_projectid}/checkins?focus=${n.relatedentityid}` : null;
   }
-  if (type === "Expense") return "/expenses";
-  if (n.type === "TamperAlert") return "/blockchain/alerts";
-  if (n.type === "BlockchainOverdue") return "/blockchain/alerts";
+  // These two are filed under the expense they are about, so check the type first. Only the
+  // General Manager and System Administrator can open the alerts page; others land on the expense.
+  if (n.type === "TamperAlert" || n.type === "BlockchainOverdue") {
+    if (role === "General Manager" || role === "System Administrator") return "/blockchain/alerts";
+  }
+  // Open the expense itself: the expenses page shows just that one until "Show all" is pressed.
+  if (type === "Expense") return `/expenses?focus=${n.relatedentityid}`;
   return null;
 }

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   listExpenses,
   listFlaggedExpenses,
@@ -16,7 +16,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { flagLabel } from "../../utils/plainLanguage";
-import { FlagReviewPanel } from "./FlagReviewPanel";
+import { FlagReviewPanel, SplitSiblings } from "./FlagReviewPanel";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ExpensesPage.css";
 import { verifyExpense } from "../../api/blockchainApi";
@@ -54,6 +54,9 @@ export function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState(null);
+  // A notification can link to one expense (?focus=<id>): show just that one, opened, until "Show all".
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = searchParams.get("focus");
 
   const [confirm, setConfirm] = useState(null); // { expense, action }
   const [reason, setReason] = useState("");
@@ -85,6 +88,10 @@ export function ExpensesPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (focusId) setOpenId(focusId);
+  }, [focusId]);
 
   const projectById = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.projectid, p])),
@@ -118,6 +125,7 @@ export function ExpensesPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    if (focusId) return scoped.filter((e) => e.expenseid === focusId);
     return scoped
       .filter((e) => {
         if (tab === "All") return true;
@@ -133,7 +141,7 @@ export function ExpensesPage() {
         );
       })
       .sort((a, b) => new Date(b.submittedat) - new Date(a.submittedat));
-  }, [scoped, tab, search, projectById, flagMap]);
+  }, [scoped, tab, search, projectById, flagMap, focusId]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -207,7 +215,13 @@ export function ExpensesPage() {
               {user.role === "Project Manager" ? t("expenses.pm_subtitle") : t("expenses.gm_subtitle")}
             </p>
         </div>
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+        <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+          <Link to="/requests" className="btn btn-secondary">
+            {t("nav.open_requests")}
+          </Link>
+          <Link to="/expenses/trip-cost" className="btn btn-secondary">
+            {t("nav.trip_cost")}
+          </Link>
           <Link to="/expenses/split" className="btn btn-secondary">
             {t("nav.split_receipt")}
           </Link>
@@ -224,6 +238,15 @@ export function ExpensesPage() {
         </Banner>
       )}
       {actionError && !confirm && <Banner tone="error" title={actionError} />}
+      {focusId && (
+        <Banner
+          tone="info"
+          title={t("expenses.focus_title")}
+          action={<Button variant="secondary" onClick={() => { setSearchParams({}); setOpenId(null); }}>{t("expenses.focus_show_all")}</Button>}
+        >
+          {t("expenses.focus_body")}
+        </Banner>
+      )}
 
       {!error && (
         <>
@@ -289,7 +312,13 @@ export function ExpensesPage() {
                             >
                               <td>{e.vendorname}</td>
                               <td>{project?.name || "—"}</td>
-                              <td>{e.category}</td>
+                              <td>
+                                {e.istripcost ? (
+                                  <Badge status="Draft">{t("expenses.trip_cost")}</Badge>
+                                ) : (
+                                  tv("category", e.category)
+                                )}
+                              </td>
                               <td>{PESO.format(e.amount)}</td>
                               <td>{formatDate(e.receiptdate)}</td>
                               <td>
@@ -316,11 +345,17 @@ export function ExpensesPage() {
                                       showEffect={e.status === "Pending"}
                                     />
                                   )}
+                                  {e.istripcost && (
+                                    <Banner tone="info" title={t("expenses.trip_cost_title")}>
+                                      {t("expenses.trip_cost_body")}
+                                    </Banner>
+                                  )}
                                   {e.submitnote && (
-                                    <Banner tone="warning" title={t("expenses.submit_note")}>
+                                    <Banner tone="warning" title={e.istripcost ? t("expenses.trip_cost_reason") : t("expenses.submit_note")}>
                                       {e.submitnote}
                                     </Banner>
                                   )}
+                                  {!flags && <SplitSiblings siblings={e.siblings} />}
                                   {e.submittedby === user.id && user.role === "General Manager" && (
                                     <Banner tone="warning" title={t("expenses.own_title")}>
                                       {t("expenses.own_body")}
@@ -328,6 +363,7 @@ export function ExpensesPage() {
                                   )}
                                   <div className="expenses-detail-grid">
                                     <p><strong>{t("expenses.submitted_by")}</strong> {e.submittedbyname}</p>
+                                    {e.ticketsubject && <p><strong>{t("expenses.request")}</strong> {e.ticketsubject}</p>}
                                     <p><strong>{t("expenses.quantity")}</strong> {e.quantity}</p>
                                     <p><strong>{t("expenses.bir_status")}</strong> {tv("bir", e.birvalidationstatus)}</p>
                                     <p><strong>{t("expenses.tin")}</strong> {e.tin || "—"}</p>
@@ -418,6 +454,11 @@ export function ExpensesPage() {
                 ? t("expenses.confirm_approve_body")
                 : t("expenses.confirm_reject_body")}
             </p>
+            {confirm.expense.submitnote && (
+              <Banner tone="warning" title={confirm.expense.istripcost ? t("expenses.trip_cost_reason") : t("expenses.submit_note")}>
+                {confirm.expense.submitnote}
+              </Banner>
+            )}
             {flagMap[confirm.expense.expenseid] && (
               <Banner tone="warning" title={t("expenses.flagged_title")}>
                 <ul className="expenses-flag-list">
