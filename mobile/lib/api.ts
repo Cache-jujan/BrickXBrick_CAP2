@@ -8,6 +8,9 @@ import { ensureFreshToken, handleUnauthorized } from "@/lib/auth";
 export type Ticket = {
   ticketid: string;
   projectid: string;
+  // Joined by GET /tickets/assigned, so a Purchaser's list does not depend on
+  // the Active-only project list to show a name.
+  projectname?: string | null;
   submittedby: string;
   tickettype: string;
   requestedbudget?: string | number | null;
@@ -388,6 +391,10 @@ export type MyExpense = {
   lineItems: BackendLineItem[] | null;
   // Projects a split receipt was shared across; 0 for an ordinary expense.
   splitProjectCount?: number;
+  // What the receipt was for, and which split receipt it belongs to (null when single).
+  ticketSubject?: string | null;
+  projectName?: string | null;
+  commonReceiptID?: string | null;
 };
 
 export async function fetchMyExpenses(): Promise<MyExpense[]> {
@@ -448,7 +455,7 @@ export type OpenRequest = {
 
 export type SplitLine = { description: string; quantity: number; amount: number; bomItemID?: string | null };
 
-export type PlanLine = { lineIndex: number; description: string; quantity: number; amount: string };
+export type PlanLine = { lineIndex: number; description: string; quantity: number; amount: string; manual?: boolean };
 
 export type PlanPortion = {
   ticketID: string;
@@ -461,6 +468,10 @@ export type PlanPortion = {
   resolvesTicket: boolean;
   remainingBudget: string | null;
   overBudget: boolean;
+  // Over the budget by more than the PM's allowance: the Purchaser must say why.
+  overAllowance: boolean;
+  // Quantity bought beyond what every open request wanted (rides on this request).
+  extraQuantity: number;
   lines: PlanLine[];
 };
 
@@ -469,13 +480,15 @@ export type AllocationPlan = {
   problems: string[];
   portions: PlanPortion[];
   uncovered: PlanLine[];
+  extras: (PlanLine & { ticketID: string })[];
   unmatched: PlanLine[];
   allocated: string;
   linesTotal: string;
-  warnings: { type: string; ticketID: string; amount: string; remainingBudget: string }[];
+  warnings: { type: string; ticketID: string; amount?: string; remainingBudget?: string; overAllowance?: boolean; quantity?: number }[];
 };
 
-export type PlanOptions = { excludeTicketIDs: string[]; feeTargets: Record<string, string> };
+// lineTargets: receipt lines the Purchaser matched to a request by hand, { lineIndex: ticketID }.
+export type PlanOptions = { excludeTicketIDs: string[]; feeTargets: Record<string, string>; lineTargets?: Record<string, string> };
 
 export type AllocationSubmission = PlanOptions & {
   receiptImageURL: string;
@@ -487,10 +500,16 @@ export type AllocationSubmission = PlanOptions & {
   birNumber?: string | null;
   receiptTotal: number;
   lineItems: SplitLine[];
+  // Made once per receipt on the phone. Sending the same one again after a lost
+  // response returns what was saved the first time instead of saving it twice.
+  commonReceiptID?: string;
+  // The Purchaser's short reason for going over (extra quantity or spending past the allowance).
+  note?: string;
 };
 
 export type AllocationResult = {
   commonReceiptID: string;
+  replayed?: boolean;
   expenses: { expenseID: string; projectID: string; ticketID: string; amount: string; quantity: string }[];
   resolvedTicketIDs: string[];
   stillOpenTicketIDs: string[];
@@ -519,6 +538,39 @@ export async function submitAllocation(body: AllocationSubmission): Promise<Allo
     body: JSON.stringify(body),
   });
   return readJson(res, "Failed to submit the split");
+}
+
+export type TripCostSubmission = {
+  receiptImageURL: string;
+  vendorName: string;
+  receiptDate: string;
+  receiptTotal: number;
+  reason: "Gas" | "Toll" | "Delivery" | "Other";
+  projectIds: string[];
+  tin?: string | null;
+  birPermitNumber?: string | null;
+  birNumber?: string | null;
+  commonReceiptID: string;
+};
+
+// A cost with no request (gas, toll, delivery), shared evenly between the ticked projects.
+export async function submitTripCost(body: TripCostSubmission): Promise<AllocationResult> {
+  const res = await apiFetch(`${API_URL}/api/allocations/trip-cost`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  return readJson(res, "Failed to send the trip cost");
+}
+
+// "That's all I could buy": close a part-bought request with a reason.
+export async function closeShortRequest(ticketID: string, reason: string): Promise<void> {
+  const res = await apiFetch(`${API_URL}/api/allocations/close-short/${ticketID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ reason }),
+  });
+  await readJson(res, "Failed to close the request");
 }
 
 // ---- Notifications (#6c) ---------------------------------------------------
