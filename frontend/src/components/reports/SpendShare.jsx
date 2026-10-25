@@ -1,5 +1,6 @@
 import { ArcElement, Chart, DoughnutController, Tooltip } from "chart.js";
 import { useEffect, useRef } from "react";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./SpendShare.css";
 
 Chart.register(ArcElement, DoughnutController, Tooltip);
@@ -13,6 +14,7 @@ const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP"
  * projects: from GET /api/reports/summary (uses name and periodSpend).
  */
 export function SpendShare({ projects, total }) {
+  const { t } = useLocale();
   const canvasRef = useRef(null);
   const spenders = projects.map((p, i) => ({ name: p.name, spend: p.periodSpend, color: SHARE_COLORS[i % SHARE_COLORS.length] }));
   const hasSpend = total > 0;
@@ -40,16 +42,16 @@ export function SpendShare({ projects, total }) {
   }, [projects, total, hasSpend]);
 
   if (!hasSpend) {
-    return <p className="spend-share-empty">No approved spend in this period yet, so there is nothing to split.</p>;
+    return <p className="spend-share-empty">{t("rep.no_spend")}</p>;
   }
 
   return (
     <div className="spend-share">
       <div className="spend-share-ring">
-        <canvas ref={canvasRef} role="img" aria-label={`Share of this period's spend. ${spenders.map((s) => `${s.name}: ${((s.spend / total) * 100).toFixed(0)}%`).join("; ")}`} />
+        <canvas ref={canvasRef} role="img" aria-label={t("rep.share_aria", { list: spenders.map((s) => `${s.name}: ${((s.spend / total) * 100).toFixed(0)}%`).join("; ") })} />
         <div className="spend-share-center">
           <span>{PESO.format(total)}</span>
-          <small>this period</small>
+          <small>{t("rep.this_period")}</small>
         </div>
       </div>
       <ul className="spend-share-legend">

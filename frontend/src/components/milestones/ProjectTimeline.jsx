@@ -1,19 +1,21 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectTimeline.css";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_TIMELINE_YEAR = 2000;
 const MAX_TIMELINE_YEAR = 2100;
-const DATE = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric" });
-const HEADER_DATE = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" });
+const DATE_OPTIONS = { month: "short", day: "numeric", year: "numeric" };
+const HEADER_DATE_OPTIONS = { month: "short", day: "numeric" };
 
+// The label shown for each status comes from the catalog (status.*); only the CSS class lives here.
 const STATUS_META = {
-  "On Track": { className: "on-track", label: "On Track" },
-  "At Risk": { className: "at-risk", label: "At Risk" },
-  Overdue: { className: "overdue", label: "Overdue" },
-  Pending: { className: "pending", label: "Pending" },
-  Completed: { className: "completed", label: "Completed" },
+  "On Track": { className: "on-track" },
+  "At Risk": { className: "at-risk" },
+  Overdue: { className: "overdue" },
+  Pending: { className: "pending" },
+  Completed: { className: "completed" },
 };
 
 function asDate(value) {
@@ -122,13 +124,14 @@ function getRange(project, milestones) {
   return { start, end, total: Math.max(DAY_MS, end - start) };
 }
 
-function assigneeLabel(task) {
-  if (task.handledby) return `Handled by: ${task.handledby}`;
+function assigneeLabel(task, t) {
+  if (task.handledby) return t("ms.handled_by", { who: task.handledby });
   if (task.assignedtoname) return task.assignedtoname;
-  return "Unassigned";
+  return t("tl.unassigned");
 }
 
 function Bar({ item, span, range, kind, onHover, onLeave }) {
+  const { t } = useLocale();
   const start = span?.start || range.start;
   const end = span?.end || start;
   const left = clamp(((start - range.start) / range.total) * 100, 0, 100);
@@ -137,7 +140,7 @@ function Bar({ item, span, range, kind, onHover, onLeave }) {
   const completedTask = kind === "task" && item.status === "Completed";
   const status = kind === "task" ? (completedTask ? "Completed" : "Task") : item.status;
   const meta = statusMeta(status);
-  const label = item.name || item.taskname || "Untitled";
+  const label = item.name || item.taskname || t("tl.untitled");
   return (
     <div
       className={`timeline-bar timeline-bar-${kind} timeline-bar-${meta.className}${completedTask ? " timeline-bar-task-done" : ""}`}
@@ -149,7 +152,7 @@ function Bar({ item, span, range, kind, onHover, onLeave }) {
       onFocus={(event) => onHover({ type: kind, item, anchor: event.currentTarget })}
       onBlur={onLeave}
       role="button"
-      aria-label={`${label}, ${kind}`}
+      aria-label={t("tl.bar_aria", { label, kind: t(kind === "milestone" ? "tl.kind_milestone" : "tl.kind_task") })}
     >
       <span>{label}</span>
     </div>
@@ -205,38 +208,40 @@ function FloatingCard({ anchor, width, contentKey, className, onEnter, onLeave, 
 }
 
 function TaskTooltip({ task }) {
+  const { t, tv, formatDate } = useLocale();
   const meta = statusMeta(task.status);
   return (
     <div className="timeline-tooltip" role="status">
       <strong>{task.taskname}</strong>
       <div className="timeline-tooltip-meta">
         <span className={`timeline-status-dot ${meta.className}`} />
-        <span>{task.status || "Pending"}</span>
-        <span>Due {DATE.format(dueOf(task) || new Date())}</span>
+        <span>{tv("status", task.status || "Pending")}</span>
+        <span>{t("ms.due", { date: formatDate(dueOf(task) || new Date(), DATE_OPTIONS) })}</span>
       </div>
-      <p>{assigneeLabel(task)}</p>
+      <p>{assigneeLabel(task, t)}</p>
     </div>
   );
 }
 
 function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask, onOpenDocuments }) {
+  const { t, tv, formatDate } = useLocale();
   const meta = statusMeta(milestone.status);
   const isPlanning = milestone.phase === "Planning";
   return (
-    <div className={`timeline-popover timeline-popover-${meta.className}`} role="dialog" aria-label={`${milestone.name} details`}>
+    <div className={`timeline-popover timeline-popover-${meta.className}`} role="dialog" aria-label={t("tl.details", { name: milestone.name })}>
       <h3>{milestone.name}</h3>
       <div className="timeline-popover-meta">
-        <span className={`timeline-status-pill ${meta.className}`}>{meta.label}</span>
-        <span>Due {DATE.format(dueOf(milestone) || new Date())}</span>
+        <span className={`timeline-status-pill ${meta.className}`}>{tv("status", STATUS_META[milestone.status] ? milestone.status : "Pending")}</span>
+        <span>{t("ms.due", { date: formatDate(dueOf(milestone) || new Date(), DATE_OPTIONS) })}</span>
       </div>
       <div className="timeline-popover-progress-head">
-        <span>Progress</span>
+        <span>{t("tl.progress")}</span>
         <strong>{Number(milestone.completionpercentage || 0)}%</strong>
       </div>
       <div className="timeline-popover-progress"><span style={{ width: `${Number(milestone.completionpercentage || 0)}%` }} /></div>
       <div className="timeline-popover-tasks">
         {(milestone.tasks || []).length === 0 ? (
-          <p className="timeline-popover-empty">No tasks yet.</p>
+          <p className="timeline-popover-empty">{t("ms.no_tasks")}</p>
         ) : (
           milestone.tasks.map((task) => {
             const done = task.status === "Completed";
@@ -244,12 +249,12 @@ function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask, onO
               <div className={`timeline-popover-task${done ? " timeline-popover-task-done" : ""}`} key={task.taskid || task.taskname}>
                 <strong>{done ? "✓ " : ""}{task.taskname}</strong>
                 <span>
-                  {done ? "Completed" : task.status || "Pending"} · Due {DATE.format(dueOf(task) || new Date())} · {assigneeLabel(task)}
+                  {done ? tv("status", "Completed") : tv("status", task.status || "Pending")} · {t("ms.due", { date: formatDate(dueOf(task) || new Date(), DATE_OPTIONS) })} · {assigneeLabel(task, t)}
                 </span>
                 {((canManage && isPlanning && !done) || (isPlanning && onOpenDocuments)) && (
                   <div className="timeline-task-actions">
-                    {canManage && isPlanning && !done && <button type="button" className="timeline-task-action" onClick={() => onCompleteTask?.(task)}>Mark done</button>}
-                    {isPlanning && onOpenDocuments && <button type="button" className="timeline-task-action" onClick={() => onOpenDocuments(task)}>Documents</button>}
+                    {canManage && isPlanning && !done && <button type="button" className="timeline-task-action" onClick={() => onCompleteTask?.(task)}>{t("pd.mark_done")}</button>}
+                    {isPlanning && onOpenDocuments && <button type="button" className="timeline-task-action" onClick={() => onOpenDocuments(task)}>{t("tl.documents")}</button>}
                   </div>
                 )}
               </div>
@@ -257,12 +262,13 @@ function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask, onO
           })
         )}
       </div>
-      {canManage && <button type="button" className="timeline-popover-action" onClick={() => onAddTask?.(milestone)}>+ Add Task</button>}
+      {canManage && <button type="button" className="timeline-popover-action" onClick={() => onAddTask?.(milestone)}>+ {t("pd.add_task_btn")}</button>}
     </div>
   );
 }
 
 export const ProjectTimeline = memo(function ProjectTimeline({ project, canManage = false, onAddMilestone, onEditTimeline, onAddTask, onCompleteTask, onOpenDocuments }) {
+  const { t, tv, formatDate } = useLocale();
   const milestones = useMemo(() => (Array.isArray(project?.milestones) ? project.milestones : []), [project]);
   const [hovered, setHovered] = useState(null);
   const leaveTimer = useRef(null);
@@ -274,8 +280,8 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
     return result;
   }, [range]);
   const phases = [
-    { id: "Planning", label: "Pre-construction", items: milestones.filter((m) => m.phase === "Planning") },
-    { id: "Construction", label: "Construction", items: milestones.filter((m) => m.phase !== "Planning") },
+    { id: "Planning", label: t("tl.pre_construction"), items: milestones.filter((m) => m.phase === "Planning") },
+    { id: "Construction", label: t("projects.construction"), items: milestones.filter((m) => m.phase !== "Planning") },
   ].filter((phase) => phase.items.length > 0);
   const today = new Date();
   const todayPosition = clamp(((today - range.start) / range.total) * 100, 0, 100);
@@ -298,15 +304,15 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
     <section className="project-timeline" aria-labelledby="project-timeline-title">
       <header className="project-timeline-header">
         <div>
-          <h2 id="project-timeline-title">Project Timeline</h2>
-          <p>Swimlanes by phase · hover a milestone bar for details</p>
+          <h2 id="project-timeline-title">{t("tl.title")}</h2>
+          <p>{t("tl.subtitle")}</p>
         </div>
         {canManage && (
           <div className="project-timeline-actions">
             {onEditTimeline && milestones.length > 0 && (
-              <button type="button" className="project-timeline-add" onClick={onEditTimeline}>Edit timeline</button>
+              <button type="button" className="project-timeline-add" onClick={onEditTimeline}>{t("tl.edit_timeline")}</button>
             )}
-            <button type="button" className="project-timeline-add" onClick={onAddMilestone}>+ Add milestone</button>
+            <button type="button" className="project-timeline-add" onClick={onAddMilestone}>+ {t("pd.add_milestone")}</button>
           </div>
         )}
       </header>
@@ -314,18 +320,18 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
       <div className="project-timeline-scroll">
         <div className="project-timeline-canvas" style={{ "--week-count": weeks.length }}>
           <div className="timeline-grid-header">
-            <div className="timeline-label-cell timeline-label-heading">Phase / milestone</div>
+            <div className="timeline-label-cell timeline-label-heading">{t("tl.phase_milestone")}</div>
             <div className="timeline-dates">
-              {weeks.map((week) => <div className="timeline-date" key={week.toISOString()}>{HEADER_DATE.format(week)}</div>)}
+              {weeks.map((week) => <div className="timeline-date" key={week.toISOString()}>{formatDate(week, HEADER_DATE_OPTIONS)}</div>)}
             </div>
           </div>
 
           <div className="timeline-body">
             <div className="timeline-today-line" style={{ left: `calc(220px + (100% - 220px) * ${todayPosition / 100})` }} aria-hidden="true">
-              <span>TODAY</span>
+              <span>{t("tl.today")}</span>
             </div>
             {phases.length === 0 && (
-              <div className="timeline-empty-timeline">No milestones yet. Use <strong>+ Add milestone</strong> to start planning this project.</div>
+              <div className="timeline-empty-timeline">{t("tl.empty_before")} <strong>+ {t("pd.add_milestone")}</strong> {t("tl.empty_after")}</div>
             )}
             {phases.map((phase) => (
               <div className="timeline-phase" key={phase.id}>
@@ -346,7 +352,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
                         </div>
                       </div>
                     ))}
-                    {(milestone.tasks || []).length === 0 && <div className="timeline-empty-row"><div className="timeline-label-cell">No tasks yet</div><div className="timeline-track" /></div>}
+                    {(milestone.tasks || []).length === 0 && <div className="timeline-empty-row"><div className="timeline-label-cell">{t("tl.no_tasks_row")}</div><div className="timeline-track" /></div>}
                   </div>
                 ))}
               </div>
@@ -354,8 +360,8 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
           </div>
 
           <footer className="project-timeline-footer">
-            <div className="timeline-legend"><strong>Status</strong><span><i className="legend-swatch on-track" />On Track</span><span><i className="legend-swatch at-risk" />At Risk</span><span><i className="legend-swatch overdue" />Overdue</span><span><i className="legend-swatch task" />Task</span><span><i className="legend-swatch on-track" />Done task</span></div>
-            <span className="timeline-footer-today">Today</span>
+            <div className="timeline-legend"><strong>{t("tl.status")}</strong><span><i className="legend-swatch on-track" />{tv("status", "On Track")}</span><span><i className="legend-swatch at-risk" />{tv("status", "At Risk")}</span><span><i className="legend-swatch overdue" />{tv("status", "Overdue")}</span><span><i className="legend-swatch task" />{t("tl.legend_task")}</span><span><i className="legend-swatch on-track" />{t("tl.legend_done")}</span></div>
+            <span className="timeline-footer-today">{t("common.today")}</span>
           </footer>
         </div>
       </div>

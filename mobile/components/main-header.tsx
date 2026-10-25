@@ -5,6 +5,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { NotificationBell } from "@/components/notification-bell";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
+import { useLocale } from "@/lib/i18n-context";
 
 type Props = {
   // A large page title under the brand row ("My requests").
@@ -25,6 +26,7 @@ function initialsOf(name: string) {
 // left, notifications and the profile button on the right. The page title, if
 // any, goes under it. It sits on the page background, so there is no box.
 export function MainHeader({ title, tagline, hideAvatar }: Props) {
+  const { t } = useLocale();
   const name = getSession()?.user.name ?? "";
   return (
     <View style={styles.wrap}>
@@ -44,7 +46,7 @@ export function MainHeader({ title, tagline, hideAvatar }: Props) {
               style={styles.avatar}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Open settings"
+              accessibilityLabel={t("mh.open_settings")}
             >
               <Text style={styles.avatarText}>{initialsOf(name)}</Text>
             </Pressable>

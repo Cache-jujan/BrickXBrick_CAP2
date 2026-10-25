@@ -5,6 +5,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
+import { useLocale } from "@/lib/i18n-context";
 
 const AMBER = COLORS.amberText;
 const AMBER_BG = COLORS.amberBannerFill;
@@ -35,12 +36,13 @@ export function ScannedReceipts({
   onRemoveQueued?: (row: QueuedScan) => void;
 }) {
   const { openReady, openManual, openScanning } = useOpenScan();
+  const { t, intlLocale } = useLocale();
   if (scans.length === 0 && queued.length === 0) return null;
 
   function confirmRemoveQueued(row: QueuedScan) {
-    Alert.alert("Remove this receipt?", "It hasn't been uploaded yet, so it will be deleted from this phone.", [
-      { text: "Keep", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => onRemoveQueued?.(row) },
+    Alert.alert(t("sr.remove_title"), t("sr.remove_queued_body"), [
+      { text: t("sr.keep"), style: "cancel" },
+      { text: t("common.remove"), style: "destructive", onPress: () => onRemoveQueued?.(row) },
     ]);
   }
 
@@ -51,45 +53,45 @@ export function ScannedReceipts({
   }
 
   function confirmDismiss(scan: ReceiptScan) {
-    Alert.alert("Remove this receipt?", "It won't be submitted. The photo stays on the server.", [
-      { text: "Keep", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => onDismiss(scan) },
+    Alert.alert(t("sr.remove_title"), t("sr.remove_scan_body"), [
+      { text: t("sr.keep"), style: "cancel" },
+      { text: t("common.remove"), style: "destructive", onPress: () => onDismiss(scan) },
     ]);
   }
 
   return (
     <View style={styles.box}>
-      <Text style={styles.title}>Scanned receipts</Text>
+      <Text style={styles.title}>{t("mx.scanned_receipts")}</Text>
       {queued.map((row) => {
-        const title = row.context?.mode === "split" ? "Split receipt" : row.context?.ticket?.subject ?? "Receipt";
+        const title = row.context?.mode === "split" ? t("nav.split_receipt") : row.context?.ticket?.subject ?? t("mobile.receipt");
         const rejected = row.sync_status === "REJECTED";
         return (
           <Pressable
             key={row.scan_id}
             onLongPress={() => confirmRemoveQueued(row)}
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-            accessibilityHint="Long-press to remove"
+            accessibilityHint={t("sr.long_press")}
           >
             <View style={styles.flex}>
               <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
               <Text style={[styles.rowMeta, rejected && { color: RED }]} numberOfLines={2}>
                 {rejected
-                  ? `Couldn't upload: ${row.error_message ?? "the server refused this file"}`
-                  : `Saved on your phone · ${scanTimeLabel(row.created_at)} · uploads when you're back online`}
+                  ? t("sr.upload_failed", { reason: row.error_message ?? t("sr.server_refused") })
+                  : t("sr.saved_meta", { time: scanTimeLabel(row.created_at, t, intlLocale) })}
               </Text>
             </View>
             <View style={[styles.pill, { backgroundColor: rejected ? COLORS.errorFill : COLORS.bg }]}>
               <IconSymbol name={rejected ? "exclamationmark.triangle.fill" : "clock.fill"} size={14} color={rejected ? RED : COLORS.muted} />
-              <Text style={[styles.pillText, { color: rejected ? RED : COLORS.muted }]}>{rejected ? "Not uploaded" : "Waiting"}</Text>
+              <Text style={[styles.pillText, { color: rejected ? RED : COLORS.muted }]}>{rejected ? t("sr.not_uploaded") : t("sr.waiting")}</Text>
             </View>
-            <Pressable onPress={() => confirmRemoveQueued(row)} hitSlop={10} accessibilityLabel="Remove this receipt">
+            <Pressable onPress={() => confirmRemoveQueued(row)} hitSlop={10} accessibilityLabel={t("sr.remove_aria")}>
               <Text style={styles.remove}>×</Text>
             </Pressable>
           </Pressable>
         );
       })}
       {scans.map((scan) => {
-        const title = scan.context?.mode === "split" ? "Split receipt" : scan.context?.ticket?.subject ?? "Receipt";
+        const title = scan.context?.mode === "split" ? t("nav.split_receipt") : scan.context?.ticket?.subject ?? t("mobile.receipt");
         const vendor = scan.status === "Ready" ? scan.result?.vendorName : null;
         return (
           <Pressable
@@ -98,16 +100,16 @@ export function ScannedReceipts({
             onLongPress={() => confirmDismiss(scan)}
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             accessibilityRole="button"
-            accessibilityHint="Long-press to remove"
+            accessibilityHint={t("sr.long_press")}
           >
             <View style={styles.flex}>
               <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
               <Text style={styles.rowMeta} numberOfLines={1}>
-                {[vendor, scanTimeLabel(scan.createdAt)].filter(Boolean).join(" · ")}
+                {[vendor, scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
               </Text>
             </View>
             <StatusPill status={scan.status} />
-            <Pressable onPress={() => confirmDismiss(scan)} hitSlop={10} accessibilityLabel="Remove this receipt">
+            <Pressable onPress={() => confirmDismiss(scan)} hitSlop={10} accessibilityLabel={t("sr.remove_aria")}>
               <Text style={styles.remove}>×</Text>
             </Pressable>
           </Pressable>
@@ -118,11 +120,12 @@ export function ScannedReceipts({
 }
 
 function StatusPill({ status }: { status: ReceiptScan["status"] }) {
+  const { t } = useLocale();
   if (status === "Scanning") {
     return (
       <View style={[styles.pill, { backgroundColor: COLORS.bg }]}>
         <ActivityIndicator size="small" color={COLORS.primary} />
-        <Text style={[styles.pillText, { color: COLORS.muted }]}>Reading…</Text>
+        <Text style={[styles.pillText, { color: COLORS.muted }]}>{t("sr.reading")}</Text>
       </View>
     );
   }
@@ -130,14 +133,14 @@ function StatusPill({ status }: { status: ReceiptScan["status"] }) {
     return (
       <View style={[styles.pill, { backgroundColor: COLORS.successBg }]}>
         <IconSymbol name="checkmark.seal.fill" size={14} color={COLORS.success} />
-        <Text style={[styles.pillText, { color: COLORS.success }]}>Review ›</Text>
+        <Text style={[styles.pillText, { color: COLORS.success }]}>{t("sr.review")}</Text>
       </View>
     );
   }
   return (
     <View style={[styles.pill, { backgroundColor: AMBER_BG }]}>
       <IconSymbol name="exclamationmark.triangle.fill" size={14} color={AMBER} />
-      <Text style={[styles.pillText, { color: AMBER }]}>Type it in ›</Text>
+      <Text style={[styles.pillText, { color: AMBER }]}>{t("sr.type_in")}</Text>
     </View>
   );
 }

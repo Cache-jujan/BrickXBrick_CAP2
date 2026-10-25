@@ -6,6 +6,7 @@ import { Field } from "../ui/Field";
 import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
 import { ManagerPicker } from "./ManagerPicker";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 export const EMPTY_PROJECT_FORM = {
   name: "",
@@ -77,8 +78,9 @@ export function ProjectForm({
   lockProjectType = false,
   siteManagerRequired = false,
   onCancel = null,
-  cancelLabel = "Cancel",
+  cancelLabel = null,
 }) {
+  const { t } = useLocale();
   const [form, setForm] = useState(initialValues || EMPTY_PROJECT_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -102,7 +104,7 @@ export function ProjectForm({
         setSiteManagers(sms || []);
       })
       .catch((err) => {
-        if (!cancelled) setListError(extractErrorMessage(err, "Couldn't load the form options."));
+        if (!cancelled) setListError(extractErrorMessage(err, t("errors.load_form_options")));
       })
       .finally(() => {
         if (!cancelled) setLoadingLists(false);
@@ -110,6 +112,7 @@ export function ProjectForm({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per project; a language change must not refetch
   }, [mode, projectId]);
 
   function updateField(key, value) {
@@ -125,23 +128,23 @@ export function ProjectForm({
 
   function validate() {
     const errors = {};
-    if (!form.name.trim()) errors.name = "Project name is required.";
-    if (!form.clientName.trim()) errors.clientName = "Client name is required.";
-    if (form.budget === "" || Number(form.budget) < 0) errors.budget = "Enter a budget of 0 or more.";
-    if (!form.projectType) errors.projectType = "Select the project type.";
-    if (!form.municipality.trim()) errors.municipality = "Enter the municipality or city of the site.";
-    if (!form.startDate) errors.startDate = "Target date of development is required.";
-    if (!form.constructionStartDate) errors.constructionStartDate = "Target date of construction is required.";
-    if (!form.endDate) errors.endDate = "Target date of completion is required.";
+    if (!form.name.trim()) errors.name = t("form.err_name");
+    if (!form.clientName.trim()) errors.clientName = t("form.err_client");
+    if (form.budget === "" || Number(form.budget) < 0) errors.budget = t("form.err_budget");
+    if (!form.projectType) errors.projectType = t("form.err_type");
+    if (!form.municipality.trim()) errors.municipality = t("form.err_municipality");
+    if (!form.startDate) errors.startDate = t("form.err_start");
+    if (!form.constructionStartDate) errors.constructionStartDate = t("form.err_construction");
+    if (!form.endDate) errors.endDate = t("form.err_end");
     if (form.startDate && form.constructionStartDate && form.constructionStartDate < form.startDate) {
-      errors.constructionStartDate = "Construction can't start before development.";
+      errors.constructionStartDate = t("form.err_construction_before");
     }
     if (form.constructionStartDate && form.endDate && form.endDate < form.constructionStartDate) {
-      errors.endDate = "Completion can't be before construction starts.";
+      errors.endDate = t("form.err_end_before");
     }
-    if (!form.projectManagerId) errors.projectManagerId = "Select a Project Manager.";
+    if (!form.projectManagerId) errors.projectManagerId = t("form.err_pm");
     if (mode === "create" && siteManagerRequired && !form.siteManagerId) {
-      errors.siteManagerId = "Select a Site Manager. The chosen starting point has construction tasks, which go to the Site Manager.";
+      errors.siteManagerId = t("form.err_sm_required");
     }
     return errors;
   }
@@ -175,7 +178,7 @@ export function ProjectForm({
     try {
       await onSubmit(payload, form);
     } catch (err) {
-      setFormError(extractErrorMessage(err, "Couldn't save the project. Please try again."));
+      setFormError(extractErrorMessage(err, t("errors.save_project")));
       setSubmitting(false);
     }
   }
@@ -189,26 +192,26 @@ export function ProjectForm({
       <div className="pf-grid">
         <div className="pf-col">
           <section className="pf-section">
-          <h2 className="pf-section-title">Project</h2>
+          <h2 className="pf-section-title">{t("nav.project")}</h2>
           <Field
-            label="Project Name"
+            label={t("form.project_name")}
             required
-            placeholder="Enter project name"
+            placeholder={t("form.project_name_placeholder")}
             value={form.name}
             error={fieldErrors.name}
             onChange={(e) => updateField("name", e.target.value)}
           />
           <div className="create-project-row">
             <Field
-              label="Client Name"
+              label={t("form.client_name")}
               required
-              placeholder="Enter client name"
+              placeholder={t("form.client_name_placeholder")}
               value={form.clientName}
               error={fieldErrors.clientName}
               onChange={(e) => updateField("clientName", e.target.value)}
             />
             <Field
-              label="Project Type"
+              label={t("form.project_type")}
               as="select"
               required
               value={form.projectType}
@@ -216,17 +219,17 @@ export function ProjectForm({
               disabled={!options || lockProjectType}
               onChange={(e) => updateField("projectType", e.target.value)}
             >
-              <option value="">{options ? "Select a project type" : "Loading…"}</option>
-              {(options?.projectTypes || []).map((t) => (
-                <option key={t} value={t}>{t}</option>
+              <option value="">{options ? t("form.select_type") : t("common.loading")}</option>
+              {(options?.projectTypes || []).map((type) => (
+                <option key={type} value={type}>{type}</option>
               ))}
             </Field>
           </div>
           <Field
-            label="Project Description"
+            label={t("form.description")}
             as="textarea"
             className="pf-description"
-            placeholder="Enter project description"
+            placeholder={t("form.description_placeholder")}
             value={form.description}
             onChange={(e) => updateField("description", e.target.value)}
           />
@@ -234,33 +237,32 @@ export function ProjectForm({
           </section>
 
           <section className="pf-section">
-          <h2 className="pf-section-title">Site</h2>
+          <h2 className="pf-section-title">{t("form.section_site")}</h2>
           <div className="create-project-row">
             <Field
-              label="Municipality / City"
+              label={t("form.municipality")}
               required
-              placeholder="e.g. Consolacion"
+              placeholder={t("form.municipality_placeholder")}
               value={form.municipality}
               error={fieldErrors.municipality}
               onChange={(e) => updateField("municipality", e.target.value)}
             />
             <Field
-              label="Province"
-              placeholder="e.g. Cebu"
+              label={t("form.province")}
+              placeholder={t("form.province_placeholder")}
               value={form.province}
               onChange={(e) => updateField("province", e.target.value)}
             />
           </div>
           <Field
-            label="Site Address (optional)"
-            placeholder="Street, barangay"
+            label={t("form.site_address")}
+            placeholder={t("form.address_placeholder")}
             value={form.siteAddress}
             onChange={(e) => updateField("siteAddress", e.target.value)}
           />
           {outsideServiceArea && (
-            <Banner tone="warning" title="Outside the usual service area">
-              Projects outside {options.serviceAreaMunicipalities.map(capitalize).join(", ")} are usually
-              handled by a subcontractor. You can still create it.
+            <Banner tone="warning" title={t("form.outside_title")}>
+              {t("form.outside_body", { areas: options.serviceAreaMunicipalities.map(capitalize).join(", ") })}
             </Banner>
           )}
           </section>
@@ -268,9 +270,9 @@ export function ProjectForm({
 
         <div className="pf-col">
           <section className="pf-section">
-          <h2 className="pf-section-title">Budget</h2>
+          <h2 className="pf-section-title">{t("projects.budget")}</h2>
           <Field
-            label="Target Budget in PHP"
+            label={t("form.target_budget")}
             required
             type="number"
             min="0"
@@ -282,18 +284,16 @@ export function ProjectForm({
             onChange={(e) => updateField("budget", e.target.value)}
           />
           <p className="field-hint">
-            {budgetLocked
-              ? "Follows the approved BOM total. Reopen the BOM to change it."
-              : "The BOM total. It is set automatically when the BOM is approved."}
+            {budgetLocked ? t("form.budget_locked") : t("form.budget_auto")}
           </p>
 
           </section>
 
           <section className="pf-section">
-          <h2 className="pf-section-title">Timeline</h2>
+          <h2 className="pf-section-title">{t("form.section_timeline")}</h2>
           <div className="create-project-row create-project-row-3">
             <Field
-              label="Target Date of Development"
+              label={t("form.date_dev")}
               required
               type="date"
               value={form.startDate}
@@ -301,7 +301,7 @@ export function ProjectForm({
               onChange={(e) => updateField("startDate", e.target.value)}
             />
             <Field
-              label="Target Date of Construction"
+              label={t("form.date_construction")}
               required
               type="date"
               value={form.constructionStartDate}
@@ -309,7 +309,7 @@ export function ProjectForm({
               onChange={(e) => updateField("constructionStartDate", e.target.value)}
             />
             <Field
-              label="Target Date of Completion"
+              label={t("form.date_end")}
               required
               type="date"
               value={form.endDate}
@@ -317,20 +317,16 @@ export function ProjectForm({
               onChange={(e) => updateField("endDate", e.target.value)}
             />
           </div>
-          <p className="create-project-hint">
-            Development covers planning, permits and procurement. The project stays in Draft until it is activated.
-          </p>
+          <p className="create-project-hint">{t("form.timeline_hint")}</p>
 
           </section>
 
           <section className="pf-section">
-          <h2 className="pf-section-title">Team</h2>
+          <h2 className="pf-section-title">{t("form.section_team")}</h2>
           {listError && <Banner tone="error" title={listError} />}
           {!loadingLists && !listError && availablePMs.length === 0 && (
-            <Banner tone="warning" title="No Project Manager is available">
-              Every Project Manager already has the maximum number of open projects. Complete or cancel one
-              of their projects, raise the limit under Assignment limits on the Projects page, or ask the
-              System Administrator to create another Project Manager account.
+            <Banner tone="warning" title={t("form.no_pm_title")}>
+              {t("form.no_pm_body")}
             </Banner>
           )}
           <ManagerPicker
@@ -341,19 +337,19 @@ export function ProjectForm({
             value={form.projectManagerId}
             currentId={initialValues?.projectManagerId}
             error={fieldErrors.projectManagerId}
-            emptyOptionLabel="Select a Project Manager"
+            emptyOptionLabel={t("form.select_pm")}
             onChange={(v) => updateField("projectManagerId", v)}
           />
 
           {mode === "create" && (
             <ManagerPicker
-              label={siteManagerRequired ? "Site Manager" : "Site Manager (required before activation)"}
+              label={siteManagerRequired ? t("form.sm_label_required") : t("form.sm_label")}
               required={siteManagerRequired}
               managers={siteManagers}
               loading={loadingLists}
               value={form.siteManagerId}
               error={fieldErrors.siteManagerId}
-              emptyOptionLabel={siteManagerRequired ? "Select a Site Manager" : "None yet (assign later)"}
+              emptyOptionLabel={siteManagerRequired ? t("form.sm_select") : t("form.sm_empty")}
               onChange={(v) => updateField("siteManagerId", v)}
             />
           )}
@@ -364,15 +360,15 @@ export function ProjectForm({
       {extraSection}
 
       <div className="pf-actions">
-        {formError ? <Banner tone="error" title={formError} /> : <span className="pf-actions-note">Fields marked * are required.</span>}
+        {formError ? <Banner tone="error" title={formError} /> : <span className="pf-actions-note">{t("form.required_note")}</span>}
         <div className="pf-actions-buttons">
           {onCancel ? (
             <button type="button" className="btn btn-secondary" onClick={onCancel}>
-              {cancelLabel}
+              {cancelLabel || t("common.cancel")}
             </button>
           ) : (
             <Link to={cancelTo} className="btn btn-secondary">
-              Cancel
+              {t("common.cancel")}
             </Link>
           )}
           <Button type="submit" disabled={submitting}>

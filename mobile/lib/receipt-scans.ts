@@ -98,13 +98,18 @@ export function manualEntryResult(scan: ReceiptScan): OcrResult {
 }
 
 // "Just now", "5 min ago", "2:14 PM", "Oct 12"
-export function scanTimeLabel(iso: string): string {
+// `t` and `intlLocale` (from useLocale) are optional: with them the label follows the chosen language.
+export function scanTimeLabel(
+  iso: string,
+  t?: (key: string, values?: Record<string, string | number>) => string,
+  intlLocale = "en-PH"
+): string {
   const then = new Date(iso);
   const minutes = Math.round((Date.now() - then.getTime()) / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return t ? t("time.just_now") : "Just now";
+  if (minutes < 60) return t ? t("time.min_ago", { count: minutes }) : `${minutes} min ago`;
   const sameDay = then.toDateString() === new Date().toDateString();
   return sameDay
-    ? then.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })
-    : then.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+    ? then.toLocaleTimeString(intlLocale, { hour: "numeric", minute: "2-digit" })
+    : then.toLocaleDateString(intlLocale, { month: "short", day: "numeric" });
 }

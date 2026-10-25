@@ -91,6 +91,27 @@ test("savedAtLabel: time only today, date and time for older copies", () => {
   assert.equal(savedAtLabel(null), "");
 });
 
+test("savedAtLabel: selected locale formats both translation paths independently of the device locale", () => {
+  const now = new Date(2026, 9, 20, 15, 0);
+  for (const intlLocale of ["en-PH", "fil-PH", "de-DE"]) {
+    for (const day of [20, 18]) {
+      const saved = new Date(2026, 9, day, 10, 42);
+      let translated;
+      const label = savedAtLabel(saved.toISOString(), now, (key, values) => {
+        translated = { key, values };
+        return "translated label";
+      }, intlLocale);
+      const time = new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit" }).format(saved);
+      assert.equal(label, "translated label");
+      assert.deepEqual(translated, day === 20
+        ? { key: "time.as_of", values: { time } }
+        : { key: "time.as_of_date", values: {
+          date: new Intl.DateTimeFormat(intlLocale, { year: "numeric", month: "numeric", day: "numeric" }).format(saved), time,
+        } });
+    }
+  }
+});
+
 test("a request that never answers falls back to the saved copy after the time limit", async () => {
   const saved = { data: [{ id: 7 }], savedAt: "2026-01-01T00:00:00.000Z" };
   const r = await withCache("tasks", "u1", () => new Promise(() => {}), {

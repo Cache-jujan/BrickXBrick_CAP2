@@ -12,6 +12,7 @@ import { Field } from "../../components/ui/Field";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { EMPTY_DRAFT, draftFromScan, isSupportedReceipt } from "./SubmitExpensePage";
 import { editLine } from "../../utils/lineItemMath";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./SubmitExpensePage.css";
 import "./SplitReceiptPage.css";
 
@@ -34,6 +35,7 @@ const toCents = (value) => Math.round(Number(value) * 100);
 /** Render the managers' receipt scan, correction, split preview and submission flow. */
 export function SplitReceiptPage() {
   const { user } = useAuth();
+  const { t, tv } = useLocale();
   const cameraInput = useRef(null);
   const imageInput = useRef(null);
   const pdfInput = useRef(null);
@@ -141,7 +143,7 @@ export function SplitReceiptPage() {
     resetAllocation();
     setDraft(blankDraft());
     if (!isSupportedReceipt(file)) {
-      setPageError("Choose a JPG, PNG, or PDF receipt. HEIC and other formats are not accepted yet.");
+      setPageError(t("errors.receipt_type"));
       return;
     }
 
@@ -153,10 +155,10 @@ export function SplitReceiptPage() {
       setDraft(draftFromScan(scan));
       setOcrNotice(scan.ocrError || "");
       if (!scan.ocrError && scan.confidence === "low") {
-        setOcrNotice("OCR confidence is low. Check every extracted value before splitting.");
+        setOcrNotice(t("split.ocr_low"));
       }
     } catch (error) {
-      setPageError(extractErrorMessage(error, "Receipt upload failed. Please try again."));
+      setPageError(extractErrorMessage(error, t("errors.upload_failed")));
     } finally {
       busyRef.current = false;
       setScanning(false);
@@ -191,7 +193,7 @@ export function SplitReceiptPage() {
         .catch((error) => {
           if (cancelled) return;
           setPlan(null);
-          setPreviewError(extractErrorMessage(error, "Couldn't preview the split."));
+          setPreviewError(extractErrorMessage(error, t("split.preview_failed")));
         })
         .finally(() => {
           if (!cancelled) setPreviewing(false);
@@ -201,7 +203,7 @@ export function SplitReceiptPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, refreshKey]);
+  }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, refreshKey, t]);
 
   /** Clear submission problems and refresh the preview to include newly opened requests. */
   function retryPreview() {
@@ -253,7 +255,7 @@ export function SplitReceiptPage() {
         setSubmitProblems(problems);
         setRefreshKey((k) => k + 1);
       } else {
-        setPageError(extractErrorMessage(error, "Split submission failed. Please check the details and retry."));
+        setPageError(extractErrorMessage(error, t("errors.split_failed")));
       }
     } finally {
       busyRef.current = false;
@@ -272,13 +274,13 @@ export function SplitReceiptPage() {
   }
 
   if (!user || !["General Manager", "Project Manager"].includes(user.role)) {
-    return <Banner tone="error" title="Not authorized">This page is for General Managers and Project Managers.</Banner>;
+    return <Banner tone="error" title={t("auth.not_authorized_title")}>{t("split.not_authorized_body")}</Banner>;
   }
 
   // ---- After a successful submit ------------------------------------------
   if (result) {
     /** Resolve a saved request's project name, using a fallback if it is unknown. */
-    const name = (id) => known[id]?.projectName ?? "Request";
+    const name = (id) => known[id]?.projectName ?? t("split.request");
     const screening = Object.values(result.screening ?? {});
     const flagged = screening.filter((s) => (s.flagTypes ?? []).length > 0).length;
     const notScreened = screening.filter((s) => s.flagTypes === null).length;
@@ -286,33 +288,33 @@ export function SplitReceiptPage() {
       <div className="submit-expense-page">
         <div className="submit-expense-header">
           <div>
-            <h1>Split saved</h1>
+            <h1>{t("split.saved_title")}</h1>
             <p className="submit-expense-subtitle">
-              {result.expenses.length} Pending expenses were created from one receipt. Each goes to review separately.
+              {t("split.saved_subtitle", { count: result.expenses.length })}
             </p>
           </div>
         </div>
         <Card className="submit-expense-card">
           <section className="submit-expense-section">
-            <h2>Completed requests</h2>
-            {result.resolvedTicketIDs.length === 0 ? <p>None</p> : (
+            <h2>{t("split.completed_requests")}</h2>
+            {result.resolvedTicketIDs.length === 0 ? <p>{t("split.none")}</p> : (
               <ul className="split-result-list">
                 {result.resolvedTicketIDs.map((id) => <li key={id}>✓ {name(id)}</li>)}
               </ul>
             )}
-            <h2>Still open</h2>
-            {result.stillOpenTicketIDs.length === 0 ? <p>None</p> : (
+            <h2>{t("split.still_open")}</h2>
+            {result.stillOpenTicketIDs.length === 0 ? <p>{t("split.none")}</p> : (
               <ul className="split-result-list">
                 {result.stillOpenTicketIDs.map((id) => <li key={id}>• {name(id)}</li>)}
               </ul>
             )}
-            {flagged > 0 && <Banner tone="warning" title="Flagged for PM review">{flagged} portion(s) were flagged by fraud screening.</Banner>}
-            {notScreened > 0 && <Banner tone="error" title="Screening didn't run">Fraud screening didn't run for {notScreened} portion(s). Tell the PM.</Banner>}
+            {flagged > 0 && <Banner tone="warning" title={t("split.flagged_title")}>{t("split.flagged_body", { count: flagged })}</Banner>}
+            {notScreened > 0 && <Banner tone="error" title={t("split.not_screened_title")}>{t("split.not_screened_body", { count: notScreened })}</Banner>}
           </section>
         </Card>
         <div className="submit-expense-footer">
-          <Link to="/expenses" className="btn btn-primary">Back to expenses</Link>
-          <Button type="button" variant="secondary" onClick={startOver}>Split another receipt</Button>
+          <Link to="/expenses" className="btn btn-primary">{t("submit.back")}</Link>
+          <Button type="button" variant="secondary" onClick={startOver}>{t("split.another")}</Button>
         </div>
       </div>
     );
@@ -334,30 +336,27 @@ export function SplitReceiptPage() {
     <div className="submit-expense-page">
       <LoadingOverlay
         open={scanning || submitting}
-        message={scanning ? "Reading receipt…" : "Submitting split…"}
-        detail={scanning ? "Uploading and running OCR. This can take a few seconds." : "Creating one expense per request."}
+        message={scanning ? t("submit.reading") : t("split.submitting")}
+        detail={scanning ? t("submit.scan_detail") : t("split.creating")}
       />
       <div className="submit-expense-header">
         <div>
-          <BackLink to="/expenses">Back to expenses</BackLink>
-          <h1>Split Receipt</h1>
-          <p className="submit-expense-subtitle">
-            One receipt for several open Material Requests. The system splits each line across the requests for that
-            material, oldest request first, and creates one expense per request.
-          </p>
+          <BackLink to="/expenses">{t("submit.back")}</BackLink>
+          <h1>{t("nav.split_receipt")}</h1>
+          <p className="submit-expense-subtitle">{t("split.intro")}</p>
         </div>
         <span className="submit-expense-role">{user.role}</span>
       </div>
 
-      {pageError && <Banner tone="error" title="Could not continue">{pageError}</Banner>}
-      {ocrNotice && <Banner tone="warning" title="Review the receipt carefully">{ocrNotice}</Banner>}
+      {pageError && <Banner tone="error" title={t("submit.could_not_continue")}>{pageError}</Banner>}
+      {ocrNotice && <Banner tone="warning" title={t("submit.review_carefully")}>{ocrNotice}</Banner>}
 
       <Card className="submit-expense-card">
         <section className="submit-expense-section" aria-labelledby="split-receipt-heading">
           <div className="submit-expense-section-heading">
             <div>
-              <h2 id="split-receipt-heading">1. Add receipt</h2>
-              <p>Choose an image or upload a PDF (10 MB maximum).</p>
+              <h2 id="split-receipt-heading">{t("submit.step1_title")}</h2>
+              <p>{t("split.step1_help")}</p>
             </div>
             {receiptName && <span className="submit-expense-filename">{receiptName}</span>}
           </div>
@@ -367,20 +366,20 @@ export function SplitReceiptPage() {
           <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={handleReceiptPick} />
 
           <div className="submit-expense-upload-actions">
-            <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>Capture with camera</Button>
-            <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>Choose image</Button>
-            <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>Choose PDF</Button>
+            <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>{t("submit.capture_camera")}</Button>
+            <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>{t("submit.choose_image")}</Button>
+            <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>{t("submit.choose_pdf")}</Button>
           </div>
 
           {draft.receiptImageURL && (
             <div className="submit-expense-receipt-preview">
               {receiptName.toLowerCase().endsWith(".pdf") ? (
-                <iframe className="submit-expense-pdf-preview" title="Uploaded receipt PDF preview" src={draft.receiptImageURL} />
+                <iframe className="submit-expense-pdf-preview" title={t("submit.pdf_preview_title")} src={draft.receiptImageURL} />
               ) : (
-                <img className="submit-expense-image-preview" src={draft.receiptImageURL} alt="Uploaded receipt preview" />
+                <img className="submit-expense-image-preview" src={draft.receiptImageURL} alt={t("submit.image_preview_alt")} />
               )}
               <a className="submit-expense-receipt-link" href={draft.receiptImageURL} target="_blank" rel="noreferrer">
-                Open the uploaded receipt separately
+                {t("submit.open_receipt")}
               </a>
             </div>
           )}
@@ -391,54 +390,54 @@ export function SplitReceiptPage() {
         <section className="submit-expense-section" aria-labelledby="split-review-heading">
           <div className="submit-expense-section-heading">
             <div>
-              <h2 id="split-review-heading">2. Review and correct extracted fields</h2>
-              <p>The line quantities drive the split, so check them against the paper receipt.</p>
+              <h2 id="split-review-heading">{t("split.step2_title")}</h2>
+              <p>{t("split.step2_help")}</p>
             </div>
           </div>
 
           <div className="submit-expense-fields">
-            <Field label="Vendor / store name" required value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
-            <Field label="Receipt total (₱)" required type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setField("amount", e.target.value)} />
-            <Field label="Receipt date" required type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
-            <Field as="select" label="Expense category" required value={draft.category} onChange={(e) => setField("category", e.target.value)}>
-              <option value="Materials">Materials</option>
-              <option value="Equipment">Equipment</option>
-              <option value="Other">Other</option>
+            <Field label={t("submit.vendor_name")} required value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
+            <Field label={t("submit.receipt_total")} required type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setField("amount", e.target.value)} />
+            <Field label={t("my_expenses.receipt_date")} required type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
+            <Field as="select" label={t("submit.expense_category")} required value={draft.category} onChange={(e) => setField("category", e.target.value)}>
+              <option value="Materials">{tv("category", "Materials")}</option>
+              <option value="Equipment">{tv("category", "Equipment")}</option>
+              <option value="Other">{tv("category", "Other")}</option>
             </Field>
             <Field label="TIN" value={draft.tin} onChange={(e) => setField("tin", e.target.value)} />
-            <Field label="BIR permit number" value={draft.birPermitNumber} onChange={(e) => setField("birPermitNumber", e.target.value)} />
+            <Field label={t("submit.field_bir_permit")} value={draft.birPermitNumber} onChange={(e) => setField("birPermitNumber", e.target.value)} />
             <Field label="OR / SI number" value={draft.birNumber} onChange={(e) => setField("birNumber", e.target.value)} />
           </div>
 
           <div className="submit-expense-items-heading">
             <div>
-              <h3>Receipt line items</h3>
-              <p>Use quantity 0 for delivery, VAT and fees; they ride along with a portion.</p>
+              <h3>{t("submit.line_items_title")}</h3>
+              <p>{t("split.line_help")}</p>
             </div>
-            <Button type="button" variant="secondary" onClick={addLineItem}>Add item</Button>
+            <Button type="button" variant="secondary" onClick={addLineItem}>{t("common.add_item")}</Button>
           </div>
           <div className="submit-expense-items">
             {draft.lineItems.map((item, index) => (
               <div className="submit-expense-item-row" key={`item-${index}`}>
-                <Field label={`Item ${index + 1}`} required value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder="Description" />
-                <Field label="Item amount (₱)" required type="number" min="0" step="0.01" value={item.amount} onChange={(e) => updateLineItem(index, "amount", e.target.value)} />
-                <Field label="Quantity (0 for fees)" required type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
-                <Field label="Unit price (₱)" type="number" min="0" step="0.01" placeholder="Calculated" value={item.unitPrice} onChange={(e) => updateLineItem(index, "unitPrice", e.target.value)} />
-                <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={`Remove item ${index + 1}`}>Remove</Button>
+                <Field label={t("submit.item_n", { n: index + 1 })} required value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder={t("submit.description")} />
+                <Field label={t("submit.item_amount")} required type="number" min="0" step="0.01" value={item.amount} onChange={(e) => updateLineItem(index, "amount", e.target.value)} />
+                <Field label={t("split.quantity_fees")} required type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
+                <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(e) => updateLineItem(index, "unitPrice", e.target.value)} />
+                <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
               </div>
             ))}
           </div>
 
           {allLinesValid && amountIsValid && !totalMatches && (
-            <Banner tone="warning" title="Lines don't add up to the receipt total">
-              Lines total {peso(linesCents / 100)} but the receipt total is {peso(draft.amount)}. Fix a line or the total.
+            <Banner tone="warning" title={t("split.mismatch_title")}>
+              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}
             </Banner>
           )}
 
           {!allocating && (
             <div className="submit-expense-footer">
-              <p>Next, the system shows how this receipt would be split. Nothing is saved yet.</p>
-              <Button type="button" disabled={!readyToPreview} onClick={() => setAllocating(true)}>Preview split</Button>
+              <p>{t("split.next_hint")}</p>
+              <Button type="button" disabled={!readyToPreview} onClick={() => setAllocating(true)}>{t("split.preview")}</Button>
             </div>
           )}
         </section>
@@ -449,43 +448,43 @@ export function SplitReceiptPage() {
           <section className="submit-expense-section" aria-labelledby="split-allocate-heading">
             <div className="submit-expense-section-heading">
               <div>
-                <h2 id="split-allocate-heading">3. Allocate to requests</h2>
-                <p>Each request below becomes one Pending expense. Untick "Not for this request" to leave one out.</p>
+                <h2 id="split-allocate-heading">{t("split.step3_title")}</h2>
+                <p>{t("split.step3_help")}</p>
               </div>
-              {previewing && <span className="submit-expense-progress" role="status">Updating…</span>}
+              {previewing && <span className="submit-expense-progress" role="status">{t("split.updating")}</span>}
             </div>
 
             {previewError && (
               <Banner
                 tone="error"
-                title="Couldn't preview the split"
-                action={<Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>Retry</Button>}
+                title={t("split.preview_failed")}
+                action={<Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>{t("common.retry")}</Button>}
               >
                 {previewError}
               </Banner>
             )}
             {submitProblems.length > 0 && (
-              <Banner tone="warning" title="The open requests changed since the preview">
-                {submitProblems.join(" ")} The preview has been refreshed.
+              <Banner tone="warning" title={t("split.requests_changed")}>
+                {submitProblems.join(" ")} {t("split.preview_refreshed")}
               </Banner>
             )}
             {plan && !plan.ok && plan.problems.length > 0 && (
               <Banner
                 tone="error"
-                title="This receipt can't be submitted yet"
+                title={t("split.cannot_submit")}
                 action={needsRetry ? (
                   <Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>
-                    {previewing ? "Checking…" : "Retry"}
+                    {previewing ? t("common.checking") : t("common.retry")}
                   </Button>
                 ) : undefined}
               >
                 <ul className="split-problems">{plan.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
-                {needsRetry && <p className="split-muted">If a Site Manager just filed the missing request, retry to pick it up. No need to rescan.</p>}
+                {needsRetry && <p className="split-muted">{t("split.retry_hint")}</p>}
               </Banner>
             )}
             {plan?.warnings?.length > 0 && (
-              <Banner tone="warning" title="Over budget">
-                One or more portions exceed the remaining budget of their request. You can still submit; the PM will see it.
+              <Banner tone="warning" title={t("dashboard.over_budget")}>
+                {t("split.over_budget_body")}
               </Banner>
             )}
 
@@ -499,26 +498,26 @@ export function SplitReceiptPage() {
                   <div key={ticketID} className={`split-portion${isExcluded ? " split-portion-excluded" : ""}`}>
                     <div className="split-portion-head">
                       <div>
-                        <strong>{portion?.projectName ?? info?.projectName ?? "Request"}</strong>
+                        <strong>{portion?.projectName ?? info?.projectName ?? t("split.request")}</strong>
                         <span className="split-muted"> · {portion?.materialType ?? info?.materialType}</span>
                       </div>
                       <label className="split-exclude">
                         <input type="checkbox" checked={isExcluded} onChange={(e) => toggleExcluded(ticketID, e.target.checked)} />
-                        Not for this request
+                        {t("split.not_for_request")}
                       </label>
                     </div>
                     {portion && !isExcluded && (
                       <>
                         <div className="split-portion-summary">
-                          <span>{portion.quantity} units</span>
+                          <span>{t("split.units", { quantity: portion.quantity })}</span>
                           <span>{peso(portion.amount)}</span>
                           <span className={portion.resolvesTicket ? "split-done" : "split-open"}>
-                            {portion.resolvesTicket ? "Completes this request" : `Request stays open (${portion.remainingAfter} left)`}
+                            {portion.resolvesTicket ? t("split.completes") : t("split.stays_open", { remaining: portion.remainingAfter })}
                           </span>
-                          {warning && <span className="split-over">Over budget (₱ left {warning.remainingBudget})</span>}
+                          {warning && <span className="split-over">{t("split.over_budget_left", { amount: warning.remainingBudget })}</span>}
                         </div>
                         <table className="split-lines">
-                          <thead><tr><th>Line</th><th>Qty</th><th>Amount</th></tr></thead>
+                          <thead><tr><th>{t("split.col_line")}</th><th>{t("split.col_qty")}</th><th>{t("dashboard.amount")}</th></tr></thead>
                           <tbody>
                             {portion.lines.map((line) => (
                               <tr key={`${line.lineIndex}-${line.quantity}`}>
@@ -537,20 +536,20 @@ export function SplitReceiptPage() {
               {plan && requestIDs.length === 0 && (
                 <Banner
                   tone="info"
-                  title="No open requests match this receipt"
-                  action={<Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>{previewing ? "Checking…" : "Retry"}</Button>}
+                  title={t("split.no_open_title")}
+                  action={<Button type="button" variant="secondary" onClick={retryPreview} disabled={previewing}>{previewing ? t("common.checking") : t("common.retry")}</Button>}
                 >
-                  Ask the Site Manager to file a Material Request for these materials, then retry.
+                  {t("split.no_open_body")}
                 </Banner>
               )}
             </div>
 
             {plan && plan.uncovered.length + plan.unmatched.length > 0 && (
               <div className="split-uncovered">
-                <h3>Not covered by any open request</h3>
+                <h3>{t("split.uncovered_title")}</h3>
                 <ul>
                   {[...plan.unmatched, ...plan.uncovered].map((line, i) => (
-                    <li key={i}>{line.description} · qty {line.quantity} · {peso(line.amount)}</li>
+                    <li key={i}>{t("split.uncovered_line", { description: line.description, quantity: line.quantity, amount: peso(line.amount) })}</li>
                   ))}
                 </ul>
               </div>
@@ -558,8 +557,8 @@ export function SplitReceiptPage() {
 
             {feeLines.length > 0 && (plan?.portions.length ?? 0) > 1 && (
               <div className="split-fees">
-                <h3>Delivery, VAT and fees</h3>
-                <p className="split-muted">These ride on the oldest request by default. Move one to a different request if needed.</p>
+                <h3>{t("split.fees_title")}</h3>
+                <p className="split-muted">{t("split.fees_help")}</p>
                 {feeLines.map((line) => (
                   <Field
                     key={line.lineIndex}
@@ -578,14 +577,14 @@ export function SplitReceiptPage() {
 
             {plan && (
               <p className="split-totals">
-                Allocated {peso(plan.allocated)} of {peso(plan.linesTotal)}
+                {t("split.totals", { allocated: peso(plan.allocated), total: peso(plan.linesTotal) })}
               </p>
             )}
 
             <div className="submit-expense-footer">
-              <p>Submitting creates one Pending expense per request. Approval and blockchain recording are separate steps.</p>
+              <p>{t("split.footer_note")}</p>
               <Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
-                {submitting ? "Submitting…" : "Submit split for approval"}
+                {submitting ? t("common.submitting") : t("split.submit_for_approval")}
               </Button>
             </div>
           </section>

@@ -4,19 +4,30 @@
 // "2026-10-09" -> true. Rejects impossible dates (2026-02-30), anything not
 // YYYY-MM-DD, years before 2000, and dates more than a day in the future
 // (one day of slack covers time-zone differences with the server).
-export function receiptDateProblem(text: string): string | null {
+// `t` (from useLocale) makes the message follow the chosen language; without it, English.
+type Translate = (key: string) => string;
+const EN_DATE_PROBLEMS: Record<string, string> = {
+  "rv.date_enter": "Enter the receipt date.",
+  "rv.date_format": "Use YYYY-MM-DD, e.g. 2026-10-09.",
+  "rv.date_missing": "That date doesn't exist.",
+  "rv.date_year": "Check the year.",
+  "rv.date_future": "The date is in the future.",
+};
+
+export function receiptDateProblem(text: string, t?: Translate): string | null {
+  const say = (key: string) => (t ? t(key) : EN_DATE_PROBLEMS[key]);
   const value = text.trim();
-  if (!value) return "Enter the receipt date.";
+  if (!value) return say("rv.date_enter");
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!m) return "Use YYYY-MM-DD, e.g. 2026-10-09.";
+  if (!m) return say("rv.date_format");
   const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    return "That date doesn't exist.";
+    return say("rv.date_missing");
   }
-  if (year < 2000) return "Check the year.";
+  if (year < 2000) return say("rv.date_year");
   const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
-  if (date.getTime() > tomorrow) return "The date is in the future.";
+  if (date.getTime() > tomorrow) return say("rv.date_future");
   return null;
 }
 
@@ -56,9 +67,9 @@ export function isoToDate(text: string): Date {
 }
 
 // "2026-10-09" -> "Oct 9, 2026"
-export function formatReceiptDate(text: string): string {
+export function formatReceiptDate(text: string, intlLocale = "en-PH"): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text.trim())) return text;
-  return isoToDate(text).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  return isoToDate(text).toLocaleDateString(intlLocale, { month: "short", day: "numeric", year: "numeric" });
 }
 
 // The reconciliation line's name starts with this. The server flags any

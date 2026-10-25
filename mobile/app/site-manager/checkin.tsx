@@ -42,6 +42,7 @@ import {
 import { describeCheckinRejection, describeLoadError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
+import { useLocale } from "@/lib/i18n-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 
 // A row of offline_checkins that the server refused (lib/sync/db.js).
@@ -69,6 +70,7 @@ const STATUS_HELP: Record<string, string> = {
 };
 
 export default function SiteManagerCheckinScreen() {
+  const { t, intlLocale } = useLocale();
   const session = getSession();
   const { isOnline, refreshPendingCount, syncNow, pendingCount, lastSync } = useNetwork();
 
@@ -289,7 +291,7 @@ export default function SiteManagerCheckinScreen() {
         <>
           {savedAt && (
             <Text style={styles.savedNote}>
-              {isOnline ? "Can't reach the server" : "You're offline"} · showing projects {savedAtLabel(savedAt)}.
+              {isOnline ? "Can't reach the server" : "You're offline"} · showing projects {savedAtLabel(savedAt, new Date(), t, intlLocale)}.
             </Text>
           )}
           <Text style={styles.eyebrow}>THREE TIMES A DAY</Text>

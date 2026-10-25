@@ -25,11 +25,13 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { loadNotifications } from "@/lib/cached-api";
 import { FlowHeader } from "@/components/flow-header";
 import { Screen } from "@/components/screen";
+import { useLocale } from "@/lib/i18n-context";
 
 const PAGE_SIZE = 30;
 type Tab = "Unread" | "All";
 
 export default function NotificationsScreen() {
+  const { t, tv, intlLocale } = useLocale();
   const session = getSession();
   const role = session?.user.role;
 
@@ -53,11 +55,12 @@ export default function NotificationsScreen() {
         setItems(rows);
         setHasMore(rows.length === PAGE_SIZE);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load your notifications."))
+      .catch((err) => setError(err instanceof Error ? err.message : t("errors.load_notifications")))
       .finally(() => {
         setLoading(false);
         setRefreshing(false);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the load callback must stay stable; a language change must not refetch
   }, []);
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function NotificationsScreen() {
         setHasMore(rows.length === PAGE_SIZE);
       })
       .catch((err) =>
-        setActionError(isOnline ? plainError(err, "Couldn't load older notifications.") : "You're offline. Older notifications will load when you're back online.")
+        setActionError(isOnline ? plainError(err, t("mn.err_older"), t) : t("mn.offline_older"))
       )
       .finally(() => setLoadingMore(false));
   }
@@ -86,7 +89,7 @@ export default function NotificationsScreen() {
     try {
       await markAllNotificationsRead();
     } catch (err) {
-      setActionError(isOnline ? plainError(err, "Couldn't mark your notifications as read.") : "You're offline. Connect to mark notifications as read.");
+      setActionError(isOnline ? plainError(err, t("mn.err_mark"), t) : t("mn.offline_mark"));
       return;
     }
     if (tab === "Unread") setItems([]);
@@ -113,11 +116,11 @@ export default function NotificationsScreen() {
     <Screen
       header={
         <FlowHeader
-          title="Notifications"
+          title={t("nav.notifications")}
           right={
             (tab === "All" && unreadCount > 0) || (tab === "Unread" && items.length > 0) ? (
               <Pressable onPress={handleMarkAllRead} hitSlop={8} style={styles.markAllButton} accessibilityRole="button">
-                <Text style={styles.markAll}>Mark all read</Text>
+                <Text style={styles.markAll}>{t("notifications.mark_all_read")}</Text>
               </Pressable>
             ) : null
           }
@@ -129,7 +132,7 @@ export default function NotificationsScreen() {
       <View style={styles.tabsRow}>
         {(["Unread", "All"] as Tab[]).map((key) => (
           <Pressable key={key} onPress={() => setTab(key)} style={styles.tabBtn} hitSlop={10}>
-            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{key}</Text>
+            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{key === "Unread" ? t("notifications.tab_unread") : t("common.all")}</Text>
             {tab === key && <View style={styles.tabUnderline} />}
           </Pressable>
         ))}
@@ -143,15 +146,15 @@ export default function NotificationsScreen() {
 
       {error && !isOnline ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>You're offline</Text>
-          <Text style={styles.errorBody}>Your notifications will load when you're back online.</Text>
+          <Text style={styles.errorTitle}>{t("mn.offline_title")}</Text>
+          <Text style={styles.errorBody}>{t("mn.offline_body")}</Text>
         </View>
       ) : error ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Couldn't load your notifications</Text>
-          <Text style={styles.errorBody}>{describeLoadError(error, true)}</Text>
+          <Text style={styles.errorTitle}>{t("mn.cant_load")}</Text>
+          <Text style={styles.errorBody}>{describeLoadError(error, true, t)}</Text>
           <Pressable onPress={() => load(tab)} style={styles.retryButton}>
-            <Text style={styles.retryText}>Try again</Text>
+            <Text style={styles.retryText}>{t("common.try_again")}</Text>
           </Pressable>
         </View>
       ) : (
@@ -164,26 +167,24 @@ export default function NotificationsScreen() {
             loading ? (
               <View style={styles.emptyCard}>
                 <ActivityIndicator color={COLORS.primary} />
-                <Text style={styles.emptyBody}>Loading…</Text>
+                <Text style={styles.emptyBody}>{t("common.loading")}</Text>
               </View>
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>
-                  {tab === "Unread" ? "You're all caught up" : "No notifications yet"}
+                  {tab === "Unread" ? t("notifications.caught_up_title") : t("notifications.none_yet")}
                 </Text>
                 <Text style={styles.emptyBody}>
-                  {tab === "Unread"
-                    ? "Nothing new to review right now."
-                    : "Activity on your tickets and tasks will show up here."}
+                  {tab === "Unread" ? t("notifications.nothing_new") : t("mn.empty_all")}
                 </Text>
               </View>
             )
           }
           renderItem={({ item: [label, rows] }) => (
             <View style={styles.group}>
-              <Text style={styles.groupLabel}>{label}</Text>
+              <Text style={styles.groupLabel}>{tv("notifications.group", label)}</Text>
               {rows.map((n) => {
-                const { icon, bg, fg, fallback } = metaFor(n.type);
+                const { icon, bg, fg, fallbackKey } = metaFor(n.type);
                 const clickable = !n.isread || !!routeForNotification(n, role as "Purchaser" | "Site Manager");
                 return (
                   <Pressable
@@ -196,9 +197,9 @@ export default function NotificationsScreen() {
                     </View>
                     <View style={styles.rowBody}>
                       <Text style={[styles.rowMessage, !n.isread && styles.rowMessageUnread]}>
-                        {n.message || fallback}
+                        {n.message || t(fallbackKey)}
                       </Text>
-                      <Text style={styles.rowTime}>{relativeTime(n.createdat)}</Text>
+                      <Text style={styles.rowTime}>{relativeTime(n.createdat, t, intlLocale)}</Text>
                     </View>
                     {!n.isread && <View style={styles.dot} />}
                   </Pressable>
@@ -209,7 +210,7 @@ export default function NotificationsScreen() {
           ListFooterComponent={
             hasMore && items.length > 0 ? (
               <Pressable onPress={loadMore} style={styles.loadMore} disabled={loadingMore}>
-                <Text style={styles.loadMoreText}>{loadingMore ? "Loading…" : "Load more"}</Text>
+                <Text style={styles.loadMoreText}>{loadingMore ? t("common.loading") : t("common.load_more")}</Text>
               </Pressable>
             ) : null
           }

@@ -3,6 +3,7 @@ import { router } from "expo-router";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, MIN_TAP } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 type Props = {
   // Replaces the default "go back".
@@ -16,6 +17,7 @@ type Props = {
 // it stays easy to tap on any phone size, and it never traps the user: with no
 // history it goes to the fallback instead of doing nothing.
 export function BackButton({ onPress, fallback = "/", color = COLORS.heading }: Props) {
+  const { t } = useLocale();
   function goBack() {
     if (onPress) return onPress();
     if (router.canGoBack()) router.back();
@@ -28,7 +30,7 @@ export function BackButton({ onPress, fallback = "/", color = COLORS.heading }: 
       hitSlop={8}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel="Go back"
+      accessibilityLabel={t("mh.go_back")}
     >
       <IconSymbol name="chevron.left" size={28} color={color} />
     </Pressable>

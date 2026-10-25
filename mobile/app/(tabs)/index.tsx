@@ -64,7 +64,7 @@ function toBucket(
 }
 
 export default function HomeScreen() {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const { setTicket, reset, startResubmit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
@@ -130,7 +130,7 @@ export default function HomeScreen() {
       setError(
         err instanceof Error
           ? err.message
-          : "Something went wrong."
+          : t("errors.something")
       );
     } finally {
       setLoading(false);
@@ -219,7 +219,7 @@ export default function HomeScreen() {
         ? {
             ticketId: ticket.ticketid,
             projectId: ticket.projectid,
-            projectName: projectsById[ticket.projectid]?.name ?? "Unknown project",
+            projectName: projectsById[ticket.projectid]?.name ?? t("mr.unknown_project"),
             subject: ticket.subject,
             budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
           }
@@ -239,7 +239,7 @@ export default function HomeScreen() {
     setTicket({
       ticketId: ticket.ticketid,
       projectId: ticket.projectid,
-      projectName: project?.name ?? "Unknown project",
+      projectName: project?.name ?? t("mr.unknown_project"),
       subject: ticket.subject,
       budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
     });
@@ -279,8 +279,8 @@ export default function HomeScreen() {
       {(!isOnline || savedAt) && (
         <Text style={styles.offlineNote}>
           {savedAt
-            ? `${isOnline ? "Can't reach the server" : "You're offline"} · showing your requests ${savedAtLabel(savedAt)}. You can still capture receipts; they upload when you're back online.`
-            : "You're offline. Showing requests as last loaded. You can still capture receipts; they upload when you're back online."}
+            ? t("ix.offline_saved_reqs", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })
+            : t("ix.offline_last")}
         </Text>
       )}
 
@@ -358,7 +358,7 @@ export default function HomeScreen() {
           const quantityLine = item.quantity != null
             ? `${formatQty(Number(item.quantity))}${item.unit ? ` ${item.unit}` : ""}`
             : null;
-          const urgency = urgencyFor(item.neededby);
+          const urgency = urgencyFor(item.neededby, new Date(), t, intlLocale);
 
           let chip: { label: string; tone: ChipTone };
           if (item.status === "Resolved") chip = { label: t("mobile.purchased"), tone: "success" };
@@ -377,11 +377,11 @@ export default function HomeScreen() {
 
               <View style={styles.divider} />
 
-              <Text style={styles.cardLocation} numberOfLines={1}>{project?.name ?? "Unknown project"}</Text>
+              <Text style={styles.cardLocation} numberOfLines={1}>{project?.name ?? t("mr.unknown_project")}</Text>
 
               {alreadyCaptured && (
                 <Text style={styles.capturedNote}>
-                  {expenseCount} expense{expenseCount === 1 ? "" : "s"} captured · ₱{Number(item.expensetotal || 0).toLocaleString()}
+                  {expenseCount === 1 ? t("mr.captured_one", { total: `₱${Number(item.expensetotal || 0).toLocaleString()}` }) : t("mr.captured_other", { count: expenseCount, total: `₱${Number(item.expensetotal || 0).toLocaleString()}` })}
                 </Text>
               )}
 

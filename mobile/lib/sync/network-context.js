@@ -18,6 +18,7 @@ import NetInfo from "@react-native-community/netinfo";
 
 import { initDb, getPendingCount } from "@/lib/sync/db";
 import { buildSyncSummary } from "@/lib/sync/messages";
+import { useLocale } from "@/lib/i18n-context";
 import { devLog } from "@/lib/sync/log";
 import { setCacheOnline } from "@/lib/sync/offline-cache";
 import { syncAllPending } from "@/lib/sync/sync";
@@ -34,6 +35,11 @@ const NetworkContext = createContext({
 });
 
 export function NetworkProvider({ children }) {
+  // Read through a ref so a language change is picked up without re-creating runSync
+  // (which would restart the connection listener).
+  const { t } = useLocale();
+  const tRef = useRef(t);
+  tRef.current = t;
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -54,7 +60,7 @@ export function NetworkProvider({ children }) {
       const result = await syncAllPending();
       refreshPendingCount();
       setLastSync({ at: Date.now(), result });
-      const summary = buildSyncSummary(result); // null when nothing was sent or rejected
+      const summary = buildSyncSummary(result, tRef.current); // null when nothing was sent or rejected
       if (!summary) return;
       if (result.rejected > 0) {
         devLog("[F10 sync] rejected:", result.rejectedItems.map((i) => `${i.code}: ${i.message}`).join(" | "));

@@ -4,6 +4,7 @@ import { extractErrorMessage } from "../../api/client";
 import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./MyExpensesPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -12,13 +13,8 @@ const PESO = new Intl.NumberFormat("en-PH", {
   maximumFractionDigits: 0,
 });
 
-const DATE = new Intl.DateTimeFormat("en-PH", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
-
 export function MyExpensesPage() {
+  const { t, formatDate } = useLocale();
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -27,33 +23,30 @@ export function MyExpensesPage() {
     listMyExpenses()
       .then(setExpenses)
       .catch((err) =>
-        setError(extractErrorMessage(err, "Could not load your expenses."))
+        setError(extractErrorMessage(err, t("errors.load_my_expenses")))
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   return (
     <div className="my-expenses-page">
       <div className="my-expenses-heading">
         <div>
-          <p className="my-expenses-eyebrow">PURCHASER WORKSPACE</p>
-          <h1>My Expenses</h1>
-          <p className="my-expenses-subtitle">
-            Track PM review decisions on your submitted receipts. Rejected
-            expenses are corrected and resubmitted from the mobile app.
-          </p>
+          <p className="my-expenses-eyebrow">{t("my_expenses.eyebrow")}</p>
+          <h1>{t("nav.my_expenses")}</h1>
+          <p className="my-expenses-subtitle">{t("my_expenses.subtitle")}</p>
         </div>
       </div>
 
       {error && <Banner tone="error" title={error} />}
 
       {!error && loading && (
-        <p className="dashboard-loading">Loading your expenses...</p>
+        <p className="dashboard-loading">{t("my_expenses.loading")}</p>
       )}
 
       {!error && !loading && expenses.length === 0 && (
-        <Banner tone="empty" title="No expenses submitted yet">
-          Your submitted receipts will appear here.
+        <Banner tone="empty" title={t("my_expenses.none_title")}>
+          {t("my_expenses.none_body")}
         </Banner>
       )}
 
@@ -63,11 +56,11 @@ export function MyExpensesPage() {
             <table className="users-table my-expenses-table">
               <thead>
                 <tr>
-                  <th>Vendor</th>
-                  <th>Amount</th>
-                  <th>Receipt date</th>
-                  <th>Status</th>
-                  <th>Next step</th>
+                  <th>{t("dashboard.vendor")}</th>
+                  <th>{t("dashboard.amount")}</th>
+                  <th>{t("my_expenses.receipt_date")}</th>
+                  <th>{t("dashboard.status")}</th>
+                  <th>{t("my_expenses.next_step")}</th>
                 </tr>
               </thead>
 
@@ -78,7 +71,7 @@ export function MyExpensesPage() {
                       <strong>{expense.vendorName}</strong>
                       {expense.status === "Rejected" && expense.rejectionReason && (
                         <p className="my-expenses-reason">
-                          <strong>PM note:</strong> {expense.rejectionReason}
+                          <strong>{t("my_expenses.pm_note")}</strong> {expense.rejectionReason}
                         </p>
                       )}
                     </td>
@@ -87,7 +80,7 @@ export function MyExpensesPage() {
 
                     <td>
                       {expense.receiptDate
-                        ? DATE.format(new Date(expense.receiptDate))
+                        ? formatDate(expense.receiptDate)
                         : "-"}
                     </td>
 
@@ -98,12 +91,12 @@ export function MyExpensesPage() {
                     <td className="my-expenses-action-cell">
                       {expense.status === "Rejected" && (
                         <span className="my-expenses-waiting">
-                          Correct and resubmit in the mobile app
+                          {t("my_expenses.resubmit")}
                         </span>
                       )}
                       {expense.status === "Pending" && (
                         <span className="my-expenses-waiting">
-                          Waiting for PM review
+                          {t("my_expenses.waiting")}
                         </span>
                       )}
                     </td>

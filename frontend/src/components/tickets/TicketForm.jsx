@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Field } from "../ui/Field";
 import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./TicketForm.css";
 
 // Sentinel value for the BOM-item select when the material isn't in the BOM.
@@ -48,6 +49,7 @@ const EMPTY_FORM = {
 // onCancel()                  — called when the user backs out.
 export function TicketForm({ onSuccess, onCancel, onClose }) {
   const { user } = useAuth();
+  const { t, tv } = useLocale();
   const isPM = user?.role === "Project Manager";
   // After a successful create we show a confirmation step (with "Create
   // another") instead of leaving the caller to close immediately.
@@ -74,18 +76,20 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     let cancelled = false;
     listProjects("Active")
       .then((data) => { if (!cancelled) setProjects(data); })
-      .catch((err) => { if (!cancelled) setProjectsError(extractErrorMessage(err, "Couldn't load active projects.")); })
+      .catch((err) => { if (!cancelled) setProjectsError(extractErrorMessage(err, t("errors.load_active_projects"))); })
       .finally(() => { if (!cancelled) setProjectsLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     listApprovedVendors()
       .then((data) => { if (!cancelled) setVendors(data); })
-      .catch((err) => { if (!cancelled) setVendorsError(extractErrorMessage(err, "Couldn't load approved vendors.")); })
+      .catch((err) => { if (!cancelled) setVendorsError(extractErrorMessage(err, t("errors.load_vendors"))); })
       .finally(() => { if (!cancelled) setVendorsLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   // A PM must assign a Purchaser at creation (the ticket is created already
@@ -96,9 +100,10 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     setPurchasersLoading(true);
     listPurchasers()
       .then((data) => { if (!cancelled) setPurchasers(data); })
-      .catch((err) => { if (!cancelled) setPurchasersError(extractErrorMessage(err, "Couldn't load Purchasers.")); })
+      .catch((err) => { if (!cancelled) setPurchasersError(extractErrorMessage(err, t("errors.load_purchasers"))); })
       .finally(() => { if (!cancelled) setPurchasersLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, [isPM]);
 
   // Load the approved BOM items for the Material Request picker whenever the
@@ -115,9 +120,10 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     setBomItemsError("");
     getBomItems(form.projectID)
       .then((data) => { if (!cancelled) setBomItems(Array.isArray(data?.items) ? data.items : []); })
-      .catch((err) => { if (!cancelled) setBomItemsError(extractErrorMessage(err, "Couldn't load this project's BOM items.")); })
+      .catch((err) => { if (!cancelled) setBomItemsError(extractErrorMessage(err, t("errors.load_bom_items"))); })
       .finally(() => { if (!cancelled) setBomItemsLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the project or type changes, not on a language change
   }, [form.projectID, form.ticketType]);
 
   function updateField(key, value) {
@@ -136,9 +142,9 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
   function validate() {
     const errors = {};
-    if (!form.projectID) errors.projectID = "Select a project.";
-    if (!form.ticketType) errors.ticketType = "Select a ticket type.";
-    if (!form.subject.trim()) errors.subject = "Subject is required.";
+    if (!form.projectID) errors.projectID = t("tf.err_project");
+    if (!form.ticketType) errors.ticketType = t("tf.err_type");
+    if (!form.subject.trim()) errors.subject = t("tf.err_subject");
 
     const isMaterialReq = form.ticketType === "Material Request";
     const isWorkItem = form.ticketType === "Work Item";
@@ -146,38 +152,38 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
     if (isMaterialReq || isWorkItem) {
       if (form.quantity === "" || !Number.isFinite(Number(form.quantity)) || Number(form.quantity) <= 0) {
-        errors.quantity = "Enter a quantity greater than 0.";
+        errors.quantity = t("tf.err_quantity");
       }
-      if (!form.vendorName.trim()) errors.vendorName = "Vendor name is required.";
-      if (isPM && !form.assignedTo) errors.assignedTo = "Choose a Purchaser to assign.";
+      if (!form.vendorName.trim()) errors.vendorName = t("tf.err_vendor");
+      if (isPM && !form.assignedTo) errors.assignedTo = t("tf.err_purchaser");
     }
 
     // Unit: an on-BOM Material Request takes it from the BOM item, so it's only
     // required when the creator must supply it (Work Item or Not-in-BOM).
     if ((isMaterialReq && notInBom) || isWorkItem) {
-      if (!form.unit.trim()) errors.unit = "Select a unit.";
+      if (!form.unit.trim()) errors.unit = t("tf.err_unit");
     }
 
     // Work Item keeps a free-text material type.
     if (isWorkItem && !form.materialType.trim()) {
-      errors.materialType = "Material type is required.";
+      errors.materialType = t("tf.err_material_type");
     }
 
     if (isMaterialReq) {
       if (!form.bomItemID) {
-        errors.bomItemID = "Pick a BOM item, or choose “Not in the BOM”.";
+        errors.bomItemID = t("tf.err_bom_item");
       }
       if (notInBom) {
-        if (!form.materialType.trim()) errors.materialType = "Material type is required.";
-        if (!form.notInBomReason.trim()) errors.notInBomReason = "Give a reason the item isn’t in the BOM.";
+        if (!form.materialType.trim()) errors.materialType = t("tf.err_material_type");
+        if (!form.notInBomReason.trim()) errors.notInBomReason = t("tf.err_reason");
       }
       // SM states a requested budget; the PM sets the approved budget directly.
       if (isPM) {
         if (form.approvedBudget === "" || !Number.isFinite(Number(form.approvedBudget)) || Number(form.approvedBudget) < 0) {
-          errors.approvedBudget = "Enter an approved budget of 0 or more.";
+          errors.approvedBudget = t("tf.err_approved_budget");
         }
       } else if (form.requestedBudget === "" || !Number.isFinite(Number(form.requestedBudget)) || Number(form.requestedBudget) < 0) {
-        errors.requestedBudget = "Enter a requested budget of 0 or more.";
+        errors.requestedBudget = t("tf.err_requested_budget");
       }
     }
 
@@ -238,7 +244,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       setCreated(ticket);
       onSuccess?.(ticket, { isPM });
     } catch (err) {
-      setFormError(extractErrorMessage(err, "Couldn't create the ticket. Please try again."));
+      setFormError(extractErrorMessage(err, t("errors.create_ticket")));
     } finally {
       setSubmitting(false);
     }
@@ -277,16 +283,16 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             <path d="M20 6 9 17l-5-5" />
           </svg>
         </span>
-        <h3 className="ticket-form-success-title">Ticket created</h3>
+        <h3 className="ticket-form-success-title">{t("tf.created_title")}</h3>
         <p className="ticket-form-success-text">
-          “{created.subject}” was {isPM ? "created and sent to the Purchaser" : "submitted for review"}.
+          {t(isPM ? "tf.created_pm" : "tf.created_sm", { subject: created.subject })}
         </p>
         <div className="ticket-form-success-actions">
           <Button type="button" variant="secondary" onClick={handleCreateAnother}>
-            Create another ticket
+            {t("tf.create_another")}
           </Button>
           <Button type="button" onClick={() => (onClose || onCancel)?.()}>
-            Done
+            {t("common.done")}
           </Button>
         </div>
       </div>
@@ -300,7 +306,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       {isPM && purchasersError && <Banner tone="error" title={purchasersError} />}
 
       <Field
-        label="Project"
+        label={t("nav.project")}
         as="select"
         required
         value={form.projectID}
@@ -308,7 +314,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         disabled={projectsLoading || projects.length === 0}
         onChange={(e) => updateField("projectID", e.target.value)}
       >
-        <option value="">{projectsLoading ? "Loading…" : "Select a project"}</option>
+        <option value="">{projectsLoading ? t("common.loading") : t("tf.select_project")}</option>
         {projects.map((project) => (
           <option key={project.projectid} value={project.projectid}>
             {project.name}
@@ -317,43 +323,43 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       </Field>
 
       <Field
-        label="Ticket Type"
+        label={t("tf.ticket_type")}
         as="select"
         required
         value={form.ticketType}
         error={fieldErrors.ticketType}
         onChange={(e) => updateField("ticketType", e.target.value)}
       >
-        <option value="Material Request">Material Request</option>
-        <option value="Work Item">Work Item</option>
-        {!isPM && <option value="Report">Report</option>}
+        <option value="Material Request">{tv("tickettype", "Material Request")}</option>
+        <option value="Work Item">{tv("tickettype", "Work Item")}</option>
+        {!isPM && <option value="Report">{tv("tickettype", "Report")}</option>}
       </Field>
 
       <Field
-        label="Subject"
+        label={t("tf.subject")}
         required
-        placeholder="Briefly describe the request"
+        placeholder={t("tf.subject_ph")}
         value={form.subject}
         error={fieldErrors.subject}
         onChange={(e) => updateField("subject", e.target.value)}
       />
 
       <Field
-        label="Description / Context"
+        label={t("tf.description")}
         as="textarea"
-        placeholder="Add details about what is needed"
+        placeholder={t("tf.description_ph")}
         value={form.description}
         onChange={(e) => updateField("description", e.target.value)}
       />
 
       {(isMaterialReq || isWorkItem) && (
         <div className="create-ticket-procurement">
-          <p className="create-ticket-section-label">Procurement details</p>
+          <p className="create-ticket-section-label">{t("tf.procurement")}</p>
 
           {isMaterialReq && (
             <>
               <Field
-                label="BOM Item"
+                label={t("tf.bom_item")}
                 as="select"
                 required
                 value={form.bomItemID}
@@ -363,10 +369,10 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               >
                 <option value="">
                   {!form.projectID
-                    ? "Select a project first"
+                    ? t("tf.select_project_first")
                     : bomItemsLoading
-                    ? "Loading BOM items…"
-                    : "Select a BOM item"}
+                    ? t("tf.loading_bom")
+                    : t("tf.select_bom")}
                 </option>
                 {groupedBomItems.map(([section, items]) => (
                   <optgroup key={section} label={section}>
@@ -377,31 +383,31 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
                     ))}
                   </optgroup>
                 ))}
-                <option value={NOT_IN_BOM}>— Not in the BOM —</option>
+                <option value={NOT_IN_BOM}>{t("tf.not_in_bom")}</option>
               </Field>
 
               {bomItemsError && <Banner tone="error" title={bomItemsError} />}
               {!bomItemsLoading && form.projectID && bomItems.length === 0 && !bomItemsError && (
                 <p role="status">
-                  This project’s BOM has no items to pick from. Choose “Not in the BOM” and give a reason.
+                  {t("tf.no_bom_items")}
                 </p>
               )}
 
               {notInBom && (
                 <>
                   <Field
-                    label="Material Type"
+                    label={t("tf.material_type")}
                     required
-                    placeholder="e.g. Pendant light"
+                    placeholder={t("tf.material_type_ph_light")}
                     value={form.materialType}
                     error={fieldErrors.materialType}
                     onChange={(e) => updateField("materialType", e.target.value)}
                   />
                   <Field
-                    label="Reason it isn’t in the BOM"
+                    label={t("tf.not_in_bom_reason")}
                     as="textarea"
                     required
-                    placeholder="e.g. Additional fixture, billed separately"
+                    placeholder={t("tf.not_in_bom_reason_ph")}
                     value={form.notInBomReason}
                     error={fieldErrors.notInBomReason}
                     onChange={(e) => updateField("notInBomReason", e.target.value)}
@@ -413,9 +419,9 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
           {isWorkItem && (
             <Field
-              label="Material Type"
+              label={t("tf.material_type")}
               required
-              placeholder="e.g. Cement"
+              placeholder={t("tf.material_type_ph_cement")}
               value={form.materialType}
               error={fieldErrors.materialType}
               onChange={(e) => updateField("materialType", e.target.value)}
@@ -424,7 +430,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
           <div className="ticket-form-qty-row">
             <Field
-              label="Quantity"
+              label={t("bom.aria_quantity")}
               required
               type="number"
               min="0.01"
@@ -436,23 +442,23 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             />
             {needsUnitPicker ? (
               <Field
-                label="Unit"
+                label={t("bom.col_unit")}
                 as="select"
                 required
                 value={form.unit}
                 error={fieldErrors.unit}
                 onChange={(e) => updateField("unit", e.target.value)}
               >
-                <option value="">Select a unit</option>
+                <option value="">{t("tf.select_unit")}</option>
                 {UNIT_OPTIONS.map((u) => (
                   <option key={u} value={u}>{u}</option>
                 ))}
               </Field>
             ) : (
               <Field
-                label="Unit"
+                label={t("bom.col_unit")}
                 value={onBomUnit || ""}
-                placeholder="From the BOM item"
+                placeholder={t("tf.unit_from_bom")}
                 readOnly
                 disabled
               />
@@ -460,7 +466,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
           </div>
 
           <Field
-            label="Preferred Vendor"
+            label={t("tf.preferred_vendor")}
             as="select"
             required
             value={form.vendorName}
@@ -469,19 +475,19 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             onChange={(e) => updateField("vendorName", e.target.value)}
           >
             <option value="">
-              {vendorsLoading ? "Loading approved vendors…" : vendors.length ? "Select an approved vendor" : "No approved vendors available"}
+              {vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
             </option>
             {vendors.map((vendor) => (
               <option key={vendor.vendorID} value={vendor.vendorName}>{vendor.vendorName}</option>
             ))}
           </Field>
           {!vendorsLoading && vendors.length === 0 && !vendorsError && (
-            <p role="status">No approved vendors are available. Ask a System Administrator to add one to the Vendor Master List.</p>
+            <p role="status">{t("tf.no_vendors_help")}</p>
           )}
 
           {isPM && (
             <Field
-              label="Assign to Purchaser"
+              label={t("tf.assign_purchaser")}
               as="select"
               required
               value={form.assignedTo}
@@ -490,7 +496,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               onChange={(e) => updateField("assignedTo", e.target.value)}
             >
               <option value="">
-                {purchasersLoading ? "Loading Purchasers…" : purchasers.length ? "Select a Purchaser" : "No active Purchasers available"}
+                {purchasersLoading ? t("tf.loading_purchasers") : purchasers.length ? t("tf.select_purchaser") : t("tf.no_purchasers")}
               </option>
               {purchasers.map((p) => (
                 <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>
@@ -500,7 +506,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
           {isMaterialReq && !isPM && (
             <Field
-              label="Requested Budget (PHP)"
+              label={t("tf.requested_budget")}
               required
               type="number"
               min="0"
@@ -513,7 +519,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
           )}
           {isMaterialReq && isPM && (
             <Field
-              label="Approved Budget (PHP)"
+              label={t("tf.approved_budget")}
               required
               type="number"
               min="0"
@@ -531,10 +537,10 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
       <div className="create-ticket-actions">
         <Button type="button" variant="secondary" onClick={() => onCancel?.()} disabled={submitting}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={submitting || projectsLoading || projects.length === 0}>
-          {submitting ? "Submitting…" : isPM ? "Create & Assign" : "Submit Ticket"}
+          {submitting ? t("common.submitting") : isPM ? t("tf.create_assign") : t("tf.submit_ticket")}
         </Button>
       </div>
     </form>

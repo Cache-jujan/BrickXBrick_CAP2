@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
-import { CATEGORY_HINTS, COST_CATEGORIES, MAX_ESCALATION_PCT } from "../../utils/costCategories";
+import { COST_CATEGORIES, MAX_ESCALATION_PCT } from "../../utils/costCategories";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./BudgetJustification.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
@@ -30,6 +31,7 @@ export function BudgetJustification({
   onAddCost,
   rateError,
 }) {
+  const { t, tv } = useLocale();
   const [adding, setAdding] = useState(false);
   const [cost, setCost] = useState({ category: "Professional Fees", description: "", amount: "" });
 
@@ -57,12 +59,12 @@ export function BudgetJustification({
     <section className="budget-just" aria-labelledby="budget-just-title">
       <div className="budget-just-head">
         <div>
-          <h2 id="budget-just-title" className="budget-just-title">Budget justification</h2>
-          <p className="budget-just-lead">Where the Target Budget goes, by type of cost.</p>
+          <h2 id="budget-just-title" className="budget-just-title">{t("bomjust.title")}</h2>
+          <p className="budget-just-lead">{t("bomjust.lead")}</p>
         </div>
         {editing && !adding && (
           <Button variant="secondary" className="btn-sm" onClick={() => setAdding(true)}>
-            Add other cost
+            {t("bomjust.add_other")}
           </Button>
         )}
       </div>
@@ -70,7 +72,7 @@ export function BudgetJustification({
       {editing && adding && (
         <form className="budget-just-add" onSubmit={addCost} noValidate>
           <label className="field">
-            <span className="field-label">Type of cost</span>
+            <span className="field-label">{t("bomjust.type_of_cost")}</span>
             <select
               className="field-control"
               value={cost.category}
@@ -78,21 +80,21 @@ export function BudgetJustification({
             >
               {COST_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
-                  {c} ({CATEGORY_HINTS[c]})
+                  {tv("costcat", c)} ({tv("costhint", c)})
                 </option>
               ))}
             </select>
           </label>
           <Field
-            label="Description"
+            label={t("submit.description")}
             required
-            placeholder="e.g. Structural engineer's fee"
+            placeholder={t("bomjust.desc_placeholder")}
             maxLength={150}
             value={cost.description}
             onChange={(e) => setCost((c) => ({ ...c, description: e.target.value }))}
           />
           <Field
-            label="Amount (₱)"
+            label={t("bomjust.amount_label")}
             required
             type="number"
             min="0"
@@ -103,16 +105,15 @@ export function BudgetJustification({
           />
           <div className="budget-just-add-actions">
             <Button type="button" variant="secondary" onClick={() => setAdding(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!costValid}>
-              Add to BOM
+              {t("bomjust.add_to_bom")}
             </Button>
           </div>
           <p className="budget-just-hint">
-            Added as its own section with a fixed amount. Save the BOM to keep it.
-            {statedTotal !== null &&
-              " This BOM came from the client's signed file, so a cost added here isn't in the price they agreed to: the totals won't match until the client agrees to the new total."}
+            {t("bomjust.add_hint")}
+            {statedTotal !== null && ` ${t("bomjust.add_hint_signed")}`}
           </p>
         </form>
       )}
@@ -121,9 +122,9 @@ export function BudgetJustification({
         <table className="budget-just-table">
           <thead>
             <tr>
-              <th>Type of cost</th>
-              <th className="num">Amount</th>
-              <th className="num">Share</th>
+              <th>{t("bomjust.type_of_cost")}</th>
+              <th className="num">{t("dashboard.amount")}</th>
+              <th className="num">{t("bomjust.col_share")}</th>
             </tr>
           </thead>
           <tbody>
@@ -133,8 +134,8 @@ export function BudgetJustification({
               return (
                 <tr key={c}>
                   <td>
-                    {c}
-                    <span className="budget-just-hintcell"> · {CATEGORY_HINTS[c]}</span>
+                    {tv("costcat", c)}
+                    <span className="budget-just-hintcell"> · {tv("costhint", c)}</span>
                   </td>
                   <td className="num">{PESO.format(value)}</td>
                   <td className="num">{share.toFixed(1)}%</td>
@@ -143,21 +144,21 @@ export function BudgetJustification({
             })}
             {used.length === 0 && (
               <tr>
-                <td colSpan={3} className="budget-just-muted">No costs yet.</td>
+                <td colSpan={3} className="budget-just-muted">{t("bomjust.no_costs")}</td>
               </tr>
             )}
           </tbody>
           <tfoot>
             <tr className="budget-just-subtotal">
-              <td>BOM total</td>
+              <td>{t("bomjust.bom_total")}</td>
               <td className="num">{PESO.format(subtotal)}</td>
               <td className="num">100%</td>
             </tr>
             {priceDiffers && (
               <tr>
                 <td>
-                  Price agreed with the client
-                  <span className="budget-just-hintcell"> · signed total in the file</span>
+                  {t("bomjust.price_agreed")}
+                  <span className="budget-just-hintcell"> · {t("bomjust.signed_total")}</span>
                 </td>
                 <td className="num">{PESO.format(contractPrice)}</td>
                 <td />
@@ -166,7 +167,7 @@ export function BudgetJustification({
             <tr>
               <td>
                 <span className="budget-just-rate">
-                  Escalation allowance
+                  {t("bomjust.escalation")}
                   {editing ? (
                     <span className="budget-just-rate-input">
                       <input
@@ -176,7 +177,7 @@ export function BudgetJustification({
                         max={MAX_ESCALATION_PCT}
                         step="0.5"
                         value={ratePct}
-                        aria-label="Escalation allowance in percent"
+                        aria-label={t("bomjust.escalation_aria")}
                         onChange={(e) => onRateChange(e.target.value)}
                       />
                       %
@@ -186,14 +187,14 @@ export function BudgetJustification({
                   )}
                 </span>
                 <span className="budget-just-hintcell budget-just-block">
-                  For price increases before construction starts (adviser: 5 to 6%).
+                  {t("bomjust.escalation_help")}
                 </span>
               </td>
               <td className="num">{PESO.format(allowance)}</td>
               <td />
             </tr>
             <tr className="budget-just-target">
-              <td>Target Budget</td>
+              <td>{t("bomjust.target_budget")}</td>
               <td className="num">{PESO.format(target)}</td>
               <td />
             </tr>
@@ -203,20 +204,19 @@ export function BudgetJustification({
 
       {editing ? (
         <Field
-          label="Note on the allowance (optional)"
-          placeholder="e.g. Construction starts January 2027"
+          label={t("bomjust.note_label")}
+          placeholder={t("bomjust.note_placeholder")}
           maxLength={500}
           value={note}
           onChange={(e) => onNoteChange(e.target.value)}
         />
       ) : (
-        note && <p className="budget-just-note">Allowance note: {note}</p>
+        note && <p className="budget-just-note">{t("bomjust.note_prefix", { note })}</p>
       )}
 
       <p className="budget-just-foot">
-        The client agrees to the price of the BOM; the allowance is the company&apos;s buffer and isn&apos;t
-        added to that price.
-        {unused.length > 0 && ` Not used in this BOM: ${unused.join(", ")}.`}
+        {t("bomjust.foot")}
+        {unused.length > 0 && ` ${t("bomjust.foot_unused", { list: unused.map((c) => tv("costcat", c)).join(", ") })}`}
       </p>
     </section>
   );

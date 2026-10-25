@@ -46,7 +46,7 @@ export function LoginPage() {
       // the email or the password was wrong — surface it as-is. A locked
       // account (423) and a deactivated account (403) get their own
       // explicit messages from the server, which we also just relay.
-      setError(extractErrorMessage(err, "Invalid email or password."));
+      setError(extractErrorMessage(err, t("errors.invalid_login")));
     } finally {
       setSubmitting(false);
     }
@@ -128,7 +128,7 @@ export function LoginPage() {
             </div>
 
             <p className="login-forgot">
-              <Link to="/forgot-password">Forgot password?</Link>
+              <Link to="/forgot-password">{t("login.forgot")}</Link>
             </p>
 
             <Button type="submit" disabled={submitting} className="login-submit">
@@ -138,9 +138,9 @@ export function LoginPage() {
             {error && <Banner tone="error" title={error} />}
 
             <p className="login-legal">
-              <Link to="/legal">Terms of Use</Link>
+              <Link to="/legal">{t("login.terms_of_use")}</Link>
               <span aria-hidden="true"> · </span>
-              <Link to="/legal?doc=privacy">Privacy Notice</Link>
+              <Link to="/legal?doc=privacy">{t("login.privacy_notice")}</Link>
             </p>
           </form>
         </div>

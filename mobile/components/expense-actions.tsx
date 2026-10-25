@@ -9,6 +9,7 @@ import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { StateCard } from "@/components/state-card";
 import { plainError } from "@/lib/sync/messages";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
+import { useLocale } from "@/lib/i18n-context";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { formatPeso } from "@/lib/money";
 
@@ -18,6 +19,7 @@ type Choice = { ticket: Ticket; projectName: string };
 // "Submit expense" asks which request the receipt is for, then opens the
 // capture step. "Split receipt" starts the split flow (no request needed).
 export function ExpenseActions() {
+  const { t, intlLocale } = useLocale();
   const { reset, setTicket, startSplit } = useExpenseDraft();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,10 +41,10 @@ export function ExpenseActions() {
       setChoices(
         ticketResult.data
           .filter((t) => t.status === "Acknowledged")
-          .map((ticket) => ({ ticket, projectName: names.get(ticket.projectid) ?? "Unknown project" }))
+          .map((ticket) => ({ ticket, projectName: names.get(ticket.projectid) ?? t("mr.unknown_project") }))
       );
     } catch (err) {
-      setError(plainError(err, "Couldn't load your requests."));
+      setError(plainError(err, t("ea.err_load"), t));
     } finally {
       setLoading(false);
     }
@@ -70,26 +72,26 @@ export function ExpenseActions() {
     <>
       <View style={styles.bar}>
         <Pressable onPress={openPicker} style={({ pressed }) => [styles.button, styles.filled, pressed && styles.pressed]} accessibilityRole="button">
-          <Text style={styles.filledText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Submit expense</Text>
+          <Text style={styles.filledText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{t("nav.submit_expense")}</Text>
         </Pressable>
         <Pressable onPress={split} style={({ pressed }) => [styles.button, styles.outlined, pressed && styles.pressed]} accessibilityRole="button">
-          <Text style={styles.outlinedText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Split receipt</Text>
+          <Text style={styles.outlinedText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{t("nav.split_receipt")}</Text>
         </Pressable>
       </View>
 
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Which request is this for?</Text>
-            <Pressable onPress={() => setPickerOpen(false)} style={styles.close} accessibilityRole="button" accessibilityLabel="Close">
-              <Text style={styles.closeText}>Close</Text>
+            <Text style={styles.modalTitle}>{t("ea.which")}</Text>
+            <Pressable onPress={() => setPickerOpen(false)} style={styles.close} accessibilityRole="button" accessibilityLabel={t("pd.close")}>
+              <Text style={styles.closeText}>{t("pd.close")}</Text>
             </Pressable>
           </View>
           {loading ? (
             <ActivityIndicator style={styles.center} color={COLORS.primary} />
           ) : error ? (
             <View style={styles.list}>
-              <StateCard kind="error" title="Couldn’t load your requests" body={error} onRetry={openPicker} />
+              <StateCard kind="error" title={t("mr.cant_load")} body={error} onRetry={openPicker} />
             </View>
           ) : (
             <FlatList
@@ -97,10 +99,10 @@ export function ExpenseActions() {
               keyExtractor={(c) => c.ticket.ticketid}
               contentContainerStyle={styles.list}
               ListHeaderComponent={
-                savedAt ? <Text style={styles.savedNote}>Offline · showing the requests saved {savedAtLabel(savedAt)}.</Text> : null
+                savedAt ? <Text style={styles.savedNote}>{t("ea.offline_saved", { when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}</Text> : null
               }
               ListEmptyComponent={
-                <StateCard kind="empty" title="Nothing to purchase yet" body="Requests assigned to you will appear here once they are ready to be bought." />
+                <StateCard kind="empty" title={t("ea.nothing_title")} body={t("ea.nothing_body")} />
               }
               renderItem={({ item }) => (
                 <Pressable onPress={() => choose(item)} style={({ pressed }) => [styles.choice, pressed && styles.pressed]} accessibilityRole="button">

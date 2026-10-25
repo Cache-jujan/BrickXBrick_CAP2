@@ -15,10 +15,14 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Banner } from "../../components/ui/Banner";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./UserManagementPage.css";
+
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 export function UserManagementPage() {
   const { user: me } = useAuth();
+  const { t, tv, formatDate } = useLocale();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
@@ -39,7 +43,7 @@ export function UserManagementPage() {
     try {
       setUsers(await listUsers());
     } catch (err) {
-      setListError(extractErrorMessage(err, "Couldn't load user accounts."));
+      setListError(extractErrorMessage(err, t("errors.load_users")));
     } finally {
       setLoading(false);
     }
@@ -47,6 +51,7 @@ export function UserManagementPage() {
 
   useEffect(() => {
     reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   const visible = useMemo(() => {
@@ -65,7 +70,7 @@ export function UserManagementPage() {
       await unlockUser(u.userid);
       reload();
     } catch (err) {
-      setRowError(extractErrorMessage(err, "Couldn't unlock this account."));
+      setRowError(extractErrorMessage(err, t("errors.unlock")));
     }
   }
 
@@ -73,14 +78,11 @@ export function UserManagementPage() {
     <div className="users-page">
       <div className="spread users-header">
         <div>
-          <h1>User Accounts</h1>
-          <p className="users-subtitle">
-            Create accounts, change roles, and send password emails. Users always set their own
-            password from the email link.
-          </p>
+          <h1>{t("nav.user_accounts")}</h1>
+          <p className="users-subtitle">{t("users.subtitle")}</p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "Add User"}
+          {showForm ? t("common.cancel") : t("users.add")}
         </Button>
       </div>
 
@@ -88,7 +90,7 @@ export function UserManagementPage() {
         <CreateUserForm
           onCreated={(email) => {
             setShowForm(false);
-            setNotice(`Invitation sent to ${email}.`);
+            setNotice(t("users.invite_sent", { email }));
             reload();
           }}
         />
@@ -99,32 +101,32 @@ export function UserManagementPage() {
         <input
           type="search"
           className="users-search"
-          placeholder="Search by name or email"
+          placeholder={t("users.search_ph")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search users"
+          aria-label={t("users.search_label")}
         />
-        <select className="users-filter" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label="Filter by role">
-          <option value="All">All roles</option>
+        <select className="users-filter" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label={t("users.filter_role")}>
+          <option value="All">{t("users.all_roles")}</option>
           {VALID_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
-        <select className="users-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
-          <option value="All">All statuses</option>
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
+        <select className="users-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label={t("projects.filter_status")}>
+          <option value="All">{t("users.all_statuses")}</option>
+          <option value="Active">{tv("status", "Active")}</option>
+          <option value="Inactive">{tv("status", "Inactive")}</option>
         </select>
       </div>
 
       {listError && <Banner tone="error" title={listError} />}
       {rowError && <Banner tone="error" title={rowError} />}
-      {!listError && loading && <p className="dashboard-loading">Loading accounts…</p>}
+      {!listError && loading && <p className="dashboard-loading">{t("users.loading")}</p>}
 
       {!listError && !loading && (
         <Card className="users-table-card">
           {visible.length === 0 ? (
             <div className="users-empty">
-              <Banner tone="empty" title={users.length === 0 ? "No user accounts yet" : "No accounts match your filters"}>
-                {users.length === 0 ? "Add the first account to get started." : "Try a different search or filter."}
+              <Banner tone="empty" title={users.length === 0 ? t("users.none") : t("users.no_match")}>
+                {users.length === 0 ? t("users.add_first") : t("users.try_filter")}
               </Banner>
             </div>
           ) : (
@@ -132,12 +134,12 @@ export function UserManagementPage() {
               <table className="users-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Lockout</th>
-                    <th aria-label="Actions" />
+                    <th>{t("users.name")}</th>
+                    <th>{t("users.email")}</th>
+                    <th>{t("settings.role")}</th>
+                    <th>{t("dashboard.status")}</th>
+                    <th>{t("users.lockout")}</th>
+                    <th aria-label={t("tamper.actions")} />
                   </tr>
                 </thead>
                 <tbody>
@@ -146,39 +148,39 @@ export function UserManagementPage() {
                     const isLocked = u.lockoutuntil && new Date(u.lockoutuntil) > new Date();
                     return (
                       <tr key={u.userid}>
-                        <td>{u.name}{isSelf && <span className="users-you"> (you)</span>}</td>
+                        <td>{u.name}{isSelf && <span className="users-you">{t("users.you")}</span>}</td>
                         <td>{u.email}</td>
                         <td>{u.role}</td>
                         <td><Badge status={u.status} /></td>
                         <td>
                           {isLocked ? (
-                            <span className="users-locked">Until {new Date(u.lockoutuntil).toLocaleString()}</span>
+                            <span className="users-locked">{t("users.locked_until", { time: formatDate(u.lockoutuntil, DATETIME_OPTIONS) })}</span>
                           ) : (
                             <span className="users-not-locked">—</span>
                           )}
                         </td>
                         <td className="users-actions">
                           <button type="button" className="users-action-link" onClick={() => setDialog({ type: "password", user: u })}>
-                            Send password email
+                            {t("users.send_pw")}
                           </button>
                           {!isSelf && (
                             <button type="button" className="users-action-link" onClick={() => setDialog({ type: "role", user: u })}>
-                              Change role
+                              {t("users.change_role")}
                             </button>
                           )}
                           {isLocked && (
                             <button type="button" className="users-action-link" onClick={() => handleUnlock(u)}>
-                              Unlock
+                              {t("users.unlock")}
                             </button>
                           )}
                           {!isSelf && u.status === "Active" && (
                             <button type="button" className="users-action-link users-action-danger" onClick={() => setDialog({ type: "deactivate", user: u })}>
-                              Deactivate
+                              {t("users.deactivate")}
                             </button>
                           )}
                           {!isSelf && u.status !== "Active" && (
                             <button type="button" className="users-action-link" onClick={() => setDialog({ type: "reactivate", user: u })}>
-                              Reactivate
+                              {t("users.reactivate")}
                             </button>
                           )}
                         </td>
@@ -232,6 +234,7 @@ function Modal({ title, children, onClose, labelId = "users-modal-title" }) {
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
 
 function CreateUserForm({ onCreated }) {
+  const { t } = useLocale();
   const [form, setForm] = useState({ name: "", email: "", role: VALID_ROLES[0] });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -244,15 +247,15 @@ function CreateUserForm({ onCreated }) {
     e.preventDefault();
     setError("");
     const email = form.email.trim().toLowerCase();
-    if (!form.name.trim()) return setError("Full name is required.");
-    if (!GMAIL_RE.test(email)) return setError("Enter a valid Gmail address (name@gmail.com).");
+    if (!form.name.trim()) return setError(t("users.err_name"));
+    if (!GMAIL_RE.test(email)) return setError(t("errors.invalid_gmail"));
 
     setSubmitting(true);
     try {
       await createUser({ name: form.name.trim(), email, role: form.role });
       onCreated(email);
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't create the account."));
+      setError(extractErrorMessage(err, t("errors.create_user")));
     } finally {
       setSubmitting(false);
     }
@@ -262,22 +265,21 @@ function CreateUserForm({ onCreated }) {
     <Card className="users-form-card">
       <form onSubmit={handleSubmit} noValidate>
         <div className="users-form-grid">
-          <Field label="Full Name" required placeholder="e.g. Juan Dela Cruz" value={form.name} onChange={(e) => update("name", e.target.value)} />
-          <Field label="Gmail Address" required type="email" placeholder="name@gmail.com" value={form.email} onChange={(e) => update("email", e.target.value)} />
+          <Field label={t("users.full_name")} required placeholder={t("users.full_name_ph")} value={form.name} onChange={(e) => update("name", e.target.value)} />
+          <Field label={t("auth.gmail_label")} required type="email" placeholder="name@gmail.com" value={form.email} onChange={(e) => update("email", e.target.value)} />
           <label className="field">
-            <span className="field-label">Role<span className="field-required"> *</span></span>
+            <span className="field-label">{t("settings.role")}<span className="field-required"> *</span></span>
             <select className="field-control" value={form.role} onChange={(e) => update("role", e.target.value)}>
               {VALID_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
             </select>
           </label>
         </div>
         <p className="users-form-hint">
-          <strong>Enforce change password upon login:</strong> an invitation email is sent to this Gmail and the
-          user sets their own password from the link before their first sign-in. You never see or type it.
+          <strong>{t("users.hint_strong")}</strong> {t("users.hint_rest")}
         </p>
         {error && <Banner tone="error" title={error} />}
         <div className="users-form-actions">
-          <Button type="submit" disabled={submitting}>{submitting ? "Sending invite…" : "Create & Send Invite"}</Button>
+          <Button type="submit" disabled={submitting}>{submitting ? t("users.sending_invite") : t("users.create_send")}</Button>
         </div>
       </form>
     </Card>
@@ -285,6 +287,7 @@ function CreateUserForm({ onCreated }) {
 }
 
 function SendPasswordEmailDialog({ user, onClose }) {
+  const { t } = useLocale();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(null); // "invite" | "recovery"
@@ -296,7 +299,7 @@ function SendPasswordEmailDialog({ user, onClose }) {
       const result = await sendPasswordEmail(user.userid);
       setSent(result.channel);
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't send the password email."));
+      setError(extractErrorMessage(err, t("errors.send_password")));
     } finally {
       setBusy(false);
     }
@@ -304,36 +307,36 @@ function SendPasswordEmailDialog({ user, onClose }) {
 
   if (sent) {
     return (
-      <Modal title="Password email sent" onClose={onClose}>
+      <Modal title={t("users.pw_sent_title")} onClose={onClose}>
         <p className="modal-body">
           {sent === "invite"
-            ? `${user.name} hasn't set a password yet, so their invitation was sent again to ${user.email}.`
-            : `A link to set a new password was sent to ${user.email}. Their old password no longer works.`}{" "}
-          They choose the new password themselves from that link.
+            ? t("users.pw_sent_invite", { name: user.name, email: user.email })
+            : t("users.pw_sent_recovery", { email: user.email })}{" "}
+          {t("users.pw_sent_tail")}
         </p>
         <div className="modal-actions">
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>{t("common.done")}</Button>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal title={`Send a password email to ${user.name}?`} onClose={onClose}>
+    <Modal title={t("users.pw_title", { name: user.name })} onClose={onClose}>
       <p className="modal-body">
-        A link goes to <strong>{user.email}</strong>. {user.name} sets a new password from it; you never
-        see or type it. Their current password stops working right away, and any login lockout is cleared.
+        {t("users.pw_body_a")} <strong>{user.email}</strong>. {t("users.pw_body_b", { name: user.name })}
       </p>
       {error && <Banner tone="error" title={error} />}
       <div className="modal-actions">
-        <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button onClick={handleSend} disabled={busy}>{busy ? "Sending…" : "Send email"}</Button>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>
+        <Button onClick={handleSend} disabled={busy}>{busy ? t("common.sending") : t("users.send_email")}</Button>
       </div>
     </Modal>
   );
 }
 
 function ChangeRoleDialog({ user, onClose, onDone }) {
+  const { t } = useLocale();
   const [role, setRole] = useState(user.role);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -345,33 +348,31 @@ function ChangeRoleDialog({ user, onClose, onDone }) {
       await updateUser(user.userid, { role });
       onDone();
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't change the role."));
+      setError(extractErrorMessage(err, t("errors.change_role")));
       setBusy(false);
     }
   }
 
   return (
-    <Modal title={`Change role for ${user.name}`} onClose={onClose}>
-      <p className="modal-body">
-        Their past records keep their name. If they still manage an open project, have unfinished
-        tasks or have material requests waiting on them, reassign those first.
-      </p>
+    <Modal title={t("users.role_title", { name: user.name })} onClose={onClose}>
+      <p className="modal-body">{t("users.role_body")}</p>
       <label className="field">
-        <span className="field-label">Role</span>
+        <span className="field-label">{t("settings.role")}</span>
         <select className="field-control" value={role} onChange={(e) => setRole(e.target.value)}>
           {VALID_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </label>
       {error && <Banner tone="error" title={error} />}
       <div className="modal-actions">
-        <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button onClick={handleSave} disabled={busy || role === user.role}>{busy ? "Saving…" : "Save role"}</Button>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>
+        <Button onClick={handleSave} disabled={busy || role === user.role}>{busy ? t("common.saving") : t("users.save_role")}</Button>
       </div>
     </Modal>
   );
 }
 
 function StatusDialog({ user, activate, onClose, onDone }) {
+  const { t } = useLocale();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -383,23 +384,21 @@ function StatusDialog({ user, activate, onClose, onDone }) {
       else await deactivateUser(user.userid);
       onDone();
     } catch (err) {
-      setError(extractErrorMessage(err, activate ? "Couldn't reactivate this account." : "Couldn't deactivate this account."));
+      setError(extractErrorMessage(err, activate ? t("errors.reactivate") : t("errors.deactivate")));
       setBusy(false);
     }
   }
 
   return (
-    <Modal title={activate ? `Reactivate ${user.name}?` : `Deactivate ${user.name}?`} onClose={onClose}>
+    <Modal title={activate ? t("users.react_title", { name: user.name }) : t("users.deact_title", { name: user.name })} onClose={onClose}>
       <p className="modal-body">
-        {activate
-          ? "They will be able to sign in again with their current password."
-          : "They will no longer be able to sign in. Their records stay in the system. Open projects, tasks and requests must be reassigned first."}
+        {activate ? t("users.react_body") : t("users.deact_body")}
       </p>
       {error && <Banner tone="error" title={error} />}
       <div className="modal-actions">
-        <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>
         <Button variant={activate ? "primary" : "danger"} onClick={handleConfirm} disabled={busy}>
-          {busy ? "Saving…" : activate ? "Reactivate" : "Deactivate"}
+          {busy ? t("common.saving") : activate ? t("users.reactivate") : t("users.deactivate")}
         </Button>
       </div>
     </Modal>

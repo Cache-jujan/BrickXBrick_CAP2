@@ -11,6 +11,7 @@ import { Field } from "../../components/ui/Field";
 import { BackLink } from "../../components/ui/BackLink";
 import { BudgetJustification } from "../../components/bom/BudgetJustification";
 import { COST_CATEGORIES, DEFAULT_COST_CATEGORY, MAX_ESCALATION_PCT } from "../../utils/costCategories";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./BomPage.css";
 
 // F2: the project's Bill of Materials.
@@ -24,9 +25,8 @@ import "./BomPage.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
 const QTY = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 });
-const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
-const DAY = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" });
-const fmtDay = (iso) => (iso ? DAY.format(new Date(`${iso}T00:00:00`)) : "");
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
+const fmtDay = (iso, formatDate) => (iso ? formatDate(`${iso}T00:00:00`, { dateStyle: "medium" }) : "");
 
 // Today in the Philippines as YYYY-MM-DD (the agreement date can't be later).
 function manilaToday() {
@@ -34,16 +34,17 @@ function manilaToday() {
 }
 
 // "Client agreed on Oct 3, 2026 (Maria Santos, Contract #2026-014)"
-function agreementText(bom) {
+function agreementText(bom, t, formatDate) {
   if (!bom?.clientAgreedOn) return "";
   const who = [bom.clientAgreedBy, bom.agreementRef].filter(Boolean).join(", ");
-  return `Client agreed on ${fmtDay(bom.clientAgreedOn)}${who ? ` (${who})` : ""}`;
+  const date = fmtDay(bom.clientAgreedOn, formatDate);
+  return who ? t("bom.agreed_on_by", { date, who }) : t("bom.agreed_on", { date });
 }
 const LABOR_OPTIONS = [
-  { value: "rate", label: "% of materials" },
-  { value: "amount", label: "Fixed amount" },
-  { value: "included", label: "Included in prices" },
-  { value: "none", label: "No labor" },
+  { value: "rate", labelKey: "bom.labor_rate" },
+  { value: "amount", labelKey: "bom.labor_amount" },
+  { value: "included", labelKey: "bom.labor_included" },
+  { value: "none", labelKey: "bom.labor_none" },
 ];
 
 let keySeq = 0;
@@ -137,6 +138,7 @@ export function BomPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const isGM = user.role === "General Manager";
+  const { t, tv, formatDate } = useLocale();
 
   const [project, setProject] = useState(null);
   const [data, setData] = useState(null); // server response
@@ -184,12 +186,13 @@ export function BomPage() {
       .catch((err) => {
         if (cancelled) return;
         if (err?.response?.status === 403) setAccessDenied(true);
-        else setLoadError(extractErrorMessage(err, "Couldn't load the Bill of Materials."));
+        else setLoadError(extractErrorMessage(err, t("errors.load_bom")));
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per project, not on a language change
   }, [id, applyResponse]);
 
   // Warn before leaving with unsaved edits.
@@ -306,14 +309,14 @@ export function BomPage() {
       const resp = await importBom(id, file);
       applyResponse(resp);
       setImportReport(resp.importReport);
-    }, "Couldn't import this file.");
+    }, t("errors.import_failed"));
   }
 
   async function handleSave() {
     await run("save", async () => {
       const pct = Number(escalation.ratePct);
       if (escalation.ratePct === "" || !Number.isFinite(pct) || pct < 0 || pct > MAX_ESCALATION_PCT) {
-        throw new Error(`The escalation allowance must be between 0% and ${MAX_ESCALATION_PCT}%.`);
+        throw new Error(t("errors.escalation_range", { max: MAX_ESCALATION_PCT }));
       }
       const resp = await saveBom(id, toPayload(draft), {
         escalationRate: Math.round(pct * 100) / 10000,
@@ -322,8 +325,8 @@ export function BomPage() {
       applyResponse(resp);
       // Keep the import report only while it lists rows that still need adding.
       setImportReport((r) => (r && r.skippedRows.length ? r : null));
-      setNotice("Changes saved.");
-    }, "Couldn't save the BOM.");
+      setNotice(t("bom.saved"));
+    }, t("errors.save_bom"));
   }
 
   async function handleApprove() {
@@ -339,10 +342,10 @@ export function BomPage() {
       setDialog(null);
       setNotice(
         resp.previousBudget !== resp.projectBudget
-          ? `BOM approved. The project budget is now ${PESO.format(resp.projectBudget)} (was ${PESO.format(resp.previousBudget)}).`
-          : "BOM approved."
+          ? t("bom.approved_budget_changed", { new: PESO.format(resp.projectBudget), old: PESO.format(resp.previousBudget) })
+          : t("bom.approved")
       );
-    }, "Couldn't approve the BOM.");
+    }, t("errors.approve_bom"));
   }
 
   async function handleReopen() {
@@ -352,7 +355,7 @@ export function BomPage() {
       setProject((p) => ({ ...p, bomstatus: "Draft" }));
       setDialog(null);
       setReopenReason("");
-    }, "Couldn't reopen the BOM.");
+    }, t("errors.reopen_bom"));
   }
 
   async function handleDelete() {
@@ -361,7 +364,7 @@ export function BomPage() {
       applyResponse({ ...data, bom: null });
       setImportReport(null);
       setDialog(null);
-    }, "Couldn't remove the BOM.");
+    }, t("errors.remove_bom"));
   }
 
   function openDialog(kind) {
@@ -371,14 +374,14 @@ export function BomPage() {
     setDialog(kind);
   }
 
-  if (loading) return <p className="dashboard-loading">Loading Bill of Materials…</p>;
+  if (loading) return <p className="dashboard-loading">{t("bom.loading")}</p>;
   if (accessDenied) {
     return (
       <div className="bom-page">
-        <Banner tone="info" title="You don't manage this project">
-          Only this project's Project Manager or a General Manager can view its Bill of Materials.
+        <Banner tone="info" title={t("bom.no_access_title")}>
+          {t("bom.no_access_body")}
         </Banner>
-        <BackLink to="/projects">Back to Projects</BackLink>
+        <BackLink to="/projects">{t("projects.back")}</BackLink>
       </div>
     );
   }
@@ -386,7 +389,7 @@ export function BomPage() {
     return (
       <div className="bom-page">
         <Banner tone="error" title={loadError} />
-        <BackLink to={`/projects/${id}`}>Back to project</BackLink>
+        <BackLink to={`/projects/${id}`}>{t("projects.back_one")}</BackLink>
       </div>
     );
   }
@@ -398,43 +401,43 @@ export function BomPage() {
 
   return (
     <div className="bom-page">
-      <BackLink to={`/projects/${id}`}>Back to project</BackLink>
+      <BackLink to={`/projects/${id}`}>{t("projects.back_one")}</BackLink>
 
       <header className="page-header">
         <div className="page-header-text">
           <div className="bom-title-row">
-            <h1>Bill of Materials</h1>
+            <h1>{t("nav.bill_of_materials")}</h1>
             {bom && <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />}
           </div>
           <p className="page-header-sub">
             <Link to={`/projects/${id}`}>{project?.name}</Link>
-            {bom?.sourceFileName && <> · from {bom.sourceFileName}</>}
+            {bom?.sourceFileName && <> · {t("bom.from_file", { file: bom.sourceFileName })}</>}
           </p>
         </div>
         {isGM && !projectClosed && (
           <div className="page-header-actions">
             {(!bom || bom.status === "Draft") && (
               <Button variant="secondary" onClick={chooseFile} disabled={Boolean(busy)}>
-                {busy === "import" ? "Importing…" : bom || draft ? "Replace from Excel" : "Import from Excel"}
+                {busy === "import" ? t("bom.importing") : bom || draft ? t("bom.replace_excel") : t("bom.import_excel")}
               </Button>
             )}
             {editing && dirty && (
               <Button variant={bom ? "secondary" : "primary"} onClick={handleSave} disabled={Boolean(busy)}>
-                {busy === "save" ? "Saving…" : "Save changes"}
+                {busy === "save" ? t("common.saving") : t("projects.save_changes")}
               </Button>
             )}
             {bom?.status === "Draft" && (
               <Button
                 onClick={() => openDialog("approve")}
                 disabled={Boolean(busy) || dirty}
-                title={dirty ? "Save your changes first" : undefined}
+                title={dirty ? t("bom.save_first") : undefined}
               >
-                Approve BOM
+                {t("bom.approve_btn")}
               </Button>
             )}
             {bom?.status === "Approved" && (
               <Button variant="secondary" onClick={() => openDialog("reopen")} disabled={Boolean(busy)}>
-                Reopen for revision
+                {t("bom.reopen_btn")}
               </Button>
             )}
           </div>
@@ -456,37 +459,37 @@ export function BomPage() {
 
       {bom?.status === "Approved" && (
         <p className="bom-status-line">
-          {bom.clientAgreedOn && <strong className="bom-agreement">{agreementText(bom)}.</strong>}{" "}
-          Approved{bom.approvedByName ? ` by ${bom.approvedByName}` : ""} on {DATETIME.format(new Date(bom.approvedAt))}.
-          It is locked; material requests use these items.
+          {bom.clientAgreedOn && <strong className="bom-agreement">{agreementText(bom, t, formatDate)}.</strong>}{" "}
+          {bom.approvedByName
+            ? t("bom.approved_line_by", { name: bom.approvedByName, date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })
+            : t("bom.approved_line", { date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })}
         </p>
       )}
       {bom?.status === "Draft" && bom.revisionNote && (
-        <Banner tone="warning" title="Reopened for revision">
+        <Banner tone="warning" title={t("bom.reopened_title")}>
           {bom.revisionNote}
-          {bom.reopenedAt ? ` (${bom.reopenedByName || "General Manager"}, ${DATETIME.format(new Date(bom.reopenedAt))})` : ""}.
-          Approve it again when the changes are done.
+          {bom.reopenedAt ? ` (${bom.reopenedByName || "General Manager"}, ${formatDate(bom.reopenedAt, DATETIME_OPTIONS)})` : ""}.{" "}
+          {t("bom.approve_again")}
         </Banner>
       )}
       {bom?.status === "Draft" && !bom.revisionNote && isGM && (
-        <p className="bom-status-line">
-          Check every section against the copy the client agreed to, correct anything that differs, then approve
-          and record when and with whom the client agreed. The project can be activated once the BOM is approved.
-        </p>
+        <p className="bom-status-line">{t("bom.check_intro")}</p>
       )}
 
       {importReport && (
         <Banner
           tone={importReport.skippedRows.length ? "warning" : "success"}
-          title={`Imported ${bom?.totals.itemCount ?? 0} items in ${bom?.totals.sectionCount ?? 0} sections from ${importReport.fileName}.`}
+          title={t("bom.imported_title", { items: bom?.totals.itemCount ?? 0, sections: bom?.totals.sectionCount ?? 0, file: importReport.fileName })}
         >
           {importReport.skippedRows.length > 0 && (
             <>
-              These rows were not imported. Add them by hand if they belong in the BOM:
+              {t("bom.skipped_intro")}
               <ul className="bom-list">
                 {importReport.skippedRows.map((r) => (
                   <li key={r.row}>
-                    Row {r.row}{r.description ? ` (${r.description})` : ""}: {r.reason}
+                    {r.description
+                      ? t("bom.skipped_row_desc", { row: r.row, description: r.description, reason: r.reason })
+                      : t("bom.skipped_row", { row: r.row, reason: r.reason })}
                   </li>
                 ))}
               </ul>
@@ -502,25 +505,20 @@ export function BomPage() {
 
       {!draft && (
         <div className="bom-empty">
-          <h2>{data?.bomPending ? "Bill of Materials not approved yet" : "No Bill of Materials yet"}</h2>
+          <h2>{data?.bomPending ? t("bom.pending_title") : t("bom.none_title")}</h2>
           {isGM && !projectClosed ? (
             <>
-              <p>
-                Import the signed BOM in the company's Excel format. Sections, items and labor are read from the
-                file; the header (owner, address) and the signatures are not stored.
-              </p>
+              <p>{t("bom.import_help")}</p>
               <div className="bom-empty-actions">
                 <Button onClick={chooseFile} disabled={Boolean(busy)}>
-                  {busy === "import" ? "Importing…" : "Import from Excel (.xlsx)"}
+                  {busy === "import" ? t("bom.importing") : t("bom.import_xlsx")}
                 </Button>
-                <Button variant="ghost" onClick={startManual}>Enter it by hand</Button>
+                <Button variant="ghost" onClick={startManual}>{t("bom.enter_by_hand")}</Button>
               </div>
             </>
           ) : (
             <p>
-              {data?.bomPending
-                ? "The General Manager is still preparing this BOM. You can open it here once it is approved."
-                : "The General Manager hasn't added this project's BOM yet."}
+              {data?.bomPending ? t("bom.pending_gm") : t("bom.none_gm")}
             </p>
           )}
         </div>
@@ -528,37 +526,40 @@ export function BomPage() {
 
       {draft && totals && (
         <>
-          <section className="bom-totals" aria-label="BOM totals">
+          <section className="bom-totals" aria-label={t("bom.totals_aria")}>
             <div className="bom-total">
-              <span className="bom-total-label">Materials</span>
+              <span className="bom-total-label">{t("bom.materials")}</span>
               <span className="bom-total-value">{PESO.format(totals.materials)}</span>
               <span className="bom-total-note">
-                {totals.items} {totals.items === 1 ? "item" : "items"} in {draft.length} {draft.length === 1 ? "section" : "sections"}
+                {t("bom.in_sections", {
+                  items: totals.items === 1 ? t("bom.item_one") : t("bom.item_other", { count: totals.items }),
+                  sections: draft.length === 1 ? t("bom.section_one") : t("bom.section_other", { count: draft.length }),
+                })}
               </span>
             </div>
             <div className="bom-total">
-              <span className="bom-total-label">Labor and other costs</span>
+              <span className="bom-total-label">{t("bom.labor_other")}</span>
               <span className="bom-total-value">{PESO.format(totals.labor)}</span>
-              <span className="bom-total-note">Labor, lump sums, overhead; not purchased</span>
+              <span className="bom-total-note">{t("bom.labor_note")}</span>
             </div>
             <div className="bom-total bom-total-main">
-              <span className="bom-total-label">BOM total</span>
+              <span className="bom-total-label">{t("bomjust.bom_total")}</span>
               <span className="bom-total-value">{PESO.format(totals.total)}</span>
               <span className={"bom-total-note" + (differs(totals.total, statedTotal) ? " bom-mismatch" : "")}>
                 {statedTotal === null
-                  ? bom?.sourceFileName ? "No total in the file" : "Entered by hand"
+                  ? bom?.sourceFileName ? t("bom.no_total_file") : t("bom.entered_by_hand")
                   : differs(totals.total, statedTotal)
-                    ? `File says ${PESO.format(statedTotal)}`
-                    : "Matches the file"}
+                    ? t("bom.file_says", { amount: PESO.format(statedTotal) })
+                    : t("bom.matches_file")}
               </span>
             </div>
             <div className="bom-total">
-              <span className="bom-total-label">Project Target Budget</span>
+              <span className="bom-total-label">{t("bom.target_budget_label")}</span>
               <span className="bom-total-value">{PESO.format(Number(project?.budget ?? data.projectBudget ?? 0))}</span>
               <span className="bom-total-note">
                 {bom?.status === "Approved"
-                  ? `Agreed price + ${Math.round((bom.escalationRate || 0) * 10000) / 100}% allowance`
-                  : `Becomes the agreed price + ${escalation.ratePct || 0}% allowance on approval`}
+                  ? t("bom.agreed_plus", { pct: Math.round((bom.escalationRate || 0) * 10000) / 100 })
+                  : t("bom.becomes", { pct: escalation.ratePct || 0 })}
               </span>
             </div>
           </section>
@@ -580,10 +581,10 @@ export function BomPage() {
             <section className="bom-checks" aria-labelledby="bom-checks-title">
               <h2 id="bom-checks-title" className="bom-checks-title">
                 {!warnings.length
-                  ? "Notes"
+                  ? t("bom.notes")
                   : bom.status === "Approved"
-                    ? `Flagged during review (${warnings.length})`
-                    : `Check before approving (${warnings.length})`}
+                    ? t("bom.flagged_review", { count: warnings.length })
+                    : t("bom.check_before", { count: warnings.length })}
               </h2>
               <ul className="bom-list">
                 {warnings.map((w, i) => <li key={`w${i}`} className="bom-check-warning">{w.message}</li>)}
@@ -592,7 +593,7 @@ export function BomPage() {
             </section>
           )}
           {dirty && (
-            <p className="bom-status-line">Checks against the file are updated when you save.</p>
+            <p className="bom-status-line">{t("bom.checks_updated")}</p>
           )}
 
           {draft.map((s, si) => {
@@ -601,53 +602,53 @@ export function BomPage() {
             const laborMismatch = s.laborMode !== "included" && differs(c.labor, s.statedLaborAmount);
             const p = `sections[${si}]`;
             return (
-              <section key={s.key} className="bom-section" aria-label={s.name || `Section ${si + 1}`}>
+              <section key={s.key} className="bom-section" aria-label={s.name || t("bom.section_n", { n: si + 1 })}>
                 <div className="bom-section-head">
                   {editing ? (
                     <div className="bom-section-names">
                       <input
                         className={"bom-input bom-input-name" + (fieldErr(`${p}.name`) ? " bom-input-error" : "")}
                         value={s.name}
-                        placeholder="Section name, e.g. STRUCTURAL"
-                        aria-label="Section name"
+                        placeholder={t("bom.section_name_ph")}
+                        aria-label={t("bom.section_name")}
                         onChange={(e) => setSection(si, { name: e.target.value })}
                       />
                       <input
                         className="bom-input bom-input-sub"
                         value={s.subheading}
-                        placeholder="Sub-heading (optional)"
-                        aria-label="Sub-heading"
+                        placeholder={t("bom.subheading_ph")}
+                        aria-label={t("bom.subheading")}
                         onChange={(e) => setSection(si, { subheading: e.target.value })}
                       />
                       <select
                         className="bom-input bom-input-category"
                         value={s.costCategory || DEFAULT_COST_CATEGORY}
-                        aria-label="Type of cost"
+                        aria-label={t("bomjust.type_of_cost")}
                         onChange={(e) => setSection(si, { costCategory: e.target.value })}
                       >
-                        {COST_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        {COST_CATEGORIES.map((c) => <option key={c} value={c}>{tv("costcat", c)}</option>)}
                       </select>
                     </div>
                   ) : (
                     <div>
                       <h2 className="bom-section-title">{s.name}</h2>
                       {s.subheading && <p className="bom-section-sub">{s.subheading}</p>}
-                      <span className="bom-category">{s.costCategory || DEFAULT_COST_CATEGORY}</span>
+                      <span className="bom-category">{tv("costcat", s.costCategory || DEFAULT_COST_CATEGORY)}</span>
                     </div>
                   )}
                   <div className="bom-section-side">
                     <span className="bom-section-total">{PESO.format(c.total)}</span>
                     {editing && (
                       <span className="bom-section-tools">
-                        <button type="button" className="bom-icon-btn" onClick={() => moveSection(si, -1)} disabled={si === 0} aria-label="Move section up">↑</button>
-                        <button type="button" className="bom-icon-btn" onClick={() => moveSection(si, 1)} disabled={si === draft.length - 1} aria-label="Move section down">↓</button>
+                        <button type="button" className="bom-icon-btn" onClick={() => moveSection(si, -1)} disabled={si === 0} aria-label={t("bom.move_up")}>↑</button>
+                        <button type="button" className="bom-icon-btn" onClick={() => moveSection(si, 1)} disabled={si === draft.length - 1} aria-label={t("bom.move_down")}>↓</button>
                         <button
                           type="button"
                           className="bom-text-btn bom-text-danger"
                           onClick={() => removeSection(si)}
                           disabled={s.items.some((it) => it.inUse)}
                         >
-                          Remove section
+                          {t("bom.remove_section")}
                         </button>
                       </span>
                     )}
@@ -659,12 +660,12 @@ export function BomPage() {
                     <thead>
                       <tr>
                         <th className="bom-col-no">#</th>
-                        <th>Description</th>
-                        <th className="num bom-col-qty">Qty</th>
-                        <th className="bom-col-unit">Unit</th>
-                        <th className="num bom-col-cost">Unit cost</th>
-                        <th className="num bom-col-amount">Cost</th>
-                        {editing && <th className="bom-col-act"><span className="visually-hidden">Remove</span></th>}
+                        <th>{t("submit.description")}</th>
+                        <th className="num bom-col-qty">{t("split.col_qty")}</th>
+                        <th className="bom-col-unit">{t("bom.col_unit")}</th>
+                        <th className="num bom-col-cost">{t("bom.col_unit_cost")}</th>
+                        <th className="num bom-col-amount">{t("bom.col_cost")}</th>
+                        {editing && <th className="bom-col-act"><span className="visually-hidden">{t("common.remove")}</span></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -677,20 +678,20 @@ export function BomPage() {
                             {editing ? (
                               <>
                                 <td>
-                                  <input className={"bom-input" + (fieldErr(`${ip}.description`) ? " bom-input-error" : "")} value={it.description} aria-label="Description"
+                                  <input className={"bom-input" + (fieldErr(`${ip}.description`) ? " bom-input-error" : "")} value={it.description} aria-label={t("submit.description")}
                                     onChange={(e) => setItem(si, ii, { description: e.target.value })} />
                                 </td>
                                 <td className="num">
-                                  <input className={"bom-input num" + (fieldErr(`${ip}.quantity`) ? " bom-input-error" : "")} type="number" min="0" step="any" inputMode="decimal" value={it.quantity} aria-label="Quantity"
+                                  <input className={"bom-input num" + (fieldErr(`${ip}.quantity`) ? " bom-input-error" : "")} type="number" min="0" step="any" inputMode="decimal" value={it.quantity} aria-label={t("bom.aria_quantity")}
                                     onChange={(e) => setItem(si, ii, { quantity: e.target.value })} />
                                 </td>
                                 <td>
-                                  <input className={"bom-input" + (fieldErr(`${ip}.unit`) ? " bom-input-error" : "")} value={it.unit} aria-label="Unit" disabled={it.inUse}
-                                    title={it.inUse ? "Used by a material request; the unit can't change" : undefined}
+                                  <input className={"bom-input" + (fieldErr(`${ip}.unit`) ? " bom-input-error" : "")} value={it.unit} aria-label={t("bom.col_unit")} disabled={it.inUse}
+                                    title={it.inUse ? t("bom.unit_locked") : undefined}
                                     onChange={(e) => setItem(si, ii, { unit: e.target.value })} />
                                 </td>
                                 <td className="num">
-                                  <input className={"bom-input num" + (fieldErr(`${ip}.unitCost`) ? " bom-input-error" : "")} type="number" min="0" step="any" inputMode="decimal" value={it.unitCost} aria-label="Unit cost"
+                                  <input className={"bom-input num" + (fieldErr(`${ip}.unitCost`) ? " bom-input-error" : "")} type="number" min="0" step="any" inputMode="decimal" value={it.unitCost} aria-label={t("bom.col_unit_cost")}
                                     onChange={(e) => setItem(si, ii, { unitCost: e.target.value })} />
                                 </td>
                               </>
@@ -706,7 +707,7 @@ export function BomPage() {
                             {editing && (
                               <td className="bom-col-act">
                                 <button type="button" className="bom-icon-btn" onClick={() => removeItem(si, ii)} disabled={it.inUse}
-                                  aria-label={`Remove ${it.description || "item"}`} title={it.inUse ? "Used by a material request" : "Remove item"}>
+                                  aria-label={t("bom.remove_item_aria", { name: it.description || t("bom.item_word") })} title={it.inUse ? t("bom.item_in_use") : t("bom.remove_item")}>
                                   ×
                                 </button>
                               </td>
@@ -717,9 +718,7 @@ export function BomPage() {
                       {s.items.length === 0 && (
                         <tr>
                           <td colSpan={editing ? 7 : 6} className="bom-empty-row">
-                            {c.labor > 0
-                              ? "No materials to buy: this section is a lump-sum cost (below)."
-                              : "No items in this section."}
+                            {c.labor > 0 ? t("bom.lump_sum_row") : t("bom.no_items")}
                           </td>
                         </tr>
                       )}
@@ -727,8 +726,8 @@ export function BomPage() {
                     <tfoot>
                       <tr>
                         <td colSpan={5}>
-                          {s.laborMode === "included" ? "Labor and material cost" : "Material cost"}
-                          {matMismatch && <span className="bom-mismatch"> · file says {PESO.format(s.statedMaterialTotal)}</span>}
+                          {s.laborMode === "included" ? t("bom.labor_material_cost") : t("bom.material_cost")}
+                          {matMismatch && <span className="bom-mismatch">{t("bom.file_says_inline", { amount: PESO.format(s.statedMaterialTotal) })}</span>}
                         </td>
                         <td className="num">{PESO.format(c.materials)}</td>
                         {editing && <td />}
@@ -736,36 +735,36 @@ export function BomPage() {
                       <tr>
                         <td colSpan={5}>
                           <span className="bom-labor">
-                            {s.items.length === 0 ? "Lump-sum cost (not purchased)" : "Labor"}
+                            {s.items.length === 0 ? t("bom.lump_sum") : t("bom.labor")}
                             {editing ? (
                               <>
-                                <select className="bom-input bom-labor-mode" value={s.laborMode} aria-label="How labor is computed"
+                                <select className="bom-input bom-labor-mode" value={s.laborMode} aria-label={t("bom.labor_how")}
                                   onChange={(e) => setSection(si, { laborMode: e.target.value })}>
-                                  {LABOR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                  {LABOR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
                                 </select>
                                 {s.laborMode === "rate" && (
                                   <span className="bom-labor-input">
-                                    <input className={"bom-input num" + (fieldErr(`${p}.laborRate`) ? " bom-input-error" : "")} type="number" min="0" step="any" value={s.laborRatePct} aria-label="Labor percent"
+                                    <input className={"bom-input num" + (fieldErr(`${p}.laborRate`) ? " bom-input-error" : "")} type="number" min="0" step="any" value={s.laborRatePct} aria-label={t("bom.labor_percent")}
                                       onChange={(e) => setSection(si, { laborRatePct: e.target.value })} />%
                                   </span>
                                 )}
                                 {s.laborMode === "amount" && (
                                   <span className="bom-labor-input">
-                                    ₱<input className={"bom-input num" + (fieldErr(`${p}.laborAmount`) ? " bom-input-error" : "")} type="number" min="0" step="any" value={s.laborAmount} aria-label="Labor amount"
+                                    ₱<input className={"bom-input num" + (fieldErr(`${p}.laborAmount`) ? " bom-input-error" : "")} type="number" min="0" step="any" value={s.laborAmount} aria-label={t("bom.labor_amount_aria")}
                                       onChange={(e) => setSection(si, { laborAmount: e.target.value })} />
                                   </span>
                                 )}
                               </>
                             ) : (
                               <span className="bom-labor-desc">
-                                {s.laborMode === "rate" && `${round2(Number(s.laborRatePct))}% of materials`}
-                                {s.laborMode === "amount" && "fixed amount"}
-                                {s.laborMode === "included" && "included in the prices"}
-                                {s.laborMode === "none" && "none"}
+                                {s.laborMode === "rate" && t("bom.labor_desc_rate", { pct: round2(Number(s.laborRatePct)) })}
+                                {s.laborMode === "amount" && t("bom.labor_desc_amount")}
+                                {s.laborMode === "included" && t("bom.labor_desc_included")}
+                                {s.laborMode === "none" && t("bom.labor_desc_none")}
                               </span>
                             )}
                           </span>
-                          {laborMismatch && <span className="bom-mismatch"> · file says {PESO.format(s.statedLaborAmount)}</span>}
+                          {laborMismatch && <span className="bom-mismatch">{t("bom.file_says_inline", { amount: PESO.format(s.statedLaborAmount) })}</span>}
                         </td>
                         <td className="num">{s.laborMode === "included" ? "—" : PESO.format(c.labor)}</td>
                         {editing && <td />}
@@ -774,7 +773,7 @@ export function BomPage() {
                   </table>
                 </div>
                 {editing && (
-                  <button type="button" className="bom-text-btn" onClick={() => addItem(si)}>+ Add item</button>
+                  <button type="button" className="bom-text-btn" onClick={() => addItem(si)}>+ {t("common.add_item")}</button>
                 )}
               </section>
             );
@@ -782,10 +781,10 @@ export function BomPage() {
 
           {editing && (
             <div className="bom-bottom-actions">
-              <Button variant="secondary" onClick={addSection}>Add section</Button>
+              <Button variant="secondary" onClick={addSection}>{t("bom.add_section")}</Button>
               {bom && data.projectStatus === "Draft" && !dirty && (
                 <button type="button" className="bom-text-btn bom-text-danger" onClick={() => openDialog("delete")}>
-                  Remove this BOM
+                  {t("bom.remove_this")}
                 </button>
               )}
             </div>
@@ -794,11 +793,11 @@ export function BomPage() {
       )}
 
       {editing && dirty && (
-        <div className="bom-savebar" role="region" aria-label="Unsaved changes">
-          <span>Unsaved changes</span>
+        <div className="bom-savebar" role="region" aria-label={t("bom.unsaved")}>
+          <span>{t("bom.unsaved")}</span>
           <div className="bom-savebar-actions">
-            <Button variant="secondary" onClick={discard} disabled={Boolean(busy)}>Discard</Button>
-            <Button onClick={handleSave} disabled={Boolean(busy)}>{busy === "save" ? "Saving…" : "Save changes"}</Button>
+            <Button variant="secondary" onClick={discard} disabled={Boolean(busy)}>{t("bom.discard")}</Button>
+            <Button onClick={handleSave} disabled={Boolean(busy)}>{busy === "save" ? t("common.saving") : t("projects.save_changes")}</Button>
           </div>
         </div>
       )}
@@ -808,25 +807,22 @@ export function BomPage() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="bom-dialog-title" onClick={(e) => e.stopPropagation()}>
             {dialog === "approve" && (
               <>
-                <h2 id="bom-dialog-title" className="modal-title">Approve this BOM?</h2>
+                <h2 id="bom-dialog-title" className="modal-title">{t("bom.approve_title")}</h2>
                 <p className="modal-body">
-                  It will be locked and used as the basis for every material request. The project&apos;s Target Budget
-                  becomes {bom.statedTotal !== null ? "the signed total from the file" : "the BOM total"}
+                  {t("bom.approve_body_1")} {t("bom.target_becomes")}{" "}
+                  {bom.statedTotal !== null ? t("bom.basis_signed") : t("bom.basis_total")}
                   {bom.budget?.escalationAllowance > 0
-                    ? ` plus the ${Math.round(bom.budget.escalationRate * 10000) / 100}% escalation allowance`
+                    ? ` ${t("bom.plus_allowance", { pct: Math.round(bom.budget.escalationRate * 10000) / 100 })}`
                     : ""}
                   , <strong>{PESO.format(bom.budgetOnApproval ?? bom.totals.total)}</strong>
                   {Number(data.projectBudget) !== (bom.budgetOnApproval ?? bom.totals.total)
-                    ? ` (now ${PESO.format(Number(data.projectBudget))})`
+                    ? ` ${t("bom.now_budget", { amount: PESO.format(Number(data.projectBudget)) })}`
                     : ""}.
                 </p>
-                <p className="bom-agreement-intro">
-                  The client agrees to the BOM outside the system (on paper, at a meeting or by email).
-                  Record it here; purchases can only start after this.
-                </p>
+                <p className="bom-agreement-intro">{t("bom.agreement_intro")}</p>
                 <div className="bom-agreement-fields">
                   <Field
-                    label="Date the client agreed"
+                    label={t("bom.date_agreed")}
                     required
                     type="date"
                     max={manilaToday()}
@@ -835,17 +831,17 @@ export function BomPage() {
                     onChange={(e) => setAgreement((a) => ({ ...a, clientAgreedOn: e.target.value }))}
                   />
                   <Field
-                    label="Who agreed"
+                    label={t("bom.who_agreed")}
                     required
-                    placeholder="Client's name, e.g. Maria Santos"
+                    placeholder={t("bom.who_ph")}
                     maxLength={150}
                     value={agreement.clientAgreedBy}
                     error={fieldErrors.clientAgreedBy}
                     onChange={(e) => setAgreement((a) => ({ ...a, clientAgreedBy: e.target.value }))}
                   />
                   <Field
-                    label="Reference (optional)"
-                    placeholder="e.g. Contract #2026-014"
+                    label={t("bom.ref_label")}
+                    placeholder={t("bom.ref_ph")}
                     maxLength={100}
                     value={agreement.agreementRef}
                     error={fieldErrors.agreementRef}
@@ -859,7 +855,7 @@ export function BomPage() {
                     </ul>
                     <label className="bom-confirm">
                       <input type="checkbox" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} />
-                      I checked these against the signed and sealed BOM.
+                      {t("bom.checked_signed")}
                     </label>
                   </>
                 )}
@@ -867,31 +863,27 @@ export function BomPage() {
             )}
             {dialog === "reopen" && (
               <>
-                <h2 id="bom-dialog-title" className="modal-title">Reopen the BOM for revision?</h2>
-                <p className="modal-body">
-                  It goes back to Draft so you can correct it. The Project Manager is notified. Approve it again when done.
-                </p>
-                <Field label="Reason" required as="textarea" placeholder="e.g. Owner approved an added gate"
+                <h2 id="bom-dialog-title" className="modal-title">{t("bom.reopen_title")}</h2>
+                <p className="modal-body">{t("bom.reopen_body")}</p>
+                <Field label={t("bom.reason")} required as="textarea" placeholder={t("bom.reason_ph")}
                   value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} />
               </>
             )}
             {dialog === "delete" && (
               <>
-                <h2 id="bom-dialog-title" className="modal-title">Remove this BOM?</h2>
-                <p className="modal-body">All its sections and items are deleted. You can import the correct file afterwards.</p>
+                <h2 id="bom-dialog-title" className="modal-title">{t("bom.delete_title")}</h2>
+                <p className="modal-body">{t("bom.delete_body")}</p>
               </>
             )}
             {dialog === "replace" && (
               <>
-                <h2 id="bom-dialog-title" className="modal-title">Replace the BOM with a new file?</h2>
-                <p className="modal-body">
-                  Every section and item, including your edits, is replaced by what is in the file you choose.
-                </p>
+                <h2 id="bom-dialog-title" className="modal-title">{t("bom.replace_title")}</h2>
+                <p className="modal-body">{t("bom.replace_body")}</p>
               </>
             )}
             {actionError && <Banner tone="error" title={actionError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setDialog(null)} disabled={Boolean(busy)}>Back</Button>
+              <Button variant="secondary" onClick={() => setDialog(null)} disabled={Boolean(busy)}>{t("bom.back")}</Button>
               {dialog === "approve" && (
                 <Button
                   onClick={handleApprove}
@@ -902,17 +894,17 @@ export function BomPage() {
                     agreement.clientAgreedBy.trim().length < 2
                   }
                 >
-                  {busy === "approve" ? "Approving…" : "Approve"}
+                  {busy === "approve" ? t("bom.approving") : t("expenses.approve")}
                 </Button>
               )}
               {dialog === "reopen" && (
                 <Button onClick={handleReopen} disabled={Boolean(busy) || !reopenReason.trim()}>
-                  {busy === "reopen" ? "Reopening…" : "Reopen"}
+                  {busy === "reopen" ? t("bom.reopening") : t("bom.reopen")}
                 </Button>
               )}
               {dialog === "delete" && (
                 <Button variant="danger" onClick={handleDelete} disabled={Boolean(busy)}>
-                  {busy === "delete" ? "Removing…" : "Remove BOM"}
+                  {busy === "delete" ? t("bom.removing") : t("bom.remove")}
                 </Button>
               )}
               {dialog === "replace" && (
@@ -922,7 +914,7 @@ export function BomPage() {
                     fileInput.current?.click();
                   }}
                 >
-                  Choose file
+                  {t("bom.choose_file")}
                 </Button>
               )}
             </div>

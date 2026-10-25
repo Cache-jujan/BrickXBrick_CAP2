@@ -86,12 +86,16 @@ function formatDay(value?: string | null) {
 }
 
 // Right-hand label of a task row: when it was finished, or how close the deadline is.
-function rightLabel(task: AssignedTask): { text: string; tone: DueTone } {
+function rightLabel(
+  task: AssignedTask,
+  t: (key: string, values?: Record<string, string | number>) => string,
+  intlLocale: string
+): { text: string; tone: DueTone } {
   if (isDone(task)) {
     const done = completedOn(task);
-    if (done) return { text: `Done ${done.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "normal" };
+    if (done) return { text: t("mobile.done_date", { date: done.toLocaleDateString(intlLocale, { month: "short", day: "numeric" }) }), tone: "normal" };
   }
-  return dueLabel(task.duedate);
+  return dueLabel(task.duedate, new Date(), t);
 }
 
 type Badge = { label: string; bg: string; fg: string; tone: "done" | "late" | "active" | "review" | "idle" };
@@ -121,7 +125,7 @@ type ProjectSummary = {
 };
 
 export default function SiteManagerHomeScreen() {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const session = getSession();
   const [tasks, setTasks] = useState<AssignedTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,7 +149,7 @@ export default function SiteManagerHomeScreen() {
       setTasks(result.data);
       setSavedAt(result.fromCache ? result.savedAt : null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load assigned tasks.");
+      setError(err instanceof Error ? err.message : t("sm.err_load_tasks"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -281,10 +285,10 @@ export default function SiteManagerHomeScreen() {
         {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
             {savedAt
-              ? `${isOnline ? "Can't reach the server" : "You're offline"} · showing your tasks ${savedAtLabel(savedAt)}. You can open a task and queue an update; it is sent when you're back online.`
+              ? t("sm.offline_saved_tasks", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })
               : tasks.length > 0
-                ? "You're offline. Showing your tasks as last loaded. You can still open a task and queue an update."
-                : "You're offline, and your tasks haven't been saved on this phone yet. Open the app once with a connection; after that it works offline."}
+                ? t("sm.offline_last_loaded")
+                : t("sm.offline_never")}
           </Text>
         )}
 
@@ -392,7 +396,7 @@ export default function SiteManagerHomeScreen() {
                     const finished = project.pending === 0;
                     const pct = project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
                     const info = projectInfo.get(project.name);
-                    const next = info?.next ? dueLabel(info.next.date) : null;
+                    const next = info?.next ? dueLabel(info.next.date, new Date(), t) : null;
                     const tone = finished
                       ? { label: "common.done_status", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
                       : project.atRisk
@@ -515,9 +519,9 @@ export default function SiteManagerHomeScreen() {
 }
 
 function TaskRow({ task, today }: { task: AssignedTask; today: number }) {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const badge = badgeFor(task, today);
-  const right = rightLabel(task);
+  const right = rightLabel(task, t, intlLocale);
   const lead =
     badge.tone === "done"
       ? { bg: COLORS.success, border: COLORS.success, glyph: "✓", color: "#FFFFFF" }

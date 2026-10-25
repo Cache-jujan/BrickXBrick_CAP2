@@ -10,19 +10,25 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
 import { BrandMark } from "@/components/brand-mark";
-import { useLocale } from "@/lib/i18n-context";
+import { useLocale, type AppLocale } from "@/lib/i18n-context";
+
+const LANGUAGE_CHIPS: { code: AppLocale; short: string; nameKey: string }[] = [
+  { code: "en", short: "EN", nameKey: "language.english" },
+  { code: "ceb", short: "CEB", nameKey: "language.bisaya" },
+  { code: "fil", short: "FIL", nameKey: "language.filipino" },
+];
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
 export default function LoginScreen() {
-  const { locale, toggleLanguage, t } = useLocale();
+  const { locale, setLanguage, t } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   // Shown once when we got here because the saved sign-in expired.
   const [error, setError] = useState(() =>
     consumeSessionExpired()
-      ? "Your sign-in expired. Please sign in again. Anything saved on your phone is kept and will be sent after you sign in."
+      ? t("lg.expired")
       : ""
   );
   const { isOnline, syncNow } = useNetwork();
@@ -37,10 +43,10 @@ export default function LoginScreen() {
     if (nextMissing.email || nextMissing.password) {
       setError(
         nextMissing.email && nextMissing.password
-          ? "Enter your email and password to continue."
+          ? t("lg.need_both")
           : nextMissing.email
-            ? "Enter your email address to continue."
-            : "Enter your password to continue."
+            ? t("lg.need_email")
+            : t("lg.need_password")
       );
       return;
     }
@@ -57,12 +63,10 @@ export default function LoginScreen() {
       // Never show the phone's raw network error ("fetch failed: java.net...").
       if (isNetworkError(err)) {
         setError(
-          isOnline
-            ? "Can't reach the Brick x Brick server. Check your internet connection and try again."
-            : "You're offline. Connect to the internet to sign in."
+          isOnline ? t("lg.err_server") : t("lg.err_offline")
         );
       } else {
-        setError(err instanceof Error ? err.message : "Unable to sign in right now.");
+        setError(err instanceof Error ? err.message : t("lg.err_signin"));
       }
     } finally {
       setSubmitting(false);
@@ -78,7 +82,7 @@ export default function LoginScreen() {
     try {
       await Linking.openURL(`${WEB_URL}/forgot-password`);
     } catch {
-      setError("Unable to open the password recovery page right now.");
+      setError(t("lg.err_recovery_open"));
     }
   }
 
@@ -92,16 +96,24 @@ export default function LoginScreen() {
           <BrandMark size={34} />
           <Text style={styles.brandName}>Brick x Brick</Text>
         </View>
-        <Pressable
-          onPress={toggleLanguage}
-          style={styles.languageButton}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: locale === "ceb" }}
-          accessibilityLabel={t(locale === "ceb" ? "language.english_action" : "language.translate")}
-        >
-          <Text style={styles.languageButtonText}>{t(locale === "ceb" ? "language.english_action" : "language.translate")}</Text>
-        </Pressable>
+        <View style={styles.languageRow} accessibilityRole="radiogroup">
+          {LANGUAGE_CHIPS.map((chip) => {
+            const selected = locale === chip.code;
+            return (
+              <Pressable
+                key={chip.code}
+                onPress={() => setLanguage(chip.code)}
+                style={[styles.languageButton, selected && styles.languageButtonOn]}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                accessibilityLabel={t(chip.nameKey)}
+              >
+                <Text style={[styles.languageButtonText, selected && styles.languageButtonTextOn]}>{chip.short}</Text>
+              </Pressable>
+            );
+          })}
         </View>
+      </View>
 
       <View style={styles.heading}>
         <Text style={styles.title}>{t("login.title")}</Text>
@@ -175,8 +187,11 @@ const styles = StyleSheet.create({
   watermark: { opacity: 0.07, position: "absolute", right: -90, top: 70 },
   brand: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 10 },
   brandMarkRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  languageButton: { borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, minHeight: 40, justifyContent: "center", paddingHorizontal: 10 },
+  languageRow: { flexDirection: "row", gap: 6 },
+  languageButton: { alignItems: "center", borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10 },
+  languageButtonOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   languageButtonText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 11 },
+  languageButtonTextOn: { color: "#FFFFFF" },
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
   heading: { marginTop: 56 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 38, letterSpacing: -1 },

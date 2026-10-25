@@ -10,13 +10,19 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { Screen } from "@/components/screen";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
-import { useLocale } from "@/lib/i18n-context";
+import { useLocale, type AppLocale } from "@/lib/i18n-context";
+
+const LANGUAGE_OPTIONS: { code: AppLocale; short: string; nameKey: string }[] = [
+  { code: "en", short: "EN", nameKey: "language.english" },
+  { code: "ceb", short: "CEB", nameKey: "language.bisaya" },
+  { code: "fil", short: "FIL", nameKey: "language.filipino" },
+];
 
 const DANGER = COLORS.errorText;
 
 // Shared by Purchasers and Site Managers. This is the only place to log out.
 export default function SettingsScreen() {
-  const { locale, toggleLanguage, t } = useLocale();
+  const { locale, setLanguage, t } = useLocale();
   const { reset } = useExpenseDraft();
   const session = getSession();
   if (!session) return <Redirect href="/login" />;
@@ -64,20 +70,23 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.languageHeading}>
             <Text style={styles.languageTitle}>{t("language.name")}</Text>
-            <Text style={styles.languageValue}>{t(locale === "ceb" ? "language.bisaya" : "language.english")}</Text>
           </View>
-          <Pressable
-            onPress={toggleLanguage}
-            style={({ pressed }) => [styles.languageButton, pressed && { opacity: 0.8 }]}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: locale === "ceb" }}
-            accessibilityLabel={t(locale === "ceb" ? "language.english_action" : "language.translate")}
-          >
-            <Text style={styles.languageButtonText}>{t(locale === "ceb" ? "language.english_action" : "language.translate")}</Text>
-            <Text style={[styles.switchTrack, locale === "ceb" && styles.switchTrackOn]}>
-              {locale === "ceb" ? "✓" : "EN"}
-            </Text>
-          </Pressable>
+          {LANGUAGE_OPTIONS.map((option) => {
+            const selected = locale === option.code;
+            return (
+              <Pressable
+                key={option.code}
+                onPress={() => setLanguage(option.code)}
+                style={({ pressed }) => [styles.languageButton, selected && styles.languageButtonOn, pressed && { opacity: 0.8 }]}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                accessibilityLabel={t(option.nameKey)}
+              >
+                <Text style={styles.languageButtonText}>{t(option.nameKey)}</Text>
+                <Text style={[styles.switchTrack, selected && styles.switchTrackOn]}>{selected ? "✓" : option.short}</Text>
+              </Pressable>
+            );
+          })}
           <Text style={styles.languageHelp}>{t("mobile.settings_language_help")}</Text>
         </View>
 
@@ -124,6 +133,7 @@ const styles = StyleSheet.create({
   languageTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   languageValue: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.muted },
   languageButton: { alignItems: "center", backgroundColor: COLORS.bg, borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, minHeight: 48, paddingHorizontal: 14 },
+  languageButtonOn: { borderColor: COLORS.primary },
   languageButtonText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 14 },
   switchTrack: { alignItems: "center", backgroundColor: COLORS.border, borderRadius: 12, color: COLORS.heading, fontFamily: FONT.bold, fontSize: 11, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4 },
   switchTrackOn: { backgroundColor: COLORS.primary, color: "#FFFFFF" },
