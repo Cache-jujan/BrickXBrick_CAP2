@@ -98,5 +98,6 @@ export function routeForNotification(n, role) {
   }
   if (type === "Expense") return "/expenses";
   if (n.type === "TamperAlert") return "/blockchain/alerts";
+  if (n.type === "BlockchainOverdue") return "/blockchain/alerts";
   return null;
 }

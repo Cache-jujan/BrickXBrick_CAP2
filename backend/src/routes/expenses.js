@@ -356,7 +356,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
         /** Atomically approve a Pending expense and its flags; throw 409 if already reviewed. */
         await withTransaction(async (client) => {
             const claimed = await client.query(
-                "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2 AND status = 'Pending'",
+                "UPDATE Expenses SET status = 'Approved', approvedBy = $1, approvedAt = NOW() WHERE expenseID = $2 AND status = 'Pending'",
                 [req.user.id, req.params.id]
             );
             if (claimed.rowCount === 0) {

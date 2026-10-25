@@ -149,9 +149,16 @@ router.get("/summary", requireRole("General Manager"), async (req, res, next) =>
         const tampered = await query(
             "SELECT COUNT(*)::int AS count FROM Expenses WHERE blockchainStatus = 'TamperDetected'"
         );
+        // Pending for more than 72 hours after approval (the F12 deadline).
+        const overdue = await query(
+            `SELECT COUNT(*)::int AS count FROM Expenses
+              WHERE blockchainStatus = 'Pending' AND status = 'Approved'
+                AND approvedAt IS NOT NULL AND approvedAt < NOW() - INTERVAL '72 hours'`
+        );
         res.json({
             confirmedCount: confirmed.rows[0].count,
             pendingCount: pending.rows[0].count,
+            overduePendingCount: overdue.rows[0].count,
             tamperedCount: tampered.rows[0].count,
         });
     } catch (err) {
