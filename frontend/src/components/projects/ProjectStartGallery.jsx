@@ -18,7 +18,8 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       if (!byType.has(t.projectType)) byType.set(t.projectType, []);
       byType.get(t.projectType).push(t);
     }
-    return [...byType.entries()];
+    // "Other" (the custom layout) always comes last, not in the middle.
+    return [...byType.entries()].sort(([a], [b]) => (a === "Other") - (b === "Other"));
   }, [templates]);
 
   const visibleSources = useMemo(() => {
