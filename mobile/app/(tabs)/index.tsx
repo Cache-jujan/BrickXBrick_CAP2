@@ -13,7 +13,6 @@ import { useOnNewNotifications } from "@/lib/notification-events";
 import { useFocusEffect } from "expo-router";
 
 import {
-  type MyExpense,
   type Ticket,
   type Project,
 } from "@/lib/api";
@@ -22,7 +21,6 @@ import { dueSortKey, urgencyFor } from "@/lib/needed-by";
 import {
   loadActiveProjects,
   loadAssignedTickets,
-  loadMyExpenses,
   loadScans as loadScansCached,
 } from "@/lib/cached-api";
 import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
@@ -39,11 +37,10 @@ import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
 import { StatusChip, type ChipTone } from "@/components/status-chip";
 import { ScannedReceipts } from "@/components/scanned-receipts";
-import { RejectedExpenses } from "@/components/rejected-expenses";
-import { fileFromExpense, ocrResultFromExpense } from "@/lib/resubmit";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
 import type { QueuedScan } from "@/components/scanned-receipts";
 import { useLocale } from "@/lib/i18n-context";
+import { ToBuy } from "@/components/to-buy";
 
 // While a receipt is still being read, refresh the list this often.
 const SCAN_REFRESH_MS = 4000;
@@ -63,9 +60,14 @@ function toBucket(
   return null;
 }
 
+// The Purchaser opens on To Buy. The Site Manager keeps the list of requests ready for an expense.
 export default function HomeScreen() {
+  return getSession()?.user.role === "Site Manager" ? <SiteManagerHome /> : <ToBuy />;
+}
+
+function SiteManagerHome() {
   const { t, intlLocale } = useLocale();
-  const { setTicket, reset, startResubmit } = useExpenseDraft();
+  const { setTicket, reset, startSplit } = useExpenseDraft();
   const isSiteManager = getSession()?.user.role === "Site Manager";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -77,7 +79,6 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("due");
   const [scans, setScans] = useState<ReceiptScan[]>([]);
-  const [rejected, setRejected] = useState<MyExpense[]>([]);
   const [focused, setFocused] = useState(false);
   // Offline-first: when the lists on screen are the copy saved on this phone.
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -117,15 +118,6 @@ export default function HomeScreen() {
 
       setProjectsById(byId);
       setTickets(ticketList);
-
-      if (!isSiteManager) {
-        // Rejected expenses to correct and resubmit. A failure keeps the last list.
-        try {
-          setRejected((await loadMyExpenses()).data.filter((e) => e.status === "Rejected"));
-        } catch {
-          // Shown again on the next refresh.
-        }
-      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -208,29 +200,6 @@ export default function HomeScreen() {
   // Sum of the estimates of the requests listed below.
   const estimatedTotal = visible.reduce((sum, t) => sum + Number(t.approvedbudget ?? 0), 0);
 
-  // A Rejected expense goes back through the review screen, then updates the
-  // same expense (PATCH .../resubmit) instead of creating a new one.
-  function fixRejected(expense: MyExpense) {
-    const ticket = tickets.find((t) => t.ticketid === expense.ticketID);
-    startResubmit({
-      expenseID: expense.expenseID,
-      reason: expense.rejectionReason,
-      ticket: ticket
-        ? {
-            ticketId: ticket.ticketid,
-            projectId: ticket.projectid,
-            projectName: projectsById[ticket.projectid]?.name ?? t("mr.unknown_project"),
-            subject: ticket.subject,
-            budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
-          }
-        : null,
-      file: fileFromExpense(expense),
-      ocrResult: ocrResultFromExpense(expense),
-      category: expense.category,
-    });
-    router.push("/expense/review");
-  }
-
   function openTicket(ticket: Ticket) {
     reset();
 
@@ -296,7 +265,6 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <>
-          {isSiteManager ? null : <RejectedExpenses expenses={rejected} onFix={fixRejected} />}
           <ScannedReceipts
             scans={scans}
             onDismiss={removeScan}
@@ -306,7 +274,16 @@ export default function HomeScreen() {
               refreshQueuedScans();
             }}
           />
-          {isSiteManager ? null : (
+          {isSiteManager ? (
+            <Pressable
+              onPress={() => { reset(); startSplit(); router.push("/expense/capture"); }}
+              style={styles.splitButton}
+              accessibilityRole="button"
+            >
+              <Text style={styles.splitButtonText}>{t("sm.snap_many")}</Text>
+              <Text style={styles.splitButtonHelp}>{t("sm.snap_many_help")}</Text>
+            </Pressable>
+          ) : (
             <View style={styles.listHeaderRow}>
               <View style={styles.flex}>
                 <Text style={styles.sectionTitle}>{t(filter === "Completed" ? "mobile.purchased_section" : "mobile.to_purchase")}</Text>
@@ -464,6 +441,9 @@ const styles = StyleSheet.create({
   listHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
   sectionTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading },
   sectionTotal: { fontSize: 12, fontFamily: FONT.medium, color: COLORS.muted, marginTop: 1 },
+  splitButton: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, gap: 2, minHeight: MIN_TAP, marginBottom: 12 },
+  splitButtonText: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.primaryTintText },
+  splitButtonHelp: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
   sortButton: { minHeight: MIN_TAP, justifyContent: "center", paddingHorizontal: 8 },
   sortText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.primary },
 
