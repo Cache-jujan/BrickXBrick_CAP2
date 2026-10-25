@@ -1,33 +1,23 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { MilestoneBoard } from "./MilestoneBoard";
+import { STATUS_META, asDate, assigneeLabel, byDueDate, dueOf, statusMeta } from "./milestoneUtils";
 import "./ProjectTimeline.css";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MIN_TIMELINE_YEAR = 2000;
-const MAX_TIMELINE_YEAR = 2100;
+const VIEW_STORAGE_KEY = "brickxbrick.timeline-view.v1";
+const VIEWS = ["timeline", "board"];
 const DATE_OPTIONS = { month: "short", day: "numeric", year: "numeric" };
 const HEADER_DATE_OPTIONS = { month: "short", day: "numeric" };
 
-// The label shown for each status comes from the catalog (status.*); only the CSS class lives here.
-const STATUS_META = {
-  "On Track": { className: "on-track" },
-  "At Risk": { className: "at-risk" },
-  Overdue: { className: "overdue" },
-  Pending: { className: "pending" },
-  Completed: { className: "completed" },
-};
-
-function asDate(value) {
-  const raw = String(value ?? "").slice(0, 10);
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-  if (!match) return null;
-  const year = Number(match[1]);
-  if (year < MIN_TIMELINE_YEAR || year > MAX_TIMELINE_YEAR) return null;
-  const date = new Date(`${raw}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  if (date.getFullYear() !== year || date.getMonth() + 1 !== Number(match[2]) || date.getDate() !== Number(match[3])) return null;
-  return date;
+function readSavedView() {
+  try {
+    const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return VIEWS.includes(saved) ? saved : "timeline";
+  } catch {
+    return "timeline";
+  }
 }
 
 function startOfWeek(date) {
@@ -49,22 +39,8 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function statusMeta(status) {
-  return STATUS_META[status] || STATUS_META.Pending;
-}
-
-function dueOf(item) {
-  return asDate(item.duedate || item.dueDate);
-}
-
 function explicitStartOf(item) {
   return asDate(item.startdate || item.startDate);
-}
-
-function byDueDate(a, b) {
-  const da = dueOf(a);
-  const db = dueOf(b);
-  return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
 }
 
 // Milestones and tasks only store a due date, not a start date. Without a start
@@ -122,12 +98,6 @@ function getRange(project, milestones) {
   const start = startOfWeek(first);
   const end = endOfWeek(last);
   return { start, end, total: Math.max(DAY_MS, end - start) };
-}
-
-function assigneeLabel(task, t) {
-  if (task.handledby) return t("ms.handled_by", { who: task.handledby });
-  if (task.assignedtoname) return task.assignedtoname;
-  return t("tl.unassigned");
 }
 
 function Bar({ item, span, range, kind, onHover, onLeave }) {
@@ -270,6 +240,7 @@ function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTask, onO
 export const ProjectTimeline = memo(function ProjectTimeline({ project, canManage = false, onAddMilestone, onEditTimeline, onAddTask, onCompleteTask, onOpenDocuments }) {
   const { t, tv, formatDate } = useLocale();
   const milestones = useMemo(() => (Array.isArray(project?.milestones) ? project.milestones : []), [project]);
+  const [view, setView] = useState(readSavedView);
   const [hovered, setHovered] = useState(null);
   const leaveTimer = useRef(null);
   const range = useMemo(() => getRange(project, milestones), [project, milestones]);
@@ -288,6 +259,16 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
 
   useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
 
+  function chooseView(next) {
+    setView(next);
+    setHovered(null);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // The choice still applies for this visit if browser storage is blocked.
+    }
+  }
+
   function leaveBar() {
     window.clearTimeout(leaveTimer.current);
     leaveTimer.current = window.setTimeout(() => setHovered(null), 160);
@@ -305,18 +286,32 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
       <header className="project-timeline-header">
         <div>
           <h2 id="project-timeline-title">{t("tl.title")}</h2>
-          <p>{t("tl.subtitle")}</p>
+          <p>{view === "board" ? t("tl.subtitle.board") : t("tl.subtitle")}</p>
         </div>
-        {canManage && (
-          <div className="project-timeline-actions">
-            {onEditTimeline && milestones.length > 0 && (
-              <button type="button" className="project-timeline-add" onClick={onEditTimeline}>{t("tl.edit_timeline")}</button>
-            )}
-            <button type="button" className="project-timeline-add" onClick={onAddMilestone}>+ {t("pd.add_milestone")}</button>
+        <div className="project-timeline-actions">
+          <div className="project-timeline-views" role="group" aria-label={t("tl.view.label")}>
+            {VIEWS.map((option) => (
+              <button
+                type="button"
+                key={option}
+                className="project-timeline-view"
+                aria-pressed={view === option}
+                onClick={() => chooseView(option)}
+              >
+                {t(`tl.view.${option}`)}
+              </button>
+            ))}
           </div>
-        )}
+          {canManage && onEditTimeline && milestones.length > 0 && (
+            <button type="button" className="project-timeline-add" onClick={onEditTimeline}>{t("tl.edit_timeline")}</button>
+          )}
+          {canManage && <button type="button" className="project-timeline-add" onClick={onAddMilestone}>+ {t("pd.add_milestone")}</button>}
+        </div>
       </header>
 
+      {view === "board" ? (
+        <MilestoneBoard milestones={milestones} canManage={canManage} onAddTask={onAddTask} onCompleteTask={onCompleteTask} onOpenDocuments={onOpenDocuments} />
+      ) : (
       <div className="project-timeline-scroll">
         <div className="project-timeline-canvas" style={{ "--week-count": weeks.length }}>
           <div className="timeline-grid-header">
@@ -365,6 +360,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
           </footer>
         </div>
       </div>
+      )}
 
       {hoveredMilestone && (
         <FloatingCard
