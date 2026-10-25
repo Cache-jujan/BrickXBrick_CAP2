@@ -9,6 +9,7 @@ import {
   previewProjectStructure,
 } from "../../api/projectTemplatesApi";
 import { extractErrorMessage } from "../../api/client";
+import { ArrowLeftIcon } from "../../components/ui/icons";
 import { BackLink } from "../../components/ui/BackLink";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
@@ -146,23 +147,29 @@ export function CreateProjectPage() {
       ) : (
         <button
           type="button"
-          className="form-back-link create-project-back"
+          className="back-link"
           onClick={() => {
             setError("");
             setStep(step === "review" ? "basics" : "start");
           }}
         >
-          ← {t("cp.back")}
+          <ArrowLeftIcon size={16} />
+          <span>{t("cp.back")}</span>
         </button>
       )}
       <h1 className="create-project-title">{t("projects.create_title")}</h1>
-      <p className="create-project-steps" aria-label={t("cp.step_of", { current: stepIndex + 1, total: stepNames.length })}>
+      <ol className="cp-steps" aria-label={t("cp.step_of", { current: stepIndex + 1, total: stepNames.length })}>
         {stepNames.map((n, i) => (
-          <span key={n} className={i === stepIndex ? "create-project-step-current" : ""}>
-            {i + 1}. {n}
-          </span>
+          <li
+            key={n}
+            className={`cp-step ${i === stepIndex ? "cp-step-current" : i < stepIndex ? "cp-step-done" : ""}`}
+            aria-current={i === stepIndex ? "step" : undefined}
+          >
+            <span className="cp-step-num" aria-hidden="true">{i < stepIndex ? "✓" : i + 1}</span>
+            <span className="cp-step-name">{n}</span>
+          </li>
         ))}
-      </p>
+      </ol>
 
       {error && <Banner tone="error" title={error} />}
 
