@@ -255,14 +255,48 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
             conditions.push(`e.projectID IN (SELECT projectId FROM projects WHERE projectManagerId = $${params.length})`);
         }
 
+        // A PM only sees the details of an earlier matching expense that belongs to a project they manage.
+        const canSeeDuplicate = req.user.role === "Project Manager"
+            ? `d.projectID IN (SELECT projectId FROM projects WHERE projectManagerId = $1)`
+            : "TRUE";
+
+        // Beyond the flags themselves, the reviewer needs: the project, what was requested, the other
+        // projects sharing this receipt, and the earlier expense a BIR duplicate flag points at.
         const result = await query(
             `SELECT e.*, u.name AS submittedbyname,
-                    json_agg(json_build_object('flagType', ff.flagType, 'reason', ff.reason)) AS flags
+                    p.name AS projectname,
+                    json_agg(json_build_object('flagType', ff.flagType, 'reason', ff.reason, 'flaggedAt', ff.flaggedAt)) AS flags,
+                    (SELECT json_build_object('subject', t.subject, 'materialType', t.materialType, 'quantity', t.quantity,
+                                              'unit', t.unit, 'approvedBudget', t.approvedBudget, 'vendorName', t.vendorName)
+                       FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticket,
+                    (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
+                                                       'amount', e2.amount, 'status', e2.status))
+                       FROM ReceiptAllocations ra
+                       JOIN ReceiptAllocations ra2 ON ra2.commonReceiptID = ra.commonReceiptID AND ra2.expenseID <> e.expenseID
+                       JOIN Expenses e2 ON e2.expenseID = ra2.expenseID
+                       JOIN Projects p2 ON p2.projectID = e2.projectID
+                      WHERE ra.expenseID = e.expenseID) AS siblings,
+                    (SELECT CASE WHEN ${canSeeDuplicate}
+                                 THEN json_build_object('expenseId', d.expenseID, 'vendorName', d.vendorName, 'amount', d.amount,
+                                                        'receiptDate', d.receiptDate, 'projectName', pd.name,
+                                                        'receiptImageURL', d.receiptImageURL)
+                                 ELSE json_build_object('hidden', TRUE) END
+                       FROM Expenses d
+                       JOIN Projects pd ON pd.projectID = d.projectID
+                      WHERE d.status = 'Approved' AND d.expenseID <> e.expenseID
+                        AND e.tin IS NOT NULL AND e.birPermitNumber IS NOT NULL AND e.birNumber IS NOT NULL
+                        AND d.tin = e.tin AND d.birPermitNumber = e.birPermitNumber AND d.birNumber = e.birNumber
+                        AND NOT EXISTS (SELECT 1 FROM ReceiptAllocations a, ReceiptAllocations b
+                                         WHERE a.expenseID = e.expenseID AND b.expenseID = d.expenseID
+                                           AND a.commonReceiptID = b.commonReceiptID)
+                      ORDER BY d.submittedAt ASC
+                      LIMIT 1) AS duplicateof
                FROM Expenses e
                JOIN Users u ON u.userid = e.submittedBy
+               JOIN Projects p ON p.projectID = e.projectID
                JOIN FraudFlags ff ON ff.expenseID = e.expenseID
               WHERE ${conditions.join(" AND ")}
-              GROUP BY e.expenseID, u.name
+              GROUP BY e.expenseID, u.name, p.name
               ORDER BY e.submittedAt ASC`,
             params
         );
