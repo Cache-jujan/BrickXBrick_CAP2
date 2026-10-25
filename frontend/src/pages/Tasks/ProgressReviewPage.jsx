@@ -69,7 +69,7 @@ export function ProgressReviewPage() {
 
   async function handleReview(submission, decision) {
     const picked = reasonById[submission.logid] || {};
-    const reason = picked.choice === OTHER ? (picked.other || "").trim() : picked.choice || "";
+    const reason = picked.choice === OTHER ? (picked.other || "").trim() : (picked.choice ? t(picked.choice) : "");
     if (decision === "Flag" && !reason) {
       setMissingReasonId(submission.logid);
       setError(
@@ -168,7 +168,7 @@ export function ProgressReviewPage() {
                     >
                       <option value="">{t("review.flag_placeholder")}</option>
                       {FLAG_REASONS.map((key) => (
-                        <option key={key} value={t(key)}>{t(key)}</option>
+                        <option key={key} value={key}>{t(key)}</option>
                       ))}
                       <option value={OTHER}>{t("review.other")}</option>
                     </select>

@@ -35,7 +35,7 @@ const STATUS: Record<MyExpense["status"], { labelKey: string; tone: ChipTone }> 
 
 // Receipts you have handed in, newest day first, with what the Project Manager decided.
 export default function HistoryScreen() {
-  const { t, formatDate } = useLocale();
+  const { t, formatDate, intlLocale } = useLocale();
   const { isOnline } = useNetwork();
   const { startResubmit } = useExpenseDraft();
   const [expenses, setExpenses] = useState<MyExpense[]>([]);
@@ -125,7 +125,7 @@ export default function HistoryScreen() {
 
       {savedAt && (
         <Text style={styles.offlineNote}>
-          {t("ex.offline_showing", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t) })}
+          {t("ex.offline_showing", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
         </Text>
       )}
       {shownError && (

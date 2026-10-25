@@ -1,4 +1,5 @@
-.edit-timeline { max-width: 760px; display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--space-5)); }
+/* .modal.edit-timeline: must outrank the base .modal max-width in global.css */
+.modal.edit-timeline { max-width: 1040px; display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--space-5)); }
 
 .et-list, .et-tasks { list-style: none; margin: 0; padding: 0; }
 .et-list { overflow-y: auto; flex: 1 1 auto; min-height: 0; margin-bottom: var(--space-3); padding-right: var(--space-1); }
@@ -7,10 +8,10 @@
 .et-list > .et-milestone:first-child .et-phase { margin-top: 0; }
 
 .et-milestone { padding: var(--space-2) 0 var(--space-3); border-bottom: 1px solid var(--color-border); }
-.et-tasks { margin: var(--space-2) 0 0 var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); }
+.et-tasks { margin: var(--space-2) 0 0 var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
 
 /* number | name | due date | action */
-.et-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 150px 72px; align-items: center; gap: var(--space-2); }
+.et-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 160px 72px; align-items: center; gap: var(--space-2); }
 .et-row-milestone .et-name { font-weight: 600; }
 
 .edit-timeline .field-control { height: 38px; padding: 0 var(--space-3); font-size: var(--text-sm); min-width: 0; }
@@ -36,10 +37,14 @@
 .edit-timeline .modal-actions { align-items: center; flex: 0 0 auto; }
 .et-count { margin-right: auto; font-size: var(--text-sm); color: var(--color-ink-soft); }
 
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .et-row { grid-template-columns: 30px minmax(0, 1fr) 64px; }
   .et-row .et-date { grid-column: 2 / 3; grid-row: 2; }
   .et-row .et-action { grid-column: 3; grid-row: 1; }
   .et-tasks { margin-left: var(--space-3); }
   .et-hint, .et-error { margin-left: 0; }
+  /* touch: 44px targets, and 16px text so iOS Safari doesn't zoom on focus */
+  .edit-timeline .field-control { height: 44px; font-size: 16px; }
+  .et-link { min-height: 44px; min-width: 44px; padding: 0 var(--space-2); }
+  .et-row { row-gap: var(--space-1); }
 }

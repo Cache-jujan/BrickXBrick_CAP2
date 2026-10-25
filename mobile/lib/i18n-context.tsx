@@ -74,6 +74,12 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   const formatDate = useCallback((input: string | number | Date, options?: Intl.DateTimeFormatOptions) => {
     const date = input instanceof Date ? input : new Date(input);
+    // Date-only inputs are local calendar days; timestamps remain instants.
+    if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input) && !Number.isNaN(date.getTime())) {
+      const [year, month, day] = input.split("-").map(Number);
+      date.setFullYear(year, month - 1, day);
+      date.setHours(0, 0, 0, 0);
+    }
     if (Number.isNaN(date.getTime())) return "";
     return date.toLocaleDateString(INTL_LOCALE[locale], options ?? { year: "numeric", month: "short", day: "numeric" });
   }, [locale]);

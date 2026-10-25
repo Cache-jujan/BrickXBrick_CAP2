@@ -19,7 +19,7 @@ type Choice = { ticket: Ticket; projectName: string };
 // "Submit expense" asks which request the receipt is for, then opens the
 // capture step. "Split receipt" starts the split flow (no request needed).
 export function ExpenseActions() {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const { reset, setTicket, startSplit } = useExpenseDraft();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -99,7 +99,7 @@ export function ExpenseActions() {
               keyExtractor={(c) => c.ticket.ticketid}
               contentContainerStyle={styles.list}
               ListHeaderComponent={
-                savedAt ? <Text style={styles.savedNote}>{t("ea.offline_saved", { when: savedAtLabel(savedAt, new Date(), t) })}</Text> : null
+                savedAt ? <Text style={styles.savedNote}>{t("ea.offline_saved", { when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}</Text> : null
               }
               ListEmptyComponent={
                 <StateCard kind="empty" title={t("ea.nothing_title")} body={t("ea.nothing_body")} />

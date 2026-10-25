@@ -14,6 +14,7 @@ import { getPendingCheckinById } from "@/lib/sync/db";
 import { describeLoadError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
+import { useLocale } from "@/lib/i18n-context";
 
 // What the Site Manager sent, read-only. The id is either the server's check-in
 // id (already sent) or the phone's own id (still waiting to be sent).
@@ -43,6 +44,7 @@ function PhotoThumb({ uri, index }: { uri: string; index: number }) {
 }
 
 export default function SiteManagerCheckinViewScreen() {
+  const { t, intlLocale } = useLocale();
   const session = getSession();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { isOnline } = useNetwork();
@@ -125,7 +127,7 @@ export default function SiteManagerCheckinViewScreen() {
         </View>
       ) : (
         <>
-          {savedAt && <Text style={styles.savedNote}>Saved copy {savedAtLabel(savedAt)}. The review below may be out of date.</Text>}
+          {savedAt && <Text style={styles.savedNote}>Saved copy {savedAtLabel(savedAt, new Date(), t, intlLocale)}. The review below may be out of date.</Text>}
           <Text style={styles.eyebrow}>{item.day}</Text>
           <Text style={styles.title}>{item.slotLabel} check-in</Text>
           {item.projectName && <Text style={styles.muted}>{item.projectName}</Text>}

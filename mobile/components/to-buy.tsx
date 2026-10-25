@@ -34,7 +34,7 @@ const SCAN_REFRESH_MS = 4000;
 // A Site Manager sees the same screen for the projects they manage; with no Turn In tab,
 // their scanned receipts are listed here too, and closing a request short stays with the Purchaser.
 export function ToBuy() {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const { isOnline, pendingCount, lastSync } = useNetwork();
   const isSiteManager = getSession()?.user.role === "Site Manager";
   const { reset, setTicket, startSplit } = useExpenseDraft();
@@ -247,7 +247,7 @@ export function ToBuy() {
         {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
             {savedAt
-              ? t("ix.offline_saved_reqs", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t) })
+              ? t("ix.offline_saved_reqs", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })
               : t("ix.offline_last")}
           </Text>
         )}

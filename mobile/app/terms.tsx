@@ -43,7 +43,7 @@ function splitHeading(heading: string) {
 //   /terms           read-only, opened from Settings
 // The text comes from the backend (GET /api/legal), the same as on the web.
 export default function TermsScreen() {
-  const { t, formatDate } = useLocale();
+  const { t, formatDate, intlLocale } = useLocale();
   const { accept } = useLocalSearchParams<{ accept?: string }>();
   const mustAccept = accept === "1";
   const session = getSession();
@@ -151,7 +151,7 @@ export default function TermsScreen() {
         </View>
 
         {savedAt ? (
-          <Text style={styles.savedNote}>{t("legal.offline_saved", { when: savedAtLabel(savedAt, new Date(), t) })}</Text>
+          <Text style={styles.savedNote}>{t("legal.offline_saved", { when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}</Text>
         ) : null}
 
         {loadError ? (

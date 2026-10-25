@@ -319,7 +319,7 @@ export default function SiteManagerTaskDetailScreen() {
           <>
             {savedAt && (
               <Text style={styles.savedNote}>
-                {t("sm.showing_task", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt) })}
+                {t("sm.showing_task", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
               </Text>
             )}
             <Text style={styles.eyebrow}>{t("sm.eyebrow")}</Text>

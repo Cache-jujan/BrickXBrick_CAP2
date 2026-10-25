@@ -2,25 +2,12 @@ import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { ProgressBar } from "./ProgressBar";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { taskIsOverdue } from "./milestoneUtils";
 import "./MilestoneCard.css";
 
 const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 const HANDLER_LABEL = { GM: "General Manager", PM: "Project Manager" };
-
-// A task is overdue when its due date has passed and it isn't Completed yet.
-// Task status is only ever Pending or Completed (see note below), so "overdue"
-// is derived here from the date rather than being a status the backend sends.
-// Compared at day granularity: a task due today is not overdue.
-function taskIsOverdue(task) {
-  if (task.status === "Completed") return false;
-  const due = new Date(task.duedate);
-  if (Number.isNaN(due.getTime())) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return due < today;
-}
 
 // A Construction task only ever moves Pending -> Completed through the F5
 // review flow (SM submits a photo on mobile, PM acknowledges) — nothing on
