@@ -41,6 +41,8 @@
 .dc-box:checked { background: var(--color-brick); border-color: var(--color-brick); }
 .dc-box:checked::after { transform: rotate(-45deg) scale(1); }
 .dc-legend .dc-box { margin: 0; }
+/* The milestone checkbox is outside any .dc-card, so it needs its own focus ring. */
+.dc-legend .dc-box:focus-visible { outline: 2px solid var(--color-brick); outline-offset: 2px; }
 
 .dc-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .dc-name { font-weight: 600; color: var(--color-ink); line-height: 1.3; }
