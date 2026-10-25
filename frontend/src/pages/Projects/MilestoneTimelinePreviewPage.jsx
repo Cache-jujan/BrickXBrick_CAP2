@@ -132,6 +132,7 @@ function buildProject(scenario) {
   const kept = scenario === "mockup" ? milestones.slice(1) : milestones;
   return {
     projectid: "preview-project",
+    sitemanagerid: scenario === "no-sm" ? null : "preview-sm",
     name: "Pickleball Court Construction",
     startdate: dayOffset(scenario === "mockup" ? 0 : -24),
     enddate: dayOffset(245),

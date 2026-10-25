@@ -55,6 +55,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
   const { t, tv, formatDate } = useLocale();
   const uid = useId();
   const milestones = useMemo(() => (Array.isArray(project?.milestones) ? project.milestones : []), [project]);
+  const hasSiteManager = Boolean(project?.sitemanagerid);
   const [view, setView] = useState(readSavedView);
   const [zoom, setZoom] = useState("months");
   const [expanded, setExpanded] = useState(() => new Set());
@@ -176,7 +177,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
       </header>
 
       {view === "board" ? (
-        <MilestoneBoard milestones={milestones} canManage={canManage} onAddTask={onAddTask} onCompleteTask={onCompleteTask} onOpenDocuments={onOpenDocuments} />
+        <MilestoneBoard milestones={milestones} canManage={canManage} hasSiteManager={hasSiteManager} onAddTask={onAddTask} onCompleteTask={onCompleteTask} onOpenDocuments={onOpenDocuments} />
       ) : (
         <>
           <div className="tl-toolbar">
@@ -254,6 +255,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
                                 range={range}
                                 canHover={canHover}
                                 canManage={canManage}
+                                hasSiteManager={hasSiteManager}
                                 onHover={setHovered}
                                 onLeave={leaveBar}
                                 onAddTask={onAddTask}

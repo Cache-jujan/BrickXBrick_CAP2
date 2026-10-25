@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { useLocale } from "../../i18n/LocaleProvider";
-import { STATUS_META, dueOf, statusMeta } from "./milestoneUtils";
+import { STATUS_META, formatDue, statusMeta } from "./milestoneUtils";
 import { DAY_MS, clamp } from "./timelineSchedule";
 
 const SHORT_DATE = { month: "short", day: "numeric" };
@@ -121,7 +121,7 @@ function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHove
   );
 }
 
-export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onToggleTask, schedule, range, canHover, canManage, onHover, onLeave, onAddTask, onCompleteTask, onOpenDocuments }) {
+export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onToggleTask, schedule, range, canHover, canManage, hasSiteManager, onHover, onLeave, onAddTask, onCompleteTask, onOpenDocuments }) {
   const { t, tv, formatDate } = useLocale();
   const uid = useId();
   const tasksId = `${uid}-tasks`;
@@ -130,7 +130,7 @@ export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onT
   const tasks = milestone.tasks || [];
   const doneCount = tasks.filter((task) => task.status === "Completed").length;
   const status = tv("status", STATUS_META[milestone.status] ? milestone.status : "Pending");
-  const due = t("ms.due", { date: formatDate(dueOf(milestone) || new Date(), SHORT_DATE) });
+  const due = t("ms.due", { date: formatDue(milestone, formatDate, SHORT_DATE) });
   const metaText = tasks.length === 0
     ? t("tl.meta_empty", { status, due })
     : t(tasks.length === 1 ? "tl.meta_one" : "tl.meta_other", { status, done: doneCount, total: tasks.length, due });
@@ -191,7 +191,11 @@ export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onT
           {canManage && (
             <div className="tl-row tl-add-row">
               <div className="tl-label tl-add-label">
-                <button type="button" className="tl-add-btn" onClick={() => onAddTask?.(milestone)}>+ {t("pd.add_task_btn")}</button>
+                {milestone.phase === "Planning" || hasSiteManager ? (
+                  <button type="button" className="tl-add-btn" onClick={() => onAddTask?.(milestone)}>+ {t("pd.add_task_btn")}</button>
+                ) : (
+                  <span className="tl-add-blocked">{t("ms.assign_sm_first")}</span>
+                )}
               </div>
               <div className="tl-track" />
             </div>

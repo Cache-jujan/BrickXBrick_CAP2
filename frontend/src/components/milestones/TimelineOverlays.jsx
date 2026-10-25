@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../../i18n/LocaleProvider";
-import { STATUS_META, assigneeLabel, dueOf, statusMeta } from "./milestoneUtils";
+import { STATUS_META, assigneeLabel, formatDue, statusMeta } from "./milestoneUtils";
 
 export const DATE_OPTIONS = { month: "short", day: "numeric", year: "numeric" };
 
@@ -62,7 +62,7 @@ export function TaskTooltip({ task }) {
       <div className="timeline-tooltip-meta">
         <span className={`timeline-status-dot ${meta.className}`} />
         <span>{tv("status", task.status || "Pending")}</span>
-        <span>{t("ms.due", { date: formatDate(dueOf(task) || new Date(), DATE_OPTIONS) })}</span>
+        <span>{t("ms.due", { date: formatDue(task, formatDate, DATE_OPTIONS) })}</span>
       </div>
       <p>{assigneeLabel(task, t)}</p>
     </div>
@@ -78,7 +78,7 @@ export function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTa
       <h3>{milestone.name}</h3>
       <div className="timeline-popover-meta">
         <span className={`timeline-status-pill ${meta.className}`}>{tv("status", STATUS_META[milestone.status] ? milestone.status : "Pending")}</span>
-        <span>{t("ms.due", { date: formatDate(dueOf(milestone) || new Date(), DATE_OPTIONS) })}</span>
+        <span>{t("ms.due", { date: formatDue(milestone, formatDate, DATE_OPTIONS) })}</span>
       </div>
       <div className="timeline-popover-progress-head">
         <span>{t("tl.progress")}</span>
@@ -95,7 +95,7 @@ export function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTa
               <div className={`timeline-popover-task${done ? " timeline-popover-task-done" : ""}`} key={task.taskid || task.taskname}>
                 <strong>{done ? "✓ " : ""}{task.taskname}</strong>
                 <span>
-                  {done ? tv("status", "Completed") : tv("status", task.status || "Pending")} · {t("ms.due", { date: formatDate(dueOf(task) || new Date(), DATE_OPTIONS) })} · {assigneeLabel(task, t)}
+                  {done ? tv("status", "Completed") : tv("status", task.status || "Pending")} · {t("ms.due", { date: formatDue(task, formatDate, DATE_OPTIONS) })} · {assigneeLabel(task, t)}
                 </span>
                 {((canManage && isPlanning && !done) || (isPlanning && onOpenDocuments)) && (
                   <div className="timeline-task-actions">

@@ -1,6 +1,6 @@
 import { memo, useMemo } from "react";
 import { useLocale } from "../../i18n/LocaleProvider";
-import { STATUS_META, assigneeLabel, byDueDate, dueOf, statusMeta, taskIsOverdue } from "./milestoneUtils";
+import { STATUS_META, assigneeLabel, byDueDate, formatDue, statusMeta, taskIsOverdue } from "./milestoneUtils";
 import "./MilestoneBoard.css";
 
 function percentOf(milestone) {
@@ -41,7 +41,7 @@ function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments
       <strong className="board-task-name">{task.taskname}</strong>
       <div className="board-task-row">
         <TaskChip task={task} />
-        <span>{t("ms.due", { date: formatDate(dueOf(task) || new Date(), { month: "short", day: "numeric" }) })}</span>
+        <span>{t("ms.due", { date: formatDue(task, formatDate, { month: "short", day: "numeric" }) })}</span>
       </div>
       <div className="board-task-row">
         <span className="board-avatar" aria-hidden="true">{initialsOf(task)}</span>
@@ -57,12 +57,14 @@ function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments
   );
 }
 
-function BoardColumn({ milestone, phaseLabel, index, canManage, onAddTask, onCompleteTask, onOpenDocuments }) {
+function BoardColumn({ milestone, phaseLabel, index, canManage, hasSiteManager, onAddTask, onCompleteTask, onOpenDocuments }) {
   const { t, tv, formatDate } = useLocale();
   const meta = statusMeta(milestone.status);
   const tasks = milestone.tasks || [];
   const percent = percentOf(milestone);
   const headingId = `board-col-${index}`;
+  // The backend rejects a task on a Construction milestone until the project has a Site Manager (same rule as MilestoneCard).
+  const canAddTask = canManage && (milestone.phase === "Planning" || hasSiteManager);
   return (
     <section className={`board-column board-column-${meta.className}`} aria-labelledby={headingId}>
       <header className="board-column-header">
@@ -70,7 +72,7 @@ function BoardColumn({ milestone, phaseLabel, index, canManage, onAddTask, onCom
         <h3 id={headingId}>{milestone.name}</h3>
         <div className="board-column-status">
           <span className={`board-pill board-pill-${meta.className}`}>{tv("status", STATUS_META[milestone.status] ? milestone.status : "Pending")}</span>
-          <span>{t("ms.due", { date: formatDate(dueOf(milestone) || new Date()) })}</span>
+          <span>{t("ms.due", { date: formatDue(milestone, formatDate) })}</span>
         </div>
         <div className="board-progress">
           <div className="board-progress-track" role="progressbar" aria-label={t("tl.progress")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
@@ -80,8 +82,9 @@ function BoardColumn({ milestone, phaseLabel, index, canManage, onAddTask, onCom
         </div>
         <div className="board-column-foot">
           <span>{t(tasks.length === 1 ? "tl.board.task_one" : "tl.board.task_other", { count: tasks.length })}</span>
-          {canManage && <button type="button" className="board-link" onClick={() => onAddTask?.(milestone)}>+ {t("pd.add_task_btn")}</button>}
+          {canAddTask && <button type="button" className="board-link" onClick={() => onAddTask?.(milestone)}>+ {t("pd.add_task_btn")}</button>}
         </div>
+        {canManage && !canAddTask && <p className="board-add-blocked">{t("ms.assign_sm_first")}</p>}
       </header>
       {tasks.length === 0 ? (
         <p className="board-empty">{t("ms.no_tasks")}</p>
@@ -103,7 +106,7 @@ function BoardColumn({ milestone, phaseLabel, index, canManage, onAddTask, onCom
   );
 }
 
-export const MilestoneBoard = memo(function MilestoneBoard({ milestones, canManage = false, onAddTask, onCompleteTask, onOpenDocuments }) {
+export const MilestoneBoard = memo(function MilestoneBoard({ milestones, canManage = false, hasSiteManager = false, onAddTask, onCompleteTask, onOpenDocuments }) {
   const { t } = useLocale();
   const groups = useMemo(() => {
     const planning = milestones.filter((m) => m.phase === "Planning").sort(byDueDate);
@@ -136,6 +139,7 @@ export const MilestoneBoard = memo(function MilestoneBoard({ milestones, canMana
                     phaseLabel={group.label}
                     index={index++}
                     canManage={canManage}
+                    hasSiteManager={hasSiteManager}
                     onAddTask={onAddTask}
                     onCompleteTask={onCompleteTask}
                     onOpenDocuments={onOpenDocuments}

@@ -63,6 +63,7 @@
 .board-avatar { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #e2dccd; color: #4a4538; font-size: 9px; font-weight: 700; }
 .board-task-actions { display: flex; gap: 16px; padding-top: 8px; border-top: 1px solid #ece7dd; }
 
+.board-add-blocked { margin: 0; color: #5f5849; font-size: 12px; line-height: 1.4; }
 .board-empty { margin: 0; padding: 18px 12px; border: 1px dashed #c9c1b0; border-radius: 10px; color: #5f5849; font-size: 13px; text-align: center; }
 .board-empty-project { margin: var(--space-5); }
 
