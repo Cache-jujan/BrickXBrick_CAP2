@@ -1,0 +1,37 @@
+.trip-cost-projects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.trip-cost-project {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.trip-cost-project-on {
+  border-color: var(--color-primary, #bf4307);
+  background: var(--color-primary-tint, #fff1e6);
+}
+
+.trip-cost-share {
+  margin: var(--space-3) 0 0;
+  font-weight: 700;
+}
+
+.trip-cost-muted {
+  color: var(--color-ink-soft);
+}
+
+.trip-cost-result {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
