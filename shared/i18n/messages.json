@@ -1762,6 +1762,17 @@
     "cp.step_review": "Review",
     "cp.step_of": "Step {current} of {total}",
     "cp.back": "Back",
+    "tl.view.label": "Timeline view",
+    "tl.view.timeline": "Timeline",
+    "tl.view.board": "Board",
+    "tl.subtitle.board": "Milestones as columns · each card is a task",
+    "tl.board.region": "Milestone board",
+    "tl.board.task_one": "{count} task",
+    "tl.board.task_other": "{count} tasks",
+    "tl.board.milestones_one": "{count} milestone",
+    "tl.board.milestones_other": "{count} milestones",
+    "tl.board.swipe": "Swipe sideways →",
+    "tl.board.empty_project": "No milestones yet.",
     "cp.checking": "Checking…"
   },
   "ceb": {
@@ -3527,6 +3538,17 @@
     "cp.step_review": "Review",
     "cp.step_of": "Lakang {current} sa {total}",
     "cp.back": "Balik",
+    "tl.view.label": "Tan-aw sa timeline",
+    "tl.view.timeline": "Timeline",
+    "tl.view.board": "Board",
+    "tl.subtitle.board": "Mga milestone isip kolum · matag kard usa ka buluhaton",
+    "tl.board.region": "Board sa mga milestone",
+    "tl.board.task_one": "{count} ka buluhaton",
+    "tl.board.task_other": "{count} ka buluhaton",
+    "tl.board.milestones_one": "{count} ka milestone",
+    "tl.board.milestones_other": "{count} ka milestone",
+    "tl.board.swipe": "I-swipe sa kilid →",
+    "tl.board.empty_project": "Wala pay milestone.",
     "cp.checking": "Gisusi…"
   },
   "fil": {
@@ -5292,6 +5314,17 @@
     "cp.step_review": "Review",
     "cp.step_of": "Hakbang {current} ng {total}",
     "cp.back": "Bumalik",
+    "tl.view.label": "Tanaw ng timeline",
+    "tl.view.timeline": "Timeline",
+    "tl.view.board": "Board",
+    "tl.subtitle.board": "Mga milestone bilang column · bawat card ay isang gawain",
+    "tl.board.region": "Board ng mga milestone",
+    "tl.board.task_one": "{count} gawain",
+    "tl.board.task_other": "{count} gawain",
+    "tl.board.milestones_one": "{count} milestone",
+    "tl.board.milestones_other": "{count} milestone",
+    "tl.board.swipe": "I-swipe pahalang →",
+    "tl.board.empty_project": "Wala pang milestone.",
     "cp.checking": "Sinusuri…"
   }
 }
