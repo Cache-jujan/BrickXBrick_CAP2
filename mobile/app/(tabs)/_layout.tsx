@@ -25,16 +25,19 @@ export default function TabLayout() {
   const rejectedBadge = useRejectedBadge();
   const turnInBadge = useTurnInBadge();
   const isPurchaserSession = session?.user.role === "Purchaser";
+  const isSiteManagerSession = session?.user.role === "Site Manager";
   // Load the counts up front so the badges show before the tabs are opened.
+  // The Site Manager has History too (badge on the bottom bar) but no Turn In.
   useEffect(() => {
-    if (!isPurchaserSession) return;
+    if (!isPurchaserSession && !isSiteManagerSession) return;
     loadMyExpenses()
       .then((result) => setRejectedBadge(rejectedCount(result.data)))
       .catch(() => {});
+    if (!isPurchaserSession) return;
     loadScans()
       .then((result) => setTurnInBadge(result.data.length))
       .catch(() => {});
-  }, [isPurchaserSession]);
+  }, [isPurchaserSession, isSiteManagerSession]);
   if (!session || !["Purchaser", "Site Manager"].includes(session.user.role)) return <Redirect href="/login" />;
   const isPurchaser = session.user.role === "Purchaser";
 
@@ -76,7 +79,6 @@ export default function TabLayout() {
           name="history"
           options={{
             title: t("hist.tab"),
-            href: isPurchaser ? undefined : null,
             tabBarBadge: rejectedBadge > 0 ? rejectedBadge : undefined,
             tabBarIcon: ({ color }) => <IconSymbol name="receipt" size={24} color={color} />,
           }}

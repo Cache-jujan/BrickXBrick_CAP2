@@ -443,6 +443,8 @@ export type OpenRequest = {
   projectID: string;
   projectName: string;
   subject: string;
+  // Acknowledged (waiting on the Purchaser) or Resolved; a Site Manager's list holds both.
+  status?: string;
   materialType: string;
   bomItemID: string | null;
   vendorName: string | null;

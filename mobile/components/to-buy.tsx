@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 
 import { closeShortRequest, type OpenRequest, type Project, type Ticket } from "@/lib/api";
-import { loadActiveProjects, loadAssignedTickets, loadOpenRequests } from "@/lib/cached-api";
+import { loadActiveProjects, loadAssignedTickets, loadOpenRequests, loadScans as loadScansCached } from "@/lib/cached-api";
 import { filterByVendor, groupByVendor, otherRequests, progressOf, vendorOptions } from "@/lib/to-buy";
 import { filterByProject, groupByProject } from "@/lib/project-groups";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
@@ -20,12 +20,23 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ProjectDropdown } from "@/components/project-dropdown";
 import { SnapProjectSheet } from "@/components/snap-project-sheet";
 import { useLocale } from "@/lib/i18n-context";
+import { getSession } from "@/lib/auth";
+import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
+import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
+import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
+import { deleteQueuedPhoto } from "@/lib/sync/task-photo";
+
+// While a receipt is still being read, refresh the list this often.
+const SCAN_REFRESH_MS = 4000;
 
 // The Purchaser's morning list: what to buy today, grouped by the store each request
 // asked for, so the list reads as a shopping route. One button per store opens the camera.
+// A Site Manager sees the same screen for the projects they manage; with no Turn In tab,
+// their scanned receipts are listed here too, and closing a request short stays with the Purchaser.
 export function ToBuy() {
   const { t } = useLocale();
-  const { isOnline } = useNetwork();
+  const { isOnline, pendingCount, lastSync } = useNetwork();
+  const isSiteManager = getSession()?.user.role === "Site Manager";
   const { reset, setTicket, startSplit } = useExpenseDraft();
 
   const [requests, setRequests] = useState<OpenRequest[]>([]);
@@ -37,19 +48,39 @@ export function ToBuy() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   // The request whose "close, that's all I could buy" reasons are showing.
   const [closingId, setClosingId] = useState<string | null>(null);
-  const [view, setView] = useState<"store" | "project">("store");
+  const [view, setView] = useState<"store" | "project">("project");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // "Which project is this receipt for?" sheet, opened by Snap receipt while no project is picked.
   const [sheetOpen, setSheetOpen] = useState(false);
   // By store: show one store only (the store key; null = all stores).
   const [vendorFilter, setVendorFilter] = useState<string | null>(null);
+  // Site Manager only: receipts being read or ready to review, and ones saved on this phone offline.
+  const [scans, setScans] = useState<ReceiptScan[]>([]);
+  const [queuedScans, setQueuedScans] = useState<QueuedScan[]>([]);
+  const [focused, setFocused] = useState(false);
+
+  const refreshQueuedScans = useCallback(() => {
+    if (!isSiteManager) return;
+    const userId = getSession()?.user.id ?? null;
+    setQueuedScans([...getPendingScans(userId), ...getRejectedScans(userId)] as QueuedScan[]);
+  }, [isSiteManager]);
+
+  // A failure here must not hide the requests.
+  const loadScans = useCallback(async () => {
+    if (!isSiteManager) return;
+    try {
+      setScans((await loadScansCached()).data);
+    } catch {
+      // Keep whatever was shown; the next refresh tries again.
+    }
+  }, [isSiteManager]);
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const [openResult, ticketResult, projectResult] = await Promise.all([
         loadOpenRequests(),
-        loadAssignedTickets("Purchaser"),
+        isSiteManager ? Promise.resolve({ data: [] as Ticket[] }) : loadAssignedTickets("Purchaser"),
         loadActiveProjects(),
       ]);
       setRequests(openResult.data);
@@ -61,11 +92,46 @@ export function ToBuy() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSiteManager]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      load();
+      loadScans();
+      refreshQueuedScans();
+      return () => setFocused(false);
+    }, [load, loadScans, refreshQueuedScans])
+  );
   // The PM just acknowledged a request or acted on a receipt.
   useOnNewNotifications(() => { load(); });
+
+  // A sync just ran (offline receipts may have been uploaded), or the phone came back online.
+  useEffect(() => {
+    refreshQueuedScans();
+    if (lastSync?.result?.scans?.uploaded) loadScans();
+  }, [pendingCount, lastSync, refreshQueuedScans, loadScans]);
+  const wasOnline = useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnline.current) {
+      load();
+      loadScans();
+    }
+    wasOnline.current = isOnline;
+  }, [isOnline, load, loadScans]);
+
+  // Keep "Reading…" rows moving to "Review" without a manual pull-to-refresh.
+  const anyScanning = scans.some((scan) => scan.status === "Scanning");
+  useEffect(() => {
+    if (!focused || !anyScanning) return;
+    const timer = setInterval(loadScans, SCAN_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [focused, anyScanning, loadScans]);
+
+  function removeScan(scan: ReceiptScan) {
+    setScans((prev) => prev.filter((s) => s.scanID !== scan.scanID));
+    dismissScan(scan.scanID).catch(() => loadScans());
+  }
 
   const shownError = describeLoadError(error, isOnline);
   const others = useMemo(() => otherRequests(assigned, requests), [assigned, requests]);
@@ -171,7 +237,7 @@ export function ToBuy() {
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { load(); loadScans(); }} />}
       >
         <View style={styles.header}>
           <Text style={styles.title}>{t("tb.title")}</Text>
@@ -186,12 +252,24 @@ export function ToBuy() {
           </Text>
         )}
 
+        {isSiteManager ? (
+          <ScannedReceipts
+            scans={scans}
+            onDismiss={removeScan}
+            queued={queuedScans}
+            onRemoveQueued={(row) => {
+              deleteQueuedPhoto(removeQueuedScan(row.scan_id));
+              refreshQueuedScans();
+            }}
+          />
+        ) : null}
+
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 
         {(projectChoices.length > 1 || storeChoices.length > 1) && (
           <View style={styles.controls}>
             <View style={styles.segment}>
-              {(["store", "project"] as const).map((mode) => (
+              {(["project", "store"] as const).map((mode) => (
                 <Pressable
                   key={mode}
                   onPress={() => setView(mode)}
@@ -267,14 +345,16 @@ export function ToBuy() {
                           ? ` · ${t("ck.given_spent", { budget: formatPeso(progress.budget), spent: formatPeso(progress.spent) })}`
                           : ""}
                       </Text>
-                      <Pressable
-                        onPress={() => setClosingId(closingId === request.ticketID ? null : request.ticketID)}
-                        style={styles.closeLink}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.closeLinkText}>{t("ck.close_short")}</Text>
-                      </Pressable>
-                      {closingId === request.ticketID ? (
+                      {isSiteManager ? null : (
+                        <Pressable
+                          onPress={() => setClosingId(closingId === request.ticketID ? null : request.ticketID)}
+                          style={styles.closeLink}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.closeLinkText}>{t("ck.close_short")}</Text>
+                        </Pressable>
+                      )}
+                      {!isSiteManager && closingId === request.ticketID ? (
                         <View style={styles.closeBox}>
                           <Text style={styles.requestMeta}>
                             {t("ck.close_body", { bought: formatQty(progress.bought), total: formatQty(progress.requested) })}
@@ -361,11 +441,12 @@ const styles = StyleSheet.create({
   pinnedMain: { flex: 3 },
   pinnedSide: { flex: 2 },
   pinned: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
-  segment: { flexDirection: "row", backgroundColor: COLORS.border, borderRadius: 12, padding: 3 },
-  segmentItem: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 10 },
-  segmentOn: { backgroundColor: COLORS.card },
-  segmentText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.muted },
-  segmentTextOn: { color: COLORS.heading, fontFamily: FONT.bold },
+  // Two real buttons, so it reads as something to tap; the open one takes the action color.
+  segment: { flexDirection: "row", gap: 8 },
+  segmentItem: { flex: 1, minHeight: MIN_TAP, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
+  segmentOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  segmentText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.heading },
+  segmentTextOn: { color: "#FFFFFF", fontFamily: FONT.bold },
 
   group: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, gap: 12 },
   // Each store / project is a tinted band with an accent edge, so it stands out from the requests under it.
