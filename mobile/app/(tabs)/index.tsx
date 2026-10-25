@@ -279,7 +279,7 @@ export default function HomeScreen() {
       {(!isOnline || savedAt) && (
         <Text style={styles.offlineNote}>
           {savedAt
-            ? t("ix.offline_saved_reqs", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t) })
+            ? t("ix.offline_saved_reqs", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })
             : t("ix.offline_last")}
         </Text>
       )}

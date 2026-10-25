@@ -70,6 +70,11 @@ for (const key of used) {
   const known = key in messages.en || Object.keys(messages.en).some((k) => k.startsWith(`${key}.`) || k.startsWith(`${key}_`));
   if (!known) errors.push(`used in code but not defined: ${key}`);
 }
+for (const prefix of usedPrefixes) {
+  if (!Object.keys(messages.en).some((key) => key.startsWith(prefix))) {
+    errors.push(`used in code but no catalog keys match prefix: ${prefix}`);
+  }
+}
 for (const key of Object.keys(messages.en)) if (!isUsed(key)) warnings.push(`unused: ${key}`);
 
 // A long sentence that is word-for-word the English is probably untranslated.

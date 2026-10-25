@@ -246,16 +246,16 @@ export function TicketQueuePage() {
     setRejectError("");
     setReject({ ticket, chips: new Set(), note: "" });
   }
-  function toggleRejectChip(reasonText) {
+  function toggleRejectChip(reasonKey) {
     setReject((r) => {
       const chips = new Set(r.chips);
-      if (chips.has(reasonText)) chips.delete(reasonText);
-      else chips.add(reasonText);
+      if (chips.has(reasonKey)) chips.delete(reasonKey);
+      else chips.add(reasonKey);
       return { ...r, chips };
     });
   }
   function composedReason(r) {
-    const parts = [...r.chips];
+    const parts = [...r.chips].map((key) => tr(key));
     const note = r.note.trim();
     if (note) parts.push(note);
     return parts.join(" — ");
@@ -839,9 +839,9 @@ function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSub
               <button
                 key={key}
                 type="button"
-                className={"reject-chip" + (state.chips.has(r) ? " reject-chip-on" : "")}
-                aria-pressed={state.chips.has(r)}
-                onClick={() => onToggleChip(r)}
+                className={"reject-chip" + (state.chips.has(key) ? " reject-chip-on" : "")}
+                aria-pressed={state.chips.has(key)}
+                onClick={() => onToggleChip(key)}
               >
                 {r}
               </button>

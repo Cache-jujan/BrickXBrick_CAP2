@@ -37,7 +37,7 @@ function shortDate(value: string | null) {
 }
 
 export default function ExpensesScreen() {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const { isOnline } = useNetwork();
   const [expenses, setExpenses] = useState<MyExpense[]>([]);
   const [projectsById, setProjectsById] = useState<Record<string, Project>>({});
@@ -99,7 +99,7 @@ export default function ExpensesScreen() {
 
       {savedAt && (
         <Text style={styles.offlineNote}>
-          {t("ex.offline_showing", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t) })}
+          {t("ex.offline_showing", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
         </Text>
       )}
       {shownError && (

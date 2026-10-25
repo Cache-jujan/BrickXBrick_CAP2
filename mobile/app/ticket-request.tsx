@@ -107,7 +107,7 @@ function prefilledCard(id: string, t: Ticket): Card {
 }
 
 export default function TicketRequestScreen() {
-  const { t, tv } = useLocale();
+  const { t, tv, intlLocale } = useLocale();
   const session = getSession();
   // Optional query param: when present, this screen is in "fix & resubmit"
   // mode — one card prefilled from the rejected ticket, project locked,
@@ -429,7 +429,7 @@ export default function TicketRequestScreen() {
 
       {savedAt && (
         <Text style={styles.offlineNote}>
-          {t("tr.offline_note", { when: savedAtLabel(savedAt) })}
+          {t("tr.offline_note", { when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
         </Text>
       )}
 

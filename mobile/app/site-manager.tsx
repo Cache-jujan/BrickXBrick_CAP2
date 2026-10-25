@@ -125,7 +125,7 @@ type ProjectSummary = {
 };
 
 export default function SiteManagerHomeScreen() {
-  const { t } = useLocale();
+  const { t, intlLocale } = useLocale();
   const session = getSession();
   const [tasks, setTasks] = useState<AssignedTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -285,7 +285,7 @@ export default function SiteManagerHomeScreen() {
         {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
             {savedAt
-              ? t("sm.offline_saved_tasks", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t) })
+              ? t("sm.offline_saved_tasks", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })
               : tasks.length > 0
                 ? t("sm.offline_last_loaded")
                 : t("sm.offline_never")}
