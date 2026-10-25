@@ -33,6 +33,8 @@ const PAGE_LABELS = [
   { test: (p) => p === "/expenses", trail: ["nav.finance", "nav.expenses"] },
   { test: (p) => p === "/expenses/new", trail: ["nav.finance", "nav.submit_expense"] },
   { test: (p) => p === "/expenses/split", trail: ["nav.finance", "nav.split_receipt"] },
+  { test: (p) => p === "/expenses/trip-cost", trail: ["nav.finance", "nav.trip_cost"] },
+  { test: (p) => p === "/requests", trail: ["nav.open_requests"] },
   { test: (p) => p === "/expenses/mine", trail: ["nav.finance", "nav.my_expenses"] },
   { test: (p) => p.startsWith("/tickets/new"), trail: ["nav.tickets", "nav.new_ticket"] },
   { test: (p) => p.startsWith("/tickets"), trail: ["nav.tickets"] },
