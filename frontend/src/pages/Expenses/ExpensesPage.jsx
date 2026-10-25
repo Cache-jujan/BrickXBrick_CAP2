@@ -16,6 +16,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { flagLabel } from "../../utils/plainLanguage";
+import { FlagReviewPanel } from "./FlagReviewPanel";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ExpensesPage.css";
 import { verifyExpense } from "../../api/blockchainApi";
@@ -23,6 +24,18 @@ import { verifyExpense } from "../../api/blockchainApi";
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const STATUS_TABS = ["All", "Pending", "Flagged", "Approved", "Rejected"];
 const PAGE_SIZE = 10;
+
+/** Line items arrive as JSON text or an array; a bad value shows no lines instead of breaking the page. */
+function parseLineItems(value) {
+  if (!value) return [];
+  if (typeof value !== "string") return Array.isArray(value) ? value : [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Render the GM/PM expense review queue with status filters and review actions.
@@ -81,6 +94,11 @@ export function ExpensesPage() {
   // { [expenseid]: [{ flagType, reason }] }
   const flagMap = useMemo(
     () => Object.fromEntries(flagged.map((f) => [f.expenseid, f.flags])),
+    [flagged]
+  );
+  // The full flagged row (project, request, split portions, matched duplicate) for the review panel.
+  const flaggedById = useMemo(
+    () => Object.fromEntries(flagged.map((f) => [f.expenseid, f])),
     [flagged]
   );
 
@@ -262,9 +280,7 @@ export function ExpensesPage() {
                         const isOpen = openId === e.expenseid;
                         const project = projectById[e.projectid];
                         const flags = flagMap[e.expenseid];
-                        const items = e.lineitems
-                          ? typeof e.lineitems === "string" ? JSON.parse(e.lineitems) : e.lineitems
-                          : [];
+                        const items = parseLineItems(e.lineitems);
                         return (
                           <Fragment key={e.expenseid}>
                             <tr
@@ -294,14 +310,15 @@ export function ExpensesPage() {
                               <tr className="expenses-detail">
                                 <td colSpan={6}>
                                   {flags && (
-                                    <Banner tone="warning" title={t("expenses.flagged_title")}>
-                                      <ul className="expenses-flag-list">
-                                        {flags.map((f, i) => (
-                                          <li key={i}>
-                                            <strong>{flagLabel(f.flagType, tv)}.</strong> {f.reason}
-                                          </li>
-                                        ))}
-                                      </ul>
+                                    <FlagReviewPanel
+                                      expense={flaggedById[e.expenseid] ?? e}
+                                      flags={flags}
+                                      showEffect={e.status === "Pending"}
+                                    />
+                                  )}
+                                  {e.submitnote && (
+                                    <Banner tone="warning" title={t("expenses.submit_note")}>
+                                      {e.submitnote}
                                     </Banner>
                                   )}
                                   {e.submittedby === user.id && user.role === "General Manager" && (
@@ -401,6 +418,15 @@ export function ExpensesPage() {
                 ? t("expenses.confirm_approve_body")
                 : t("expenses.confirm_reject_body")}
             </p>
+            {flagMap[confirm.expense.expenseid] && (
+              <Banner tone="warning" title={t("expenses.flagged_title")}>
+                <ul className="expenses-flag-list">
+                  {flagMap[confirm.expense.expenseid].map((f, i) => (
+                    <li key={i}>{flagLabel(f.flagType, tv)}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
             {confirm.action === "reject" && (
               <Field
                 label={t("expenses.reason_label")}
