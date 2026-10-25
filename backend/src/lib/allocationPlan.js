@@ -59,7 +59,8 @@ function proportionalCents(lineCents, pieceQtyH, lineQtyH) {
  * lineItems:   [{ description, quantity, amount }] in receipt order, pesos
  * openTickets: [{ ticketID, projectID, projectName, materialType,
  *                 remainingQuantity, createdAt, remainingBudget? }]
- * options:     { excludeTicketIDs: [], feeTargets: { lineIndex: ticketID } }
+ * options:     { excludeTicketIDs: [], feeTargets: { lineIndex: ticketID },
+ *                lineTargets: { lineIndex: ticketID } }   (a line matched to a request by hand)
  * matches:     (description, materialType) => boolean; tests pass a fake one
  *
  * Returns { ok, portions, extras, unmatched, allocatedCents, linesCents, warnings }
@@ -69,6 +70,7 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   const lines = parseAllocationLines(lineItems);
   const excluded = new Set((options.excludeTicketIDs || []).map((id) => String(id).toLowerCase()));
   const feeTargets = options.feeTargets || {};
+  const lineTargets = options.lineTargets || {};
 
   // Step 2. Drop excluded tickets, sort oldest first, and copy each remaining
   // quantity into a working map so lines of the same material share one pool.
@@ -101,6 +103,7 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
         allowancePct: Number.isFinite(Number(ticket.budgetAllowancePct)) ? Number(ticket.budgetAllowancePct) : DEFAULT_ALLOWANCE_PCT,
         startRemainingH: ticket.remainingH,
         remainingBudgetCents: ticket.remainingBudgetCents,
+        manualLines: [],
       });
     }
     return portionsByTicket.get(ticket.ticketID);
@@ -110,7 +113,10 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   for (const line of lines) {
     if (line.quantityH === 0) continue;
 
-    const matching = tickets.filter((ticket) => matches(line.description, ticket.materialType));
+    // A line the Purchaser matched by hand goes to that request only. If that request is no
+    // longer in play (closed, out of scope), the line is matched the normal way.
+    const chosen = tickets.find((ticket) => ticket.ticketID === lineTargets[line.lineIndex]);
+    const matching = chosen ? [chosen] : tickets.filter((ticket) => matches(line.description, ticket.materialType));
 
     // 3b. No open request for this material at all.
     if (matching.length === 0) {
@@ -170,7 +176,9 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
         description: line.description,
         quantityH: piece.quantityH,
         amountCents: piece.amountCents,
+        ...(chosen ? { manual: true } : {}),
       });
+      if (chosen && !portion.manualLines.includes(line.description)) portion.manualLines.push(line.description);
       portion.quantityH += piece.quantityH;
       portion.amountCents += piece.amountCents;
     }
@@ -183,6 +191,17 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   // Step 4. Fee / VAT / delivery lines (quantity 0) ride on a portion.
   for (const line of lines) {
     if (line.quantityH !== 0) continue;
+
+    // Matched by hand: the fee rides on that request, even if nothing else was bought for it.
+    const chosen = tickets.find((ticket) => ticket.ticketID === lineTargets[line.lineIndex]);
+    if (chosen) {
+      const portion = portionFor(chosen);
+      portion.lines.push({ lineIndex: line.lineIndex, description: line.description, quantityH: 0, amountCents: line.amountCents, manual: true });
+      portion.manualLines.push(line.description);
+      portion.amountCents += line.amountCents;
+      continue;
+    }
+
     const portions = orderedPortions();
     if (portions.length === 0) {
       unmatched.push({
@@ -241,6 +260,7 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
       overAllowance,
       extraH: portion.extraH,
       allowancePct: portion.allowancePct,
+      manualLines: portion.manualLines,
     };
   });
 
@@ -291,6 +311,9 @@ function submitNoteFor(portion, userNote) {
       `Spent ₱${formatMoney(portion.amountCents)} with ₱${formatMoney(portion.remainingBudgetCents)} left, beyond the ${portion.allowancePct}% allowance.`
     );
   }
+  if (portion.manualLines && portion.manualLines.length > 0) {
+    parts.push(`Matched by hand to this request: ${portion.manualLines.join(", ")}.`);
+  }
   if (userNote) parts.push(`Purchaser's reason: ${userNote}`);
   return parts.length ? parts.join(" ") : null;
 }
@@ -305,6 +328,7 @@ function presentPlan(plan) {
     description: line.description,
     quantity: qty(line.quantityH),
     amount: peso(line.amountCents),
+    ...(line.manual ? { manual: true } : {}),
   });
   return {
     ok: plan.ok,

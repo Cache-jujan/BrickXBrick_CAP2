@@ -130,6 +130,7 @@ router.post("/preview", requireRole(...ALLOCATION_ROLES), async (req, res, next)
     const plan = planAllocation(input.lineItems, openTickets, {
       excludeTicketIDs: input.excludeTicketIDs,
       feeTargets: input.feeTargets,
+      lineTargets: input.lineTargets,
     });
     res.json(presentPlan(plan));
   } catch (error) {
@@ -182,6 +183,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
       const plan = planAllocation(body.lineItems, openTickets, {
         excludeTicketIDs: body.excludeTicketIDs,
         feeTargets: body.feeTargets,
+        lineTargets: body.lineTargets,
       });
       if (!plan.ok) throw planError(plan);
 

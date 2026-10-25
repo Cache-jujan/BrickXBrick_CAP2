@@ -174,12 +174,33 @@ function parseFeeTargets(value, lines) {
 }
 
 // Body for POST /api/allocations/preview — only what the split needs.
+// lineTargets: the Purchaser matched a receipt line to a request by hand, { lineIndex: ticketID }.
+// Unlike feeTargets it works for any line, quantity or not.
+function parseLineTargets(value, lines) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "lineTargets must be an object of { lineIndex: ticketID }");
+  }
+  const targets = {};
+  for (const [key, ticketID] of Object.entries(value)) {
+    if (!/^\d+$/.test(key) || Number(key) >= lines.length) {
+      throw httpError(400, `lineTargets key ${key} is not a valid line index`);
+    }
+    if (typeof ticketID !== "string" || !UUID_PATTERN.test(ticketID)) {
+      throw httpError(400, `lineTargets[${key}] must be a valid ticket UUID`);
+    }
+    targets[Number(key)] = ticketID.toLowerCase();
+  }
+  return targets;
+}
+
 function validatePlanInput(body = {}) {
   const lines = parseAllocationLines(body.lineItems);
   return {
     lineItems: lines,
     excludeTicketIDs: parseExcludeTicketIDs(body.excludeTicketIDs),
     feeTargets: parseFeeTargets(body.feeTargets, lines),
+    lineTargets: parseLineTargets(body.lineTargets, lines),
   };
 }
 
@@ -231,6 +252,7 @@ module.exports = {
   validateAllocationSum,
   parseAllocationLines,
   validatePlanInput,
+  parseLineTargets,
   validateAllocationBody,
   validateCloseShortReason,
 };

@@ -229,4 +229,45 @@ test("closing a request short needs a reason of reasonable length", () => {
   assert.throws(() => validateCloseShortReason(undefined), (e) => e.status === 400);
   assert.throws(() => validateCloseShortReason("x".repeat(301)), (e) => e.status === 400);
 });
-
+
+// ---- Matched by hand (lineTargets) ---------------------------------------------------------
+
+const { submitNoteFor } = require("../src/lib/allocationPlan");
+
+test("a line matched by hand goes to that request even when the words do not match", () => {
+  const result = plan([{ description: "Sand and gravel mix", quantity: 5, amount: 1000 }], cementTickets(), { lineTargets: { 0: BRAVO } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(summary(result), [["Project Bravo", 5, 100000, false]]);
+  assert.equal(result.portions[0].lines[0].manual, true);
+});
+
+test("a hand match is capped by what the request still wants; the rest is an extra on it", () => {
+  const result = plan([{ description: "Mystery bags", quantity: 12, amount: 1200 }], cementTickets(), { lineTargets: { 0: CHARLIE } });
+  assert.equal(result.portions.length, 1);
+  assert.equal(result.portions[0].quantityH, 1200);
+  assert.equal(result.portions[0].extraH, 200);
+  assert.equal(result.portions[0].resolvesTicket, true);
+});
+
+test("a delivery fee alone can be matched to a request", () => {
+  const result = plan([delivery], cementTickets(), { lineTargets: { 0: ALPHA } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(summary(result), [["Project Alpha", 0, 50000, false]]);
+  assert.equal(result.portions[0].remainingAfterH, 2000);
+});
+
+test("a delivery fee with no target still blocks when nothing matched", () => {
+  assert.equal(plan([delivery]).ok, false);
+});
+
+test("a target that is excluded falls back to normal matching", () => {
+  const result = plan([cement(5, 1000)], cementTickets(), { excludeTicketIDs: [BRAVO], lineTargets: { 0: BRAVO } });
+  assert.equal(result.ok, true);
+  assert.equal(result.portions[0].ticketID, ALPHA);
+  assert.equal(result.portions[0].lines[0].manual, undefined);
+});
+
+test("the PM note says what was matched by hand", () => {
+  const result = plan([{ description: "Mystery bags", quantity: 3, amount: 300 }], cementTickets(), { lineTargets: { 0: ALPHA } });
+  assert.match(submitNoteFor(result.portions[0], null), /Matched by hand to this request: Mystery bags\./);
+});
