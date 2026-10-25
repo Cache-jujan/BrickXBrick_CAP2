@@ -11,21 +11,26 @@ export type DraftMode = "single" | "split";
 // resubmit: set when the draft is a Rejected expense being corrected, so the
 // last step updates that expense instead of creating a new one.
 type Resubmit = { expenseID: string; reason: string | null };
+// scope: the projects a split receipt was scanned for (null = it may match any project).
+type Scope = { projectIds: string[]; projectNames: string[] } | null;
+// "trip": a gas / toll / delivery receipt that is charged to projects, not matched to requests.
+type Kind = "trip" | null;
+type StartOptions = { projectIds: string[]; projectNames: string[] } | { kind: "trip" } | null;
 type ExpenseDraft = {
   mode: DraftMode; ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult | null;
-  category: Category | null; notes: string; scanID: string | null; resubmit: Resubmit | null;
+  category: Category | null; notes: string; scanID: string | null; resubmit: Resubmit | null; scope: Scope; kind: Kind;
 };
 // Everything needed to pick a scanned receipt back up (see lib/receipt-scans.ts).
-type ResumeScan = { scanID: string; mode: DraftMode; ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult | null };
+type ResumeScan = { scanID: string; mode: DraftMode; ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult | null; scope?: Scope; kind?: Kind };
 type ResubmitStart = Resubmit & { ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult; category: Category };
 type Ctx = {
   draft: ExpenseDraft; setTicket: (t: SelectedTicket) => void; setFile: (f: FileState) => void;
   setOcrResult: (r: OcrResult) => void; setCategory: (c: Category) => void; setNotes: (n: string) => void; reset: () => void;
-  startSplit: () => void; setScanID: (id: string | null) => void; resumeScan: (scan: ResumeScan) => void;
+  startSplit: (options?: StartOptions) => void; setScanID: (id: string | null) => void; resumeScan: (scan: ResumeScan) => void;
   startResubmit: (draft: ResubmitStart) => void;
 };
 
-const EMPTY: ExpenseDraft = { mode: "single", ticket: null, file: null, ocrResult: null, category: null, notes: "", scanID: null, resubmit: null };
+const EMPTY: ExpenseDraft = { mode: "single", ticket: null, file: null, ocrResult: null, category: null, notes: "", scanID: null, resubmit: null, scope: null, kind: null };
 const ExpenseDraftContext = createContext<Ctx | null>(null);
 
 export function ExpenseDraftProvider({ children }: { children: ReactNode }) {
@@ -39,11 +44,17 @@ export function ExpenseDraftProvider({ children }: { children: ReactNode }) {
       setCategory: (category) => setDraft((d) => ({ ...d, category })),
       setNotes: (notes) => setDraft((d) => ({ ...d, notes })),
       reset: () => setDraft(EMPTY),
-      // Fresh draft in split mode, with no ticket.
-      startSplit: () => setDraft({ ...EMPTY, mode: "split" }),
+      // Fresh draft in split mode, with no ticket. A scope limits the matching to those projects.
+      startSplit: (options = null) =>
+        setDraft({
+          ...EMPTY,
+          mode: "split",
+          scope: options && "projectIds" in options ? options : null,
+          kind: options && "kind" in options ? options.kind : null,
+        }),
       setScanID: (scanID) => setDraft((d) => ({ ...d, scanID })),
       // Replaces the whole draft: a resumed scan never mixes with the old one.
-      resumeScan: ({ scanID, mode, ticket, file, ocrResult }) => setDraft({ ...EMPTY, scanID, mode, ticket, file, ocrResult }),
+      resumeScan: ({ scanID, mode, ticket, file, ocrResult, scope = null, kind = null }) => setDraft({ ...EMPTY, scanID, mode, ticket, file, ocrResult, scope, kind }),
       // A Rejected expense, loaded for correction (always a single-ticket receipt).
       startResubmit: ({ expenseID, reason, ticket, file, ocrResult, category }) =>
         setDraft({ ...EMPTY, mode: "single", ticket, file, ocrResult, category, resubmit: { expenseID, reason } }),
