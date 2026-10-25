@@ -37,6 +37,7 @@ import {
   todayIso,
 } from "@/lib/receipt-checks";
 import { loadOpenRequests } from "@/lib/cached-api";
+import { defaultQuantity, isFeeLine } from "@/lib/fee-lines";
 import { BlockedReasons } from "@/components/blocked-reasons";
 import { phoneReachableUrl } from "@/lib/receipt-scans";
 import { KeyboardAvoider } from "@/components/keyboard-avoider";
@@ -96,6 +97,9 @@ export default function ReviewScreen() {
             name: r.materialType,
             detail: t("rv.material_detail", { project: r.projectName, qty: r.remainingQuantity, subject: r.subject }),
             bomItemID: r.bomItemID ?? null,
+            projectName: r.projectName,
+            vendorName: r.vendorName,
+            subject: r.subject,
           }))
         );
       })
@@ -123,7 +127,7 @@ export default function ReviewScreen() {
     const lineItemsOcr = draft.resubmit ? undefined : result.confidence?.lineItems === "medium" ? "medium" : "low";
     setItems(
       result.lineItems?.length
-        ? result.lineItems.map((li) => withUnitPrice({ id: makeId(), name: li.description ?? "", quantity: li.quantity != null ? String(li.quantity) : "", price: li.amount != null ? groupAmountText(String(li.amount)) : "", unitPrice: li.unitPrice != null ? groupAmountText(String(li.unitPrice)) : "", ocr: lineItemsOcr, scanned: draft.resubmit ? undefined : li.description || undefined }))
+        ? result.lineItems.map((li) => withUnitPrice({ id: makeId(), name: li.description ?? "", quantity: defaultQuantity(li.description, li.quantity), price: li.amount != null ? groupAmountText(String(li.amount)) : "", unitPrice: li.unitPrice != null ? groupAmountText(String(li.unitPrice)) : "", ocr: lineItemsOcr, scanned: draft.resubmit ? undefined : li.description || undefined }))
         : [{ id: makeId(), name: "", quantity: "", price: result.amount != null ? groupAmountText(String(result.amount)) : "" }]
     );
     setEdited(new Set());
@@ -250,9 +254,10 @@ export default function ReviewScreen() {
     const clean = (text: string) => Number(text.replace(/,/g, "").trim());
     setOcrResult({
       ...result!, vendorName: vendorName.trim(), tin, birPermitNumber, birNumber, amount: clean(amount), receiptDate: receiptDate.trim(),
-      lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: unitPriceForPayload(it), bomItemID: it.bomItemID ?? null })),
+      lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: unitPriceForPayload(it), bomItemID: it.bomItemID ?? null, matchedTicketID: it.matchedTicketID ?? null })),
     });
-    router.push(isSplit ? "/expense/allocate" : "/expense/link");
+    // A gas / toll receipt is charged to projects; every other split receipt is matched to requests.
+    router.push(draft.kind === "trip" ? "/expense/trip-cost" : isSplit ? "/expense/allocate" : "/expense/link");
   }
 
   const file = draft.file;
@@ -415,12 +420,25 @@ export default function ReviewScreen() {
                       <Text style={styles.removeText}>{t("common.remove")}</Text>
                     </Pressable>
                   </View>
-                  <TextInput style={styles.input} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null })} />
+                  <TextInput style={styles.input} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} />
                   {item.scanned && simpleText(item.scanned) !== simpleText(item.name) && (
                     <Text style={styles.scannedNote}>
                       {t("rv.receipt_says", { scanned: item.scanned })}
                     </Text>
                   )}
+                  {item.matchedTicketID ? (
+                    <View style={styles.matchedChip}>
+                      <Text style={styles.matchedChipText} numberOfLines={2}>
+                        {t("rv.matched_chip", {
+                          request: materials.find((m) => m.key === item.matchedTicketID)?.name ?? item.name,
+                          project: materials.find((m) => m.key === item.matchedTicketID)?.projectName ?? "",
+                        })}
+                      </Text>
+                      <Pressable onPress={() => updateItem(item.id, { matchedTicketID: null })} hitSlop={8} accessibilityRole="button">
+                        <Text style={styles.matchedChipRemove}>{t("rv.remove_match")}</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                   {materials.length > 0 && (
                     <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
                       <Text style={styles.pickButtonText}>{t("rv.match_material")}</Text>
@@ -470,9 +488,15 @@ export default function ReviewScreen() {
       <RequestedMaterialPicker
         visible={pickingItemId !== null}
         materials={materials}
+        lineText={(() => { const it = items.find((i) => i.id === pickingItemId); return it ? it.scanned || it.name : ""; })()}
         onClose={() => setPickingItemId(null)}
         onSelect={(m) => {
-            if (pickingItemId) updateItem(pickingItemId, { name: m.name, bomItemID: m.bomItemID ?? null });
+          const it = items.find((i) => i.id === pickingItemId);
+          if (it) {
+            // A fee line (delivery, VAT) keeps its own name: it is matched to the request, not renamed to a material.
+            const fee = isFeeLine(it.scanned || it.name) || toHundredths(it.quantity) === 0;
+            updateItem(it.id, fee ? { matchedTicketID: m.key } : { name: m.name, bomItemID: m.bomItemID ?? null, matchedTicketID: m.key });
+          }
           setPickingItemId(null);
         }}
       />
@@ -591,6 +615,9 @@ const styles = StyleSheet.create({
   errorHint: { fontSize: 11, fontFamily: FONT.regular, color: RED, marginTop: 4 },
   addLink: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.success },
   hint: { fontSize: 11, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 8 },
+  matchedChip: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, backgroundColor: COLORS.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  matchedChipText: { flex: 1, fontSize: 12, fontFamily: FONT.semibold, color: COLORS.success },
+  matchedChipRemove: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted, textDecorationLine: "underline" },
   pickButton: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 12, paddingHorizontal: 12, backgroundColor: COLORS.card },
   pickButtonText: { fontSize: 14, fontFamily: FONT.medium, color: COLORS.muted },
   scannedNote: { fontSize: 12, fontFamily: FONT.regular, color: AMBER, marginTop: 4 },
