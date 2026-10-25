@@ -9,7 +9,8 @@ function fmt(iso) {
   return DATE.format(new Date(y, m - 1, d));
 }
 
-const OWNER = { GM: "GM", PM: "PM" };
+const OWNER = { GM: "General Manager", PM: "Project Manager" };
+const SITE = "Site Manager"; // construction tasks have no planning owner
 
 // Last screen of "New project": what will be created, with the dates worked out
 // from the project dates. Nothing is saved until the GM confirms.
@@ -21,6 +22,10 @@ export function StructurePreview({ preview }) {
         {counts.milestones} milestones and {counts.tasks} tasks
         {preview.source ? ` from ${preview.source.kind === "template" ? "the template" : "the project"} "${preview.source.name}"` : ""}
       </h2>
+      <div className="sp-stats">
+        <span className="sp-stat"><strong>{counts.milestones}</strong> milestones</span>
+        <span className="sp-stat"><strong>{counts.tasks}</strong> tasks</span>
+      </div>
       <p className="sp-sub">
         Everything starts Pending at 0%. Planning tasks belong to the General Manager or Project Manager;
         construction tasks go to the Site Manager. The Project Manager can change any date or name afterwards.
@@ -51,7 +56,7 @@ export function StructurePreview({ preview }) {
                 <li key={`${t.name}-${j}`} className="sp-task">
                   <span className="sp-num">{i + 1}.{j + 1}</span>
                   <span className="sp-name">{t.name}</span>
-                  {t.handledBy && <span className="sp-owner">{OWNER[t.handledBy]}</span>}
+                  <span className="sp-owner">{OWNER[t.handledBy] || SITE}</span>
                   <span className={`sp-date ${t.warning ? "sp-date-warn" : ""}`} title={t.warning || undefined}>
                     {fmt(t.dueDate)}
                   </span>
