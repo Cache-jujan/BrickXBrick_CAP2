@@ -18,8 +18,15 @@ test("General Manager (backup actor) sees every open request", () => {
   assert.deepEqual(ticketScope({ id: USER, role: "General Manager" }), { clause: "TRUE", params: [] });
 });
 
+test("Site Manager sees their own requests on their project, once Resolved", () => {
+  const scope = ticketScope({ id: USER, role: "Site Manager" });
+  assert.deepEqual(scope, { clause: "t.submittedby = $1 AND p.sitemanagerid = $1", params: [USER] });
+  assert.match(buildOpenRequestsQuery({ id: USER, role: "Site Manager" }).text, /t.status = 'Resolved'/);
+  assert.match(buildOpenRequestsQuery({ id: USER, role: "Purchaser" }).text, /t.status = 'Acknowledged'/);
+});
+
 test("any other role gets 403", () => {
-  assert.throws(() => ticketScope({ id: USER, role: "Site Manager" }), (error) => error.status === 403);
+  assert.throws(() => ticketScope({ id: USER, role: "Accountant" }), (error) => error.status === 403);
 });
 
 test("the lock and the open-request query use the same scope", () => {
@@ -68,5 +75,5 @@ test("presentPlan turns centavos into peso strings and hundredths into numbers",
     ["Bravo", 25, "7000.00", 5, false],
   ]);
   assert.equal(shown.linesTotal, "13100.00");
-  assert.deepEqual(shown.warnings, [{ type: "OVER_BUDGET", ticketID: tickets[0].ticketID, amount: "6100.00", remainingBudget: "5000.00" }]);
+  assert.deepEqual(shown.warnings, [{ type: "OVER_BUDGET", ticketID: tickets[0].ticketID, amount: "6100.00", remainingBudget: "5000.00", overAllowance: true }]);
 });
