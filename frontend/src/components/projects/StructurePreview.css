@@ -27,6 +27,7 @@
 .sp-owner { justify-self: start; padding: 1px var(--space-2); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; color: var(--color-ink-soft); background: var(--color-surface-muted); border-radius: 999px; }
 .sp-date { font-size: var(--text-sm); white-space: nowrap; text-align: right; color: var(--color-ink-soft); font-variant-numeric: tabular-nums; }
 .sp-date-warn { color: var(--color-status-risk); font-weight: 650; }
+.sp-head .sp-date-warn { color: var(--color-status-risk); }
 .sp-date-warn::before { content: "\26A0\FE0E"; margin-right: var(--space-1); }
 @media (max-width: 700px) {
   .sp-head, .sp-task { grid-template-columns: 40px minmax(0, 1fr) auto; row-gap: var(--space-1); }

@@ -40,7 +40,6 @@
 .dc-box::after { content: ""; width: 10px; height: 6px; margin-top: -2px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: rotate(-45deg) scale(0); transition: transform 0.12s ease; }
 .dc-box:checked { background: var(--color-brick); border-color: var(--color-brick); }
 .dc-box:checked::after { transform: rotate(-45deg) scale(1); }
-.dc-box:focus-visible { outline: none; }
 .dc-legend .dc-box { margin: 0; }
 
 .dc-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
