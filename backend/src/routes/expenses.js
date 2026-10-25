@@ -224,9 +224,15 @@ router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, n
         const result = await query(
             // splitProjectCount: how many projects a split receipt was shared across
             // (0 for an ordinary single-request expense).
+            // ticketSubject / projectName / commonReceiptID let the app's History tab show
+            // what each receipt was for and group the portions of one split receipt.
             `SELECT ${EXPENSE_COLUMNS},
                     (SELECT COUNT(DISTINCT a.projectID)::int FROM ReceiptAllocations a
-                      WHERE a.expenseID = expenses.expenseID) AS "splitProjectCount"
+                      WHERE a.expenseID = expenses.expenseID) AS "splitProjectCount",
+                    (SELECT t.subject FROM tickets t WHERE t.ticketID = expenses.ticketID) AS "ticketSubject",
+                    (SELECT p.name FROM projects p WHERE p.projectID = expenses.projectID) AS "projectName",
+                    (SELECT a.commonReceiptID FROM ReceiptAllocations a
+                      WHERE a.expenseID = expenses.expenseID LIMIT 1) AS "commonReceiptID"
                FROM expenses
               WHERE submittedby = $1 ORDER BY submittedat DESC`,
             [req.user.id]
@@ -353,7 +359,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
             throw httpError(403, "You can't approve an expense you submitted");
         }
 
-        /** Atomically approve a Pending expense and its flags; throw 409 if already reviewed. */
+        /** Atomically approve a Pending expense and its flags and tell its submitter; throw 409 if already reviewed. */
         await withTransaction(async (client) => {
             const claimed = await client.query(
                 "UPDATE Expenses SET status = 'Approved', approvedBy = $1 WHERE expenseID = $2 AND status = 'Pending'",
@@ -366,6 +372,13 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
                 "UPDATE FraudFlags SET resolution = 'Approved', reviewedBy = $1, resolvedAt = NOW() WHERE expenseID = $2 AND resolution = 'Pending'",
                 [req.user.id, req.params.id]
             );
+            if (expense.submittedby !== req.user.id) {
+                await client.query(
+                    `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+                     VALUES ($1, 'ExpenseApproved', 'Expense', $2, $3)`,
+                    [expense.submittedby, req.params.id, `Your expense was approved: ${expense.vendorname}`]
+                );
+            }
         });
 
         // Read the row again so the fingerprint includes who approved it.

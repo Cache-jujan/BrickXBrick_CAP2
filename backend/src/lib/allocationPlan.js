@@ -2,8 +2,10 @@
 //
 // One receipt line is split across the open Material Requests for that
 // material, oldest request first. A request never receives more than its
-// remaining quantity. Whatever no request covers blocks the submit
-// (UC-06-01 E3: no request, no purchase).
+// remaining quantity. Buying MORE than every open request wants is a fact, not
+// an error (the money is already spent): the extra rides on the last request
+// that took part of the line and is reported as an "extra" for the PM to judge.
+// A line no request matches at all still blocks the submit (UC-06-01 E3).
 //
 // Units: centavos for money, hundredths for quantity (see allocationValidation.js).
 
@@ -33,6 +35,9 @@ function ticketTime(ticket) {
   return Number.isFinite(time) ? time : 0;
 }
 
+// A PM-set tolerance over the budget given (delivery, gas, price changes).
+const DEFAULT_ALLOWANCE_PCT = 10;
+
 // Oldest request first; ticketID breaks ties (same order as the SQL ORDER BY).
 function compareTickets(a, b) {
   const byTime = ticketTime(a) - ticketTime(b);
@@ -57,7 +62,7 @@ function proportionalCents(lineCents, pieceQtyH, lineQtyH) {
  * options:     { excludeTicketIDs: [], feeTargets: { lineIndex: ticketID } }
  * matches:     (description, materialType) => boolean; tests pass a fake one
  *
- * Returns { ok, portions, uncovered, unmatched, allocatedCents, linesCents, warnings }
+ * Returns { ok, portions, extras, unmatched, allocatedCents, linesCents, warnings }
  */
 function planAllocation(lineItems, openTickets, options = {}, matches = matchesMaterial) {
   // Step 1. Validate lines and convert to centavos / hundredths.
@@ -79,7 +84,7 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
 
   const leftH = new Map(tickets.map((ticket) => [ticket.ticketID, ticket.remainingH]));
   const portionsByTicket = new Map();
-  const uncovered = [];
+  const extras = [];
   const unmatched = [];
 
   function portionFor(ticket) {
@@ -92,6 +97,8 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
         lines: [],
         amountCents: 0,
         quantityH: 0,
+        extraH: 0,
+        allowancePct: Number.isFinite(Number(ticket.budgetAllowancePct)) ? Number(ticket.budgetAllowancePct) : DEFAULT_ALLOWANCE_PCT,
         startRemainingH: ticket.remainingH,
         remainingBudgetCents: ticket.remainingBudgetCents,
       });
@@ -129,8 +136,12 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
       left -= take;
     }
 
-    // 3d. More than the requests cover: an uncovered piece, priced last.
-    if (left > 0) pieces.push({ ticket: null, quantityH: left });
+    // 3d. More than the requests want: an extra on the last request that took part
+    // of this line (or the oldest match if none had room), priced last.
+    if (left > 0) {
+      const lastTaker = [...pieces].reverse().find((piece) => piece.ticket)?.ticket ?? matching[0];
+      pieces.push({ ticket: lastTaker, quantityH: left, extra: true });
+    }
 
     // 3e. Price the pieces; the last piece takes the remainder (rule 8).
     let pricedCents = 0;
@@ -143,16 +154,17 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
     });
 
     for (const piece of pieces) {
-      if (piece.ticket === null) {
-        uncovered.push({
+      const portion = portionFor(piece.ticket);
+      if (piece.extra) {
+        portion.extraH += piece.quantityH;
+        extras.push({
           lineIndex: line.lineIndex,
           description: line.description,
           quantityH: piece.quantityH,
           amountCents: piece.amountCents,
+          ticketID: piece.ticket.ticketID,
         });
-        continue;
       }
-      const portion = portionFor(piece.ticket);
       portion.lines.push({
         lineIndex: line.lineIndex,
         description: line.description,
@@ -194,16 +206,25 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   // Step 5. Finish each portion and build the result.
   const warnings = [];
   const portions = orderedPortions().map((portion) => {
-    const remainingAfterH = portion.startRemainingH - portion.quantityH;
+    // Extras were bought beyond what was left, so they do not count against it.
+    const remainingAfterH = Math.max(0, portion.startRemainingH - (portion.quantityH - portion.extraH));
     const overBudget =
       portion.remainingBudgetCents !== null && portion.amountCents > portion.remainingBudgetCents;
+    // Beyond the PM's allowance the Purchaser must say why; inside it, it is normal.
+    const overAllowance =
+      overBudget &&
+      portion.amountCents * 100 > portion.remainingBudgetCents * (100 + portion.allowancePct);
     if (overBudget) {
       warnings.push({
         type: "OVER_BUDGET",
         ticketID: portion.ticketID,
         amountCents: portion.amountCents,
         remainingBudgetCents: portion.remainingBudgetCents,
+        overAllowance,
       });
+    }
+    if (portion.extraH > 0) {
+      warnings.push({ type: "OVER_QUANTITY", ticketID: portion.ticketID, quantityH: portion.extraH });
     }
     return {
       ticketID: portion.ticketID,
@@ -217,6 +238,9 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
       resolvesTicket: remainingAfterH === 0,
       remainingBudgetCents: portion.remainingBudgetCents,
       overBudget,
+      overAllowance,
+      extraH: portion.extraH,
+      allowancePct: portion.allowancePct,
     };
   });
 
@@ -224,9 +248,9 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   const linesCents = lines.reduce((sum, line) => sum + line.amountCents, 0);
 
   return {
-    ok: uncovered.length === 0 && unmatched.length === 0 && portions.length >= 2,
+    ok: unmatched.length === 0 && portions.length >= 1,
     portions,
-    uncovered,
+    extras,
     unmatched,
     allocatedCents,
     linesCents,
@@ -246,15 +270,29 @@ function describePlanProblems(plan) {
         : `No open request for ${qty(piece.quantityH)} of "${piece.description}". Ask the Site Manager to file one.`
     );
   }
-  for (const piece of plan.uncovered) {
-    problems.push(
-      `No open request for ${qty(piece.quantityH)} more of "${piece.description}". Ask the Site Manager to file one.`
-    );
-  }
-  if (plan.uncovered.length === 0 && plan.unmatched.length === 0 && plan.portions.length < 2) {
-    problems.push("This receipt covers one request. Submit it from that request instead.");
+  if (plan.unmatched.length === 0 && plan.portions.length === 0) {
+    problems.push("No open request matches anything on this receipt.");
   }
   return problems;
+}
+
+/**
+ * The note saved on a portion's expense for the PM: what the system noticed
+ * (extra quantity, spending beyond the allowance) and the Purchaser's own reason.
+ * Null when there is nothing to say.
+ */
+function submitNoteFor(portion, userNote) {
+  const parts = [];
+  if (portion.extraH > 0) {
+    parts.push(`Bought ${portion.extraH / 100} more ${portion.materialType} than requested.`);
+  }
+  if (portion.overAllowance) {
+    parts.push(
+      `Spent ₱${formatMoney(portion.amountCents)} with ₱${formatMoney(portion.remainingBudgetCents)} left, beyond the ${portion.allowancePct}% allowance.`
+    );
+  }
+  if (userNote) parts.push(`Purchaser's reason: ${userNote}`);
+  return parts.length ? parts.join(" ") : null;
 }
 
 // Plan -> API response: centavos become peso strings ("6100.00", the same
@@ -282,19 +320,28 @@ function presentPlan(plan) {
       resolvesTicket: portion.resolvesTicket,
       remainingBudget: peso(portion.remainingBudgetCents),
       overBudget: portion.overBudget,
+      overAllowance: portion.overAllowance,
+      extraQuantity: qty(portion.extraH),
       lines: portion.lines.map(presentLine),
     })),
-    uncovered: plan.uncovered.map(presentLine),
+    // Always empty now: kept so older clients that read it keep working.
+    uncovered: [],
+    extras: plan.extras.map((line) => ({ ...presentLine(line), ticketID: line.ticketID })),
     unmatched: plan.unmatched.map(presentLine),
     allocated: peso(plan.allocatedCents),
     linesTotal: peso(plan.linesCents),
-    warnings: plan.warnings.map((warning) => ({
-      type: warning.type,
-      ticketID: warning.ticketID,
-      amount: peso(warning.amountCents),
-      remainingBudget: peso(warning.remainingBudgetCents),
-    })),
+    warnings: plan.warnings.map((warning) =>
+      warning.type === "OVER_QUANTITY"
+        ? { type: warning.type, ticketID: warning.ticketID, quantity: qty(warning.quantityH) }
+        : {
+            type: warning.type,
+            ticketID: warning.ticketID,
+            amount: peso(warning.amountCents),
+            remainingBudget: peso(warning.remainingBudgetCents),
+            overAllowance: warning.overAllowance,
+          }
+    ),
   };
 }
 
-module.exports = { planAllocation, describePlanProblems, presentPlan, compareTickets };
+module.exports = { planAllocation, describePlanProblems, presentPlan, compareTickets, submitNoteFor };

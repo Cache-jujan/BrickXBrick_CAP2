@@ -10,7 +10,9 @@
 //
 //   GET  /open-requests  the To-buy list
 //   POST /preview        run the split, write nothing
-//   POST /               run the split and save it in one transaction
+//   POST /               run the split and save it in one transaction. The client may send
+//                        its own commonReceiptID: sending the same one again (a retry after
+//                        a lost response) returns what was saved the first time.
 
 const crypto = require("crypto");
 const express = require("express");
@@ -27,9 +29,11 @@ const {
   validatePlanInput,
   validateAllocationBody,
   validateAllocationSum,
+  validateCloseShortReason,
+  UUID_PATTERN,
 } = require("../lib/allocationValidation");
-const { planAllocation, presentPlan } = require("../lib/allocationPlan");
-const { ALLOCATION_ROLES, loadOpenRequests, buildLockQuery } = require("../lib/openRequests");
+const { planAllocation, presentPlan, submitNoteFor } = require("../lib/allocationPlan");
+const { ALLOCATION_ROLES, loadOpenRequests, buildLockQuery, ticketScope } = require("../lib/openRequests");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -69,6 +73,46 @@ function planError(plan) {
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// What an earlier POST with this commonReceiptID saved, or null if nothing was.
+// Only the same user's own expenses count, so an ID cannot be used to read another's.
+async function loadSaved(client, commonReceiptID, userId) {
+  const found = await client.query(
+    `SELECT ${EXPENSE_COLUMNS}
+       FROM expenses
+      WHERE submittedby = $2
+        AND expenseid IN (SELECT expenseid FROM receiptallocations WHERE commonreceiptid = $1)
+      ORDER BY submittedat`,
+    [commonReceiptID, userId]
+  );
+  if (found.rowCount === 0) return null;
+
+  const expenses = found.rows;
+  const tickets = await client.query(
+    `SELECT ticketid, status FROM tickets WHERE ticketid = ANY($1::uuid[])`,
+    [expenses.map((e) => e.ticketID)]
+  );
+  const flags = await client.query(
+    `SELECT expenseid, flagtype FROM fraudflags WHERE expenseid = ANY($1::uuid[])`,
+    [expenses.map((e) => e.expenseID)]
+  );
+
+  const screening = {};
+  for (const expense of expenses) screening[expense.expenseID] = { flagTypes: [] };
+  for (const flag of flags.rows) screening[flag.expenseid]?.flagTypes.push(flag.flagtype);
+
+  return {
+    commonReceiptID,
+    expenses,
+    resolvedTicketIDs: tickets.rows.filter((t) => t.status === "Resolved").map((t) => t.ticketid),
+    stillOpenTicketIDs: tickets.rows.filter((t) => t.status !== "Resolved").map((t) => t.ticketid),
+    warnings: [],
+    screening,
+    replayed: true,
+  };
+}
+
 // GET /open-requests — open requests with remaining quantity, oldest first.
 router.get("/open-requests", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   try {
@@ -98,6 +142,10 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   try {
     // 1. Shape of the body, and the receipt image must be one we stored.
     const body = validateAllocationBody(req.body);
+    const clientReceiptID = req.body?.commonReceiptID == null ? null : String(req.body.commonReceiptID).toLowerCase();
+    if (clientReceiptID && !UUID.test(clientReceiptID)) {
+      throw httpError(400, "commonReceiptID must be a UUID");
+    }
     if (!(await receiptImageExists(body.receiptImageURL))) {
       throw httpError(400, "receiptImageURL must reference a receipt uploaded via POST /api/receipts/scan");
     }
@@ -122,6 +170,12 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
       // 4a. Lock this actor's open requests, then read them with the same client.
       const lock = buildLockQuery(req.user);
       await client.query(lock.text, lock.params);
+
+      // A retry of a request that already went through: answer with what was saved.
+      if (clientReceiptID) {
+        const earlier = await loadSaved(client, clientReceiptID, req.user.id);
+        if (earlier) return earlier;
+      }
       const openTickets = await loadOpenRequests(req.user, client);
 
       // 4b. Plan. Not ok means nothing gets written.
@@ -131,7 +185,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
       });
       if (!plan.ok) throw planError(plan);
 
-      const commonReceiptID = crypto.randomUUID();
+      const commonReceiptID = clientReceiptID ?? crypto.randomUUID();
       const expenses = [];
       const resolvedTicketIDs = [];
       const stillOpenTicketIDs = [];
@@ -144,8 +198,8 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
           `INSERT INTO expenses
              (projectid, submittedby, ticketid, vendorname, amount, receiptdate, category,
               birvalidationstatus, receiptimageurl, birnumber, tin, birpermitnumber,
-              lineitems, quantity)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+              lineitems, quantity, submitnote)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
            RETURNING ${EXPENSE_COLUMNS}`,
           [
             portion.projectID,
@@ -162,6 +216,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
             bir.birPermitNumber,
             JSON.stringify(portion.lines.map(storedLine)),
             qtyString(portion.quantityH),
+            submitNoteFor(portion, body.note),
           ]
         );
         const expense = expenseResult.rows[0];
@@ -176,6 +231,11 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
         // 4d. A request resolves only when this receipt brings it to 0.
         if (!portion.resolvesTicket) {
           stillOpenTicketIDs.push(portion.ticketID);
+          continue;
+        }
+        // A Site Manager's requests are already Resolved by the Purchaser.
+        if (req.user.role === "Site Manager") {
+          resolvedTicketIDs.push(portion.ticketID);
           continue;
         }
         assertLegalTransition("Acknowledged", "Resolved");
@@ -201,6 +261,10 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
       return { commonReceiptID, expenses, resolvedTicketIDs, stillOpenTicketIDs, warnings: presentPlan(plan).warnings };
     });
 
+    if (saved.replayed) {
+      return res.status(200).json(saved);
+    }
+
     // 5. Screening runs AFTER COMMIT, once per portion. Inside the
     // transaction, screenExpense's own connection couldn't see these rows.
     const screening = {};
@@ -209,6 +273,54 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
     }
 
     res.status(201).json({ ...saved, screening });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /close-short/:ticketId — "that's all I could buy". The money ran out (or the store ran
+// out), so the request is closed with what was bought so far and a reason the PM can read.
+// Resolving goes through the same transition log as any other resolve, so the usual
+// ticket notifications fire.
+router.post("/close-short/:ticketId", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
+  try {
+    const ticketId = String(req.params.ticketId).toLowerCase();
+    if (!UUID_PATTERN.test(ticketId)) throw httpError(400, "ticketId must be a UUID");
+    if (req.user.role === "Site Manager") throw httpError(403, "Only the Purchaser can close a request short");
+    const reason = validateCloseShortReason(req.body?.reason);
+
+    await withTransaction(async (client) => {
+      const scope = ticketScope(req.user);
+      const found = await client.query(
+        `SELECT t.ticketid
+           FROM tickets t
+           JOIN projects p ON p.projectid = t.projectid
+          WHERE ${scope.clause}
+            AND t.ticketid = $${scope.params.length + 1}
+            AND t.tickettype = 'Material Request'
+            AND t.status = 'Acknowledged'
+            FOR UPDATE OF t`,
+        [...scope.params, ticketId]
+      );
+      if (found.rowCount === 0) throw httpError(404, "That request is not open, or it is not yours");
+
+      assertLegalTransition("Acknowledged", "Resolved");
+      await client.query(
+        `UPDATE tickets
+            SET status = 'Resolved', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW(),
+                closedshortreason = $3
+          WHERE ticketId = $2`,
+        [req.user.id, ticketId, reason]
+      );
+      await logTransition(client, {
+        ticketId,
+        fromStatus: "Acknowledged",
+        toStatus: "Resolved",
+        changedBy: req.user.id,
+      });
+    });
+
+    res.json({ ticketID: ticketId, status: "Resolved", closedShortReason: reason });
   } catch (error) {
     next(error);
   }

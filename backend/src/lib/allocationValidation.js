@@ -66,6 +66,17 @@ function optionalText(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+// "That's all I could buy": the Purchaser closes a part-bought request and says why.
+const CLOSE_SHORT_REASON_MAX = 300;
+function validateCloseShortReason(value) {
+  const reason = optionalText(value);
+  if (!reason) throw httpError(400, "A short reason is required to close a request");
+  if (reason.length > CLOSE_SHORT_REASON_MAX) {
+    throw httpError(400, `The reason must be ${CLOSE_SHORT_REASON_MAX} characters or fewer`);
+  }
+  return reason;
+}
+
 // Manuscript UTC-003 / UTC-004.
 // allocations: [{ amount }] in pesos. receiptTotal: pesos.
 // Returns { valid: true } or { valid: false, error }. Never throws.
@@ -204,6 +215,8 @@ function validateAllocationBody(body = {}) {
     tin: optionalText(body.tin),
     birPermitNumber: optionalText(body.birPermitNumber),
     birNumber: optionalText(body.birNumber),
+    // The Purchaser's short reason for going over (extra quantity, spending past the allowance).
+    note: optionalText(body.note)?.slice(0, 500) ?? null,
     ...plan,
   };
 }
@@ -219,4 +232,5 @@ module.exports = {
   parseAllocationLines,
   validatePlanInput,
   validateAllocationBody,
+  validateCloseShortReason,
 };

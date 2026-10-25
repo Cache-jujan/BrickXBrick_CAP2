@@ -56,11 +56,51 @@ test("45 bags: Bravo is partly filled and stays open", () => {
   assert.equal(bravo.resolvesTicket, false);
 });
 
-test("excess: 70 bags leave 10 bags (₱2,800) uncovered and block submit", () => {
+test("excess: 70 bags still submit; the 10 extra bags (₱2,800) ride on the last request and are reported", () => {
   const result = plan([cement(70, 19600)]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(describePlanProblems(result), []);
+  assert.equal(result.extras.length, 1);
+  assert.deepEqual(
+    { quantityH: result.extras[0].quantityH, amountCents: result.extras[0].amountCents, ticketID: result.extras[0].ticketID },
+    { quantityH: 1000, amountCents: 280000, ticketID: CHARLIE }
+  );
+  // Money still adds up: every peso of the receipt sits on a portion.
+  assert.equal(result.allocatedCents, result.linesCents);
+  const charlie = result.portions.find((p) => p.ticketID === CHARLIE);
+  assert.equal(charlie.quantityH, 2000); // 10 it wanted + 10 extra
+  assert.equal(charlie.extraH, 1000);
+  assert.equal(charlie.remainingAfterH, 0);
+  assert.equal(charlie.resolvesTicket, true);
+  assert.deepEqual(result.warnings, [{ type: "OVER_QUANTITY", ticketID: CHARLIE, quantityH: 1000 }]);
+});
+
+test("a receipt that matches no request at all still cannot be submitted", () => {
+  const result = plan([{ description: "Rebar 10mm", quantity: 5, amount: 1000 }]);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.uncovered, [{ lineIndex: 0, description: "Portland cement 40kg", quantityH: 1000, amountCents: 280000 }]);
-  assert.match(describePlanProblems(result)[0], /No open request for 10 more of "Portland cement 40kg"/);
+  assert.equal(result.unmatched.length, 1);
+});
+
+test("over the budget but inside the allowance is a quiet warning; beyond it needs a reason", () => {
+  const tickets = cementTickets();
+  tickets.find((t) => t.ticketID === ALPHA).remainingBudget = "5800.00"; // spends 6,100: 5% over
+  tickets.find((t) => t.ticketID === ALPHA).budgetAllowancePct = 10;
+  const quiet = plan([cement(60, 16800), delivery], tickets);
+  const alpha = quiet.portions.find((p) => p.ticketID === ALPHA);
+  assert.equal(alpha.overBudget, true);
+  assert.equal(alpha.overAllowance, false);
+
+  tickets.find((t) => t.ticketID === ALPHA).remainingBudget = "5000.00"; // 22% over
+  const loud = plan([cement(60, 16800), delivery], tickets);
+  assert.equal(loud.portions.find((p) => p.ticketID === ALPHA).overAllowance, true);
+});
+
+test("allowance defaults to 10% when the project has none set", () => {
+  const tickets = cementTickets();
+  tickets.find((t) => t.ticketID === ALPHA).remainingBudget = "5500.00"; // 6,100 is 10.9% over
+  assert.equal(plan([cement(60, 16800), delivery], tickets).portions.find((p) => p.ticketID === ALPHA).overAllowance, true);
+  tickets.find((t) => t.ticketID === ALPHA).budgetAllowancePct = 15;
+  assert.equal(plan([cement(60, 16800), delivery], tickets).portions.find((p) => p.ticketID === ALPHA).overAllowance, false);
 });
 
 test("FIFO order uses createdAt, then ticketID to break ties", () => {
@@ -128,11 +168,11 @@ test("a line without a quantity is rejected with 400", () => {
   );
 });
 
-test("only one portion gives ok = false (use the F6 flow instead)", () => {
+test("a receipt that covers a single request is a valid plan", () => {
   const result = plan([cement(20, 5600)]);
-  assert.equal(result.ok, false);
+  assert.equal(result.ok, true);
   assert.equal(result.portions.length, 1);
-  assert.deepEqual(describePlanProblems(result), ["This receipt covers one request. Submit it from that request instead."]);
+  assert.deepEqual(describePlanProblems(result), []);
 });
 
 test("two requests from the SAME project are two portions and allowed", () => {
@@ -157,7 +197,7 @@ test("over-budget portions produce a warning but do not block the plan", () => {
   const result = plan([cement(60, 16800), delivery], tickets);
   assert.equal(result.ok, true);
   assert.deepEqual(result.warnings, [
-    { type: "OVER_BUDGET", ticketID: ALPHA, amountCents: 610000, remainingBudgetCents: 500000 },
+    { type: "OVER_BUDGET", ticketID: ALPHA, amountCents: 610000, remainingBudgetCents: 500000, overAllowance: true },
   ]);
   assert.equal(result.portions[0].overBudget, true);
   assert.equal(result.portions[1].overBudget, false); // no budget given: not checked
@@ -168,3 +208,25 @@ test("default matcher is F9's matchesMaterial (no fake passed)", () => {
   assert.equal(result.ok, true);
   assert.equal(result.portions.length, 3);
 });
+
+test("the PM note names what the system noticed and keeps the Purchaser's own words", () => {
+  const { submitNoteFor } = require("../src/lib/allocationPlan");
+  assert.equal(submitNoteFor({ extraH: 0, overAllowance: false }, null), null);
+  assert.equal(
+    submitNoteFor({ extraH: 1000, materialType: "cement", overAllowance: false }, "Store had a promo"),
+    "Bought 10 more cement than requested. Purchaser's reason: Store had a promo"
+  );
+  assert.match(
+    submitNoteFor({ extraH: 0, overAllowance: true, amountCents: 610000, remainingBudgetCents: 500000, allowancePct: 10 }, null),
+    /Spent ₱6100.00 with ₱5000.00 left, beyond the 10% allowance./
+  );
+});
+
+test("closing a request short needs a reason of reasonable length", () => {
+  const { validateCloseShortReason } = require("../src/lib/allocationValidation");
+  assert.equal(validateCloseShortReason("  Budget ran out  "), "Budget ran out");
+  assert.throws(() => validateCloseShortReason("   "), (e) => e.status === 400);
+  assert.throws(() => validateCloseShortReason(undefined), (e) => e.status === 400);
+  assert.throws(() => validateCloseShortReason("x".repeat(301)), (e) => e.status === 400);
+});
+
