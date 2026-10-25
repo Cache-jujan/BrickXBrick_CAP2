@@ -4,31 +4,40 @@
 .psg-group { margin-bottom: var(--space-4); }
 .psg-type { margin: 0 0 var(--space-2); font-size: var(--text-sm); font-weight: 650; color: var(--color-ink-soft); }
 
-.psg-row { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.psg-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--space-4); }
 
+/* One card per choice. The whole card is the button; a brick tick marks the chosen one. */
 .psg-tile {
-  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1);
-  width: 160px; padding: var(--space-2); font: inherit; text-align: left; cursor: pointer;
-  background: transparent; border: 2px solid transparent; border-radius: var(--radius-md);
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1);
+  min-width: 0; padding: var(--space-3); font: inherit; text-align: left; cursor: pointer;
+  background: var(--color-surface); border: 2px solid var(--color-border); border-radius: var(--radius-lg);
+  transition: border-color var(--duration, 0.15s) var(--ease, ease), box-shadow var(--duration, 0.15s) var(--ease, ease);
 }
-.psg-tile:hover:not(:disabled) { background: var(--color-surface-muted); }
+.psg-tile:hover:not(:disabled) { border-color: var(--color-border-strong); box-shadow: 0 4px 12px rgba(49, 43, 35, 0.08); }
 .psg-tile:focus-visible { outline: 2px solid var(--color-brick); outline-offset: 2px; }
 .psg-tile:disabled { opacity: 0.5; cursor: not-allowed; }
-.psg-tile-selected { border-color: var(--color-brick); background: var(--color-brick-tint); }
-.psg-tile-selected:hover:not(:disabled) { background: var(--color-brick-tint); }
+.psg-tile-selected, .psg-tile-selected:hover:not(:disabled) { border-color: var(--color-brick); background: var(--color-brick-tint); box-shadow: 0 0 0 1px var(--color-brick); }
+
+.psg-check {
+  position: absolute; top: var(--space-3); right: var(--space-3); display: grid; place-content: center;
+  width: 24px; height: 24px; border-radius: 50%; font-size: 14px; font-weight: 700; line-height: 1;
+  color: #fff; background: var(--color-brick); opacity: 0; transform: scale(0.6);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.psg-tile-selected .psg-check { opacity: 1; transform: scale(1); }
 
 .psg-thumb {
   display: flex; align-items: center; justify-content: center;
-  width: 100%; aspect-ratio: 3 / 4; padding: var(--space-3);
-  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm, 4px);
-  box-shadow: 0 2px 6px rgba(49, 43, 35, 0.08);
+  width: 100%; aspect-ratio: 4 / 3; margin-bottom: var(--space-2); padding: var(--space-4);
+  background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-md);
 }
+.psg-tile-selected .psg-thumb { background: var(--color-surface); }
 .psg-plus { font-size: 3rem; line-height: 1; color: var(--color-brick); font-weight: 300; }
 .psg-lines { display: flex; flex-direction: column; gap: 7px; width: 100%; align-self: flex-start; }
 .psg-lines i { display: block; height: 5px; border-radius: 3px; background: var(--color-border-strong); }
 .psg-lines i:first-child { height: 8px; width: 60% !important; background: var(--color-ink-faint); margin-bottom: 4px; }
 .psg-lines-stacked { transform: rotate(-2deg); }
-.psg-tile-title { font-weight: 650; font-size: var(--text-sm); color: var(--color-ink); }
+.psg-tile-title { font-weight: 650; font-size: var(--text-base); color: var(--color-ink); }
 .psg-tile-caption { font-size: var(--text-xs); color: var(--color-ink-soft); }
 
 .psg-copy { padding: var(--space-4); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
@@ -41,8 +50,16 @@
 .psg-none { padding: var(--space-2); font-size: var(--text-sm); color: var(--color-ink-soft); }
 .psg-note { margin: 0; font-size: var(--text-xs); color: var(--color-ink-soft); }
 
-.psg-actions { display: flex; justify-content: flex-end; gap: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+/* Next stays on screen while scrolling, with what is chosen next to it. */
+.psg-actions {
+  position: sticky; bottom: var(--space-3); z-index: 2;
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 -4px 12px rgba(48, 47, 40, 0.06);
+}
+.psg-picked { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--color-ink-soft); }
 
 @media (max-width: 600px) {
-  .psg-tile { width: calc(50% - var(--space-2)); }
+  .psg-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  .psg-picked { display: none; }
 }
