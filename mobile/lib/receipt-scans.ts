@@ -16,6 +16,13 @@ export type ScanContext = {
   ticket: SelectedTicket | null;
   fileName: string;
   fileType: "image" | "pdf";
+  // The Purchaser scanned this for certain projects: only their requests are matched.
+  // Left out when the receipt may match any project.
+  projectIds?: string[];
+  // The names to show for those projects ("Scanning for ...") without another lookup.
+  projectNames?: string[];
+  // "trip": a gas / toll / delivery receipt with no request; it ends on the Trip cost screen.
+  kind?: "trip";
 };
 
 export type ScanStatus = "Scanning" | "Ready" | "Failed";

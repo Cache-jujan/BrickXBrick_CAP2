@@ -489,9 +489,11 @@ router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     try {
         const result = await query(
             `SELECT t.*,
+                    p.name AS projectName,
                     COALESCE(ec.expenseCount, 0) AS expenseCount,
                     COALESCE(ec.expenseTotal, 0) AS expenseTotal
                FROM tickets t
+               JOIN projects p ON p.projectId = t.projectId
                LEFT JOIN LATERAL (
                    SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal
                      FROM expenses e

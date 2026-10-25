@@ -4,22 +4,23 @@ import { router, usePathname, type Href } from "expo-router";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
+import { useRejectedBadge } from "@/lib/history-badge";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useLocale } from "@/lib/i18n-context";
 
 type Tab = {
   label: string;
   href: Href;
-  icon: "list.clipboard.fill" | "camera.fill" | "ticket.fill" | "gearshape.fill";
+  icon: "list.clipboard.fill" | "camera.fill" | "receipt" | "ticket.fill";
   // Pathnames that should light this tab up.
   match: string[];
 };
 
 const TABS: Tab[] = [
   { label: "mobile.tasks_nav", href: "/site-manager" as Href, icon: "list.clipboard.fill", match: ["/site-manager"] },
-  { label: "mobile.receipt_nav", href: "/(tabs)" as Href, icon: "camera.fill", match: ["/", "/index"] },
   { label: "mobile.requests", href: "/site-manager/my-requests" as Href, icon: "ticket.fill", match: ["/site-manager/my-requests"] },
-  { label: "settings.title", href: "/settings" as Href, icon: "gearshape.fill", match: ["/settings"] },
+  { label: "mobile.receipt_nav", href: "/(tabs)" as Href, icon: "camera.fill", match: ["/", "/index"] },
+  { label: "hist.tab", href: "/history" as Href, icon: "receipt", match: ["/history"] },
 ];
 
 // Bottom navigation for Site Manager screens. It renders nothing for any other
@@ -29,6 +30,7 @@ export function SmBottomBar() {
   const session = getSession();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const rejectedBadge = useRejectedBadge();
 
   if (session?.user.role !== "Site Manager") return null;
 
@@ -50,6 +52,9 @@ export function SmBottomBar() {
             >
               <IconSymbol name={tab.icon} size={22} color={active ? "#FFFFFF" : "#CFC6BA"} />
               {active ? <Text style={styles.label} numberOfLines={1}>{t(tab.label)}</Text> : null}
+              {tab.icon === "receipt" && rejectedBadge > 0 ? (
+                <View style={styles.badge}><Text style={styles.badgeText}>{rejectedBadge}</Text></View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -66,4 +71,6 @@ const styles = StyleSheet.create({
   item: { alignItems: "center", borderRadius: 26, flexDirection: "row", gap: 6, height: MIN_TAP + 4, justifyContent: "center", minWidth: MIN_TAP + 4, paddingHorizontal: 12 },
   itemActive: { backgroundColor: COLORS.primary, paddingHorizontal: 16 },
   label: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 13 },
+  badge: { position: "absolute", top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.errorText },
+  badgeText: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 10 },
 });

@@ -452,3 +452,57 @@ test("T2c-L3: BOM-linked ticket with empty expense lineitems = mismatch", async 
 
   assert.equal(result, true, "Should flag mismatch when expense has no line items but ticket has bomItemID");
 });
+
+test("a smaller quantity is fine when the expense is a portion of an allocation", async () => {
+  const screening = createFraudScreening({
+    query: async (sql) =>
+      /receiptallocations/i.test(sql)
+        ? { rowCount: 1, rows: [{ "?column?": 1 }] }
+        : { rowCount: 1, rows: [{ materialtype: "Cement", quantity: "50", vendorname: "Padeena" }] },
+  });
+
+  const result = await screening.checkTicketMismatch({
+    expenseid: "e1",
+    ticketid: "t1",
+    quantity: 30,
+    vendorname: "Padeena",
+    lineitems: [{ description: "Cement" }],
+  });
+
+  assert.equal(result, false);
+});
+
+test("a smaller quantity is still a mismatch for a plain expense", async () => {
+  const screening = createFraudScreening({
+    query: async (sql) =>
+      /receiptallocations/i.test(sql)
+        ? { rowCount: 0, rows: [] }
+        : { rowCount: 1, rows: [{ materialtype: "Cement", quantity: "50", vendorname: "Padeena" }] },
+  });
+
+  const result = await screening.checkTicketMismatch({
+    expenseid: "e1",
+    ticketid: "t1",
+    quantity: 30,
+    vendorname: "Padeena",
+    lineitems: [{ description: "Cement" }],
+  });
+
+  assert.equal(result, true);
+});
+
+test("more than requested is a mismatch even for an allocation portion", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [{ materialtype: "Cement", quantity: "50", vendorname: "Padeena" }] }),
+  });
+
+  const result = await screening.checkTicketMismatch({
+    expenseid: "e1",
+    ticketid: "t1",
+    quantity: 60,
+    vendorname: "Padeena",
+    lineitems: [{ description: "Cement" }],
+  });
+
+  assert.equal(result, true);
+});

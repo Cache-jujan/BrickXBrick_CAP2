@@ -41,7 +41,7 @@ export function ExpenseActions() {
       setChoices(
         ticketResult.data
           .filter((t) => t.status === "Acknowledged")
-          .map((ticket) => ({ ticket, projectName: names.get(ticket.projectid) ?? t("mr.unknown_project") }))
+          .map((ticket) => ({ ticket, projectName: ticket.projectname ?? names.get(ticket.projectid) ?? t("mr.unknown_project") }))
       );
     } catch (err) {
       setError(plainError(err, t("ea.err_load"), t));
