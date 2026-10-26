@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import "./DocumentChecklist.css";
 
 // Which tasks a template/past project starts with. Used on the second screen of
@@ -8,8 +8,9 @@ import "./DocumentChecklist.css";
 // "only if it applies" ones start unticked). All other template tasks are always
 // created. Copy: every task has a checkbox, all ticked.
 //
-// selection: { included: Set<id>, excluded: Set<id> }  (task ids from the API)
-export const EMPTY_SELECTION = { included: new Set(), excluded: new Set() };
+// selection: { included: Set<id>, excluded: Set<id>, others: string[] }
+// (task ids from the API; others = documents the GM typed under "Others")
+export const EMPTY_SELECTION = { included: new Set(), excluded: new Set(), others: [] };
 
 export function isChecked(task, selection) {
   if (selection.excluded.has(task.id)) return false;
@@ -27,13 +28,16 @@ export function withChecked(selection, task, checked) {
   } else {
     included.delete(task.id);
   }
-  return { included, excluded };
+  return { ...selection, included, excluded };
 }
 
 // The part of the create/preview request that carries the GM's choices.
 export function selectionToStart(base, selection) {
   const out = { ...base, excludeTaskIds: [...selection.excluded] };
-  if (base.mode === "template") out.includeTaskIds = [...selection.included];
+  if (base.mode === "template") {
+    out.includeTaskIds = [...selection.included];
+    out.otherDocuments = selection.others || [];
+  }
   return out;
 }
 
@@ -136,7 +140,57 @@ export function DocumentChecklist({ source, selection, onChange }) {
           </ul>
         </fieldset>
       )}
+
+      <OtherDocuments
+        others={selection.others || []}
+        onChange={(others) => onChange({ ...selection, others })}
+      />
     </section>
+  );
+}
+
+// "Others": a document this list doesn't have. Each one becomes a task like the ticked ones.
+function OtherDocuments({ others, onChange }) {
+  const [draft, setDraft] = useState("");
+  const name = draft.trim();
+  const canAdd = name.length > 0 && name.length <= 120 && others.length < 10 && !others.includes(name);
+
+  function add() {
+    if (!canAdd) return;
+    onChange([...others, name]);
+    setDraft("");
+  }
+
+  return (
+    <fieldset className="dc-group">
+      <legend className="dc-legend dc-legend-bar">
+        <strong>Others</strong>
+      </legend>
+      <p className="dc-sub">Need a document that isn't listed? Type its name and add it.</p>
+      <div className="dc-other-add">
+        <input
+          className="dc-other-input"
+          type="text"
+          value={draft}
+          maxLength={120}
+          placeholder="e.g. Barangay clearance"
+          aria-label="Other document name"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        />
+        <button type="button" className="dc-link" onClick={add} disabled={!canAdd}>Add</button>
+      </div>
+      <ul className="dc-list">
+        {others.map((o) => (
+          <li key={o} className="dc-row">
+            <span className="dc-card dc-card-on">
+              <span className="dc-text"><span className="dc-name">{o}</span></span>
+              <button type="button" className="dc-link" onClick={() => onChange(others.filter((x) => x !== o))}>Remove</button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </fieldset>
   );
 }
 

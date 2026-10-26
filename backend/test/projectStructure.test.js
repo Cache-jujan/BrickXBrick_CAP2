@@ -86,6 +86,23 @@ test("the GM can untick a document and tick an optional one", () => {
   assert.deepEqual(out.milestones[0].tasks.map((t) => t.name), ["Scope", "Fence permit"]);
 });
 
+test("'Others' documents are added as tasks next to the permit documents", () => {
+  const out = buildStructure(source(), req({ otherDocuments: ["Barangay clearance"] }), DATES);
+  assert.deepEqual(out.milestones[0].tasks.map((t) => [t.name, t.handledBy, t.requirementCode]), [
+    ["Scope", "GM", null],
+    ["Electrical permit", "PM", "BP-ELEC"],
+    ["Barangay clearance", "PM", null],
+  ]);
+  assert.equal(out.counts.tasks, 4);
+});
+
+test("'Others' names are trimmed, de-duplicated and limited", () => {
+  const ok = parseStartRequest({ mode: "template", templateId: ID(1), otherDocuments: [" A ", "A", "", "B"] });
+  assert.deepEqual(ok.otherDocuments, ["A", "B"]);
+  assert.throws(() => parseStartRequest({ mode: "template", templateId: ID(1), otherDocuments: "A" }), /at most/);
+  assert.throws(() => parseStartRequest({ mode: "template", templateId: ID(1), otherDocuments: ["x".repeat(121)] }), /characters/);
+});
+
 test("only permit documents can be unticked in a template", () => {
   assert.throws(() => buildStructure(source(), req({ excludeTaskIds: new Set([ID(11)]) }), DATES), /can't be removed/);
   assert.throws(() => buildStructure(source(), req({ excludeTaskIds: new Set([ID(777)]) }), DATES), /isn't part of/);

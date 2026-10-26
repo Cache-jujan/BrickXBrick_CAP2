@@ -7,6 +7,7 @@ import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
 import { ManagerPicker } from "./ManagerPicker";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 
 export const EMPTY_PROJECT_FORM = {
   name: "",
@@ -130,7 +131,7 @@ export function ProjectForm({
     const errors = {};
     if (!form.name.trim()) errors.name = t("form.err_name");
     if (!form.clientName.trim()) errors.clientName = t("form.err_client");
-    if (form.budget === "" || Number(form.budget) < 0) errors.budget = t("form.err_budget");
+    if (form.budget === "" || Number.isNaN(Number(form.budget)) || Number(form.budget) < 0) errors.budget = t("form.err_budget");
     if (!form.projectType) errors.projectType = t("form.err_type");
     if (!form.municipality.trim()) errors.municipality = t("form.err_municipality");
     if (!form.startDate) errors.startDate = t("form.err_start");
@@ -274,14 +275,14 @@ export function ProjectForm({
           <Field
             label={t("form.target_budget")}
             required
-            type="number"
-            min="0"
-            step="any"
-            placeholder="0"
-            value={form.budget}
+            type="text"
+            inputMode="decimal"
+            prefix="₱"
+            placeholder="0.00"
+            value={formatAmountInput(form.budget)}
             error={fieldErrors.budget}
             disabled={budgetLocked}
-            onChange={(e) => updateField("budget", e.target.value)}
+            onChange={(e) => updateField("budget", parseAmountInput(e.target.value))}
           />
           <p className="field-hint">
             {budgetLocked ? t("form.budget_locked") : t("form.budget_auto")}
