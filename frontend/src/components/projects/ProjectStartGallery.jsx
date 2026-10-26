@@ -29,6 +29,8 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       : sources;
   }, [sources, search]);
 
+  const pickedTemplate = mode === "template" ? templates.find((t) => t.templateId === value.templateId) : null;
+
   const pickedLabel =
     mode === "template" ? `Selected: ${value.name}`
     : mode === "copy" ? (value?.sourceProjectId ? `Selected: ${value.name}` : "Choose a project to copy")
@@ -103,10 +105,10 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
         </section>
       )}
 
-      {groups.length > 0 && (
-        <section aria-labelledby="psg-templates">
-          <h2 id="psg-templates" className="psg-heading">Templates</h2>
-          {groups.map(([type, list]) => (
+      <section aria-labelledby="psg-templates">
+        <h2 id="psg-templates" className="psg-heading">Templates</h2>
+        {groups.length === 0 && <p className="psg-none">No templates are available yet.</p>}
+        {groups.map(([type, list]) => (
             <div key={type} className="psg-group">
               <h3 className="psg-type">{type}</h3>
               <div className="psg-row" role="radiogroup" aria-label={type}>
@@ -123,9 +125,14 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
                 ))}
               </div>
             </div>
-          ))}
-        </section>
-      )}
+        ))}
+        {pickedTemplate && (
+          <div className="psg-describe" role="status">
+            <strong>{pickedTemplate.projectType} · {pickedTemplate.size === "custom" ? "Custom" : pickedTemplate.size === "small" ? "Small" : "Large"}</strong>
+            <p>{pickedTemplate.description || "No description has been written for this template yet."}</p>
+          </div>
+        )}
+      </section>
 
       <div className="psg-actions">
         <span className="psg-picked">{pickedLabel}</span>

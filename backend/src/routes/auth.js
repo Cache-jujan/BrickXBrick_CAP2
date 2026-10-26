@@ -27,7 +27,7 @@ router.post("/login", async (req, res) => {
  
   try {
     const userResult = await query(
-      `SELECT userid, name, email, role, status, lockoutuntil, failedloginattempts
+      `SELECT userid, name, username, email, role, status, lockoutuntil, failedloginattempts
        FROM users WHERE email = $1`,
       [email]
     );
@@ -95,6 +95,7 @@ router.post("/login", async (req, res) => {
       user: {
         id: user.userid,
         name: user.name,
+        username: user.username,
         email: user.email,
         role: user.role,
         // false until the current Terms of Use / Privacy Notice is accepted

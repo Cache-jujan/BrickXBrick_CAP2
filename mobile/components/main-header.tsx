@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { BrandMark } from "@/components/brand-mark";
+import { LanguageButton } from "@/components/language-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { getSession } from "@/lib/auth";
@@ -16,7 +17,7 @@ type Props = {
   hideAvatar?: boolean;
 };
 
-function initialsOf(name: string) {
+export function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "U";
 }
@@ -39,6 +40,7 @@ export function MainHeader({ title, tagline, hideAvatar }: Props) {
           </View>
         </View>
         <View style={styles.actions}>
+          <LanguageButton />
           <NotificationBell color={COLORS.heading} />
           {hideAvatar ? null : (
             <Pressable
@@ -64,7 +66,7 @@ const styles = StyleSheet.create({
   brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 10 },
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
   tagline: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 11, marginTop: 1 },
-  actions: { alignItems: "center", flexDirection: "row", gap: 10 },
+  actions: { alignItems: "center", flexDirection: "row", gap: 4 },
   avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: MIN_TAP, justifyContent: "center", width: MIN_TAP },
   avatarText: { color: "#FFFFFF", fontFamily: FONT.extrabold, fontSize: 15 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 28, letterSpacing: -0.5, marginTop: 14 },

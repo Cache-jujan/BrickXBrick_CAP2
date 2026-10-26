@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { BackButton } from "@/components/back-button";
+import { LanguageButton } from "@/components/language-button";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -35,7 +36,10 @@ export function FlowHeader({ title, caption, hideBack, onBack, fallback, step, r
           {caption ? <Text style={styles.caption} numberOfLines={1}>{caption}</Text> : null}
           <Text style={bar ? styles.barTitle : styles.title} numberOfLines={bar ? 1 : 2}>{title}</Text>
         </View>
-        {right ? <View style={styles.right}>{right}</View> : null}
+        <View style={styles.right}>
+          <LanguageButton />
+          {right}
+        </View>
       </View>
       {step ? (
         <View style={styles.progress} accessibilityLabel={t("mx.step_n", { current: step.current, total: step.total })}>

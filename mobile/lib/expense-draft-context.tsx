@@ -25,7 +25,7 @@ type ResumeScan = { scanID: string; mode: DraftMode; ticket: SelectedTicket | nu
 type ResubmitStart = Resubmit & { ticket: SelectedTicket | null; file: FileState; ocrResult: OcrResult; category: Category };
 type Ctx = {
   draft: ExpenseDraft; setTicket: (t: SelectedTicket) => void; setFile: (f: FileState) => void;
-  setOcrResult: (r: OcrResult) => void; setCategory: (c: Category) => void; setNotes: (n: string) => void; reset: () => void;
+  setOcrResult: (r: OcrResult) => void; setCategory: (c: Category) => void; setNotes: (n: string) => void; setScope: (s: Scope) => void; reset: () => void;
   startSplit: (options?: StartOptions) => void; setScanID: (id: string | null) => void; resumeScan: (scan: ResumeScan) => void;
   startResubmit: (draft: ResubmitStart) => void;
 };
@@ -43,6 +43,8 @@ export function ExpenseDraftProvider({ children }: { children: ReactNode }) {
       setOcrResult: (ocrResult) => setDraft((d) => ({ ...d, ocrResult })),
       setCategory: (category) => setDraft((d) => ({ ...d, category })),
       setNotes: (notes) => setDraft((d) => ({ ...d, notes })),
+      // The projects picked after the photo was taken (null = it may match any project).
+      setScope: (scope) => setDraft((d) => ({ ...d, scope })),
       reset: () => setDraft(EMPTY),
       // Fresh draft in split mode, with no ticket. A scope limits the matching to those projects.
       startSplit: (options = null) =>

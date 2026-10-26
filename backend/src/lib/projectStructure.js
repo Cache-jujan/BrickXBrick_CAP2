@@ -66,10 +66,26 @@ function idList(value, field) {
   return [...new Set(value)];
 }
 
+const MAX_OTHER_DOCUMENTS = 10;
+const MAX_DOCUMENT_NAME = 120;
+
+// The "Others" documents the GM typed in: trimmed, blanks and repeats dropped.
+function nameList(value, field) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > MAX_OTHER_DOCUMENTS || !value.every((v) => typeof v === "string")) {
+    throw httpError(400, `${field} must be a list of at most ${MAX_OTHER_DOCUMENTS} names`);
+  }
+  const names = value.map((v) => v.trim()).filter(Boolean);
+  if (names.some((n) => n.length > MAX_DOCUMENT_NAME)) {
+    throw httpError(400, `Each of ${field} must be at most ${MAX_DOCUMENT_NAME} characters`);
+  }
+  return [...new Set(names)];
+}
+
 /**
  * Reads body.start. Missing = a blank sheet, so existing clients keep working.
  *   { mode: "blank" }
- *   { mode: "template", templateId, includeTaskIds?, excludeTaskIds? }
+ *   { mode: "template", templateId, includeTaskIds?, excludeTaskIds?, otherDocuments? }
  *   { mode: "copy", sourceProjectId, excludeTaskIds? }
  */
 function parseStartRequest(start) {
@@ -86,6 +102,7 @@ function parseStartRequest(start) {
       templateId: start.templateId,
       includeTaskIds: new Set(idList(start.includeTaskIds, "includeTaskIds")),
       excludeTaskIds,
+      otherDocuments: nameList(start.otherDocuments, "otherDocuments"),
     };
   }
   if (!isUUID(start.sourceProjectId)) throw httpError(400, "Choose the project to copy");
@@ -233,9 +250,19 @@ function buildStructure(source, request, project) {
   const omittedMilestones = [];
   const milestones = [];
 
+  // "Others" documents join the milestone that holds the permit documents.
+  const others = request.otherDocuments || [];
+  const otherHome = others.length ? source.milestones.find((m) => m.tasks.some((t) => t.selectable)) : null;
+
   for (const m of source.milestones) {
     const anchor = anchorFor(m.phase, project);
     const kept = m.tasks.filter((t) => isTaskIncluded(t, request));
+    if (m === otherHome) {
+      const lastOffset = Math.max(m.offset, ...m.tasks.map((t) => t.offset));
+      for (const name of others) {
+        kept.push({ id: null, name, handledBy: "PM", requirementCode: null, offset: lastOffset });
+      }
+    }
     if (kept.length === 0) {
       omittedMilestones.push(m.name);
       continue;

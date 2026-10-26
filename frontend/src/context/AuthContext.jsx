@@ -59,6 +59,11 @@ export function AuthProvider({ children }) {
     setUser((current) => (current ? { ...current, termsAccepted: true, termsVersion: version } : current));
   }
 
+  // Called after the user saves a new username (pages/Account/AccountPage.jsx).
+  function markUsernameChanged(username, name) {
+    setUser((current) => (current ? { ...current, username, name } : current));
+  }
+
   function logout() {
     localStorage.removeItem("bxb_token");
     setUser(null);
@@ -66,7 +71,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, status, login, logout, markTermsAccepted }),
+    () => ({ user, status, login, logout, markTermsAccepted, markUsernameChanged }),
     [user, status]
   );
 
