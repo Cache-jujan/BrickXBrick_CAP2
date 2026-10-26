@@ -8,6 +8,7 @@ import { listPendingTickets } from "../../api/ticketsApi";
 import { listProgressSubmissions } from "../../api/taskProgressApi";
 import { getAttentionMilestones } from "../../api/milestonesApi";
 import { extractErrorMessage } from "../../api/client";
+import { AdminDashboardPage } from "./AdminDashboardPage";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
@@ -32,10 +33,9 @@ const RANGES = [3, 6, 12];
 export function DashboardPage() {
   const { user } = useAuth();
 
-  // Admin has no dashboard of its own — its only web job is account
-  // management, so send it straight to User Accounts.
+  // The System Administrator's dashboard: account and record-protection counts.
   if (user.role === "System Administrator") {
-    return <Navigate to="/admin/users" replace />;
+    return <AdminDashboardPage />;
   }
   if (WEB_ROLES.includes(user.role)) {
     return <ProjectsOverview role={user.role} name={user.name} userId={user.id} />;

@@ -6,7 +6,6 @@ import {
   deactivateUser,
   unlockUser,
   sendPasswordEmail,
-  getAdminOverview,
   VALID_ROLES,
 } from "../../api/adminApi";
 import { extractErrorMessage } from "../../api/client";
@@ -16,7 +15,6 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Banner } from "../../components/ui/Banner";
-import { AdminOverview } from "../../components/admin/AdminOverview";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./UserManagementPage.css";
 
@@ -28,8 +26,6 @@ export function UserManagementPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
-  const [overview, setOverview] = useState(null);
-  const [overviewError, setOverviewError] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -44,10 +40,6 @@ export function UserManagementPage() {
   async function reload() {
     setLoading(true);
     setListError("");
-    // The counts are a bonus: if they fail, the account list still works.
-    getAdminOverview()
-      .then((data) => { setOverview(data); setOverviewError(false); })
-      .catch(() => setOverviewError(true));
     try {
       setUsers(await listUsers());
     } catch (err) {
@@ -93,9 +85,6 @@ export function UserManagementPage() {
           {showForm ? t("common.cancel") : t("users.add")}
         </Button>
       </div>
-
-      {overview && <AdminOverview overview={overview} />}
-      {overviewError && !overview && <Banner tone="info" title={t("admin_overview.load_error")} />}
 
       {showForm && (
         <CreateUserForm

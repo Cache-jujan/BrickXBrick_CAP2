@@ -1900,7 +1900,8 @@
     "admin_overview.overdue": "Overdue blockchain records",
     "admin_overview.overdue_sub": "Over 72 hours · {count} waiting in total",
     "admin_overview.by_role": "Active accounts by role",
-    "admin_overview.load_error": "Could not load the overview."
+    "admin_overview.load_error": "Could not load the overview.",
+    "admin_overview.subtitle": "A quick look at accounts and record protection."
   },
   "ceb": {
     "language.name": "Pinulongan",
@@ -3803,7 +3804,8 @@
     "admin_overview.overdue": "Naulahing mga blockchain record",
     "admin_overview.overdue_sub": "Lapas sa 72 ka oras · {count} ang naghulat sa tanan",
     "admin_overview.by_role": "Aktibong mga account matag papel",
-    "admin_overview.load_error": "Wala ma-load ang pagsusi."
+    "admin_overview.load_error": "Wala ma-load ang pagsusi.",
+    "admin_overview.subtitle": "Mubo nga pagtan-aw sa mga account ug sa pagpanalipod sa mga rekord."
   },
   "fil": {
     "language.name": "Wika",
@@ -5706,6 +5708,7 @@
     "admin_overview.overdue": "Mga overdue na blockchain record",
     "admin_overview.overdue_sub": "Lampas 72 oras · {count} ang naghihintay sa kabuuan",
     "admin_overview.by_role": "Mga aktibong account ayon sa role",
-    "admin_overview.load_error": "Hindi ma-load ang pangkalahatang-tanaw."
+    "admin_overview.load_error": "Hindi ma-load ang pangkalahatang-tanaw.",
+    "admin_overview.subtitle": "Mabilis na tingin sa mga account at sa proteksyon ng mga talaan."
   }
 }
