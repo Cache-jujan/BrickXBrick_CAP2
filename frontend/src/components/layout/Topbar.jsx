@@ -286,6 +286,14 @@ export function Topbar({ onMenuClick }) {
                 </div>
                 <LanguageToggle variant="menu" />
                 <Link
+                  to="/account"
+                  className="topbar-menu-item"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {t("settings.account")}
+                </Link>
+                <Link
                   to="/legal"
                   className="topbar-menu-item"
                   role="menuitem"

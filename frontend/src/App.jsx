@@ -29,6 +29,7 @@ import { NotificationsPage } from "./pages/Notifications/NotificationsPage";
 import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
 import { SetPasswordPage } from "./pages/Auth/SetPasswordPage";
 import { LegalPage } from "./pages/Legal/LegalPage";
+import { AccountPage } from "./pages/Account/AccountPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
 import { MilestoneTimelinePreviewPage } from "./pages/Projects/MilestoneTimelinePreviewPage";
 import { LocaleProvider } from "./i18n/LocaleProvider";
@@ -85,6 +86,7 @@ export default function App() {
             {/* Every web role lands here (mobile-only roles never reach
                 AppShell's DashboardLayout at all — see MOBILE_ONLY_ROLES). */}
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/account" element={<AccountPage />} />
 
             <Route
               path="/tickets/new"
