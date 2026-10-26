@@ -6,6 +6,7 @@ const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { supabaseAnon } = require("../lib/supabaseAnon");
 const { setPasswordUrl } = require("../lib/passwordLink");
 const { findOpenWork, hasOpenWork, describeOpenWork } = require("../lib/userOpenWork");
+const { loadAdminOverview } = require("../lib/adminOverview");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
@@ -79,6 +80,16 @@ router.post("/", async (req, res) => {
   } catch (err) {
     if (authUserId) await supabaseAdmin.auth.admin.deleteUser(authUserId);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// OVERVIEW: counts for the top of the admin page (read-only).
+router.get("/overview", async (req, res) => {
+  try {
+    res.json(await loadAdminOverview());
+  } catch (err) {
+    console.error("Admin overview failed:", err.message);
+    res.status(500).json({ error: "Could not load the overview" });
   }
 });
 
