@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -10,21 +11,17 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
 import { BrandMark } from "@/components/brand-mark";
-import { useLocale, type AppLocale } from "@/lib/i18n-context";
-
-const LANGUAGE_CHIPS: { code: AppLocale; short: string; nameKey: string }[] = [
-  { code: "en", short: "EN", nameKey: "language.english" },
-  { code: "ceb", short: "CEB", nameKey: "language.bisaya" },
-  { code: "fil", short: "FIL", nameKey: "language.filipino" },
-];
+import { LanguageButton } from "@/components/language-button";
+import { useLocale } from "@/lib/i18n-context";
 
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 
 export default function LoginScreen() {
-  const { locale, setLanguage, t } = useLocale();
+  const { t } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   // Shown once when we got here because the saved sign-in expired.
   const [error, setError] = useState(() =>
     consumeSessionExpired()
@@ -48,6 +45,10 @@ export default function LoginScreen() {
             ? t("lg.need_email")
             : t("lg.need_password")
       );
+      return;
+    }
+    if (!agreed) {
+      setError(t("login.terms_required"));
       return;
     }
 
@@ -96,23 +97,7 @@ export default function LoginScreen() {
           <BrandMark size={34} />
           <Text style={styles.brandName}>Brick x Brick</Text>
         </View>
-        <View style={styles.languageRow} accessibilityRole="radiogroup">
-          {LANGUAGE_CHIPS.map((chip) => {
-            const selected = locale === chip.code;
-            return (
-              <Pressable
-                key={chip.code}
-                onPress={() => setLanguage(chip.code)}
-                style={[styles.languageButton, selected && styles.languageButtonOn]}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                accessibilityLabel={t(chip.nameKey)}
-              >
-                <Text style={[styles.languageButtonText, selected && styles.languageButtonTextOn]}>{chip.short}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <LanguageButton color={COLORS.primary} />
       </View>
 
       <View style={styles.heading}>
@@ -168,6 +153,25 @@ export default function LoginScreen() {
           <Text style={styles.forgotPasswordText}>{t("login.forgot")}</Text>
         </Pressable>
 
+        <View style={styles.termsRow}>
+          <Pressable
+            onPress={() => setAgreed((v) => !v)}
+            hitSlop={8}
+            style={[styles.checkbox, agreed && styles.checkboxOn]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreed }}
+            accessibilityLabel={`${t("login.terms_agree")} ${t("login.terms_link")}`}
+          >
+            {agreed ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
+          </Pressable>
+          <Text style={styles.termsText}>
+            {t("login.terms_agree")}{" "}
+            <Text style={styles.termsLink} accessibilityRole="link" onPress={() => router.push("/terms")}>
+              {t("login.terms_link")}
+            </Text>
+          </Text>
+        </View>
+
         {error ? (
           <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
             {error}
@@ -187,11 +191,6 @@ const styles = StyleSheet.create({
   watermark: { opacity: 0.07, position: "absolute", right: -90, top: 70 },
   brand: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 10 },
   brandMarkRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  languageRow: { flexDirection: "row", gap: 6 },
-  languageButton: { alignItems: "center", borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10 },
-  languageButtonOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  languageButtonText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 11 },
-  languageButtonTextOn: { color: "#FFFFFF" },
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
   heading: { marginTop: 56 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 38, letterSpacing: -1 },
@@ -204,7 +203,12 @@ const styles = StyleSheet.create({
   inputInRow: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 16, minHeight: 52, paddingHorizontal: 16 },
   showButton: { justifyContent: "center", minHeight: 52, paddingHorizontal: 16 },
   showPassword: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
-  forgotPasswordButton: { alignSelf: "flex-start", marginBottom: 22, marginTop: 14, minHeight: 32, justifyContent: "center" },
+  termsRow: { alignItems: "center", flexDirection: "row", gap: 12, marginBottom: 18 },
+  checkbox: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.primary, borderRadius: 7, borderWidth: 2, height: 26, justifyContent: "center", width: 26 },
+  checkboxOn: { backgroundColor: COLORS.primary },
+  termsText: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 14, lineHeight: 20 },
+  termsLink: { color: COLORS.primary, fontFamily: FONT.bold, textDecorationLine: "underline" },
+  forgotPasswordButton: { alignSelf: "flex-start", marginBottom: 14, marginTop: 14, minHeight: 32, justifyContent: "center" },
   forgotPasswordText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
   error: { backgroundColor: COLORS.errorFill, borderRadius: 10, color: COLORS.errorText, fontFamily: FONT.medium, fontSize: 13, lineHeight: 19, marginBottom: 14, padding: 12 },
   footer: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, marginTop: "auto", paddingTop: 28, textAlign: "center" },

@@ -438,6 +438,26 @@ async function readJson(res: Response, fallback: string) {
   return data;
 }
 
+// Everyone else sees you as "username.role"; `name` is that label.
+export async function updateUsername(username: string): Promise<{ id: string; name: string; username: string }> {
+  const res = await apiFetch(`${API_URL}/api/me/profile`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ username }),
+  });
+  return (await readJson(res, "Failed to save the username")).user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await apiFetch(`${API_URL}/api/me/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  // 204 has no body, so only read the error case.
+  if (!res.ok) await readJson(res, "Failed to change the password");
+}
+
 export type OpenRequest = {
   ticketID: string;
   projectID: string;

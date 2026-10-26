@@ -16,8 +16,8 @@ type Props = {
   onClose: () => void;
 };
 
-// Asks "which project is this receipt for?" before the camera opens. Shown only when the
-// To Buy list is not already filtered to one project.
+// Asks "which project is this receipt for?" once the photo is taken (app/expense/capture.tsx).
+// The app never guesses the project; it only skips this when the user has a single one.
 export function SnapProjectSheet({ visible, projects, onPick, onMultiple, onClose }: Props) {
   const { t } = useLocale();
   return (

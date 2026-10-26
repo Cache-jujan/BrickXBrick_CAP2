@@ -18,7 +18,6 @@ import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ProjectDropdown } from "@/components/project-dropdown";
-import { SnapProjectSheet } from "@/components/snap-project-sheet";
 import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
@@ -51,7 +50,6 @@ export function ToBuy() {
   const [view, setView] = useState<"store" | "project">("project");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // "Which project is this receipt for?" sheet, opened by Snap receipt while no project is picked.
-  const [sheetOpen, setSheetOpen] = useState(false);
   // By store: show one store only (the store key; null = all stores).
   const [vendorFilter, setVendorFilter] = useState<string | null>(null);
   // Site Manager only: receipts being read or ready to review, and ones saved on this phone offline.
@@ -170,11 +168,12 @@ export function ToBuy() {
     return ticket.projectname ?? projectsById[ticket.projectid]?.name ?? t("mr.unknown_project");
   }
 
-  // Opens the camera. The receipt is not tied to a request here: the app matches
-  // it to the open requests afterwards.
-  function snapReceipt(project: { id: string; name: string } | null) {
+  // Opens the camera. No project is assumed here, not even from the list filter:
+  // the capture screen asks which project the receipt is for once the photo is taken
+  // (and picks it by itself only when there is exactly one).
+  function snapReceipt() {
     reset();
-    startSplit(project ? { projectIds: [project.id], projectNames: [project.name] } : null);
+    startSplit(null);
     router.push("/expense/capture");
   }
 
@@ -183,18 +182,6 @@ export function ToBuy() {
     reset();
     startSplit({ kind: "trip" });
     router.push("/expense/capture");
-  }
-
-  // The pinned button: straight to the camera when a project is picked, otherwise ask which.
-  function snapFromFooter() {
-    const picked = projectChoices.find((p) => p.projectId === activeFilter);
-    if (picked) return snapReceipt({ id: picked.projectId, name: picked.projectName });
-    if (projectChoices.length <= 1) {
-      // One project (or none yet): nothing to ask.
-      const only = projectChoices[0];
-      return snapReceipt(only ? { id: only.projectId, name: only.projectName } : null);
-    }
-    setSheetOpen(true);
   }
 
   // The money or the stock ran out: close what is left, with a reason the PM can read.
@@ -407,18 +394,10 @@ export function ToBuy() {
       {/* Always in reach, just above the tab bar. */}
       <View style={styles.pinned}>
         <View style={styles.pinnedRow}>
-          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={snapFromFooter} /></View>
+          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={snapReceipt} /></View>
           <View style={styles.pinnedSide}><AppButton label={t("tb.gas_button")} variant="secondary" onPress={snapGas} /></View>
         </View>
       </View>
-
-      <SnapProjectSheet
-        visible={sheetOpen}
-        projects={projectChoices.map((p) => ({ id: p.projectId, name: p.projectName }))}
-        onPick={(project) => { setSheetOpen(false); snapReceipt(project); }}
-        onMultiple={() => { setSheetOpen(false); snapReceipt(null); }}
-        onClose={() => setSheetOpen(false)}
-      />
     </SafeAreaView>
   );
 }

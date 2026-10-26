@@ -257,7 +257,7 @@ export default function TermsScreen() {
         ) : null}
       </ScrollView>
 
-      {mustAccept && data ? (
+      {mustAccept ? (
         <SafeAreaView edges={["bottom"]} style={styles.acceptBar}>
           {error ? <Text style={[styles.error, styles.barError]}>{error}</Text> : null}
           <Pressable
@@ -301,7 +301,7 @@ export default function TermsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: PAGE_BG },
-  content: { padding: 16, paddingBottom: 32, gap: 16 },
+  content: { padding: 16, paddingBottom: 48, gap: 16 },
   loading: { marginTop: 24 },
 
   hero: { gap: 8, paddingTop: 4 },
@@ -436,17 +436,17 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
     backgroundColor: PAGE_BG,
   },
   checkRowOn: { borderColor: COLORS.primary, backgroundColor: TINT },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
     borderWidth: 2,
-    borderColor: COLORS.inputBorder,
+    borderColor: COLORS.primary,
     backgroundColor: COLORS.card,
     alignItems: "center",
     justifyContent: "center",

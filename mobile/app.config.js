@@ -29,9 +29,6 @@ const config = {
   slug: env.appSlug,
   owner: "cache-jujan",
   version: "1.0.0",
-  extra: {
-    eas: { projectId: "b44fc7f1-a37b-43b4-b806-266479320c7d" },
-  },
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,

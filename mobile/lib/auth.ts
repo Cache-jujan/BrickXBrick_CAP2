@@ -9,7 +9,9 @@ export type MobileRole = "Purchaser" | "Site Manager";
 
 export type MobileUser = {
   id: string;
+  // Shown as "username.role" once a username is set.
   name: string;
+  username?: string | null;
   email: string;
   role: MobileRole;
   // false until the current Terms of Use / Privacy Notice is accepted
@@ -157,6 +159,13 @@ export function nextRouteAfterLogin(user: MobileUser) {
 export function setTermsAccepted(version: string) {
   if (!session) return;
   session = { ...session, user: { ...session.user, termsAccepted: true, termsVersion: version } };
+  persistSession(session);
+}
+
+// Called by app/settings.tsx once the server saved a new username.
+export function setUsername(username: string, name: string) {
+  if (!session) return;
+  session = { ...session, user: { ...session.user, username, name } };
   persistSession(session);
 }
 
