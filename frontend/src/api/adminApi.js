@@ -46,3 +46,9 @@ export const VALID_ROLES = [
   "Purchaser",
   "System Administrator",
 ];
+
+// GET /api/admin/users/overview — counts for the top of the admin page
+export async function getAdminOverview() {
+  const { data } = await apiClient.get("/api/admin/users/overview");
+  return data;
+}

@@ -79,7 +79,6 @@ export function LoginPage() {
       {/* Right — the sign-in form */}
       <div className="login-form-side">
         <div className="login-card">
-          <div className="login-language-row"><LanguageToggle /></div>
           <h2 className="login-title">{t("login.title")}</h2>
           <p className="login-subtitle">{t("login.subtitle")}</p>
 
@@ -142,6 +141,7 @@ export function LoginPage() {
               <span aria-hidden="true"> · </span>
               <Link to="/legal?doc=privacy">{t("login.privacy_notice")}</Link>
             </p>
+            <LanguageToggle variant="inline" />
           </form>
         </div>
 

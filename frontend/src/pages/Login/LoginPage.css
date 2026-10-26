@@ -365,12 +365,6 @@
   box-shadow: none;
 }
 
-.login-language-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: var(--space-4);
-}
-
 .login-title {
   font-size: var(--text-lg);
   text-align: left;
@@ -401,6 +395,7 @@
   font-size: var(--text-xs);
   color: var(--color-ink-faint);
 }
+.login-card .language-inline { margin-top: var(--space-2); }
 .login-legal a {
   color: var(--color-ink-soft);
 }

@@ -188,7 +188,6 @@ export function Topbar({ onMenuClick }) {
         <span className="topbar-spacer" />
 
         <div className="topbar-actions">
-          <LanguageToggle />
           <div className="topbar-notif" ref={notifRef}>
             <button
               type="button"
@@ -285,6 +284,7 @@ export function Topbar({ onMenuClick }) {
                   <p className="topbar-menu-name">{user?.name}</p>
                   <p className="topbar-menu-email">{user?.email}</p>
                 </div>
+                <LanguageToggle variant="menu" />
                 <Link
                   to="/legal"
                   className="topbar-menu-item"

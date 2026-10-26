@@ -1927,7 +1927,21 @@
     "tl.meta_one": "{status} · {done}/{total} task · {due}",
     "tl.meta_other": "{status} · {done}/{total} tasks · {due}",
     "tl.meta_empty": "{status} · No tasks yet · {due}",
-    "tl.legend_filled": "Filled part = tasks done"
+    "tl.legend_filled": "Filled part = tasks done",
+    "admin_overview.title": "Overview",
+    "admin_overview.active": "Active accounts",
+    "admin_overview.inactive_sub": "{count} inactive",
+    "admin_overview.locked": "Locked accounts",
+    "admin_overview.locked_sub": "Too many failed sign-ins",
+    "admin_overview.none_locked": "None locked",
+    "admin_overview.alerts": "Open tamper alerts",
+    "admin_overview.alerts_sub": "View alerts",
+    "admin_overview.overdue": "Overdue blockchain records",
+    "admin_overview.overdue_sub": "Over 72 hours · {count} waiting in total",
+    "admin_overview.by_role": "Active accounts by role",
+    "admin_overview.load_error": "Could not load the overview.",
+    "admin_overview.subtitle": "A quick look at accounts and record protection.",
+    "admin_overview.accounts_sub": "View accounts"
   },
   "ceb": {
     "language.name": "Pinulongan",
@@ -3857,7 +3871,21 @@
     "tl.meta_one": "{status} · {done}/{total} ka buluhaton · {due}",
     "tl.meta_other": "{status} · {done}/{total} ka buluhaton · {due}",
     "tl.meta_empty": "{status} · Wala pay buluhaton · {due}",
-    "tl.legend_filled": "Napuno nga bahin = mga buluhaton nga human na"
+    "tl.legend_filled": "Napuno nga bahin = mga buluhaton nga human na",
+    "admin_overview.title": "Pagsusi sa kinatibuk-an",
+    "admin_overview.active": "Aktibong mga account",
+    "admin_overview.inactive_sub": "{count} dili aktibo",
+    "admin_overview.locked": "Naka-lock nga mga account",
+    "admin_overview.locked_sub": "Daghan kaayong napakyas nga pag-sign in",
+    "admin_overview.none_locked": "Walay naka-lock",
+    "admin_overview.alerts": "Abli nga mga alerto sa pagbag-o",
+    "admin_overview.alerts_sub": "Tan-awa ang mga alerto",
+    "admin_overview.overdue": "Naulahing mga blockchain record",
+    "admin_overview.overdue_sub": "Lapas sa 72 ka oras · {count} ang naghulat sa tanan",
+    "admin_overview.by_role": "Aktibong mga account matag papel",
+    "admin_overview.load_error": "Wala ma-load ang pagsusi.",
+    "admin_overview.subtitle": "Mubo nga pagtan-aw sa mga account ug sa pagpanalipod sa mga rekord.",
+    "admin_overview.accounts_sub": "Tan-awa ang mga account"
   },
   "fil": {
     "language.name": "Wika",
@@ -5787,6 +5815,20 @@
     "tl.meta_one": "{status} · {done}/{total} gawain · {due}",
     "tl.meta_other": "{status} · {done}/{total} gawain · {due}",
     "tl.meta_empty": "{status} · Wala pang gawain · {due}",
-    "tl.legend_filled": "May kulay na bahagi = tapos na ang mga gawain"
+    "tl.legend_filled": "May kulay na bahagi = tapos na ang mga gawain",
+    "admin_overview.title": "Pangkalahatang-tanaw",
+    "admin_overview.active": "Mga aktibong account",
+    "admin_overview.inactive_sub": "{count} na hindi aktibo",
+    "admin_overview.locked": "Mga naka-lock na account",
+    "admin_overview.locked_sub": "Sobrang dami ng bigong pag-sign in",
+    "admin_overview.none_locked": "Walang naka-lock",
+    "admin_overview.alerts": "Mga bukas na tamper alert",
+    "admin_overview.alerts_sub": "Tingnan ang mga alerto",
+    "admin_overview.overdue": "Mga overdue na blockchain record",
+    "admin_overview.overdue_sub": "Lampas 72 oras · {count} ang naghihintay sa kabuuan",
+    "admin_overview.by_role": "Mga aktibong account ayon sa role",
+    "admin_overview.load_error": "Hindi ma-load ang pangkalahatang-tanaw.",
+    "admin_overview.subtitle": "Mabilis na tingin sa mga account at sa proteksyon ng mga talaan.",
+    "admin_overview.accounts_sub": "Tingnan ang mga account"
   }
 }
