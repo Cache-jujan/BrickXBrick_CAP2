@@ -58,6 +58,33 @@ async function assertSiteManagerProject(user, projectId) {
     }
 }
 
+const SCREENING_FAILED_REASON =
+    "Automatic fraud screening could not run for this expense. Review it manually before approving.";
+
+/**
+ * Run F9 screening on a saved expense without letting a screening failure
+ * undo it. The expense row is already committed, so a throw here used to make
+ * the client see a 500 for an expense that was in fact saved (and retry it).
+ * If screening throws, a Screening_Failed flag is written instead, so the
+ * expense lands in the PM's flagged queue rather than looking clean.
+ */
+async function screenOrFlag(expenseID) {
+    try {
+        await screenExpense(expenseID);
+    } catch (err) {
+        console.error(`Expense ${expenseID} failed screening:`, err);
+        try {
+            await query(
+                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
+                 VALUES ($1, 'Screening_Failed', $2, 'system', 'Pending')`,
+                [expenseID, SCREENING_FAILED_REASON]
+            );
+        } catch (flagErr) {
+            console.error(`Expense ${expenseID}: could not record the screening failure:`, flagErr);
+        }
+    }
+}
+
 /**
  * Submit an expense after validating receipt, project access and ticket rules.
  * Purchasers need assigned resolved tickets; Site Managers need their own resolved
@@ -209,9 +236,10 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         const expense = result.rows[0];
 
         // F9 Layers 1-3. No transaction here, so the row is already visible
-        // to screenExpense's queries.
-        await screenExpense(expense.expenseID);
-        
+        // to screenExpense's queries. A screening failure is recorded as a
+        // flag (see screenOrFlag), never as an error to the client.
+        await screenOrFlag(expense.expenseID);
+
         res.status(201).json(expense);
     } catch (err) {
         next(err);
@@ -530,15 +558,17 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
 
         const expense = result.rows[0];
 
-        // Clear the old screening flags before re-screening, so a corrected
-        // expense doesn't keep stale "duplicate"/"unknown vendor" flags.
+        // Clear only the still-open system flags before re-screening, so a
+        // corrected expense doesn't keep stale "duplicate"/"unknown vendor"
+        // flags. Flags the PM already resolved (Approved/Rejected) are kept as
+        // the review history, including why the expense was rejected.
         await query(
-            "DELETE FROM FraudFlags WHERE expenseID = $1 AND flaggedBy = 'system'",
+            "DELETE FROM FraudFlags WHERE expenseID = $1 AND flaggedBy = 'system' AND resolution = 'Pending'",
             [req.params.id]
         );
 
         // Re-run F9 Layers 1-3 on the corrected data.
-        await screenExpense(expense.expenseID);
+        await screenOrFlag(expense.expenseID);
 
         res.json(expense);
     } catch (err) {
