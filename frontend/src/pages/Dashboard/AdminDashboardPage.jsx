@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { getAdminOverview } from "../../api/adminApi";
 import { extractErrorMessage } from "../../api/client";
 import { AdminOverview } from "../../components/admin/AdminOverview";
@@ -31,11 +30,6 @@ export function AdminDashboardPage() {
       {error && <Banner tone="error" title={error} />}
       {!error && !overview && <p className="dashboard-loading">{t("common.loading")}</p>}
       {overview && <AdminOverview overview={overview} />}
-
-      <div className="admin-dash-links">
-        <Link className="admin-dash-link" to="/admin/users">{t("nav.user_accounts")} →</Link>
-        <Link className="admin-dash-link" to="/blockchain/alerts">{t("nav.tamper_alerts")} →</Link>
-      </div>
     </div>
   );
 }

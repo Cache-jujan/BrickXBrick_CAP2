@@ -17,6 +17,7 @@ export function AdminOverview({ overview }) {
           <span className="ao-label">{t("admin_overview.active")}</span>
           <strong className="ao-value">{o.active}</strong>
           <span className="ao-sub">{t("admin_overview.inactive_sub", { count: o.inactive })}</span>
+          <Link className="ao-sub ao-link" to="/admin/users">{t("admin_overview.accounts_sub")}</Link>
         </Card>
         <Card className={`ao-card ${o.locked > 0 ? "ao-warn" : ""}`}>
           <span className="ao-label">{t("admin_overview.locked")}</span>
