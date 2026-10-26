@@ -8,6 +8,7 @@ const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
 const adminUsers = require("./routes/adminUsers");
 const authRoutes = require("./routes/auth");
+const meRoutes = require("./routes/me");
 const legalRoutes = require("./routes/legal");
 const { termsFields } = legalRoutes;
 const expenseRoutes = require("./routes/expenses");
@@ -49,7 +50,8 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
 });
 
 // --- Routes ---
-app.use("/api/auth", authRoutes);                 // login / session
+app.use("/api/me", meRoutes);                     // your own username / password
+app.use("/api/auth", authRoutes);               // login / session
 app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Notice
 app.use("/api/admin/users", adminUsers);          // F1 account management
 app.use("/api/projects/:projectId/bom", bomRoutes); // F2 bill of materials

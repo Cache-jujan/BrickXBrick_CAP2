@@ -44,7 +44,7 @@ async function requireAuth(req, res, next) {
   let dbUser;
   try {
     const result = await query(
-      `SELECT userid, name, email, role, status, lockoutuntil FROM users WHERE supabaseuserid = $1`,
+      `SELECT userid, name, username, email, role, status, lockoutuntil FROM users WHERE supabaseuserid = $1`,
       [payload.sub]
     );
 
@@ -75,6 +75,7 @@ async function requireAuth(req, res, next) {
   req.user = {
     id: dbUser.userid,
     name: dbUser.name,
+    username: dbUser.username,
     email: dbUser.email,
     role: dbUser.role,
   };

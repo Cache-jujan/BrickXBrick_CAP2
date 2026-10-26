@@ -7,6 +7,7 @@ const { supabaseAnon } = require("../lib/supabaseAnon");
 const { setPasswordUrl } = require("../lib/passwordLink");
 const { findOpenWork, hasOpenWork, describeOpenWork } = require("../lib/userOpenWork");
 const { loadAdminOverview } = require("../lib/adminOverview");
+const { roleSlug } = require("../lib/displayName");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
@@ -71,8 +72,8 @@ router.post("/", async (req, res) => {
     authUserId = data.user.id;
 
     const result = await query(
-      `INSERT INTO Users (name, email, supabaseUserId, role, status)
-       VALUES ($1, $2, $3, $4, 'Active')
+      `INSERT INTO Users (name, fullname, email, supabaseUserId, role, status)
+       VALUES ($1, $1, $2, $3, $4, 'Active')
        RETURNING userID, name, email, role, status`,
       [name, email, authUserId, role]
     );
@@ -126,11 +127,14 @@ router.patch("/:id", async (req, res) => {
       if (conflict) return res.status(409).json(conflict);
     }
 
+    // Someone with a username shows as "username.role", so a new role renames them.
     const result = await query(
-      `UPDATE Users SET role = COALESCE($1, role), status = COALESCE($2, status)
-       WHERE userID = $3
+      `UPDATE Users
+          SET role = COALESCE($1, role), status = COALESCE($2, status),
+              name = CASE WHEN username IS NULL THEN name ELSE username || '.' || $4 END
+        WHERE userID = $3
        RETURNING userID, name, email, role, status`,
-      [role || null, status || null, req.params.id]
+      [role || null, status || null, req.params.id, roleSlug(role || user.role)]
     );
     res.json(result.rows[0]);
   } catch (err) {
