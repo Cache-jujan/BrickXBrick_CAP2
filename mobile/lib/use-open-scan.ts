@@ -23,6 +23,10 @@ export function useOpenScan() {
       ticket: scan.context?.ticket ?? null,
       file,
       ocrResult,
+      scope: scan.context?.projectIds?.length
+        ? { projectIds: scan.context.projectIds, projectNames: scan.context.projectNames ?? [] }
+        : null,
+      kind: scan.context?.kind ?? null,
     });
   }
 

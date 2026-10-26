@@ -12,6 +12,7 @@ import {
 } from "../../components/legal/LegalReader";
 import { ArrowRightIcon, CheckIcon } from "../../components/legal/LegalIcons";
 import { LegalBrand, ReadingProgress, readingMinutes } from "./LegalChrome";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./LegalPages.css";
 
 // Shown instead of the app (see ProtectedRoute) until the signed-in user has
@@ -20,6 +21,7 @@ import "./LegalPages.css";
 // The acceptance (who, version, time, IP, device) is saved by the backend.
 export function TermsAcceptPage() {
   const { user, logout, markTermsAccepted } = useAuth();
+  const { t, formatDate } = useLocale();
   const [data, setData] = useState(null);
   const [docId, setDocId] = useState("terms");
   const [loadError, setLoadError] = useState("");
@@ -31,9 +33,10 @@ export function TermsAcceptPage() {
     setLoadError("");
     getLegalDocuments()
       .then(setData)
-      .catch((err) => setLoadError(extractErrorMessage(err, "Couldn't load the terms. Please try again.")));
+      .catch((err) => setLoadError(extractErrorMessage(err, t("legal.load_error"))));
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once; a language change must not refetch
   useEffect(load, []);
 
   async function handleAccept() {
@@ -49,7 +52,7 @@ export function TermsAcceptPage() {
         setChecked(false);
         load();
       }
-      setError(extractErrorMessage(err, "Couldn't save your acceptance. Please try again."));
+      setError(extractErrorMessage(err, t("legal.accept_error")));
     } finally {
       setBusy(false);
     }
@@ -65,11 +68,11 @@ export function TermsAcceptPage() {
           <div className="legal-header-actions">
             {user?.name && (
               <span className="legal-header-user">
-                Signed in as <strong>{user.name}</strong>
+                {t("nav.signed_in_as")} <strong>{user.name}</strong>
               </span>
             )}
             <button type="button" className="legal-text-btn" onClick={logout} disabled={busy}>
-              Sign out
+              {t("account.logout")}
             </button>
           </div>
         </div>
@@ -78,18 +81,18 @@ export function TermsAcceptPage() {
 
       <main className="legal-main">
         <div className="legal-hero">
-          <p className="legal-eyebrow">{firstName ? `Welcome, ${firstName} · One-time review` : "One-time review"}</p>
-          <h1>Review and accept our terms</h1>
+          <p className="legal-eyebrow">{firstName ? t("legal.eyebrow_named", { name: firstName }) : t("legal.eyebrow")}</p>
+          <h1>{t("legal.title")}</h1>
           <p className="legal-lede">
             Brick x Brick holds company records and your personal data, so we need your agreement to the Terms of
             Use and Privacy Notice first. You&apos;ll only be asked again if they change.
           </p>
           {data && (
             <p className="legal-meta">
-              <span className="legal-chip">Version {data.version}</span>
-              <span>Effective {formatEffectiveDate(data.effectiveDate)}</span>
+              <span className="legal-chip">{t("legal.version", { version: data.version })}</span>
+              <span>{t("legal.effective", { date: formatEffectiveDate(data.effectiveDate, formatDate) })}</span>
               <span className="legal-meta-dot" aria-hidden="true">·</span>
-              <span>About {readingMinutes(data)} min read</span>
+              <span>{t("legal.read_minutes", { minutes: readingMinutes(data) })}</span>
             </p>
           )}
         </div>
@@ -100,7 +103,7 @@ export function TermsAcceptPage() {
             title={loadError}
             action={
               <Button variant="secondary" onClick={load}>
-                Try again
+                {t("common.try_again")}
               </Button>
             }
           />
@@ -116,7 +119,7 @@ export function TermsAcceptPage() {
       </main>
 
       {data && (
-        <div className="legal-consent" role="region" aria-label="Your agreement">
+        <div className="legal-consent" role="region" aria-label={t("legal.your_agreement")}>
           <div className="legal-consent-inner">
             {error && (
               <div className="legal-consent-error">
@@ -140,10 +143,10 @@ export function TermsAcceptPage() {
             </label>
             <Button className="legal-consent-btn" onClick={handleAccept} disabled={!checked || busy}>
               {busy ? (
-                "Saving…"
+                t("common.saving")
               ) : (
                 <>
-                  Agree and continue <ArrowRightIcon />
+                  {t("legal.agree_continue")} <ArrowRightIcon />
                 </>
               )}
             </Button>

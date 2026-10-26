@@ -27,6 +27,7 @@ const MAPPING = {
   "paperplane.fill": "send",
   "chevron.left.forwardslash.chevron.right": "code",
   "chevron.right": "chevron-right",
+  "chevron.down": "expand-more",
   "chevron.left": "chevron-left",
   "arrow.triangle.2.circlepath": "autorenew",
   "exclamationmark.triangle.fill": "warning",

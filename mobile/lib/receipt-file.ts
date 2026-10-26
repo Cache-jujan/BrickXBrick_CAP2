@@ -35,13 +35,22 @@ export function isAllowedReceiptType(mimeType: string | null): mimeType is (type
   return mimeType === PDF_MIME_TYPE || (IMAGE_MIME_TYPES as readonly string[]).includes(mimeType ?? "");
 }
 
-/** A message for the user if the file can't be used, or null when it is fine. */
-export function receiptFileProblem(mimeType: string | null, bytes?: number | null): string | null {
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * A message for the user if the file can't be used, or null when it is fine.
+ * Pass `t` (from useLocale) to get the message in the chosen language; without it, English.
+ */
+export function receiptFileProblem(mimeType: string | null, bytes?: number | null, t?: Translate): string | null {
   if (!isAllowedReceiptType(mimeType)) {
-    return "That file type isn't supported. Choose a JPEG, PNG or WebP photo, or a PDF.";
+    return t
+      ? t("mx.file_type_bad")
+      : "That file type isn't supported. Choose a JPEG, PNG or WebP photo, or a PDF.";
   }
   if (bytes && bytes > MAX_RECEIPT_BYTES) {
-    return `That file is too big (${formatBytes(bytes)}). Receipts must be ${formatBytes(MAX_RECEIPT_BYTES)} or smaller.`;
+    return t
+      ? t("mx.file_too_big", { size: formatBytes(bytes), max: formatBytes(MAX_RECEIPT_BYTES) })
+      : `That file is too big (${formatBytes(bytes)}). Receipts must be ${formatBytes(MAX_RECEIPT_BYTES)} or smaller.`;
   }
   return null;
 }

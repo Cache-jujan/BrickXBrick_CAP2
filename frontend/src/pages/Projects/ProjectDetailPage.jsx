@@ -27,6 +27,7 @@ import { EditTimelineModal } from "../../components/milestones/EditTimelineModal
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectDetailPage.css";
 
 const PESO_WHOLE = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
@@ -38,17 +39,15 @@ const PESO = {
     return (Math.abs(n * 100 - Math.round(n) * 100) < 0.5 ? PESO_WHOLE : PESO_CENTS).format(n);
   },
 };
-const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "long", day: "numeric" });
-const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const LONG_DATE = { year: "numeric", month: "long", day: "numeric" };
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 const CLOSED_STATUSES = ["Completed", "Cancelled", "Archived"];
-
-function formatDate(value) {
-  return value ? DATE.format(new Date(value)) : "Not set";
-}
 
 export function ProjectDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { t, tv, formatDate } = useLocale();
+  const fmtLong = (value) => (value ? formatDate(value, LONG_DATE) : t("projects.not_set"));
   const canReview = user.role === "General Manager" || user.role === "Project Manager";
   const canVerify = user.role === "General Manager"; // matches backend requireRole on /verify/:id
 
@@ -132,7 +131,7 @@ export function ProjectDetailPage() {
         if (err?.response?.status === 403) {
           setAccessDenied(true);
         } else {
-          setError(extractErrorMessage(err, "Couldn't load this project."));
+          setError(extractErrorMessage(err, t("errors.load_project")));
         }
       })
       .finally(() => {
@@ -141,6 +140,7 @@ export function ProjectDetailPage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per project, not on a language change
   }, [id]);
 
   const isGM = user.role === "General Manager";
@@ -159,9 +159,10 @@ export function ProjectDetailPage() {
     getEligibleSiteManagers(id)
       .then((data) => { if (!cancelled) setSiteManagers(data); })
       .catch((err) => {
-        if (!cancelled) setSiteManagersError(extractErrorMessage(err, "Couldn't load Site Managers."));
+        if (!cancelled) setSiteManagersError(extractErrorMessage(err, t("errors.load_site_managers")));
       });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per project, not on a language change
   }, [canManageSiteManager, id]);
 
   useEffect(() => {
@@ -170,7 +171,7 @@ export function ProjectDetailPage() {
     setBomError("");
     getBom(id)
       .then((data) => { if (!cancelled) setBomInfo(data); })
-      .catch((err) => { if (!cancelled) setBomError(extractErrorMessage(err, "Couldn't load the Bill of Materials.")); });
+      .catch((err) => { if (!cancelled) setBomError(extractErrorMessage(err, t("errors.load_bom"))); });
     return () => { cancelled = true; };
     // Reload when the project's BOM status changes (e.g. after activation).
   }, [id, project?.bomstatus, Boolean(project)]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -181,9 +182,10 @@ export function ProjectDetailPage() {
     setExpensesError("");
     listExpenses(id)
       .then((data) => { if (!cancelled) setExpenses(data); })
-      .catch((err) => { if (!cancelled) setExpensesError(extractErrorMessage(err, "Couldn't load expenses for this project.")); })
+      .catch((err) => { if (!cancelled) setExpensesError(extractErrorMessage(err, t("errors.load_project_expenses"))); })
       .finally(() => { if (!cancelled) setExpensesLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per project, not on a language change
   }, [id]);
 
   useEffect(() => {
@@ -192,9 +194,10 @@ export function ProjectDetailPage() {
     setChainError("");
     getProjectBlockchainSummary(id)
       .then((data) => { if (!cancelled) setChainSummary(data); })
-      .catch((err) => { if (!cancelled) setChainError(extractErrorMessage(err, "Couldn't load blockchain audit data.")); })
+      .catch((err) => { if (!cancelled) setChainError(extractErrorMessage(err, t("errors.load_chain"))); })
       .finally(() => { if (!cancelled) setChainLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per project, not on a language change
   }, [id]);
 
   async function refreshAfterReview() {
@@ -208,7 +211,7 @@ export function ProjectDetailPage() {
       await approveExpense(expenseId);
       await refreshAfterReview();
     } catch (err) {
-      setActionError(extractErrorMessage(err, "Couldn't approve this expense."));
+      setActionError(extractErrorMessage(err, t("errors.expense_approve")));
     }
   }
 
@@ -235,7 +238,7 @@ export function ProjectDetailPage() {
       setRejectReason("");
       await refreshAfterReview();
     } catch (err) {
-      setActionError(extractErrorMessage(err, "Couldn't reject this expense."));
+      setActionError(extractErrorMessage(err, t("errors.expense_reject")));
     } finally {
       setRejectBusy(false);
     }
@@ -252,7 +255,7 @@ export function ProjectDetailPage() {
     } catch (err) {
       setVerifyResults((prev) => ({
         ...prev,
-        [expenseId]: { verified: false, error: extractErrorMessage(err, "Verification failed.") },
+        [expenseId]: { verified: false, error: extractErrorMessage(err, t("errors.verify_failed")) },
       }));
     } finally {
       setVerifyingId(null);
@@ -269,7 +272,7 @@ export function ProjectDetailPage() {
       setSiteManagers(await getEligibleSiteManagers(id));
       return true;
     } catch (err) {
-      setSiteManagersError(extractErrorMessage(err, "Couldn't update the Site Manager assignment."));
+      setSiteManagersError(extractErrorMessage(err, t("errors.update_sm")));
       return false;
     } finally {
       setSiteManagerSaving(false);
@@ -290,7 +293,7 @@ export function ProjectDetailPage() {
   async function handleCreateMilestone() {
     if (milestoneBusy) return;
     if (!milestoneForm.name.trim() || !milestoneForm.dueDate) {
-      setMilestoneError("Milestone name and due date are required.");
+      setMilestoneError(t("pd.err_milestone_required"));
       return;
     }
     setMilestoneBusy(true);
@@ -307,7 +310,7 @@ export function ProjectDetailPage() {
       setMilestoneDialog(false);
       setScheduleWarning((created.warnings || [])[0] || "");
     } catch (err) {
-      setMilestoneError(extractErrorMessage(err, "Couldn't create the milestone. Please try again."));
+      setMilestoneError(extractErrorMessage(err, t("errors.create_milestone")));
     } finally {
       setMilestoneBusy(false);
     }
@@ -327,7 +330,7 @@ export function ProjectDetailPage() {
   async function handleCreateTask() {
     if (!taskDialog || taskBusy) return;
     if (!taskForm.taskName.trim() || !taskForm.dueDate) {
-      setTaskError("Task name and due date are required.");
+      setTaskError(t("pd.err_task_required"));
       return;
     }
     const isPlanning = taskDialog.milestone.phase === "Planning";
@@ -343,7 +346,7 @@ export function ProjectDetailPage() {
       setTaskDialog(null);
       setScheduleWarning((created.warnings || [])[0] || "");
     } catch (err) {
-      setTaskError(extractErrorMessage(err, "Couldn't create the task. Please try again."));
+      setTaskError(extractErrorMessage(err, t("errors.create_task")));
     } finally {
       setTaskBusy(false);
     }
@@ -384,7 +387,7 @@ export function ProjectDetailPage() {
       setProject(await getProjectOverview(id));
       setCompleteDialog(null);
     } catch (err) {
-      setCompleteError(extractErrorMessage(err, "Couldn't mark this task done. Please try again."));
+      setCompleteError(extractErrorMessage(err, t("errors.complete_task")));
     } finally {
       setCompleteBusy(false);
     }
@@ -413,21 +416,21 @@ export function ProjectDetailPage() {
       setProject(await getProjectOverview(id));
       setStatusDialog(null);
     } catch (err) {
-      setStatusError(extractErrorMessage(err, "Couldn't update the project status."));
+      setStatusError(extractErrorMessage(err, t("errors.update_status")));
     } finally {
       setStatusBusy(false);
     }
   }
 
-  if (loading) return <p className="dashboard-loading">Loading project…</p>;
+  if (loading) return <p className="dashboard-loading">{t("projects.loading_one")}</p>;
 
   if (accessDenied) {
     return (
       <div className="project-detail-terminal">
-        <Banner tone="info" title="You don't manage this project">
-          Only this project's assigned Project Manager or a General Manager can view its details.
+        <Banner tone="info" title={t("bom.no_access_title")}>
+          {t("pd.no_access_body")}
         </Banner>
-        <BackLink to="/projects">Back to Projects</BackLink>
+        <BackLink to="/projects">{t("projects.back")}</BackLink>
       </div>
     );
   }
@@ -435,7 +438,7 @@ export function ProjectDetailPage() {
     return (
       <div className="project-detail-terminal">
         <Banner tone="error" title={error} />
-        <BackLink to="/projects">Back to Projects</BackLink>
+        <BackLink to="/projects">{t("projects.back")}</BackLink>
       </div>
     );
   }
@@ -466,15 +469,16 @@ export function ProjectDetailPage() {
   const bomApproved = project.bomstatus === "Approved";
   const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
   const activationChecks = [
-    { label: "Project Manager assigned", done: Boolean(project.projectmanagerid) },
-    { label: "Site Manager assigned", done: hasSiteManager },
+    { label: t("pd.check_pm"), done: Boolean(project.projectmanagerid) },
+    { label: t("pd.check_sm"), done: hasSiteManager },
     {
       label:
         bomApproved && bom?.clientAgreedOn
-          ? `Bill of Materials approved · client agreed on ${new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" }).format(
-              new Date(`${bom.clientAgreedOn}T00:00:00`)
-            )}${bom.clientAgreedBy ? ` (${bom.clientAgreedBy})` : ""}`
-          : "Bill of Materials approved, with the client's agreement recorded",
+          ? t(bom.clientAgreedBy ? "pd.check_bom_agreed_by" : "pd.check_bom_agreed", {
+              date: formatDate(`${bom.clientAgreedOn}T00:00:00`, { dateStyle: "medium" }),
+              who: bom.clientAgreedBy,
+            })
+          : t("pd.check_bom"),
       done: bomApproved,
     },
   ];
@@ -482,7 +486,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="project-detail">
-      <BackLink to="/projects">Back to Projects</BackLink>
+      <BackLink to="/projects">{t("projects.back")}</BackLink>
 
       <header className="pd-header">
         <div className="pd-header-text">
@@ -497,16 +501,16 @@ export function ProjectDetailPage() {
         {((isGM && !isClosed) || showCheckinsLink) && (
           <div className="page-header-actions">
             {showCheckinsLink && (
-              <Link to={`/projects/${project.projectid}/checkins`} className="btn btn-secondary">Daily check-ins</Link>
+              <Link to={`/projects/${project.projectid}/checkins`} className="btn btn-secondary">{t("pd.daily_checkins")}</Link>
             )}
             {isGM && !isClosed && (<>
-            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>Cancel project</Button>
-            <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">Edit details</Link>
+            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{t("pd.cancel_project")}</Button>
+            <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">{t("pd.edit_details")}</Link>
             {project.status === "Draft" && (
-              <Button onClick={() => openStatusDialog("activate")}>Activate project</Button>
+              <Button onClick={() => openStatusDialog("activate")}>{t("pd.activate")}</Button>
             )}
             {project.status === "Active" && (
-              <Button onClick={() => openStatusDialog("complete")}>Mark as completed</Button>
+              <Button onClick={() => openStatusDialog("complete")}>{t("pd.mark_completed")}</Button>
             )}
             </>)}
           </div>
@@ -514,17 +518,16 @@ export function ProjectDetailPage() {
       </header>
 
       {project.status === "Draft" && (
-        <Banner tone="info" title="Draft: planning and procurement">
-          The Project Manager can already plan milestones and tasks. Material requests and purchases start
-          once a General Manager activates the project.
+        <Banner tone="info" title={t("pd.draft_title")}>
+          {t("pd.draft_body")}
           {!readyToActivate &&
-            ` Still needed: ${activationChecks.filter((c) => !c.done).map((c) => c.label).join(", ")}.`}
+            ` ${t("pd.still_needed", { list: activationChecks.filter((c) => !c.done).map((c) => c.label).join(", ") })}`}
         </Banner>
       )}
       {project.status === "Cancelled" && (
-        <Banner tone="warning" title="This project was cancelled">
+        <Banner tone="warning" title={t("pd.cancelled_title")}>
           {project.cancellationreason}
-          {project.cancelledat ? ` (${DATETIME.format(new Date(project.cancelledat))})` : ""}
+          {project.cancelledat ? ` (${formatDate(project.cancelledat, DATETIME_OPTIONS)})` : ""}
         </Banner>
       )}
       {(project.warnings || []).map((w) => (
@@ -533,23 +536,23 @@ export function ProjectDetailPage() {
 
       {project.description && <p className="pd-description">{project.description}</p>}
 
-      <section className="pd-summary" aria-label="Project summary">
+      <section className="pd-summary" aria-label={t("pd.summary")}>
         <div className="pd-group">
-          <h2 className="pd-group-title">Budget</h2>
+          <h2 className="pd-group-title">{t("projects.budget")}</h2>
           <dl>
-            <div><dt>Target budget</dt><dd className="num-left">{PESO.format(budget)}</dd></div>
+            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{PESO.format(budget)}</dd></div>
             <div>
-              <dt>Approved spending</dt>
+              <dt>{t("dashboard.approved_spending")}</dt>
               <dd className="num-left">
-                {PESO.format(approvedTotal)} <span className="pd-dd-note">{budgetUsedPct}% of budget</span>
+                {PESO.format(approvedTotal)} <span className="pd-dd-note">{t("pd.of_budget", { percent: budgetUsedPct })}</span>
               </dd>
             </div>
             <div>
-              <dt>Waiting for approval</dt>
-              <dd className="num-left">{pendingTotal ? PESO.format(pendingTotal) : <span className="pd-dd-note">None</span>}</dd>
+              <dt>{t("pd.waiting_approval")}</dt>
+              <dd className="num-left">{pendingTotal ? PESO.format(pendingTotal) : <span className="pd-dd-note">{t("split.none")}</span>}</dd>
             </div>
             <div className="pd-progress">
-              <dt>Work progress</dt>
+              <dt>{t("pd.work_progress")}</dt>
               <dd>
                 <div className="pd-progress-track">
                   <ProgressBar value={progressPct} />
@@ -560,27 +563,27 @@ export function ProjectDetailPage() {
           </dl>
         </div>
         <div className="pd-group">
-          <h2 className="pd-group-title">Timeline</h2>
+          <h2 className="pd-group-title">{t("form.section_timeline")}</h2>
           <dl>
-            <div><dt>Target Date of Development</dt><dd>{formatDate(project.startdate)}</dd></div>
-            <div><dt>Target Date of Construction</dt><dd>{formatDate(project.constructionstartdate)}</dd></div>
-            <div><dt>Target Date of Completion</dt><dd>{formatDate(project.enddate)}</dd></div>
+            <div><dt>{t("form.date_dev")}</dt><dd>{fmtLong(project.startdate)}</dd></div>
+            <div><dt>{t("form.date_construction")}</dt><dd>{fmtLong(project.constructionstartdate)}</dd></div>
+            <div><dt>{t("form.date_end")}</dt><dd>{fmtLong(project.enddate)}</dd></div>
             {project.actualcompletiondate && (
-              <div><dt>Turnover (actual)</dt><dd>{formatDate(project.actualcompletiondate)}</dd></div>
+              <div><dt>{t("pd.turnover")}</dt><dd>{fmtLong(project.actualcompletiondate)}</dd></div>
             )}
           </dl>
         </div>
         <div className="pd-group">
-          <h2 className="pd-group-title">Site</h2>
+          <h2 className="pd-group-title">{t("form.section_site")}</h2>
           <dl>
-            <div><dt>Type</dt><dd>{project.projecttype || "Not set"}</dd></div>
-            <div><dt>Location</dt><dd>{location || "Not set"}</dd></div>
-            <div><dt>Client</dt><dd>{project.clientname}</dd></div>
+            <div><dt>{t("pd.type")}</dt><dd>{project.projecttype || t("projects.not_set")}</dd></div>
+            <div><dt>{t("projects.location")}</dt><dd>{location || t("projects.not_set")}</dd></div>
+            <div><dt>{t("pd.client")}</dt><dd>{project.clientname}</dd></div>
             {project.createdfromtemplatename && (
-              <div><dt>Started from</dt><dd>Template: {project.createdfromtemplatename}</dd></div>
+              <div><dt>{t("pd.started_from")}</dt><dd>{t("pd.from_template", { name: project.createdfromtemplatename })}</dd></div>
             )}
             {project.copiedfromprojectname && (
-              <div><dt>Started from</dt><dd>Copy of {project.copiedfromprojectname}</dd></div>
+              <div><dt>{t("pd.started_from")}</dt><dd>{t("pd.copy_of", { name: project.copiedfromprojectname })}</dd></div>
             )}
           </dl>
         </div>
@@ -588,10 +591,10 @@ export function ProjectDetailPage() {
 
       <section className="pd-bom" aria-labelledby="pd-bom-title">
         <div className="section-head">
-          <h2 id="pd-bom-title">Bill of Materials</h2>
+          <h2 id="pd-bom-title">{t("nav.bill_of_materials")}</h2>
           {bom && (
             <Link to={`/projects/${project.projectid}/bom`} className="btn btn-secondary btn-sm">
-              {isGM && !isClosed && bom.status === "Draft" ? "Review and approve" : "Open BOM"}
+              {isGM && !isClosed && bom.status === "Draft" ? t("pd.review_approve") : t("pd.open_bom")}
             </Link>
           )}
         </div>
@@ -599,12 +602,10 @@ export function ProjectDetailPage() {
         {!bomError && bomInfo && !bom && (
           <div className="pd-bom-bar pd-bom-empty">
             <p>
-              {isGM && !isClosed
-                ? "Add the signed BOM. It is the basis for every purchase and is required before activation."
-                : "The General Manager hasn't added the BOM yet."}
+              {isGM && !isClosed ? t("pd.bom_add_help") : t("pd.bom_none_gm")}
             </p>
             {isGM && !isClosed && (
-              <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">Add BOM</Link>
+              <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
             )}
           </div>
         )}
@@ -614,18 +615,22 @@ export function ProjectDetailPage() {
               <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />
               <span>
                 {bom.status === "Approved"
-                  ? `Approved${bom.approvedAt ? ` ${DATETIME.format(new Date(bom.approvedAt))}` : ""}`
+                  ? bom.approvedAt
+                    ? t("pd.bom_approved_at", { date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })
+                    : t("status.approved")
                   : bomWarningCount
-                    ? `${bomWarningCount} ${bomWarningCount === 1 ? "thing" : "things"} to check before approval`
-                    : "Not approved yet"}
+                    ? bomWarningCount === 1
+                      ? t("pd.bom_check_one")
+                      : t("pd.bom_check_other", { count: bomWarningCount })
+                    : t("pd.bom_not_approved")}
               </span>
             </div>
             <dl className="pd-bom-figures">
-              <div><dt>Items</dt><dd>{bom.totals.itemCount} in {bom.totals.sectionCount} sections</dd></div>
+              <div><dt>{t("pd.items")}</dt><dd>{t("pd.items_in_sections", { items: bom.totals.itemCount, sections: bom.totals.sectionCount })}</dd></div>
               {/* BOM figures always show centavos, like the BOM itself */}
-              <div><dt>Materials</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
-              <div><dt>Labor and other</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
-              <div><dt>Total</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
+              <div><dt>{t("bom.materials")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
+              <div><dt>{t("pd.labor_other")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
+              <div><dt>{t("pd.total")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
             </dl>
           </div>
         )}
@@ -633,20 +638,20 @@ export function ProjectDetailPage() {
 
       <section className="pd-team" aria-labelledby="pd-team-title">
         <div className="section-head">
-          <h2 id="pd-team-title">Team</h2>
+          <h2 id="pd-team-title">{t("form.section_team")}</h2>
           {isGM && !isClosed && (
-            <span className="section-head-note">Change the Project Manager from Edit details.</span>
+            <span className="section-head-note">{t("pd.change_pm_hint")}</span>
           )}
         </div>
         <div className="pd-team-grid">
           <div className="pd-person">
             <p className="pd-person-role">Project Manager</p>
-            <p className="pd-person-name">{project.projectmanagername || "Not assigned"}</p>
+            <p className="pd-person-name">{project.projectmanagername || t("projects.not_assigned")}</p>
             {project.projectmanageremail && <p className="pd-person-email">{project.projectmanageremail}</p>}
           </div>
           <div className="pd-person">
             <p className="pd-person-role">Site Manager</p>
-            <p className="pd-person-name">{project.sitemanagername || "Not assigned yet"}</p>
+            <p className="pd-person-name">{project.sitemanagername || t("pd.not_assigned_yet")}</p>
             {project.sitemanageremail && <p className="pd-person-email">{project.sitemanageremail}</p>}
             {canManageSiteManager && (
               <div className="pd-person-control">
@@ -655,7 +660,7 @@ export function ProjectDetailPage() {
                   className="btn btn-secondary btn-sm"
                   onClick={() => { setSiteManagersError(""); setSmDialog(true); }}
                 >
-                  {project.sitemanagerid ? "Change" : "Assign a Site Manager"}
+                  {project.sitemanagerid ? t("pd.change") : t("pd.assign_sm")}
                 </button>
                 {!smDialog && siteManagersError && <p className="field-error">{siteManagersError}</p>}
               </div>
@@ -666,9 +671,8 @@ export function ProjectDetailPage() {
 
       <div className="project-detail-milestones">
         {!hasSiteManager && canManage && (
-          <Banner tone="info" title="No Site Manager assigned">
-            You can still add milestones and Planning tasks, but Construction tasks can't be
-            created until a Site Manager is assigned to this project.
+          <Banner tone="info" title={t("pd.no_sm_title")}>
+            {t("pd.no_sm_body")}
           </Banner>
         )}
         {scheduleWarning && <Banner tone="warning" title={scheduleWarning} />}
@@ -684,18 +688,18 @@ export function ProjectDetailPage() {
       </div>
 
       <div className="section-head">
-        <h2>Expenses</h2>
+        <h2>{t("nav.expenses")}</h2>
         {!expensesLoading && expenses.length > 0 && (
-          <span className="section-head-note">{expenses.length} recorded · {PESO.format(approvedTotal)} approved</span>
+          <span className="section-head-note">{t("pd.recorded", { count: expenses.length, amount: PESO.format(approvedTotal) })}</span>
         )}
       </div>
 
       {expensesError && <Banner tone="error" title={expensesError} />}
       {actionError && !rejecting && <Banner tone="error" title={actionError} />}
-      {!expensesError && expensesLoading && <p className="dashboard-loading">Loading expenses…</p>}
+      {!expensesError && expensesLoading && <p className="dashboard-loading">{t("dashboard.loading_expenses")}</p>}
       {!expensesError && !expensesLoading && expenses.length === 0 && (
-        <Banner tone="empty" title="No expenses recorded yet">
-          Expenses submitted by the Purchaser for this project will appear here.
+        <Banner tone="empty" title={t("pd.no_expenses")}>
+          {t("pd.no_expenses_body")}
         </Banner>
       )}
       {!expensesError && !expensesLoading && expenses.length > 0 && (
@@ -703,7 +707,7 @@ export function ProjectDetailPage() {
           <div className="table-scroll">
             <table className="users-table project-detail-table">
               <thead>
-                <tr><th>Vendor</th><th>Category</th><th>Date</th><th className="num">Amount</th><th>Status</th></tr>
+                <tr><th>{t("dashboard.vendor")}</th><th>{t("dashboard.category")}</th><th>{t("dashboard.date")}</th><th className="num">{t("dashboard.amount")}</th><th>{t("dashboard.status")}</th></tr>
               </thead>
               <tbody>
                 {expenses.map((e) => {
@@ -716,14 +720,14 @@ export function ProjectDetailPage() {
                         onClick={() => setOpenId(isOpen ? null : e.expenseid)}
                       >
                         <td>{e.vendorname}</td>
-                        <td>{e.category}</td>
-                        <td>{DATE.format(new Date(e.receiptdate))}</td>
+                        <td>{tv("category", e.category)}</td>
+                        <td>{fmtLong(e.receiptdate)}</td>
                         <td className="num">{PESO.format(e.amount)}</td>
                         <td>
                           <span className="project-detail-badges">
                             <Badge status={e.status} />
                             {e.status === "Approved" && e.blockchainstatus === "TamperDetected" && (
-                              <Badge status="Overdue">Changed after approval</Badge>
+                              <Badge status="Overdue">{t("chain.changed.label")}</Badge>
                             )}
                           </span>
                         </td>
@@ -732,10 +736,10 @@ export function ProjectDetailPage() {
                         <tr className="project-detail-expense-detail">
                           <td colSpan={5}>
                             <div className="expense-detail-grid">
-                              <p><strong>Submitted by:</strong> {e.submittedbyname}</p>
-                              <p><strong>Quantity:</strong> {e.quantity}</p>
-                              <p><strong>TIN:</strong> {e.tin || "—"}</p>
-                              <p><strong>BIR Permit:</strong> {e.birpermitnumber || "—"}</p>
+                              <p><strong>{t("expenses.submitted_by")}</strong> {e.submittedbyname}</p>
+                              <p><strong>{t("expenses.quantity")}</strong> {e.quantity}</p>
+                              <p><strong>{t("expenses.tin")}</strong> {e.tin || "—"}</p>
+                              <p><strong>{t("expenses.bir_permit")}</strong> {e.birpermitnumber || "—"}</p>
                             </div>
                             {e.lineitems && (
                               <ul className="expense-detail-items">
@@ -745,23 +749,23 @@ export function ProjectDetailPage() {
                               </ul>
                             )}
                             {e.receiptimageurl && (
-                              <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
+                              <a href={e.receiptimageurl} target="_blank" rel="noreferrer">{t("expenses.view_receipt")}</a>
                             )}
 
                             {e.submittedby === user.id && user.role === "General Manager" && (
-                              <Banner tone="warning" title="You are reviewing your own submission">
-                                Your approval will be recorded under your account.
+                              <Banner tone="warning" title={t("expenses.own_title")}>
+                                {t("expenses.own_body")}
                               </Banner>
                             )}
 
                             {canReview && e.status === "Pending" && (
                               e.submittedby === user.id && user.role !== "General Manager" ? (
-                                <p>You submitted this expense, so someone else must review it.</p>
+                                <p>{t("expenses.own_waiting")}</p>
                               ) : (
                                 <div className="expense-detail-actions">
-                                  <Button onClick={() => handleApprove(e.expenseid)}>Approve</Button>
+                                  <Button onClick={() => handleApprove(e.expenseid)}>{t("expenses.approve")}</Button>
                                   {!(e.submittedby === user.id && user.role === "General Manager") && (
-                                    <Button variant="danger" onClick={() => openReject(e)}>Reject</Button>
+                                    <Button variant="danger" onClick={() => openReject(e)}>{t("expenses.reject")}</Button>
                                   )}
                                 </div>
                               )
@@ -790,25 +794,23 @@ export function ProjectDetailPage() {
 
       <section className="record-protection" aria-labelledby="record-protection-title">
         <div className="section-head">
-          <h2 id="record-protection-title">Record protection</h2>
-          <span className="section-head-note">
-            Each approved expense is hashed and stored on the blockchain; later edits raise an alert.
-          </span>
+          <h2 id="record-protection-title">{t("nav.record_protection")}</h2>
+          <span className="section-head-note">{t("pd.chain_note")}</span>
         </div>
 
           {chainError && <Banner tone="error" title={chainError} />}
-          {!chainError && chainLoading && <p className="dashboard-loading">Loading blockchain audit data…</p>}
+          {!chainError && chainLoading && <p className="dashboard-loading">{t("pd.loading_chain")}</p>}
           {!chainError && !chainLoading && chainSummary && (
             chainSummary.logs.length === 0 ? (
-              <Banner tone="empty" title="No blockchain records yet">
-                Records appear here once an approved expense is confirmed on the blockchain.
+              <Banner tone="empty" title={t("pd.no_chain_title")}>
+                {t("pd.no_chain_body")}
               </Banner>
             ) : (
               <Card className="users-table-card">
                 <div className="table-scroll">
                   <table className="users-table project-detail-table">
                     <thead>
-                      <tr><th>Transaction Hash</th><th>Block #</th><th>Validators</th><th>Recorded</th></tr>
+                      <tr><th>{t("pd.tx_hash")}</th><th>{t("pd.block")}</th><th>{t("pd.validators")}</th><th>{t("pd.recorded_col")}</th></tr>
                     </thead>
                     <tbody>
                       {chainSummary.logs.map((log) => (
@@ -816,7 +818,7 @@ export function ProjectDetailPage() {
                           <td title={log.txhash}>{log.txhash.slice(0, 20)}…</td>
                           <td>{log.blocknumber}</td>
                           <td>{log.validatornodecount}</td>
-                          <td>{DATETIME.format(new Date(log.timestamp))}</td>
+                          <td>{formatDate(log.timestamp, DATETIME_OPTIONS)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -832,7 +834,7 @@ export function ProjectDetailPage() {
             {statusDialog.kind === "activate" && (
               <>
                 <h2 id="project-status-title" className="modal-title">
-                  {readyToActivate ? "Activate this project?" : "Not ready to activate"}
+                  {readyToActivate ? t("pd.activate_title") : t("pd.not_ready")}
                 </h2>
                 <ul className="pd-checklist">
                   {activationChecks.map((c) => (
@@ -842,17 +844,15 @@ export function ProjectDetailPage() {
                   ))}
                 </ul>
                 <p className="modal-body">
-                  {readyToActivate
-                    ? "The Project Manager, Site Manager and Purchaser will be notified, and material requests and purchases can begin."
-                    : "Complete the missing steps first."}
+                  {readyToActivate ? t("pd.activate_body") : t("pd.complete_missing")}
                 </p>
               </>
             )}
             {statusDialog.kind === "complete" && (
               <>
-                <h2 id="project-status-title" className="modal-title">Mark this project as completed?</h2>
+                <h2 id="project-status-title" className="modal-title">{t("pd.complete_title")}</h2>
                 <Field
-                  label="Actual completion / turnover date"
+                  label={t("pd.actual_completion")}
                   required
                   type="date"
                   value={statusInput}
@@ -862,13 +862,13 @@ export function ProjectDetailPage() {
             )}
             {statusDialog.kind === "cancel" && (
               <>
-                <h2 id="project-status-title" className="modal-title">Cancel this project?</h2>
-                <p className="modal-body">Use this when the project didn't push through. It can't be reopened.</p>
+                <h2 id="project-status-title" className="modal-title">{t("pd.cancel_title")}</h2>
+                <p className="modal-body">{t("pd.cancel_body")}</p>
                 <Field
-                  label="Reason"
+                  label={t("bom.reason")}
                   required
                   as="textarea"
-                  placeholder="e.g. Client did not push through"
+                  placeholder={t("pd.cancel_reason_ph")}
                   value={statusInput}
                   onChange={(ev) => setStatusInput(ev.target.value)}
                 />
@@ -876,7 +876,7 @@ export function ProjectDetailPage() {
             )}
             {statusError && <Banner tone="error" title={statusError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeStatusDialog} disabled={statusBusy}>Back</Button>
+              <Button variant="secondary" onClick={closeStatusDialog} disabled={statusBusy}>{t("bom.back")}</Button>
               {!(statusDialog.kind === "activate" && !readyToActivate) && <Button
                 variant={statusDialog.kind === "cancel" ? "danger" : "primary"}
                 onClick={handleStatusAction}
@@ -885,7 +885,7 @@ export function ProjectDetailPage() {
                   (statusDialog.kind === "activate" ? !readyToActivate : !statusInput.trim())
                 }
               >
-                {statusBusy ? "Saving…" : statusDialog.kind === "activate" ? "Activate" : statusDialog.kind === "complete" ? "Mark Completed" : "Cancel Project"}
+                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : t("pd.cancel_btn")}
               </Button>}
             </div>
           </div>
@@ -894,16 +894,16 @@ export function ProjectDetailPage() {
       {milestoneDialog && (
         <div className="modal-overlay" role="presentation" onClick={closeMilestoneDialog}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-milestone-title" onClick={(ev) => ev.stopPropagation()}>
-            <h2 id="pd-milestone-title" className="modal-title">Add milestone</h2>
+            <h2 id="pd-milestone-title" className="modal-title">{t("pd.add_milestone")}</h2>
             <Field
-              label="Milestone name"
+              label={t("pd.milestone_name")}
               required
-              placeholder="Enter milestone name"
+              placeholder={t("pd.milestone_ph")}
               value={milestoneForm.name}
               onChange={(ev) => setMilestoneForm((f) => ({ ...f, name: ev.target.value }))}
             />
             <Field
-              label="Due date"
+              label={t("mobile.due_date")}
               required
               type="date"
               value={milestoneForm.dueDate}
@@ -911,23 +911,21 @@ export function ProjectDetailPage() {
             />
             <Field
               as="select"
-              label="Phase"
+              label={t("pd.phase")}
               value={milestoneForm.phase}
               onChange={(ev) => setMilestoneForm((f) => ({ ...f, phase: ev.target.value }))}
             >
-              <option value="Construction">Construction</option>
-              <option value="Planning">Planning (pre-construction)</option>
+              <option value="Construction">{t("projects.construction")}</option>
+              <option value="Planning">{t("pd.phase_planning")}</option>
             </Field>
             <p className="modal-body">
-              {milestoneForm.phase === "Planning"
-                ? "Planning tasks under this milestone are handled by the GM or PM directly — no Site Manager involved."
-                : "Construction tasks under this milestone are assigned to this project's Site Manager."}
+              {milestoneForm.phase === "Planning" ? t("pd.milestone_planning_help") : t("pd.milestone_construction_help")}
             </p>
             {milestoneError && <Banner tone="error" title={milestoneError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeMilestoneDialog} disabled={milestoneBusy}>Cancel</Button>
+              <Button variant="secondary" onClick={closeMilestoneDialog} disabled={milestoneBusy}>{t("common.cancel")}</Button>
               <Button onClick={handleCreateMilestone} disabled={milestoneBusy || !milestoneForm.name.trim() || !milestoneForm.dueDate}>
-                {milestoneBusy ? "Adding…" : "Add Milestone"}
+                {milestoneBusy ? t("pd.adding") : t("pd.add_milestone_btn")}
               </Button>
             </div>
           </div>
@@ -936,21 +934,19 @@ export function ProjectDetailPage() {
       {taskDialog && (
         <div className="modal-overlay" role="presentation" onClick={closeTaskDialog}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-task-title" onClick={(ev) => ev.stopPropagation()}>
-            <h2 id="pd-task-title" className="modal-title">Add task to "{taskDialog.milestone.name}"</h2>
+            <h2 id="pd-task-title" className="modal-title">{t("pd.add_task_to", { name: taskDialog.milestone.name })}</h2>
             <p className="modal-body">
-              {taskDialog.milestone.phase === "Planning"
-                ? "No Site Manager involved — pick who this is handled by."
-                : "Assigned automatically to this project's Site Manager."}
+              {taskDialog.milestone.phase === "Planning" ? t("pd.task_planning_help") : t("pd.task_auto_help")}
             </p>
             <Field
-              label="Task name"
+              label={t("pd.task_name")}
               required
-              placeholder="Enter task name"
+              placeholder={t("pd.task_ph")}
               value={taskForm.taskName}
               onChange={(ev) => setTaskForm((f) => ({ ...f, taskName: ev.target.value }))}
             />
             <Field
-              label="Due date"
+              label={t("mobile.due_date")}
               required
               type="date"
               value={taskForm.dueDate}
@@ -959,7 +955,7 @@ export function ProjectDetailPage() {
             {taskDialog.milestone.phase === "Planning" && (
               <Field
                 as="select"
-                label="Handled by"
+                label={t("pd.handled_by")}
                 required
                 value={taskForm.handledBy}
                 onChange={(ev) => setTaskForm((f) => ({ ...f, handledBy: ev.target.value }))}
@@ -970,9 +966,9 @@ export function ProjectDetailPage() {
             )}
             {taskError && <Banner tone="error" title={taskError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeTaskDialog} disabled={taskBusy}>Cancel</Button>
+              <Button variant="secondary" onClick={closeTaskDialog} disabled={taskBusy}>{t("common.cancel")}</Button>
               <Button onClick={handleCreateTask} disabled={taskBusy || !taskForm.taskName.trim() || !taskForm.dueDate}>
-                {taskBusy ? "Adding…" : "Add Task"}
+                {taskBusy ? t("pd.adding") : t("pd.add_task_btn")}
               </Button>
             </div>
           </div>
@@ -995,22 +991,20 @@ export function ProjectDetailPage() {
       {completeDialog && (
         <div className="modal-overlay" role="presentation" onClick={closeCompleteDialog}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-complete-title" onClick={(ev) => ev.stopPropagation()}>
-            <h2 id="pd-complete-title" className="modal-title">Mark "{completeDialog.task.taskname}" done?</h2>
-            <p className="modal-body">
-              This closes the task directly — there's no photo or review step for a Planning task.
-            </p>
+            <h2 id="pd-complete-title" className="modal-title">{t("pd.mark_done_title", { name: completeDialog.task.taskname })}</h2>
+            <p className="modal-body">{t("pd.mark_done_body")}</p>
             <Field
               as="textarea"
-              label="Note (optional)"
-              placeholder="Anything worth recording about how this was done"
+              label={t("pd.note_optional")}
+              placeholder={t("pd.note_ph")}
               value={completeNote}
               onChange={(ev) => setCompleteNote(ev.target.value)}
             />
             {completeError && <Banner tone="error" title={completeError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeCompleteDialog} disabled={completeBusy}>Cancel</Button>
+              <Button variant="secondary" onClick={closeCompleteDialog} disabled={completeBusy}>{t("common.cancel")}</Button>
               <Button onClick={handleCompleteTask} disabled={completeBusy}>
-                {completeBusy ? "Marking done…" : "Mark done"}
+                {completeBusy ? t("pd.marking_done") : t("pd.mark_done")}
               </Button>
             </div>
           </div>
@@ -1020,25 +1014,23 @@ export function ProjectDetailPage() {
         <div className="modal-overlay" role="presentation" onClick={() => { if (!siteManagerSaving) setSmDialog(false); }}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="pd-sm-title" onClick={(ev) => ev.stopPropagation()}>
             <h2 id="pd-sm-title" className="modal-title">
-              {project.sitemanagerid ? "Change Site Manager" : "Assign a Site Manager"}
+              {project.sitemanagerid ? t("pd.sm_change_title") : t("pd.assign_sm")}
             </h2>
-            <p className="modal-body">
-              Tasks are auto-assigned to this project's Site Manager when a Project Manager creates them.
-            </p>
+            <p className="modal-body">{t("pd.sm_help")}</p>
             <ManagerPicker
               label="Site Manager"
               managers={siteManagers}
               loading={false}
               value={project.sitemanagerid || ""}
               currentId={project.sitemanagerid}
-              emptyOptionLabel="No Site Manager"
+              emptyOptionLabel={t("pd.no_sm")}
               disabled={siteManagerSaving || siteManagers.length === 0}
               onChange={async (value) => { const ok = await handleSiteManagerChange(value); if (ok) setSmDialog(false); }}
             />
-            {siteManagerSaving && <p className="project-detail-assignment-status">Updating assignment…</p>}
+            {siteManagerSaving && <p className="project-detail-assignment-status">{t("pd.updating_assignment")}</p>}
             {siteManagersError && <Banner tone="error" title={siteManagersError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setSmDialog(false)} disabled={siteManagerSaving}>Close</Button>
+              <Button variant="secondary" onClick={() => setSmDialog(false)} disabled={siteManagerSaving}>{t("pd.close")}</Button>
             </div>
           </div>
         </div>
@@ -1046,23 +1038,23 @@ export function ProjectDetailPage() {
       {rejecting && (
         <div className="modal-overlay" role="presentation" onClick={closeReject}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="project-reject-title" onClick={(ev) => ev.stopPropagation()}>
-            <h2 id="project-reject-title" className="modal-title">Reject this expense?</h2>
+            <h2 id="project-reject-title" className="modal-title">{t("expenses.confirm_reject_title")}</h2>
             <p className="modal-body">
-              <strong>{rejecting.vendorname}</strong> · {PESO.format(rejecting.amount)}. The submitter will see it as rejected. No blockchain record is written.
+              <strong>{rejecting.vendorname}</strong> · {PESO.format(rejecting.amount)}. {t("pd.reject_body")}
             </p>
             <Field
-              label="Reason for rejection"
+              label={t("expenses.reason_label")}
               required
               as="textarea"
-              placeholder="Tell the submitter what needs to change"
+              placeholder={t("expenses.reason_placeholder")}
               value={rejectReason}
               onChange={(ev) => setRejectReason(ev.target.value)}
             />
             {actionError && <Banner tone="error" title={actionError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeReject} disabled={rejectBusy}>Cancel</Button>
+              <Button variant="secondary" onClick={closeReject} disabled={rejectBusy}>{t("common.cancel")}</Button>
               <Button variant="danger" onClick={handleReject} disabled={rejectBusy || !rejectReason.trim()}>
-                {rejectBusy ? "Saving…" : "Reject"}
+                {rejectBusy ? t("common.saving") : t("expenses.reject")}
               </Button>
             </div>
           </div>

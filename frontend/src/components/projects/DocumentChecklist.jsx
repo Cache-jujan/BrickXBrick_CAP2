@@ -61,6 +61,12 @@ export function DocumentChecklist({ source, selection, onChange }) {
     onChange(next);
   }
 
+  function setMany(tasks, checked) {
+    let next = selection;
+    for (const t of tasks) next = withChecked(next, t, checked);
+    onChange(next);
+  }
+
   if (isCopy) {
     const all = source.milestones.flatMap((m) => m.tasks);
     const on = all.filter((t) => isChecked(t, selection)).length;
@@ -78,6 +84,7 @@ export function DocumentChecklist({ source, selection, onChange }) {
                 <label>
                   <input
                     type="checkbox"
+                    className="dc-box"
                     checked={ticked === m.tasks.length && m.tasks.length > 0}
                     ref={(el) => { if (el) el.indeterminate = ticked > 0 && ticked < m.tasks.length; }}
                     onChange={(e) => setMilestone(m, e.target.checked)}
@@ -105,11 +112,14 @@ export function DocumentChecklist({ source, selection, onChange }) {
       <p className="dc-sub">
         Each ticked document becomes a task with its own due date. Untick the ones this project doesn't need;
         you can add a task later from the project page. {onCount} selected.
-        {fixedCount > 0 && ` ${fixedCount} other tasks from the template are always included.`}
+        {fixedCount > 0 && ` ${fixedCount} other ${fixedCount === 1 ? "task" : "tasks"} from the template ${fixedCount === 1 ? "is" : "are"} always included.`}
       </p>
 
       <fieldset className="dc-group">
-        <legend className="dc-legend"><strong>Standard permit documents</strong></legend>
+        <legend className="dc-legend dc-legend-bar">
+          <strong>Standard permit documents</strong>
+          <GroupTools tasks={standard} selection={selection} onSet={setMany} />
+        </legend>
         <ul className="dc-list">
           {standard.map((t) => <Row key={t.id} task={t} checked={isChecked(t, selection)} onToggle={toggle} />)}
         </ul>
@@ -117,7 +127,10 @@ export function DocumentChecklist({ source, selection, onChange }) {
 
       {conditional.length > 0 && (
         <fieldset className="dc-group">
-          <legend className="dc-legend"><strong>Only if it applies</strong></legend>
+          <legend className="dc-legend dc-legend-bar">
+            <strong>Only if it applies</strong>
+            <GroupTools tasks={conditional} selection={selection} onSet={setMany} />
+          </legend>
           <ul className="dc-list">
             {conditional.map((t) => <Row key={t.id} task={t} checked={isChecked(t, selection)} onToggle={toggle} />)}
           </ul>
@@ -127,15 +140,33 @@ export function DocumentChecklist({ source, selection, onChange }) {
   );
 }
 
+// "3 of 12" with Select all / Clear, for one group of documents.
+function GroupTools({ tasks, selection, onSet }) {
+  const on = tasks.filter((t) => isChecked(t, selection)).length;
+  return (
+    <span className="dc-tools">
+      <span className="dc-count">{on} of {tasks.length}</span>
+      <button type="button" className="dc-link" onClick={() => onSet(tasks, true)} disabled={on === tasks.length}>
+        Select all
+      </button>
+      <button type="button" className="dc-link" onClick={() => onSet(tasks, false)} disabled={on === 0}>
+        Clear
+      </button>
+    </span>
+  );
+}
+
 function Row({ task, checked, onToggle }) {
   return (
     <li className="dc-row">
-      <label>
-        <input type="checkbox" checked={checked} onChange={(e) => onToggle(task, e.target.checked)} />
-        <span className="dc-name">{task.name}</span>
-        {task.handledBy && <span className="dc-owner">{OWNER[task.handledBy]}</span>}
+      <label className={`dc-card ${checked ? "dc-card-on" : ""}`}>
+        <input type="checkbox" className="dc-box" checked={checked} onChange={(e) => onToggle(task, e.target.checked)} />
+        <span className="dc-text">
+          <span className="dc-name">{task.name}</span>
+          {task.hint && <span className="dc-hint">{task.hint}</span>}
+          {task.handledBy && <span className="dc-owner">{OWNER[task.handledBy]}</span>}
+        </span>
       </label>
-      {task.hint && <p className="dc-hint">{task.hint}</p>}
     </li>
   );
 }

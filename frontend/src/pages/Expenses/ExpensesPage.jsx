@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   listExpenses,
   listFlaggedExpenses,
@@ -16,13 +16,26 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { flagLabel } from "../../utils/plainLanguage";
+import { FlagReviewPanel, SplitSiblings } from "./FlagReviewPanel";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ExpensesPage.css";
 import { verifyExpense } from "../../api/blockchainApi";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
-const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "numeric" });
 const STATUS_TABS = ["All", "Pending", "Flagged", "Approved", "Rejected"];
 const PAGE_SIZE = 10;
+
+/** Line items arrive as JSON text or an array; a bad value shows no lines instead of breaking the page. */
+function parseLineItems(value) {
+  if (!value) return [];
+  if (typeof value !== "string") return Array.isArray(value) ? value : [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Render the GM/PM expense review queue with status filters and review actions.
@@ -30,6 +43,7 @@ const PAGE_SIZE = 10;
  */
 export function ExpensesPage() {
   const { user } = useAuth();
+  const { t, tv, formatDate } = useLocale();
   const [expenses, setExpenses] = useState([]);
   const [flagged, setFlagged] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -40,6 +54,9 @@ export function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState(null);
+  // A notification can link to one expense (?focus=<id>): show just that one, opened, until "Show all".
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = searchParams.get("focus");
 
   const [confirm, setConfirm] = useState(null); // { expense, action }
   const [reason, setReason] = useState("");
@@ -62,7 +79,7 @@ export function ExpensesPage() {
       setProjects(proj);
       setFlagged(flg);
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't load expenses."));
+      setError(extractErrorMessage(err, t("errors.load_expenses")));
     } finally {
       setLoading(false);
     }
@@ -72,6 +89,10 @@ export function ExpensesPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (focusId) setOpenId(focusId);
+  }, [focusId]);
+
   const projectById = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.projectid, p])),
     [projects]
@@ -80,6 +101,11 @@ export function ExpensesPage() {
   // { [expenseid]: [{ flagType, reason }] }
   const flagMap = useMemo(
     () => Object.fromEntries(flagged.map((f) => [f.expenseid, f.flags])),
+    [flagged]
+  );
+  // The full flagged row (project, request, split portions, matched duplicate) for the review panel.
+  const flaggedById = useMemo(
+    () => Object.fromEntries(flagged.map((f) => [f.expenseid, f])),
     [flagged]
   );
 
@@ -99,6 +125,7 @@ export function ExpensesPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    if (focusId) return scoped.filter((e) => e.expenseid === focusId);
     return scoped
       .filter((e) => {
         if (tab === "All") return true;
@@ -114,7 +141,7 @@ export function ExpensesPage() {
         );
       })
       .sort((a, b) => new Date(b.submittedat) - new Date(a.submittedat));
-  }, [scoped, tab, search, projectById, flagMap]);
+  }, [scoped, tab, search, projectById, flagMap, focusId]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -140,7 +167,7 @@ export function ExpensesPage() {
     } catch (err) {
       setVerifyResults((prev) => ({
         ...prev,
-        [expenseId]: { verified: false, error: extractErrorMessage(err, "Verification failed.") },
+        [expenseId]: { verified: false, error: extractErrorMessage(err, t("errors.verify_failed")) },
       }));
     } finally {
       setVerifyingId(null);
@@ -164,14 +191,14 @@ export function ExpensesPage() {
       setExpenses(exp);
       setFlagged(flg);
     } catch (err) {
-      setActionError(extractErrorMessage(err, `Couldn't ${confirm.action} this expense.`));
+      setActionError(extractErrorMessage(err, t(confirm.action === "approve" ? "errors.expense_approve" : "errors.expense_reject")));
     } finally {
       setBusy(false);
     }
   }
 
-  function selectTab(t) {
-    setTab(t);
+  function selectTab(name) {
+    setTab(name);
     setPage(1);
   }
 
@@ -182,67 +209,77 @@ export function ExpensesPage() {
       <div className="expenses-header spread">
         <div>
           <h1>
-            {user.role === "Project Manager"
-              ? "PM Fraud Review Queue"
-              : "Expenses"}
+            {user.role === "Project Manager" ? t("expenses.pm_title") : t("nav.expenses")}
           </h1>
             <p className="expenses-subtitle">
-              {user.role === "Project Manager"
-                ? "Review F9 fraud flags, request corrections, or approve expenses for your projects."
-                : "Review submitted expenses. Approving one saves a tamper-proof copy, so any later edit gets caught."}
+              {user.role === "Project Manager" ? t("expenses.pm_subtitle") : t("expenses.gm_subtitle")}
             </p>
         </div>
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+        <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+          <Link to="/requests" className="btn btn-secondary">
+            {t("nav.open_requests")}
+          </Link>
+          <Link to="/expenses/trip-cost" className="btn btn-secondary">
+            {t("nav.trip_cost")}
+          </Link>
           <Link to="/expenses/split" className="btn btn-secondary">
-            Split Receipt
+            {t("nav.split_receipt")}
           </Link>
           <Link to="/expenses/new" className="btn btn-primary">
-            Submit Expense
+            {t("nav.submit_expense")}
           </Link>
         </div>
       </div>
 
       {error && <Banner tone="error" title={error} />}
       {notice && (
-        <Banner tone="warning" title="Approved. The tamper-proof copy will be saved shortly">
-          The record servers are busy or offline right now. The system will keep trying automatically,
-          so there's nothing you need to do.
+        <Banner tone="warning" title={t("expenses.approved_notice_title")}>
+          {t("expenses.approved_notice_body")}
         </Banner>
       )}
       {actionError && !confirm && <Banner tone="error" title={actionError} />}
+      {focusId && (
+        <Banner
+          tone="info"
+          title={t("expenses.focus_title")}
+          action={<Button variant="secondary" onClick={() => { setSearchParams({}); setOpenId(null); }}>{t("expenses.focus_show_all")}</Button>}
+        >
+          {t("expenses.focus_body")}
+        </Banner>
+      )}
 
       {!error && (
         <>
           <div className="expenses-toolbar">
             <div className="expenses-tabs" role="tablist">
-              {STATUS_TABS.map((t) => (
+              {STATUS_TABS.map((name) => (
                 <button
-                  key={t}
+                  key={name}
                   type="button"
                   role="tab"
-                  aria-selected={tab === t}
-                  className={"expenses-tab" + (tab === t ? " expenses-tab-active" : "")}
-                  onClick={() => selectTab(t)}
+                  aria-selected={tab === name}
+                  className={"expenses-tab" + (tab === name ? " expenses-tab-active" : "")}
+                  onClick={() => selectTab(name)}
                 >
-                  {t} <span className="expenses-tab-count">{counts[t]}</span>
+                  {tv("status", name)} <span className="expenses-tab-count">{counts[name]}</span>
                 </button>
               ))}
             </div>
             <input
               type="search"
               className="expenses-search"
-              placeholder="Search vendor, project or submitter"
+              placeholder={t("expenses.search_placeholder")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              aria-label="Search expenses"
+              aria-label={t("expenses.search_label")}
             />
           </div>
 
-          {loading && <p className="dashboard-loading">Loading expenses…</p>}
+          {loading && <p className="dashboard-loading">{t("dashboard.loading_expenses")}</p>}
 
           {!loading && filtered.length === 0 && (
-            <Banner tone="empty" title={search ? "No expenses match your search" : `No ${tab === "All" ? "" : tab.toLowerCase() + " "}expenses`}>
-              {search ? "Try a different vendor, project or name." : "Submitted expenses will appear here."}
+            <Banner tone="empty" title={search ? t("expenses.no_match") : tab === "All" ? t("expenses.none") : t("expenses.none_status", { status: tv("status", tab).toLowerCase() })}>
+              {search ? t("expenses.try_different") : t("expenses.will_appear")}
             </Banner>
           )}
 
@@ -253,12 +290,12 @@ export function ExpensesPage() {
                   <table className="users-table expenses-table">
                     <thead>
                       <tr>
-                        <th>Vendor</th>
-                        <th>Project</th>
-                        <th>Category</th>
-                        <th>Amount</th>
-                        <th>Date</th>
-                        <th>Status</th>
+                        <th>{t("dashboard.vendor")}</th>
+                        <th>{t("nav.project")}</th>
+                        <th>{t("dashboard.category")}</th>
+                        <th>{t("dashboard.amount")}</th>
+                        <th>{t("dashboard.date")}</th>
+                        <th>{t("dashboard.status")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -266,9 +303,7 @@ export function ExpensesPage() {
                         const isOpen = openId === e.expenseid;
                         const project = projectById[e.projectid];
                         const flags = flagMap[e.expenseid];
-                        const items = e.lineitems
-                          ? typeof e.lineitems === "string" ? JSON.parse(e.lineitems) : e.lineitems
-                          : [];
+                        const items = parseLineItems(e.lineitems);
                         return (
                           <Fragment key={e.expenseid}>
                             <tr
@@ -277,19 +312,25 @@ export function ExpensesPage() {
                             >
                               <td>{e.vendorname}</td>
                               <td>{project?.name || "—"}</td>
-                              <td>{e.category}</td>
+                              <td>
+                                {e.istripcost ? (
+                                  <Badge status="Draft">{t("expenses.trip_cost")}</Badge>
+                                ) : (
+                                  tv("category", e.category)
+                                )}
+                              </td>
                               <td>{PESO.format(e.amount)}</td>
-                              <td>{DATE.format(new Date(e.receiptdate))}</td>
+                              <td>{formatDate(e.receiptdate)}</td>
                               <td>
                                 <span className="expenses-badges">
                                   <Badge status={e.status} />
                                   {flags && (
                                     <Badge status="At Risk">
-                                      {flags.length} flag{flags.length === 1 ? "" : "s"} to review
+                                      {flags.length === 1 ? t("expenses.flags_one") : t("expenses.flags_other", { count: flags.length })}
                                     </Badge>
                                   )}
                                   {e.status === "Approved" && e.blockchainstatus === "TamperDetected" && (
-                                    <Badge status="Overdue">Changed after approval</Badge>
+                                    <Badge status="Overdue">{t("chain.changed.label")}</Badge>
                                   )}
                                 </span>
                               </td>
@@ -298,30 +339,38 @@ export function ExpensesPage() {
                               <tr className="expenses-detail">
                                 <td colSpan={6}>
                                   {flags && (
-                                    <Banner tone="warning" title="Flagged for review">
-                                      <ul className="expenses-flag-list">
-                                        {flags.map((f, i) => (
-                                          <li key={i}>
-                                            <strong>{flagLabel(f.flagType)}.</strong> {f.reason}
-                                          </li>
-                                        ))}
-                                      </ul>
+                                    <FlagReviewPanel
+                                      expense={flaggedById[e.expenseid] ?? e}
+                                      flags={flags}
+                                      showEffect={e.status === "Pending"}
+                                    />
+                                  )}
+                                  {e.istripcost && (
+                                    <Banner tone="info" title={t("expenses.trip_cost_title")}>
+                                      {t("expenses.trip_cost_body")}
                                     </Banner>
                                   )}
+                                  {e.submitnote && (
+                                    <Banner tone="warning" title={e.istripcost ? t("expenses.trip_cost_reason") : t("expenses.submit_note")}>
+                                      {e.submitnote}
+                                    </Banner>
+                                  )}
+                                  {!flags && <SplitSiblings siblings={e.siblings} />}
                                   {e.submittedby === user.id && user.role === "General Manager" && (
-                                    <Banner tone="warning" title="You are reviewing your own submission">
-                                      Your approval will be recorded under your account.
+                                    <Banner tone="warning" title={t("expenses.own_title")}>
+                                      {t("expenses.own_body")}
                                     </Banner>
                                   )}
                                   <div className="expenses-detail-grid">
-                                    <p><strong>Submitted by:</strong> {e.submittedbyname}</p>
-                                    <p><strong>Quantity:</strong> {e.quantity}</p>
-                                    <p><strong>BIR status:</strong> {e.birvalidationstatus}</p>
-                                    <p><strong>TIN:</strong> {e.tin || "—"}</p>
-                                    <p><strong>BIR permit:</strong> {e.birpermitnumber || "—"}</p>
-                                    <p><strong>OR/SI number:</strong> {e.birnumber || "—"}</p>
+                                    <p><strong>{t("expenses.submitted_by")}</strong> {e.submittedbyname}</p>
+                                    {e.ticketsubject && <p><strong>{t("expenses.request")}</strong> {e.ticketsubject}</p>}
+                                    <p><strong>{t("expenses.quantity")}</strong> {e.quantity}</p>
+                                    <p><strong>{t("expenses.bir_status")}</strong> {tv("bir", e.birvalidationstatus)}</p>
+                                    <p><strong>{t("expenses.tin")}</strong> {e.tin || "—"}</p>
+                                    <p><strong>{t("expenses.bir_permit")}</strong> {e.birpermitnumber || "—"}</p>
+                                    <p><strong>{t("expenses.or_si")}</strong> {e.birnumber || "—"}</p>
                                     {e.status === "Rejected" && e.rejectionreason && (
-                                      <p><strong>Rejection reason:</strong> {e.rejectionreason}</p>
+                                      <p><strong>{t("expenses.rejection_reason")}</strong> {e.rejectionreason}</p>
                                     )}
                                   </div>
                                   {items.length > 0 && (
@@ -333,24 +382,24 @@ export function ExpensesPage() {
                                   )}
                                   <div className="expenses-detail-links">
                                     {e.receiptimageurl && (
-                                      <a href={e.receiptimageurl} target="_blank" rel="noreferrer">View receipt image</a>
+                                      <a href={e.receiptimageurl} target="_blank" rel="noreferrer">{t("expenses.view_receipt")}</a>
                                     )}
-                                    {project && <Link to={`/projects/${project.projectid}`}>Open project</Link>}
+                                    {project && <Link to={`/projects/${project.projectid}`}>{t("expenses.open_project")}</Link>}
                                   </div>
                                   {e.status === "Pending" && (
                                     <div className="expenses-actions">
                                       {e.submittedby === user.id ? (
                                         user.role === "General Manager" ? (
-                                          <Button onClick={() => openConfirm(e, "approve")}>Approve</Button>
+                                          <Button onClick={() => openConfirm(e, "approve")}>{t("expenses.approve")}</Button>
                                         ) : (
                                         <p className="expenses-subtitle">
-                                          You submitted this expense, so someone else must review it.
+                                          {t("expenses.own_waiting")}
                                         </p>
                                         )
                                       ) : (
                                         <>
-                                          <Button onClick={() => openConfirm(e, "approve")}>Approve</Button>
-                                          <Button variant="danger" onClick={() => openConfirm(e, "reject")}>Reject</Button>
+                                          <Button onClick={() => openConfirm(e, "approve")}>{t("expenses.approve")}</Button>
+                                          <Button variant="danger" onClick={() => openConfirm(e, "reject")}>{t("expenses.reject")}</Button>
                                         </>
                                       )}
                                     </div>
@@ -378,13 +427,13 @@ export function ExpensesPage() {
 
               <div className="expenses-footer">
                 <span className="expenses-total">
-                  {filtered.length} {filtered.length === 1 ? "expense" : "expenses"} · {PESO.format(filteredTotal)}
+                  {filtered.length === 1 ? t("expenses.count_one") : t("expenses.count_other", { count: filtered.length })} · {PESO.format(filteredTotal)}
                 </span>
                 {totalPages > 1 && (
                   <div className="expenses-pagination">
-                    <button type="button" className="expenses-page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</button>
-                    <span>Page {currentPage} of {totalPages}</span>
-                    <button type="button" className="expenses-page-btn" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>Next</button>
+                    <button type="button" className="expenses-page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>{t("common.previous")}</button>
+                    <span>{t("common.page_of", { page: currentPage, total: totalPages })}</span>
+                    <button type="button" className="expenses-page-btn" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>{t("common.next")}</button>
                   </div>
                 )}
               </div>
@@ -397,33 +446,47 @@ export function ExpensesPage() {
         <div className="modal-overlay" role="presentation" onClick={() => !busy && closeConfirm()}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="expense-confirm-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="expense-confirm-title" className="modal-title">
-              {confirm.action === "approve" ? "Approve this expense?" : "Reject this expense?"}
+              {confirm.action === "approve" ? t("expenses.confirm_approve_title") : t("expenses.confirm_reject_title")}
             </h2>
             <p className="modal-body">
               <strong>{confirm.expense.vendorname}</strong> · {PESO.format(confirm.expense.amount)}.{" "}
               {confirm.action === "approve"
-                ? "A tamper-proof copy of this expense will be saved. Approval can't be undone."
-                : "The submitter will see it as rejected, along with your reason."}
+                ? t("expenses.confirm_approve_body")
+                : t("expenses.confirm_reject_body")}
             </p>
+            {confirm.expense.submitnote && (
+              <Banner tone="warning" title={confirm.expense.istripcost ? t("expenses.trip_cost_reason") : t("expenses.submit_note")}>
+                {confirm.expense.submitnote}
+              </Banner>
+            )}
+            {flagMap[confirm.expense.expenseid] && (
+              <Banner tone="warning" title={t("expenses.flagged_title")}>
+                <ul className="expenses-flag-list">
+                  {flagMap[confirm.expense.expenseid].map((f, i) => (
+                    <li key={i}>{flagLabel(f.flagType, tv)}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
             {confirm.action === "reject" && (
               <Field
-                label="Reason for rejection"
+                label={t("expenses.reason_label")}
                 required
                 as="textarea"
-                placeholder="Tell the submitter what needs to change"
+                placeholder={t("expenses.reason_placeholder")}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
             )}
             {actionError && <Banner tone="error" title={actionError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeConfirm} disabled={busy}>Cancel</Button>
+              <Button variant="secondary" onClick={closeConfirm} disabled={busy}>{t("common.cancel")}</Button>
               <Button
                 variant={confirm.action === "approve" ? "primary" : "danger"}
                 onClick={handleConfirm}
                 disabled={busy || rejectNeedsReason}
               >
-                {busy ? "Saving…" : confirm.action === "approve" ? "Approve" : "Reject"}
+                {busy ? t("common.saving") : confirm.action === "approve" ? t("expenses.approve") : t("expenses.reject")}
               </Button>
             </div>
           </div>

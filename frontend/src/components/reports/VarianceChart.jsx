@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { BarController, BarElement, CategoryScale, Chart, LinearScale, Tooltip } from "chart.js";
 import { signedPct, signedPesoShort } from "../../utils/variance";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./BudgetChart.css";
 
 // Register only what a bar chart needs (the same set BudgetChart registers).
@@ -29,7 +30,7 @@ const valueLabels = {
     meta.data.forEach((bar, index) => {
       const value = chart.data.datasets[0].data[index];
       ctx.fillStyle = value > 0 ? OVER_COLOR : "#302f28";
-      const text = chart.$noBudget?.[index] ? "no budget" : signedPct(value, Math.abs(value) >= 10 ? 0 : 1);
+      const text = chart.$noBudget?.[index] ? chart.$noBudgetText : signedPct(value, Math.abs(value) >= 10 ? 0 : 1);
       ctx.fillText(text, Math.max(bar.x, zeroX) + 8, bar.y);
     });
     ctx.restore();
@@ -45,6 +46,7 @@ const valueLabels = {
  * destroyed before a new one is drawn or the component goes away.
  */
 export function VarianceChart({ projects }) {
+  const { t } = useLocale();
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
@@ -82,8 +84,8 @@ export function VarianceChart({ projects }) {
             callbacks: {
               label: (item) => {
                 const p = projects[item.dataIndex];
-                if (noBudget[item.dataIndex]) return `No budget set; ${PESO.format(p.cumulativeSpend)} spent`;
-                return `${signedPesoShort(p.varianceToDate)} (${signedPct(p.varianceToDatePct)}): ${PESO.format(p.cumulativeSpend)} spent of ${PESO.format(p.budget)}`;
+                if (noBudget[item.dataIndex]) return t("rep.tooltip_no_budget", { spend: PESO.format(p.cumulativeSpend) });
+                return t("rep.tooltip_variance", { signed: signedPesoShort(p.varianceToDate), pct: signedPct(p.varianceToDatePct), spend: PESO.format(p.cumulativeSpend), budget: PESO.format(p.budget) });
               },
             },
           },
@@ -101,20 +103,21 @@ export function VarianceChart({ projects }) {
       plugins: [valueLabels],
     });
     chart.$noBudget = noBudget;
+    chart.$noBudgetText = t("rep.no_budget_short");
     chartRef.current = chart;
     return () => {
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [projects]);
+  }, [projects, t]);
 
   const description = projects
-    .map((p) => `${p.name}: ${!Number.isFinite(p.varianceToDatePct) ? "no budget set" : `${signedPct(p.varianceToDatePct)} against budget, ${p.varianceToDate > 0 ? "over" : "under"} budget`}`)
+    .map((p) => `${p.name}: ${!Number.isFinite(p.varianceToDatePct) ? t("rep.no_budget_lower") : t("rep.var_desc", { pct: signedPct(p.varianceToDatePct), dir: p.varianceToDate > 0 ? t("rep.over_word") : t("rep.under_word") })}`)
     .join("; ");
 
   return (
     <div className="budget-chart" style={{ height: Math.max(150, projects.length * ROW_HEIGHT + CHART_PADDING) }}>
-      <canvas ref={canvasRef} role="img" aria-label={`Cost variance to date. ${description}`} />
+      <canvas ref={canvasRef} role="img" aria-label={t("rep.variance_aria", { description })} />
     </div>
   );
 }

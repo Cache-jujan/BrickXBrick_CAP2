@@ -2,6 +2,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { AppButton } from "@/components/app-button";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 type Kind = "empty" | "error" | "loading" | "offline";
 
@@ -21,7 +22,8 @@ const GLYPH: Record<Exclude<Kind, "loading">, { glyph: string; bg: string; fg: s
 };
 
 // The one empty / error / loading / offline panel. Plain words, one action.
-export function StateCard({ kind, title, body, onRetry, retryLabel = "Try again" }: Props) {
+export function StateCard({ kind, title, body, onRetry, retryLabel }: Props) {
+  const { t } = useLocale();
   return (
     <View style={styles.card} accessibilityRole={kind === "error" ? "alert" : undefined}>
       {kind === "loading" ? (
@@ -33,7 +35,7 @@ export function StateCard({ kind, title, body, onRetry, retryLabel = "Try again"
       )}
       {title ? <Text style={styles.title}>{title}</Text> : null}
       {body ? <Text style={styles.body}>{body}</Text> : null}
-      {onRetry ? <AppButton label={retryLabel} onPress={onRetry} variant="secondary" fit style={styles.action} /> : null}
+      {onRetry ? <AppButton label={retryLabel ?? t("common.try_again")} onPress={onRetry} variant="secondary" fit style={styles.action} /> : null}
     </View>
   );
 }

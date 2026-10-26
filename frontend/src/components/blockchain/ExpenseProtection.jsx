@@ -2,9 +2,10 @@ import { Banner } from "../ui/Banner";
 import { Button } from "../ui/Button";
 import { ChainStatus } from "./ChainStatus";
 import { humanizeVerifyError } from "../../utils/plainLanguage";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ExpenseProtection.css";
 
-const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 /**
  * The "Record protection" panel shown inside an approved expense's detail
@@ -15,36 +16,37 @@ const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeSty
  *         or { verified: false, error: "..." } when the request itself failed.
  */
 export function ExpenseProtection({ status, canCheck, checking, result, onCheck }) {
+  const { t, formatDate } = useLocale();
   const effectiveStatus = result && result.verified === false && !result.error ? "TamperDetected" : status;
 
   return (
-    <section className="expense-protection" aria-label="Record protection">
+    <section className="expense-protection" aria-label={t("nav.record_protection")}>
       <div className="expense-protection-head">
         <ChainStatus status={effectiveStatus} withDescription />
         {canCheck && (status === "Confirmed" || status === "TamperDetected") && (
           <Button variant="secondary" className="btn-sm" disabled={checking} onClick={onCheck}>
-            {checking ? "Checking…" : "Check for changes"}
+            {checking ? t("protection.checking") : t("protection.check")}
           </Button>
         )}
       </div>
 
       {result && result.verified && (
-        <Banner tone="success" title="No changes found">
-          This expense still matches the copy secured
-          {result.timestamp ? ` on ${DATETIME.format(new Date(result.timestamp))}` : " when it was approved"}.
+        <Banner tone="success" title={t("protection.no_changes")}>
+          {result.timestamp
+            ? t("protection.matches_on", { date: formatDate(result.timestamp, DATETIME_OPTIONS) })
+            : t("protection.matches_approved")}
         </Banner>
       )}
 
       {result && result.verified === false && result.error && (
-        <Banner tone="warning" title="Couldn't run the check">
-          {humanizeVerifyError(result.error)}
+        <Banner tone="warning" title={t("protection.check_failed")}>
+          {humanizeVerifyError(result.error, t)}
         </Banner>
       )}
 
       {result && result.verified === false && !result.error && (
-        <Banner tone="error" title="This expense was changed after approval">
-          Its details no longer match the secured copy. Your System Administrator has been notified
-          and it now appears under Tamper Alerts.
+        <Banner tone="error" title={t("protection.changed_title")}>
+          {t("protection.changed_body")}
         </Banner>
       )}
     </section>

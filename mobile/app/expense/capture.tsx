@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Redirect, router } from "expo-router";
+import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as Crypto from "expo-crypto";
@@ -11,16 +11,18 @@ import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useNetwork } from "@/lib/sync/network-context";
-import { useExpenseDraft } from "@/lib/expense-draft-context";
+import { useExpenseDraft, type DraftMode } from "@/lib/expense-draft-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { compressReceiptImage } from "@/lib/compress-image";
 import { startScan } from "@/lib/receipt-scans";
 import { PDF_MIME_TYPE, formatBytes, receiptFileProblem, receiptMimeType } from "@/lib/receipt-file";
 import { getSession } from "@/lib/auth";
+import { useLocale } from "@/lib/i18n-context";
 import { queueScan } from "@/lib/sync/db";
 import { copyFileToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 
 export default function CaptureScreen() {
+  const { t } = useLocale();
   const { draft, setFile, setScanID, reset } = useExpenseDraft();
   const [file, setLocalFile] = useState<FileState>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
@@ -31,9 +33,24 @@ export default function CaptureScreen() {
   // The server couldn't be reached on the last try: offer to keep it on the phone.
   const [unreachable, setUnreachable] = useState(false);
 
-  const isSplit = draft.mode === "split";
-  // Single mode needs a ticket; split mode has none (the server picks the requests).
-  if (!draft.ticket && !isSplit) return <Redirect href="/" />;
+  // A receipt with no request picked ("snap now") is matched to the open requests later,
+  // at Turn In. Only a receipt opened from one request keeps that request.
+  const mode: DraftMode = draft.ticket && draft.mode === "single" ? "single" : "split";
+  const isSplit = mode === "split";
+  // The Purchaser's receipts wait on Turn In; a Site Manager has no such tab and stays on their list.
+  const afterSnap = getSession()?.user.role === "Site Manager" ? "/" : "/turn-in";
+
+  // What the app needs to pick this receipt up again, including the projects it was scanned for.
+  function scanContext(picked: NonNullable<FileState>) {
+    return {
+      mode,
+      ticket: isSplit ? null : draft.ticket,
+      fileName: picked.name,
+      fileType: picked.type,
+      ...(isSplit && draft.scope ? { projectIds: draft.scope.projectIds, projectNames: draft.scope.projectNames } : {}),
+      ...(isSplit && draft.kind === "trip" ? { kind: "trip" as const } : {}),
+    };
+  }
 
   // Every new pick starts clean: no leftover "Try again" or error text.
   function pick(next: FileState) {
@@ -49,7 +66,7 @@ export default function CaptureScreen() {
   async function pickImage(asset: ImagePicker.ImagePickerAsset) {
     // The camera often reports no type at all; it always produces a JPEG.
     const mimeType = receiptMimeType(asset.mimeType, asset.fileName) ?? "image/jpeg";
-    const problem = receiptFileProblem(mimeType, null);
+    const problem = receiptFileProblem(mimeType, null, t);
     if (problem) return setPickError(problem);
 
     const name = asset.fileName ?? "photo.jpg";
@@ -61,7 +78,7 @@ export default function CaptureScreen() {
     } catch (err) {
       console.warn("Image compression failed; uploading the original:", err);
       // The original is uploaded as it is, so it must fit the size limit.
-      const tooBig = receiptFileProblem(mimeType, asset.fileSize);
+      const tooBig = receiptFileProblem(mimeType, asset.fileSize, t);
       if (tooBig) return setPickError(tooBig);
       pick({ type: "image", name, uri: asset.uri, mimeType });
     }
@@ -69,13 +86,13 @@ export default function CaptureScreen() {
 
   async function handleCamera() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return Alert.alert("Camera access needed", "Enable it in Settings.");
+    if (!perm.granted) return Alert.alert(t("mx.camera_needed_title"), t("mx.enable_settings"));
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 });
     if (!result.canceled) await pickImage(result.assets[0]);
   }
   async function handleGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert("Photo access needed", "Enable it in Settings.");
+    if (!perm.granted) return Alert.alert(t("mx.photo_needed_title"), t("mx.enable_settings"));
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
     if (!result.canceled) await pickImage(result.assets[0]);
   }
@@ -85,7 +102,7 @@ export default function CaptureScreen() {
     const a = result.assets[0];
     const mimeType = receiptMimeType(a.mimeType, a.name);
     // Only PDFs belong here; the gallery button is for photos.
-    const problem = mimeType === PDF_MIME_TYPE ? receiptFileProblem(mimeType, a.size) : "That isn't a PDF. Choose a PDF file.";
+    const problem = mimeType === PDF_MIME_TYPE ? receiptFileProblem(mimeType, a.size, t) : t("mx.not_pdf");
     if (problem) return setPickError(problem);
     pick({ type: "pdf", name: a.name, size: formatBytes(a.size), uri: a.uri, mimeType: PDF_MIME_TYPE });
   }
@@ -109,25 +126,22 @@ export default function CaptureScreen() {
         fileName: file.name,
         fileType: file.type,
         mimeType: file.mimeType ?? (file.type === "image" ? "image/jpeg" : "application/pdf"),
-        context: { mode: draft.mode, ticket: draft.ticket, fileName: file.name, fileType: file.type },
+        context: scanContext(file),
       });
       if (!result.queued) {
         await deleteQueuedPhoto(copied);
-        setErrorMessage(result.message ?? "Couldn't save this receipt on your phone.");
+        setErrorMessage(result.message ?? t("mx.save_failed"));
         setStatus("error");
         return;
       }
       refreshPendingCount();
       setStatus("idle");
-      Alert.alert(
-        "Saved on your phone",
-        "It will be uploaded for reading when you're back online. Then it appears under Scanned receipts, ready to review."
-      );
+      Alert.alert(t("mx.saved_phone_title"), t("mx.saved_phone_body"));
       reset();
-      router.replace("/");
+      router.replace(isSplit ? afterSnap : "/");
     } catch (err) {
       if (copied) await deleteQueuedPhoto(copied);
-      setErrorMessage("Couldn't save this receipt on your phone. Please try again.");
+      setErrorMessage(t("mx.save_failed_retry"));
       setStatus("error");
     }
   }
@@ -140,10 +154,16 @@ export default function CaptureScreen() {
     setUnreachable(false);
     setStatus("uploading"); setErrorMessage(null);
     try {
-      const scan = await startScan(file, { mode: draft.mode, ticket: draft.ticket, fileName: file.name, fileType: file.type });
+      const scan = await startScan(file, scanContext(file));
+      setStatus("idle");
+      if (isSplit) {
+        // Snap now, review later: the receipt goes to the Turn In tray and OCR runs there.
+        reset();
+        router.replace(afterSnap);
+        return;
+      }
       setFile(file);
       setScanID(scan.scanID);
-      setStatus("idle");
       router.replace({ pathname: "/expense/scanning", params: { id: scan.scanID } });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -155,25 +175,35 @@ export default function CaptureScreen() {
       }
       setUnreachable(isNetworkError);
       setErrorMessage(
-        isNetworkError
-          ? "Can't reach the server right now. Try again, or save it on your phone and it uploads by itself later."
-          : "Something went wrong while uploading. Please try again."
+        isNetworkError ? t("mx.err_server") : t("mx.err_upload")
       );
       setStatus("error");
     }
   }
 
-  const tips = ["Lay the receipt flat", "Show all four edges", "Use good light, no glare"];
+  const tips = [t("mx.tip_flat"), t("mx.tip_edges"), t("mx.tip_light")];
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader
-        title="Add receipt"
-        caption={isSplit ? "Split receipt · Step 1 of 3" : "Step 1 of 3"}
-        step={{ current: 1, total: 3 }}
+        title={t("mx.add_receipt")}
+        caption={isSplit ? undefined : t("mx.step_n", { current: 1, total: 3 })}
+        step={isSplit ? undefined : { current: 1, total: 3 }}
       />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {isSplit && draft.scope && draft.scope.projectNames.length > 0 && (
+          <View style={styles.contextChip}>
+            <Text style={styles.contextTitle} numberOfLines={2}>
+              {t("mx.scoped_chip", { projects: draft.scope.projectNames.join(", ") })}
+            </Text>
+          </View>
+        )}
+        {isSplit && draft.kind === "trip" && (
+          <View style={styles.contextChip}>
+            <Text style={styles.contextTitle} numberOfLines={1}>{t("mx.trip_chip")}</Text>
+          </View>
+        )}
         {!isSplit && (
           <View style={styles.contextChip}>
             <Text style={styles.contextTitle} numberOfLines={1}>{draft.ticket?.subject}</Text>
@@ -189,8 +219,8 @@ export default function CaptureScreen() {
               <View style={styles.dropIcon}>
                 <IconSymbol name="doc.fill" size={30} color={COLORS.primary} />
               </View>
-              <Text style={styles.dropTitle}>Add a photo or PDF of the receipt</Text>
-              <Text style={styles.dropBody}>We read the vendor, total and items for you. You check them next.</Text>
+              <Text style={styles.dropTitle}>{t("mx.drop_title")}</Text>
+              <Text style={styles.dropBody}>{t("mx.drop_body")}</Text>
             </>
           )}
         </View>
@@ -203,7 +233,7 @@ export default function CaptureScreen() {
 
         {!file && (
           <View style={styles.tips}>
-            <Text style={styles.tipsTitle}>For a good scan</Text>
+            <Text style={styles.tipsTitle}>{t("mx.good_scan")}</Text>
             {tips.map((tip) => (
               <View key={tip} style={styles.tipRow}>
                 <IconSymbol name="checkmark.circle.fill" size={16} color={COLORS.success} />
@@ -218,9 +248,7 @@ export default function CaptureScreen() {
         {file && status === "error" && errorMessage ? (
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : file && !isOnline ? (
-          <Text style={styles.offlineText}>
-            You're offline. The receipt will be saved on your phone and uploaded for reading when you're back online.
-          </Text>
+          <Text style={styles.offlineText}>{t("mx.offline_note")}</Text>
         ) : null}
 
         {file && (
@@ -231,42 +259,43 @@ export default function CaptureScreen() {
             accessibilityRole="button"
           >
             <Text style={styles.primaryButtonText}>
-              {!isOnline ? "Save to upload later" : status === "error" ? "Try again" : "Scan receipt"}
+              {!isOnline ? t("mx.save_later") : status === "error" ? t("common.try_again") : t("mx.scan_receipt")}
             </Text>
           </Pressable>
         )}
         {file && isOnline && unreachable && (
           <Pressable onPress={saveForLater} style={styles.outlinedButton} accessibilityRole="button">
-            <Text style={styles.outlinedButtonText}>Save on phone instead</Text>
+            <Text style={styles.outlinedButtonText}>{t("mx.save_phone_instead")}</Text>
           </Pressable>
         )}
 
+        {/* Taking the photo is the main way in; picking an existing file is the backup. */}
+        <Pressable
+          onPress={handleCamera}
+          style={({ pressed }) => [file ? styles.outlinedButton : styles.primaryButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={file ? styles.outlinedButtonText : styles.primaryButtonText}>{t("mx.take_photo")}</Text>
+        </Pressable>
         <View style={styles.buttonRow}>
           <Pressable
             onPress={handleGallery}
-            style={({ pressed }) => [styles.rowButton, file ? styles.outlinedButton : styles.primaryButton, pressed && styles.pressed]}
-            accessibilityRole="button"
-          >
-            <Text style={file ? styles.outlinedButtonText : styles.primaryButtonText}>Choose from gallery</Text>
-          </Pressable>
-          <Pressable
-            onPress={handleCamera}
             style={({ pressed }) => [styles.rowButton, styles.outlinedButton, pressed && styles.pressed]}
             accessibilityRole="button"
           >
-            <Text style={styles.outlinedButtonText}>Take photo</Text>
+            <Text style={styles.outlinedButtonText}>{t("mx.gallery")}</Text>
+          </Pressable>
+          <Pressable
+            onPress={handlePdf}
+            style={({ pressed }) => [styles.rowButton, styles.outlinedButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+          >
+            <Text style={styles.outlinedButtonText}>{t("mx.upload_pdf")}</Text>
           </Pressable>
         </View>
-        <Pressable
-          onPress={handlePdf}
-          style={({ pressed }) => [styles.outlinedButton, styles.pdfButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.outlinedButtonText}>Upload a PDF instead</Text>
-        </Pressable>
       </View>
 
-      <LoadingOverlay visible={status === "uploading"} message="Uploading receipt…" detail="Keep the app open until the upload finishes." />
+      <LoadingOverlay visible={status === "uploading"} message={t("mx.uploading_receipt")} detail={t("mx.keep_open")} />
     </SafeAreaView>
   );
 }
@@ -299,7 +328,6 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONT.bold, textAlign: "center" },
   outlinedButton: { minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: COLORS.card },
   outlinedButtonText: { color: COLORS.primary, fontSize: 15, fontFamily: FONT.bold, textAlign: "center" },
-  pdfButton: { alignSelf: "stretch" },
   pressed: { opacity: 0.85 },
 
   errorText: { color: COLORS.errorText, textAlign: "center", fontSize: 13, fontFamily: FONT.regular },

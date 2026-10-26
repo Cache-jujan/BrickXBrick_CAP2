@@ -8,12 +8,14 @@ import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import "./CreateMilestonePage.css";
 import { BackLink } from "../../components/ui/BackLink";
+import { useLocale } from "../../i18n/LocaleProvider";
 
 const EMPTY_FORM = { name: "", dueDate: "" };
 
 export function CreateMilestonePage() {
   const { id: projectId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -26,8 +28,8 @@ export function CreateMilestonePage() {
 
   function validate() {
     const errors = {};
-    if (!form.name.trim()) errors.name = "Milestone Name is required.";
-    if (!form.dueDate) errors.dueDate = "Due date is required.";
+    if (!form.name.trim()) errors.name = t("ms.err_name");
+    if (!form.dueDate) errors.dueDate = t("ms.err_due");
     return errors;
   }
 
@@ -51,7 +53,7 @@ export function CreateMilestonePage() {
       });
       navigate(`/projects/${projectId}`, { replace: true });
     } catch (err) {
-      setFormError(extractErrorMessage(err, "Couldn't create the milestone. Please try again."));
+      setFormError(extractErrorMessage(err, t("errors.create_milestone")));
     } finally {
       setSubmitting(false);
     }
@@ -59,22 +61,22 @@ export function CreateMilestonePage() {
 
   return (
     <div className="create-milestone">
-      <BackLink to={`/projects/${projectId}`}>Back to project</BackLink>
-      <h1 className="create-milestone-title">Add Milestone</h1>
+      <BackLink to={`/projects/${projectId}`}>{t("projects.back_one")}</BackLink>
+      <h1 className="create-milestone-title">{t("pd.add_milestone_btn")}</h1>
 
       <Card className="create-milestone-card">
         <form onSubmit={handleSubmit} noValidate>
           <Field
-            label="Milestone Name"
+            label={t("pd.milestone_name")}
             required
-            placeholder="Enter milestone name"
+            placeholder={t("pd.milestone_ph")}
             value={form.name}
             error={fieldErrors.name}
             onChange={(e) => updateField("name", e.target.value)}
           />
 
           <Field
-            label="Due Date"
+            label={t("mobile.due_date")}
             required
             type="date"
             value={form.dueDate}
@@ -86,10 +88,10 @@ export function CreateMilestonePage() {
 
           <div className="create-milestone-actions">
             <Link to={`/projects/${projectId}`} className="btn btn-secondary">
-              Cancel
+              {t("common.cancel")}
             </Link>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding…" : "Add Milestone"}
+              {submitting ? t("pd.adding") : t("pd.add_milestone_btn")}
             </Button>
           </div>
         </form>

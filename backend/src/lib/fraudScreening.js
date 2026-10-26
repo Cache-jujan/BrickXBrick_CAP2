@@ -90,6 +90,18 @@ function createFraudScreening({ query } = {}) {
     return false;
   }
 
+  async function isAllocationPortion(expense) {
+    const expenseId = expense?.expenseid ?? expense?.expenseID;
+    if (!expenseId) {
+      return false;
+    }
+    const result = await runQuery(
+      `SELECT 1 FROM receiptallocations WHERE expenseid = $1`,
+      [expenseId]
+    );
+    return result.rowCount > 0;
+  }
+
   // Layer 3: Ticket/receipt mismatch validation
   //
   // T2c-L3: when the ticket is BOM-linked (tickets.bomitemid is set), material
@@ -155,10 +167,19 @@ function createFraudScreening({ query } = {}) {
         );
     }
 
-    const quantityMismatch =
-      ticket.quantity != null &&
-      expense.quantity != null &&
-      Number(ticket.quantity) !== Number(expense.quantity);
+    // More than requested is always a mismatch. Less is one too, unless the expense
+    // is a portion of an allocation: a request is bought in several trips, so a
+    // smaller quantity is expected there.
+    let quantityMismatch = false;
+    if (ticket.quantity != null && expense.quantity != null) {
+      const requested = Number(ticket.quantity);
+      const bought = Number(expense.quantity);
+      if (bought > requested) {
+        quantityMismatch = true;
+      } else if (bought < requested) {
+        quantityMismatch = !(await isAllocationPortion(expense));
+      }
+    }
 
     const vendorMismatch =
       ticket.vendorname &&

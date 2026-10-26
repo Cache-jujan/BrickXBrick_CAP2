@@ -1,4 +1,5 @@
 import { Card } from "../ui/Card";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectStatCards.css";
 
 const PESO = new Intl.NumberFormat("en-PH", {
@@ -8,13 +9,14 @@ const PESO = new Intl.NumberFormat("en-PH", {
 });
 
 export function ProjectStatCards({ projects }) {
+  const { t } = useLocale();
   const active = projects.filter((p) => p.status === "Active").length;
   const totalBudget = projects.reduce((sum, p) => sum + Number(p.budget || 0), 0);
 
   const stats = [
-    { label: "Total Projects", value: projects.length },
-    { label: "Active Projects", value: active },
-    { label: "Combined Budget", value: PESO.format(totalBudget) },
+    { label: t("projects.total"), value: projects.length },
+    { label: t("dashboard.active_projects"), value: active },
+    { label: t("projects.combined_budget"), value: PESO.format(totalBudget) },
   ];
 
   return (

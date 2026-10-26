@@ -8,6 +8,7 @@ import { listPendingTickets } from "../../api/ticketsApi";
 import { listProgressSubmissions } from "../../api/taskProgressApi";
 import { getAttentionMilestones } from "../../api/milestonesApi";
 import { extractErrorMessage } from "../../api/client";
+import { AdminDashboardPage } from "./AdminDashboardPage";
 import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
@@ -20,7 +21,6 @@ const PESO = new Intl.NumberFormat("en-PH", {
   currency: "PHP",
   maximumFractionDigits: 0,
 });
-const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "numeric" });
 const MONTH = new Intl.DateTimeFormat("en-PH", { month: "short", year: "numeric" });
 
 // Per the Process spec: the web dashboard is for General Manager and
@@ -33,10 +33,9 @@ const RANGES = [3, 6, 12];
 export function DashboardPage() {
   const { user } = useAuth();
 
-  // Admin has no dashboard of its own — its only web job is account
-  // management, so send it straight to User Accounts.
+  // The System Administrator's dashboard: account and record-protection counts.
   if (user.role === "System Administrator") {
-    return <Navigate to="/admin/users" replace />;
+    return <AdminDashboardPage />;
   }
   if (WEB_ROLES.includes(user.role)) {
     return <ProjectsOverview role={user.role} name={user.name} userId={user.id} />;
@@ -54,21 +53,22 @@ function greetingFor(date, t) {
   return t("dashboard.evening");
 }
 
-// "5 minutes ago", "3 hours ago", "2 days ago". Never in the future.
-function timeAgo(value, now = Date.now()) {
+// "5 minutes ago", "3 hours ago", "2 days ago". Never in the future. `t` is from useLocale().
+function timeAgo(value, t, now = Date.now()) {
   const minutes = Math.max(0, Math.round((now - new Date(value).getTime()) / 60000));
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return t("time.just_now");
+  if (minutes < 60) return t("time.min_ago", { count: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  if (hours < 24) return hours === 1 ? t("time.hour_one") : t("time.hour_other", { count: hours });
   const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
+  return days === 1 ? t("time.day_one") : t("time.day_other", { count: days });
 }
 
 // One entry per calendar month, oldest first, ending with the current month.
 // Spending is bucketed by the receipt date (the day it was really bought),
 // and `cumulative` starts from everything approved before the first month.
-export function buildMonthlySeries(approved, openBudget, monthsBack, now = new Date()) {
+// `monthLabel(date)` formats the axis label; it defaults to the English one so the helper stays usable on its own.
+export function buildMonthlySeries(approved, openBudget, monthsBack, now = new Date(), monthLabel = (date) => MONTH.format(date)) {
   const keyOf = (d) => d.getFullYear() * 12 + d.getMonth();
   const dateOf = (e) => new Date(e.receiptdate || e.submittedat);
   const startKey = keyOf(now) - (monthsBack - 1);
@@ -85,7 +85,7 @@ export function buildMonthlySeries(approved, openBudget, monthsBack, now = new D
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
     running += spend;
     months.push({
-      label: MONTH.format(new Date(Math.floor(key / 12), key % 12, 1)),
+      label: monthLabel(new Date(Math.floor(key / 12), key % 12, 1)),
       spend,
       cumulative: running,
       remaining: openBudget > 0 ? openBudget - running : null,
@@ -95,7 +95,7 @@ export function buildMonthlySeries(approved, openBudget, monthsBack, now = new D
 }
 
 function ProjectsOverview({ role, name, userId }) {
-  const { t } = useLocale();
+  const { t, tv, formatDate } = useLocale();
   const canCreate = role === "General Manager";
   const canSeeAlerts = role === "General Manager"; // matches backend requireRole on /alerts
   const isPM = role === "Project Manager";
@@ -128,18 +128,20 @@ function ProjectsOverview({ role, name, userId }) {
     let cancelled = false;
     listProjects()
       .then((data) => { if (!cancelled) setProjects(data); })
-      .catch((err) => { if (!cancelled) setProjectsError(extractErrorMessage(err, "Couldn't load projects.")); })
+      .catch((err) => { if (!cancelled) setProjectsError(extractErrorMessage(err, t("errors.load_projects"))); })
       .finally(() => { if (!cancelled) setProjectsLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     listExpenses()
       .then((data) => { if (!cancelled) setExpenses(data); })
-      .catch((err) => { if (!cancelled) setExpensesError(extractErrorMessage(err, "Couldn't load expenses.")); })
+      .catch((err) => { if (!cancelled) setExpensesError(extractErrorMessage(err, t("errors.load_expenses"))); })
       .finally(() => { if (!cancelled) setExpensesLoading(false); });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
   useEffect(() => {
@@ -211,10 +213,10 @@ function ProjectsOverview({ role, name, userId }) {
   const usedPct = openBudget > 0 ? Math.round((openApproved / openBudget) * 100) : 0;
 
   const months = useMemo(
-    () => buildMonthlySeries(openApprovedExpenses, openBudget, range),
-    // openApprovedExpenses is rebuilt each render; these two change only when the data does.
+    () => buildMonthlySeries(openApprovedExpenses, openBudget, range, new Date(), (date) => formatDate(date, { month: "short", year: "numeric" })),
+    // openApprovedExpenses is rebuilt each render; these change only when the data or language does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expenses, projects, range]
+    [expenses, projects, range, formatDate]
   );
 
   // Open projects, most budget used first, so overruns are at the top.
@@ -249,7 +251,7 @@ function ProjectsOverview({ role, name, userId }) {
 
   const dataError = projectsError || expensesError;
   const now = new Date();
-  const today = new Intl.DateTimeFormat("en-PH", { month: "long", day: "numeric", year: "numeric" }).format(now);
+  const today = formatDate(now, { month: "long", day: "numeric", year: "numeric" });
   const firstName = name.split(" ")[0];
 
   return (
@@ -351,11 +353,11 @@ function ProjectsOverview({ role, name, userId }) {
                     {recentExpenses.map((e) => (
                       <tr key={e.expenseid}>
                         <td className="dash-project-plain">{e.vendorname}</td>
-                        <td>{projectNames[e.projectid] || "Project"}</td>
-                        <td>{e.category}</td>
+                        <td>{projectNames[e.projectid] || t("nav.project")}</td>
+                        <td>{tv("category", e.category)}</td>
                         <td className="num">{PESO.format(e.amount)}</td>
                         <td><Badge status={e.status} /></td>
-                        <td>{DATE.format(new Date(e.receiptdate || e.submittedat))}</td>
+                        <td>{formatDate(e.receiptdate || e.submittedat)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -422,35 +424,35 @@ function ProjectsOverview({ role, name, userId }) {
                 <div className={"dash-audit-card" + (tamperedCount > 0 ? " dash-audit-bad" : " dash-audit-good")}>
                   <ShieldIcon />
                   <div>
-                    <span className="dash-audit-label">Secured records</span>
+                    <span className="dash-audit-label">{t("dashboard.secured_records")}</span>
                     <span className="dash-audit-value">{confirmedCount == null ? "—" : confirmedCount}</span>
                     <span className="dash-audit-note">
                       {tamperedCount == null
                         ? ""
                         : tamperedCount === 0
-                          ? "None changed since approval"
-                          : `${tamperedCount} changed since approval`}
+                          ? t("dashboard.none_changed")
+                          : t("dashboard.n_changed", { count: tamperedCount })}
                     </span>
                   </div>
                 </div>
                 <div className={"dash-audit-card" + (alertCount > 0 ? " dash-audit-bad" : " dash-audit-good")}>
                   <AlertIcon />
                   <div>
-                    <span className="dash-audit-label">Open tamper alerts</span>
+                    <span className="dash-audit-label">{t("dashboard.open_alerts")}</span>
                     <span className="dash-audit-value">{alertCount == null ? "—" : alertCount}</span>
                     <span className="dash-audit-note">
-                      {alertCount == null ? "" : alertCount > 0 ? "Needs review and resolution" : "Nothing to review"}
+                      {alertCount == null ? "" : alertCount > 0 ? t("dashboard.needs_review") : t("tamper.nothing")}
                     </span>
                   </div>
                 </div>
               </div>
               {pendingChainCount > 0 && (
-                <p className="dash-footnote">{pendingChainCount} approved expense{pendingChainCount === 1 ? "" : "s"} waiting to be secured on the chain.</p>
+                <p className="dash-footnote">{pendingChainCount === 1 ? t("dashboard.chain_waiting_one") : t("dashboard.chain_waiting_other", { count: pendingChainCount })}</p>
               )}
 
-              <h3 className="dash-subhead">Recent checks</h3>
+              <h3 className="dash-subhead">{t("dashboard.recent_checks")}</h3>
               {recentChecks.length === 0 ? (
-                <p className="dash-empty">No checks yet.</p>
+                <p className="dash-empty">{t("dashboard.no_checks")}</p>
               ) : (
                 <ul className="dash-checks">
                   {recentChecks.map((e) => (
@@ -460,7 +462,7 @@ function ProjectsOverview({ role, name, userId }) {
                         aria-hidden="true"
                       />
                       <span className="dash-check-name">{e.vendorname} · {PESO.format(e.amount)}</span>
-                      <span className="dash-check-time">{timeAgo(e.lastintegritycheckat)}</span>
+                      <span className="dash-check-time">{timeAgo(e.lastintegritycheckat, t)}</span>
                     </li>
                   ))}
                 </ul>
@@ -520,18 +522,19 @@ function SkylineArt() {
 }
 
 function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
+  const { t } = useLocale();
   const total = tickets.length + reviews.length + milestones.length;
 
   return (
     <section className="dash-panel">
       <header className="dash-panel-head">
-        <h2>Needs your attention</h2>
+        <h2>{t("dashboard.attention")}</h2>
       </header>
 
-      {loading && <p className="dashboard-loading">Loading…</p>}
+      {loading && <p className="dashboard-loading">{t("common.loading")}</p>}
 
       {!loading && total === 0 && (
-        <p className="dash-empty">You’re all caught up — nothing needs action right now.</p>
+        <p className="dash-empty">{t("dashboard.attention_clear")}</p>
       )}
 
       {!loading && total > 0 && (
@@ -540,14 +543,14 @@ function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
             <AttnGroup
               accent="tickets"
               count={tickets.length}
-              label="Tickets to assign"
+              label={t("dashboard.tickets_to_assign")}
               to="/tickets/queue"
-              linkText="Go to tickets"
-              items={tickets.slice(0, 3).map((t) => ({
-                key: t.ticketid,
-                to: `/tickets/queue?focus=${t.ticketid}`,
-                primary: t.subject,
-                secondary: t.projectname || t.projectName,
+              linkText={t("dashboard.go_tickets")}
+              items={tickets.slice(0, 3).map((tk) => ({
+                key: tk.ticketid,
+                to: `/tickets/queue?focus=${tk.ticketid}`,
+                primary: tk.subject,
+                secondary: tk.projectname || tk.projectName,
               }))}
               moreCount={tickets.length - Math.min(3, tickets.length)}
             />
@@ -557,9 +560,9 @@ function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
             <AttnGroup
               accent="reviews"
               count={reviews.length}
-              label="Submissions to review"
+              label={t("dashboard.submissions_to_review")}
               to="/tasks/progress-review"
-              linkText="Review submissions"
+              linkText={t("dashboard.review_submissions")}
               items={reviews.slice(0, 3).map((r) => ({
                 key: r.logid,
                 to: `/tasks/progress-review?focus=${r.logid}`,
@@ -574,7 +577,7 @@ function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
             <AttnGroup
               accent="risk"
               count={milestones.length}
-              label="Milestones at risk"
+              label={t("dashboard.milestones_at_risk")}
               items={milestones.slice(0, 3).map((m) => ({
                 key: m.milestoneid,
                 to: `/projects/${m.projectid}`,
@@ -592,6 +595,7 @@ function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
 }
 
 function AttnGroup({ accent, count, label, to, linkText, items, moreCount }) {
+  const { t } = useLocale();
   return (
     <div className={`attn-group attn-group-${accent}`}>
       <div className="attn-group-head">
@@ -621,11 +625,11 @@ function AttnGroup({ accent, count, label, to, linkText, items, moreCount }) {
       {to && linkText ? (
         <p className="attn-foot">
           <Link to={to} className="dash-link">
-            {linkText}{moreCount > 0 ? ` · +${moreCount} more` : ""}
+            {moreCount > 0 ? t("dashboard.link_more", { text: linkText, count: moreCount }) : linkText}
           </Link>
         </p>
       ) : (
-        moreCount > 0 && <p className="attn-more">+{moreCount} more</p>
+        moreCount > 0 && <p className="attn-more">{t("picker.more", { count: moreCount })}</p>
       )}
     </div>
   );

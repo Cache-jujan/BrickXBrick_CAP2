@@ -7,6 +7,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import { EyeIcon, EyeOffIcon } from "../../components/ui/icons";
 import { LINK_TYPE_KEY } from "../../auth/authLinkRedirect";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./AuthPages.css";
 
 const MIN_LENGTH = 8;
@@ -31,6 +32,7 @@ function clearLinkType() {
 
 // A password field with its own show/hide button (the Field component has none).
 function PasswordField({ label, value, onChange, autoComplete }) {
+  const { t } = useLocale();
   const [shown, setShown] = useState(false);
   return (
     <div className="auth-password">
@@ -40,7 +42,7 @@ function PasswordField({ label, value, onChange, autoComplete }) {
         type="button"
         className="auth-password-toggle"
         onClick={() => setShown((v) => !v)}
-        aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        aria-label={t(shown ? "auth.hide_field" : "auth.show_field", { field: label.toLowerCase() })}
         aria-pressed={shown}
       >
         {shown ? <EyeOffIcon /> : <EyeIcon />}
@@ -52,6 +54,7 @@ function PasswordField({ label, value, onChange, autoComplete }) {
 /** Render invite or recovery password setup after verifying the Supabase session, with invalid-link guidance. */
 export function SetPasswordPage() {
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [ready, setReady] = useState(false);
   const [waited, setWaited] = useState(false);
   const [password, setPassword] = useState("");
@@ -76,8 +79,8 @@ export function SetPasswordPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (password.length < MIN_LENGTH) return setError(`Password must be at least ${MIN_LENGTH} characters.`);
-    if (password !== confirm) return setError("Passwords do not match.");
+    if (password.length < MIN_LENGTH) return setError(t("errors.password_short", { min: MIN_LENGTH }));
+    if (password !== confirm) return setError(t("errors.password_mismatch"));
 
     setBusy(true);
     const { error: err } = await supabase.auth.updateUser({ password });
@@ -90,9 +93,7 @@ export function SetPasswordPage() {
     navigate("/login", {
       replace: true,
       state: {
-        successMessage: isInvite
-          ? "Your account is ready. Sign in with your Gmail and new password."
-          : "Password set. You can now sign in.",
+        successMessage: isInvite ? t("auth.account_ready") : t("auth.password_set"),
       },
     });
   }
@@ -103,34 +104,31 @@ export function SetPasswordPage() {
   return (
     <div className="auth-simple">
       <Card className="auth-simple-card">
-        <h1>{isInvite ? "Create your password" : "Set your password"}</h1>
+        <h1>{isInvite ? t("auth.create_password") : t("auth.set_password")}</h1>
 
         {showBroken && (
           <>
-            <Banner tone="error" title="This link is invalid or has expired">
-              Email links work once and expire after a while. Ask your System Administrator to send a new
-              password email, or use Forgot password.
+            <Banner tone="error" title={t("auth.link_invalid_title")}>
+              {t("auth.link_invalid_body")}
             </Banner>
-            <Link to="/forgot-password" className="auth-simple-back">Forgot password</Link>
+            <Link to="/forgot-password" className="auth-simple-back">{t("auth.forgot_title")}</Link>
           </>
         )}
 
-        {!showForm && !showBroken && <p className="auth-simple-sub">Verifying your link…</p>}
+        {!showForm && !showBroken && <p className="auth-simple-sub">{t("auth.verifying")}</p>}
 
         {showForm && (
           <form onSubmit={handleSubmit} noValidate>
             <p className="auth-simple-sub">
-              {isInvite
-                ? "Welcome to Brick x Brick. Your account was created by your System Administrator. Choose the password you'll use to sign in."
-                : "Choose a password you'll use to sign in to Brick x Brick."}
+              {isInvite ? t("auth.welcome_invite") : t("auth.choose_password")}
             </p>
-            <PasswordField label="New password" value={password}
+            <PasswordField label={t("auth.new_password")} value={password}
               onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-            <PasswordField label="Confirm password" value={confirm}
+            <PasswordField label={t("auth.confirm_password")} value={confirm}
               onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
             {error && <Banner tone="error" title={error} />}
             <Button type="submit" disabled={busy} style={{ width: "100%" }}>
-              {busy ? "Saving…" : "Save password"}
+              {busy ? t("common.saving") : t("auth.save_password")}
             </Button>
           </form>
         )}

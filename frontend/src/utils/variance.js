@@ -24,8 +24,9 @@ export function signedPct(value, digits = 1) {
 export const signedPesoShort = (value) => `${sign(value)}${new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(Math.abs(value))}`;
 
 // Always written out, so the meaning never depends on colour alone.
-export function varianceWords(value) {
-  if (value > 0) return "Over budget";
-  if (value < 0) return "Under budget";
-  return "On budget";
+// `t` is the translate function from useLocale().
+export function varianceWords(value, t) {
+  if (value > 0) return t("dashboard.over_budget");
+  if (value < 0) return t("rep.words_under");
+  return t("rep.words_on");
 }

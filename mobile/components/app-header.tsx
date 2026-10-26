@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { NotificationBell } from "@/components/notification-bell";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
+import { useLocale } from "@/lib/i18n-context";
 
 const HEADER = {
   bg: COLORS.card,
@@ -14,6 +15,7 @@ const HEADER = {
 // Brand on the left, gear on the right. Logout lives only in Settings so it
 // can't be tapped by accident from the home screen.
 export function AppHeader() {
+  const { t } = useLocale();
   return (
     <View style={styles.bar}>
       <Text style={styles.brand} numberOfLines={1}>
@@ -27,7 +29,7 @@ export function AppHeader() {
           onPress={() => router.push("/settings")}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Open settings"
+          accessibilityLabel={t("mh.open_settings")}
         >
           <IconSymbol name="gearshape.fill" size={22} color={HEADER.ink} />
         </Pressable>

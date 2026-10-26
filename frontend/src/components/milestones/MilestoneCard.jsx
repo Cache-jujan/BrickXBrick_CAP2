@@ -1,31 +1,13 @@
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { ProgressBar } from "./ProgressBar";
+import { useLocale } from "../../i18n/LocaleProvider";
+import { taskIsOverdue } from "./milestoneUtils";
 import "./MilestoneCard.css";
 
-const DATE = new Intl.DateTimeFormat("en-PH", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
-
-const DATETIME = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 const HANDLER_LABEL = { GM: "General Manager", PM: "Project Manager" };
-
-// A task is overdue when its due date has passed and it isn't Completed yet.
-// Task status is only ever Pending or Completed (see note below), so "overdue"
-// is derived here from the date rather than being a status the backend sends.
-// Compared at day granularity: a task due today is not overdue.
-function taskIsOverdue(task) {
-  if (task.status === "Completed") return false;
-  const due = new Date(task.duedate);
-  if (Number.isNaN(due.getTime())) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return due < today;
-}
 
 // A Construction task only ever moves Pending -> Completed through the F5
 // review flow (SM submits a photo on mobile, PM acknowledges) — nothing on
@@ -36,6 +18,7 @@ function taskIsOverdue(task) {
 // they're "Handled by: GM/PM" and the owning PM closes them out directly
 // via onCompleteTask, which is the one action this card can trigger.
 export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask, onCompleteTask }) {
+  const { t, formatDate } = useLocale();
   const isPlanning = milestone.phase === "Planning";
 
   // #14: review state from /overview. Flagged takes priority over awaiting —
@@ -45,9 +28,9 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
   const flaggedCount = Number(milestone.flagged || 0);
   const awaitingCount = Number(milestone.awaitingReview || milestone.awaitingreview || 0);
   const reviewChip = flaggedCount > 0
-    ? { tone: "Overdue", label: "Needs resubmit" }
+    ? { tone: "Overdue", label: t("ms.needs_resubmit") }
     : awaitingCount > 0
-    ? { tone: "Pending", label: "Awaiting review" }
+    ? { tone: "Pending", label: t("ms.awaiting_review") }
     : null;
 
   return (
@@ -55,7 +38,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
       <div className="spread milestone-card-head">
         <div>
           <h3 className="milestone-card-name">{milestone.name}</h3>
-          <p className="milestone-card-due">Due {DATE.format(new Date(milestone.duedate))}</p>
+          <p className="milestone-card-due">{t("ms.due", { date: formatDate(milestone.duedate) })}</p>
         </div>
         <div className="milestone-card-badges">
           <Badge status={milestone.status} />
@@ -72,7 +55,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
 
       <div className="milestone-card-tasks">
         {milestone.tasks.length === 0 ? (
-          <p className="milestone-card-empty">No tasks yet.</p>
+          <p className="milestone-card-empty">{t("ms.no_tasks")}</p>
         ) : (
           <ul className="milestone-card-task-list">
             {milestone.tasks.map((task) => {
@@ -88,10 +71,10 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
                         (overdue ? " milestone-card-task-due-overdue" : "")
                       }
                     >
-                      Due {DATE.format(new Date(task.duedate))}
+                      {t("ms.due", { date: formatDate(task.duedate) })}
                     </span>
                     {handledByLabel && (
-                      <span className="milestone-card-task-handler">Handled by: {handledByLabel}</span>
+                      <span className="milestone-card-task-handler">{t("ms.handled_by", { who: handledByLabel })}</span>
                     )}
                     <span className="milestone-card-task-badges">
                       {overdue && <Badge status="Overdue" />}
@@ -100,7 +83,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
                   </div>
                   {task.status === "Completed" && task.completedat && (
                     <p className="milestone-card-task-completed-note">
-                      Done {DATETIME.format(new Date(task.completedat))}
+                      {t("mobile.done_date", { date: formatDate(task.completedat, DATETIME_OPTIONS) })}
                       {task.completionnote ? ` — "${task.completionnote}"` : ""}
                     </p>
                   )}
@@ -110,7 +93,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
                       className="milestone-card-complete-task"
                       onClick={() => onCompleteTask?.(task)}
                     >
-                      Mark done
+                      {t("pd.mark_done")}
                     </button>
                   )}
                 </li>
@@ -126,7 +109,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
               className="milestone-card-add-task"
               onClick={() => onAddTask?.(milestone)}
             >
-              + Add Task
+              + {t("pd.add_task_btn")}
             </button>
           ) : (
             // Backend 400s POST /:id/tasks on a Construction milestone when
@@ -134,7 +117,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
             // letting the PM hit a dead end on the create-task page. A
             // Planning milestone has no such requirement (handled above).
             <p className="milestone-card-add-task-blocked">
-              Assign a Site Manager to this project before adding tasks.
+              {t("ms.assign_sm_first")}
             </p>
           ))}
       </div>

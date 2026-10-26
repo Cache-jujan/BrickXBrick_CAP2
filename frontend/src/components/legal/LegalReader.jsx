@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRightIcon, HighlightIcon } from "./LegalIcons";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./LegalReader.css";
 
 // Shared by the "Before you continue" screen and the public /legal page.
@@ -7,8 +8,11 @@ import "./LegalReader.css";
 
 const DATE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "long", day: "numeric" });
 
-export function formatEffectiveDate(isoDate) {
-  return isoDate ? DATE.format(new Date(`${isoDate}T00:00:00`)) : "";
+// `formatDate` (from useLocale) makes the month name follow the language; without it, English.
+export function formatEffectiveDate(isoDate, formatDate) {
+  if (!isoDate) return "";
+  const date = new Date(`${isoDate}T00:00:00`);
+  return formatDate ? formatDate(date, { year: "numeric", month: "long", day: "numeric" }) : DATE.format(date);
 }
 
 // "3. Your account" -> { num: "3", label: "Your account" }
@@ -21,11 +25,12 @@ const sectionId = (docId, i) => `legal-${docId}-${i + 1}`;
 
 /** "At a glance": short plain-language points above the full text. */
 export function LegalHighlights({ items }) {
+  const { t } = useLocale();
   if (!items?.length) return null;
   return (
     <section className="legal-glance" aria-labelledby="legal-glance-title">
       <h2 id="legal-glance-title" className="legal-glance-title">
-        At a glance
+        {t("legal.glance")}
       </h2>
       <ul className="legal-glance-grid">
         {items.map((h) => (
@@ -40,9 +45,7 @@ export function LegalHighlights({ items }) {
           </li>
         ))}
       </ul>
-      <p className="legal-glance-note">
-        This summary is here to help. The full text below is what you agree to.
-      </p>
+      <p className="legal-glance-note">{t("legal.glance_note")}</p>
     </section>
   );
 }
@@ -52,6 +55,7 @@ export function LegalHighlights({ items }) {
  * reader, and the document itself. The page scrolls, not a box inside it.
  */
 export function LegalReader({ data, docId, onDocChange }) {
+  const { t } = useLocale();
   const doc = data.documents.find((d) => d.id === docId) || data.documents[0];
   const docIndex = data.documents.indexOf(doc);
   const nextDoc = data.documents[docIndex + 1];
@@ -87,8 +91,8 @@ export function LegalReader({ data, docId, onDocChange }) {
   }
 
   return (
-    <section className="legal-reader" ref={readerRef} aria-label="Terms of Use and Privacy Notice">
-      <div className="legal-tabs" role="tablist" aria-label="Documents">
+    <section className="legal-reader" ref={readerRef} aria-label={t("settings.terms")}>
+      <div className="legal-tabs" role="tablist" aria-label={t("tl.documents")}>
         {data.documents.map((d) => (
           <button
             key={d.id}
@@ -107,8 +111,8 @@ export function LegalReader({ data, docId, onDocChange }) {
       </div>
 
       <div className="legal-reader-body">
-        <nav className="legal-toc" aria-label={`${doc.title} sections`}>
-          <p className="legal-toc-title">On this page</p>
+        <nav className="legal-toc" aria-label={t("legal.sections_aria", { title: doc.title })}>
+          <p className="legal-toc-title">{t("legal.on_this_page")}</p>
           <ol>
             {doc.sections.map((s, i) => {
               const { num, label } = splitHeading(s.heading);
@@ -136,7 +140,7 @@ export function LegalReader({ data, docId, onDocChange }) {
           className="legal-article"
         >
           <label className="legal-jump">
-            <span>Jump to section</span>
+            <span>{t("legal.jump")}</span>
             <select value={activeIndex} onChange={(e) => goToSection(Number(e.target.value))}>
               {doc.sections.map((s, i) => (
                 <option key={s.heading} value={i}>
@@ -174,13 +178,13 @@ export function LegalReader({ data, docId, onDocChange }) {
             {nextDoc ? (
               <button type="button" className="legal-next" onClick={() => switchDoc(nextDoc.id)}>
                 <span>
-                  <span className="legal-next-label">Next</span>
+                  <span className="legal-next-label">{t("common.next")}</span>
                   <span className="legal-next-title">{nextDoc.title}</span>
                 </span>
                 <ArrowRightIcon />
               </button>
             ) : (
-              <p className="legal-end-note">End of the {doc.title}.</p>
+              <p className="legal-end-note">{t("legal.end_note", { title: doc.title })}</p>
             )}
           </div>
         </article>
@@ -191,8 +195,9 @@ export function LegalReader({ data, docId, onDocChange }) {
 
 /** Grey placeholder blocks while the text loads. */
 export function LegalSkeleton() {
+  const { t } = useLocale();
   return (
-    <div className="legal-skeleton" aria-busy="true" aria-label="Loading the terms">
+    <div className="legal-skeleton" aria-busy="true" aria-label={t("legal.loading_terms")}>
       <div className="legal-skeleton-grid">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="legal-skeleton-card" />

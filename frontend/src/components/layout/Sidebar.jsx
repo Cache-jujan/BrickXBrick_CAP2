@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { Fragment, useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listTamperAlerts } from "../../api/blockchainApi";
 import { GridIcon, FolderIcon, UsersIcon, ChevronIcon } from "./icons";
@@ -44,6 +44,12 @@ function AlertTriangleIcon() {
   );
 }
 
+// Ways to submit an expense other than a single receipt for one request; listed under "Submit expense".
+const SUBMIT_EXPENSE_CHILDREN = [
+  { to: "/expenses/split", label: "nav.split_receipt" },
+  { to: "/expenses/trip-cost", label: "nav.trip_cost" },
+];
+
 // alerts: "live" reads the badge count from GET /api/blockchain/alerts (real
 // backend data — see FRONTEND_IMPLEMENTATION_TRACKER.md). Omit the key
 // entirely for nav items that don't need a badge.
@@ -51,7 +57,9 @@ const NAV_BY_ROLE = {
   "General Manager": [
     { to: "/dashboard/gm", label: "nav.dashboard", icon: GridIcon },
     { to: "/projects", label: "nav.projects", icon: FolderIcon },
-    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon },
+    { to: "/requests", label: "nav.open_requests", icon: TicketIcon },
+    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon, end: true },
+    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
     { to: "/reports", label: "nav.reports", icon: ChartIcon },
     { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: AlertTriangleIcon, alerts: "live" },
   ],
@@ -60,7 +68,9 @@ const NAV_BY_ROLE = {
     { to: "/tickets/queue", label: "nav.tickets", icon: TicketIcon },
     { to: "/tasks/progress-review", label: "nav.progress_review", icon: TicketIcon },
     { to: "/projects", label: "nav.projects", icon: FolderIcon },
-    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon },
+    { to: "/requests", label: "nav.open_requests", icon: TicketIcon },
+    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon, end: true },
+    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
   ],
   "Site Manager": [
     { to: "/dashboard/sm", label: "nav.dashboard", icon: GridIcon },
@@ -89,6 +99,7 @@ const NAV_BY_ROLE = {
 export function Sidebar({ mobileOpen = false, onNavigate }) {
   const { t } = useLocale();
   const { user } = useAuth();
+  const { pathname } = useLocation();
   const links = NAV_BY_ROLE[user?.role] || [];
   const [collapsedPref, setCollapsed] = useState(false);
   // The mobile drawer is always shown expanded.
@@ -138,10 +149,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
           const Icon = link.icon;
           const showBadge = link.alerts === "live" && alertCount != null && alertCount > 0;
           return (
+            <Fragment key={link.to}>
             <NavLink
-              key={link.to}
               to={link.to}
-              end={link.to.startsWith("/dashboard")}
+              end={link.to.startsWith("/dashboard") || Boolean(link.end)}
               className={({ isActive }) => "sidebar-link" + (isActive ? " sidebar-link-active" : "")}
               title={collapsed ? t(link.label) : undefined}
               onClick={onNavigate}
@@ -156,6 +167,22 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
                 </span>
               )}
             </NavLink>
+            {/* The sub-links appear once "Submit expense" (or one of them) is open, and hide again when you leave. */}
+            {!collapsed && link.children && (pathname === link.to || link.children.some((c) => c.to === pathname)) && (
+              <div className="sidebar-sublinks">
+                {link.children.map((child) => (
+                  <NavLink
+                    key={child.to}
+                    to={child.to}
+                    className={({ isActive }) => "sidebar-sublink" + (isActive ? " sidebar-sublink-active" : "")}
+                    onClick={onNavigate}
+                  >
+                    {t(child.label)}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+            </Fragment>
           );
         })}
       </nav>

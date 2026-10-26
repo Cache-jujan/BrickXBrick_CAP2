@@ -33,7 +33,8 @@ const EXPENSE_COLUMNS = `
   tin,
   birpermitnumber      AS "birPermitNumber",
   lineitems            AS "lineItems",
-  blockchainstatus     AS "blockchainStatus"
+  blockchainstatus     AS "blockchainStatus",
+  submitnote           AS "submitNote"
 `;
 
 // numeric(12,2) comes back from pg as a STRING, and that is correct — JS

@@ -12,12 +12,15 @@ ALTER TABLE Expenses ADD COLUMN IF NOT EXISTS approvedAt TIMESTAMP;
 ALTER TABLE Expenses ADD COLUMN IF NOT EXISTS blockchainOverdueAt TIMESTAMP;
 
 -- Expenses approved before this migration: the best record of the approval
--- time is the chain log when there is one, otherwise the submission time.
+-- time is the chain log when there is one. If there is no log, the real
+-- approval time is unknown (submittedAt is NOT the approval time and could
+-- trigger a false overdue alert), so the 72-hour clock starts at migration
+-- time instead (grace period).
 UPDATE Expenses e
    SET approvedAt = COALESCE(
          (SELECT MIN(bl.timestamp) FROM BlockchainLogs bl
            WHERE bl.expenseID = e.expenseID AND bl.eventType = 'ExpenseApproved'),
-         e.submittedAt)
+         NOW())
  WHERE e.status = 'Approved' AND e.approvedAt IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_expenses_blockchain_pending

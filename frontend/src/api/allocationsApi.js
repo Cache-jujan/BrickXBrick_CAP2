@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 
-// F8 split receipt. All three routes allow Purchaser, Project Manager and
-// General Manager; the server scopes the open requests to the caller.
+// F8 split receipt and trip costs. The split routes allow Purchaser, Project Manager and
+// General Manager (and Site Manager); the server scopes the open requests to the caller.
 
 /** Fetch the caller's open material requests, ordered oldest first. */
 export async function listOpenRequests() {
@@ -12,7 +12,8 @@ export async function listOpenRequests() {
 /**
  * Preview a receipt split without saving expenses.
  * @param {Array<{description: string, quantity: number, amount: number}>} lineItems Receipt lines.
- * @param {{excludeTicketIDs?: string[], feeTargets?: Object<string, string>}} [options] Requests to exclude and fee destinations by line index.
+ * @param {{excludeTicketIDs?: string[], feeTargets?: Object<string, string>, lineTargets?: Object<string, string>}} [options]
+ *   Requests to exclude, fee destinations by line index, and lines matched to a request by hand (line index to ticket id).
  * @returns {Promise<object>} The server's allocation plan and validation results.
  */
 export async function previewAllocation(lineItems, options = {}) {
@@ -20,6 +21,7 @@ export async function previewAllocation(lineItems, options = {}) {
     lineItems,
     excludeTicketIDs: options.excludeTicketIDs || [],
     feeTargets: options.feeTargets || {},
+    lineTargets: options.lineTargets || {},
   });
   return data;
 }
@@ -27,5 +29,17 @@ export async function previewAllocation(lineItems, options = {}) {
 /** Submit receipt details and allocation options to save one expense per request in one transaction. */
 export async function submitAllocation(payload) {
   const { data } = await apiClient.post("/api/allocations", payload);
+  return data;
+}
+
+/**
+ * Charge a gas / toll / delivery receipt, split evenly, to the ticked projects. No request is needed.
+ * A Project Manager can charge the Active projects they manage; a General Manager any Active project.
+ * @param {{receiptImageURL: string, vendorName: string, receiptDate: string, receiptTotal: number,
+ *   reason: "Gas"|"Toll"|"Delivery"|"Other", projectIds: string[], tin?: string|null,
+ *   birPermitNumber?: string|null, birNumber?: string|null, note?: string, commonReceiptID?: string}} payload
+ */
+export async function submitTripCost(payload) {
+  const { data } = await apiClient.post("/api/allocations/trip-cost", payload);
   return data;
 }

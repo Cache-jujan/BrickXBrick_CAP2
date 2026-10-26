@@ -33,6 +33,8 @@ const PAGE_LABELS = [
   { test: (p) => p === "/expenses", trail: ["nav.finance", "nav.expenses"] },
   { test: (p) => p === "/expenses/new", trail: ["nav.finance", "nav.submit_expense"] },
   { test: (p) => p === "/expenses/split", trail: ["nav.finance", "nav.split_receipt"] },
+  { test: (p) => p === "/expenses/trip-cost", trail: ["nav.finance", "nav.trip_cost"] },
+  { test: (p) => p === "/requests", trail: ["nav.open_requests"] },
   { test: (p) => p === "/expenses/mine", trail: ["nav.finance", "nav.my_expenses"] },
   { test: (p) => p.startsWith("/tickets/new"), trail: ["nav.tickets", "nav.new_ticket"] },
   { test: (p) => p.startsWith("/tickets"), trail: ["nav.tickets"] },
@@ -48,7 +50,7 @@ function pageInfoFor(pathname) {
 }
 
 export function Topbar({ onMenuClick }) {
-  const { t } = useLocale();
+  const { t, tv, formatDate } = useLocale();
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -186,7 +188,6 @@ export function Topbar({ onMenuClick }) {
         <span className="topbar-spacer" />
 
         <div className="topbar-actions">
-          <LanguageToggle />
           <div className="topbar-notif" ref={notifRef}>
             <button
               type="button"
@@ -222,10 +223,10 @@ export function Topbar({ onMenuClick }) {
                   ) : (
                     groupByDay(notifications).map(([label, items]) => (
                       <div key={label} className="topbar-notif-group">
-                        <p className="topbar-notif-group-label">{label}</p>
+                        <p className="topbar-notif-group-label">{tv("notifications.group", label)}</p>
                         <ul className="topbar-notif-list">
                           {items.map((n) => {
-                            const { Icon, bg, fg, fallback } = metaFor(n.type);
+                            const { Icon, bg, fg, fallbackKey } = metaFor(n.type);
                             const clickable = !n.isread || routeForNotification(n, user?.role);
                             return (
                               <li
@@ -237,8 +238,8 @@ export function Topbar({ onMenuClick }) {
                                   <Icon />
                                 </span>
                                 <span className="topbar-notif-body">
-                                  <p className="topbar-notif-message">{humanizeNotification(n.message) || fallback}</p>
-                                  <p className="topbar-notif-time">{relativeTime(n.createdat)}</p>
+                                  <p className="topbar-notif-message">{humanizeNotification(n.message, t) || t(fallbackKey)}</p>
+                                  <p className="topbar-notif-time">{relativeTime(n.createdat, t, formatDate)}</p>
                                 </span>
                                 {!n.isread && <span className="topbar-notif-dot" aria-hidden="true" />}
                               </li>
@@ -283,6 +284,7 @@ export function Topbar({ onMenuClick }) {
                   <p className="topbar-menu-name">{user?.name}</p>
                   <p className="topbar-menu-email">{user?.email}</p>
                 </div>
+                <LanguageToggle variant="menu" />
                 <Link
                   to="/legal"
                   className="topbar-menu-item"

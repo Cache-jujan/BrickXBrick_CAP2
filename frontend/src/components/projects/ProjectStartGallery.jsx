@@ -18,7 +18,8 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       if (!byType.has(t.projectType)) byType.set(t.projectType, []);
       byType.get(t.projectType).push(t);
     }
-    return [...byType.entries()];
+    // "Other" (the custom layout) always comes last, not in the middle.
+    return [...byType.entries()].sort(([a], [b]) => (a === "Other") - (b === "Other"));
   }, [templates]);
 
   const visibleSources = useMemo(() => {
@@ -27,6 +28,11 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       ? sources.filter((s) => `${s.name} ${s.clientName} ${s.projectType}`.toLowerCase().includes(q))
       : sources;
   }, [sources, search]);
+
+  const pickedLabel =
+    mode === "template" ? `Selected: ${value.name}`
+    : mode === "copy" ? (value?.sourceProjectId ? `Selected: ${value.name}` : "Choose a project to copy")
+    : "Selected: Blank project";
 
   const canContinue = mode === "blank" || mode === "template" || (mode === "copy" && value?.sourceProjectId);
 
@@ -122,8 +128,9 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       )}
 
       <div className="psg-actions">
+        <span className="psg-picked">{pickedLabel}</span>
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="button" disabled={!canContinue} onClick={onNext}>Next</Button>
+        <Button type="button" disabled={!canContinue} onClick={onNext}>Next →</Button>
       </div>
     </div>
   );
@@ -141,6 +148,7 @@ function Tile({ selected, onSelect, title, caption, description, thumb, disabled
       title={description || undefined}
     >
       <span className="psg-thumb" aria-hidden="true">{thumb}</span>
+      <span className="psg-check" aria-hidden="true">✓</span>
       <span className="psg-tile-title">{title}</span>
       <span className="psg-tile-caption">{caption}</span>
     </button>

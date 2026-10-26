@@ -9,6 +9,7 @@ import {
   previewProjectStructure,
 } from "../../api/projectTemplatesApi";
 import { extractErrorMessage } from "../../api/client";
+import { ArrowLeftIcon } from "../../components/ui/icons";
 import { BackLink } from "../../components/ui/BackLink";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
@@ -16,6 +17,7 @@ import { ProjectForm, EMPTY_PROJECT_FORM } from "../../components/projects/Proje
 import { ProjectStartGallery } from "../../components/projects/ProjectStartGallery";
 import { DocumentChecklist, EMPTY_SELECTION, selectionToStart } from "../../components/projects/DocumentChecklist";
 import { StructurePreview } from "../../components/projects/StructurePreview";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./CreateProjectPage.css";
 
 // F2: the GM records the project once the client has signed the BOM.
@@ -27,6 +29,7 @@ import "./CreateProjectPage.css";
 // the review. The starting structure is copied once; nothing stays linked.
 export function CreateProjectPage() {
   const navigate = useNavigate();
+  const { t } = useLocale();
 
   const [step, setStep] = useState("start"); // start | basics | review
   const [templates, setTemplates] = useState([]);
@@ -46,14 +49,14 @@ export function CreateProjectPage() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([listProjectTemplates(), listCopySources()])
-      .then(([t, s]) => {
+      .then(([tpls, srcs]) => {
         if (cancelled) return;
-        setTemplates(t);
-        setSources(s);
+        setTemplates(tpls);
+        setSources(srcs);
       })
       .catch(() => {
         // The start screen still works as a blank sheet; say why the rest is missing.
-        if (!cancelled) setError("Couldn't load the templates. You can still start with a blank project.");
+        if (!cancelled) setError(t("cp.err_templates"));
       })
       .finally(() => {
         if (!cancelled) setLoadingStart(false);
@@ -90,7 +93,7 @@ export function CreateProjectPage() {
       setChecklist(data);
       setStep("basics");
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't load that starting point. Please try again."));
+      setError(extractErrorMessage(err, t("cp.err_start")));
     } finally {
       setLoadingChecklist(false);
     }
@@ -121,7 +124,7 @@ export function CreateProjectPage() {
       const project = await createProject({ ...saved.payload, start: selectionToStart(base, selection) });
       navigate(`/projects/${project.projectid}`, { replace: true });
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't create the project. Please try again."));
+      setError(extractErrorMessage(err, t("cp.err_create")));
       setCreating(false);
     }
   }
@@ -134,40 +137,46 @@ export function CreateProjectPage() {
     return form;
   }, [saved, choice]);
 
-  const stepNames = choice ? ["Start", "Details", "Review"] : ["Start", "Details"];
+  const stepNames = choice ? [t("cp.step_start"), t("cp.step_details"), t("cp.step_review")] : [t("cp.step_start"), t("cp.step_details")];
   const stepIndex = { start: 0, basics: 1, review: 2 }[step];
 
   return (
     <div className="create-project">
       {step === "start" ? (
-        <BackLink to="/projects">Back to Projects</BackLink>
+        <BackLink to="/projects">{t("projects.back")}</BackLink>
       ) : (
         <button
           type="button"
-          className="form-back-link create-project-back"
+          className="back-link"
           onClick={() => {
             setError("");
             setStep(step === "review" ? "basics" : "start");
           }}
         >
-          ← Back
+          <ArrowLeftIcon size={16} />
+          <span>{t("cp.back")}</span>
         </button>
       )}
-      <h1 className="create-project-title">Create New Project</h1>
-      <p className="create-project-steps" aria-label={`Step ${stepIndex + 1} of ${stepNames.length}`}>
+      <h1 className="create-project-title">{t("projects.create_title")}</h1>
+      <ol className="cp-steps" aria-label={t("cp.step_of", { current: stepIndex + 1, total: stepNames.length })}>
         {stepNames.map((n, i) => (
-          <span key={n} className={i === stepIndex ? "create-project-step-current" : ""}>
-            {i + 1}. {n}
-          </span>
+          <li
+            key={n}
+            className={`cp-step ${i === stepIndex ? "cp-step-current" : i < stepIndex ? "cp-step-done" : ""}`}
+            aria-current={i === stepIndex ? "step" : undefined}
+          >
+            <span className="cp-step-num" aria-hidden="true">{i < stepIndex ? "✓" : i + 1}</span>
+            <span className="cp-step-name">{n}</span>
+          </li>
         ))}
-      </p>
+      </ol>
 
       {error && <Banner tone="error" title={error} />}
 
       {step === "start" && (
         <div className="create-project-card">
           {loadingStart ? (
-            <p>Loading…</p>
+            <p>{t("common.loading")}</p>
           ) : (
             <ProjectStartGallery
               templates={templates}
@@ -178,7 +187,7 @@ export function CreateProjectPage() {
               onCancel={() => navigate("/projects")}
             />
           )}
-          {loadingChecklist && <p className="create-project-hint">Loading…</p>}
+          {loadingChecklist && <p className="create-project-hint">{t("common.loading")}</p>}
         </div>
       )}
 
@@ -189,11 +198,11 @@ export function CreateProjectPage() {
             mode="create"
             initialValues={initialValues}
             onSubmit={handleBasics}
-            submitLabel={choice ? "Review" : "Create Project"}
-            busyLabel={choice ? "Checking…" : "Creating…"}
+            submitLabel={choice ? t("cp.step_review") : t("projects.create_submit")}
+            busyLabel={choice ? t("cp.checking") : t("projects.creating")}
             cancelTo="/projects"
             onCancel={() => setStep("start")}
-            cancelLabel="Back"
+            cancelLabel={t("cp.back")}
             lockProjectType={choice?.mode === "template"}
             siteManagerRequired={Boolean(choice)}
             extraSection={
@@ -208,10 +217,10 @@ export function CreateProjectPage() {
           <StructurePreview preview={preview} />
           <div className="create-project-actions">
             <Button type="button" variant="secondary" onClick={() => setStep("basics")} disabled={creating}>
-              Back
+              {t("cp.back")}
             </Button>
             <Button type="button" onClick={handleCreate} disabled={creating}>
-              {creating ? "Creating…" : "Create Project"}
+              {creating ? t("projects.creating") : t("projects.create_submit")}
             </Button>
           </div>
         </div>

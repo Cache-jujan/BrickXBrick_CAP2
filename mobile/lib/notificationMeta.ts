@@ -19,45 +19,51 @@ type IconName =
   | "arrow.up.forward.circle.fill"
   | "arrow.triangle.2.circlepath.circle";
 
-type Meta = { icon: IconName; bg: string; fg: string; fallback: string };
+// `fallbackKey` is a message-catalog key; the screen translates it with useLocale().
+type Meta = { icon: IconName; bg: string; fg: string; fallbackKey: string };
 
 const META: Record<string, Meta> = {
-  TicketSubmitted:       { icon: "ticket.fill",      bg: "#EAF2FF", fg: "#2563EB", fallback: "A new request was submitted." },
-  TicketAcknowledged:    { icon: "ticket.fill",      bg: "#FFF0E6", fg: "#EA580C", fallback: "A request was acknowledged." },
-  TicketResolved:        { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A request was resolved." },
-  TicketRejected:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallback: "A request was rejected." },
-  ScheduleVarianceAlert: { icon: "clock.fill",       bg: "#FFF7E0", fg: "#B45309", fallback: "A milestone is behind schedule." },
-  ExpenseRejected:       { icon: "receipt",          bg: "#FFF5F3", fg: "#B42318", fallback: "An expense was rejected." },
-  TamperAlert:           { icon: "shield.lefthalf.filled", bg: "#FDE8E8", fg: "#9F1239", fallback: "A record integrity issue was found." },
-  TaskAssigned:          { icon: "list.clipboard.fill", bg: "#EAF2FF", fg: "#2563EB", fallback: "A task was assigned to you." },
-  TaskAcknowledged:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "Your task photo was accepted." },
-  TaskFlagged:           { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallback: "Your task photo was flagged." },
-  CheckinFlagged:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallback: "Your Project Manager flagged a check-in." },
-  ProjectAssigned:       { icon: "folder.fill",      bg: "#EAF2FF", fg: "#2563EB", fallback: "A project was assigned to you." },
-  ProjectActivated:      { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A project was activated." },
-  BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallback: "A Bill of Materials was approved." },
-  BOMReopened:           { icon: "arrow.triangle.2.circlepath.circle", bg: "#FFF7E0", fg: "#B45309", fallback: "A Bill of Materials was reopened." },
+  TicketSubmitted:       { icon: "ticket.fill",      bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.ticket_submitted" },
+  TicketAcknowledged:    { icon: "ticket.fill",      bg: "#FFF0E6", fg: "#EA580C", fallbackKey: "notif.fallback.ticket_acknowledged" },
+  TicketResolved:        { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.ticket_resolved" },
+  TicketRejected:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.ticket_rejected" },
+  ScheduleVarianceAlert: { icon: "clock.fill",       bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.schedule_variance" },
+  ExpenseRejected:       { icon: "receipt",          bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.expense_rejected" },
+  ExpenseApproved:       { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.expense_approved" },
+  TamperAlert:           { icon: "shield.lefthalf.filled", bg: "#FDE8E8", fg: "#9F1239", fallbackKey: "notif.fallback.tamper_alert" },
+  TaskAssigned:          { icon: "list.clipboard.fill", bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_assigned" },
+  TaskAcknowledged:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.task_acknowledged" },
+  TaskFlagged:           { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.task_flagged" },
+  CheckinFlagged:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.checkin_flagged_sm" },
+  ProjectAssigned:       { icon: "folder.fill",      bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.project_assigned" },
+  ProjectActivated:      { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.project_activated" },
+  BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.bom_approved" },
+  BOMReopened:           { icon: "arrow.triangle.2.circlepath.circle", bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.bom_reopened" },
 };
 
-const DEFAULT_META: Meta = { icon: "list.clipboard.fill", bg: "#F1E9DD", fg: "#8A7F6E", fallback: "You have a new notification." };
+const DEFAULT_META: Meta = { icon: "list.clipboard.fill", bg: "#F1E9DD", fg: "#8A7F6E", fallbackKey: "notif.fallback.default" };
 
 export function metaFor(type: string): Meta {
   return META[type] || DEFAULT_META;
 }
 
-export function relativeTime(iso: string): string {
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+// `t` and `intlLocale` come from useLocale() so the wording and month names follow the language.
+export function relativeTime(iso: string, t: Translate, intlLocale = "en-PH"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString(intlLocale, { hour: "numeric", minute: "2-digit" });
   const diffMs = Date.now() - d.getTime();
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t("time.just_now");
+  if (mins < 60) return t("time.minutes_ago", { count: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t("time.hours_ago", { count: hours });
   const days = Math.floor(hours / 24);
-  if (days === 1) return `Yesterday, ${d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}`;
-  if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" }) + ", " + d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+  if (days === 1) return t("time.yesterday_at", { time });
+  if (days < 7) return t("time.days_ago", { count: days });
+  return `${d.toLocaleDateString(intlLocale, { month: "short", day: "numeric" })}, ${time}`;
 }
 
 export function groupByDay(notifications: AppNotification[]): [string, AppNotification[]][] {

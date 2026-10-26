@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Card } from "../../components/ui/Card";
 import { BackLink } from "../../components/ui/BackLink";
 import { TicketForm } from "../../components/tickets/TicketForm";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./CreateTicketPage.css";
 
 // Standalone create page. The Site Manager reaches this from their sidebar;
@@ -12,6 +13,7 @@ import "./CreateTicketPage.css";
 export function CreateTicketPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLocale();
   const dashPath = user?.role === "Project Manager" ? "/dashboard/pm" : "/dashboard/sm";
 
   // The form shows its own success step (with "Create another"); leaving it —
@@ -20,8 +22,8 @@ export function CreateTicketPage() {
 
   return (
     <div className="create-ticket">
-      <BackLink to={dashPath}>Back to Dashboard</BackLink>
-      <h1 className="create-ticket-title">Create Ticket</h1>
+      <BackLink to={dashPath}>{t("auth.back_to_dashboard")}</BackLink>
+      <h1 className="create-ticket-title">{t("nav.create_ticket")}</h1>
 
       <Card className="create-ticket-card">
         <TicketForm onCancel={toDashboard} onClose={toDashboard} />
