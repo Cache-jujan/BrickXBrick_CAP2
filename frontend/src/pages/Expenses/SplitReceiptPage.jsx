@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { scanReceipt } from "../../api/expensesApi";
-import { previewAllocation, submitAllocation } from "../../api/allocationsApi";
+import { listOpenRequests, previewAllocation, submitAllocation } from "../../api/allocationsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
@@ -9,6 +9,7 @@ import { BackLink } from "../../components/ui/BackLink";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { RequestPickerModal } from "../../components/expenses/RequestPickerModal";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { EMPTY_DRAFT, draftFromScan, isSupportedReceipt } from "./SubmitExpensePage";
 import { editLine } from "../../utils/lineItemMath";
@@ -20,7 +21,19 @@ import "./SplitReceiptPage.css";
 // SERVER splits each line across the open Material Requests for that material,
 // oldest request first, and saves one expense per request. This page only
 // collects the receipt, shows the server's preview, and lets the actor exclude
-// a request ("Not for this request") or move a fee/VAT line to another portion.
+// a request ("Not for this request"), move a fee/VAT line to another portion, or
+// match a line to a request by hand ("Match to a request", searchable).
+//
+// Buying more than every request wants is allowed: the extra rides on the last request and
+// the PM is told. Spending past the project's allowance, or buying extra, needs a short reason.
+
+// A line starting with this makes the expense go to PM review (Receipt_Adjustment flag).
+const ADJUSTMENT_PREFIX = "Adjustment";
+const QUICK_REASONS = [
+  { key: "ck.reason_price", text: "Prices went up." },
+  { key: "ck.reason_delivery", text: "Delivery or gas." },
+  { key: "ck.reason_promo", text: "The store gave extra." },
+];
 
 /** Create an empty receipt draft with its own editable line item. */
 const blankDraft = () => ({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
@@ -60,6 +73,20 @@ export function SplitReceiptPage() {
   const [submitProblems, setSubmitProblems] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [result, setResult] = useState(null);
+  // The open requests, for the "Match to a request" picker.
+  const [openRequests, setOpenRequests] = useState([]);
+  const [pickingIndex, setPickingIndex] = useState(null);
+  // Why the receipt went over (extra quantity, spending past the allowance). The PM reads it.
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    listOpenRequests()
+      .then((rows) => { if (!cancelled) setOpenRequests(rows); })
+      // The picker is a shortcut; without it the line is renamed by hand.
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
   /** Replace one receipt field while preserving the rest of the draft. */
   function setField(name, value) {
@@ -72,6 +99,7 @@ export function SplitReceiptPage() {
       ...current,
       lineItems: current.lineItems.map((item, i) => {
         if (i !== index) return item;
+        if (name === "description") return { ...item, description: value, matchedTicketID: null };
         return ["quantity", "unitPrice", "amount"].includes(name) ? editLine(item, name, value) : { ...item, [name]: value };
       }),
     }));
@@ -115,6 +143,16 @@ export function SplitReceiptPage() {
     [JSON.stringify(validLineItems)]
   );
 
+  // Lines matched to a request by hand: { position among the valid lines: ticketID }, as the server expects.
+  const lineTargets = useMemo(
+    () =>
+      Object.fromEntries(
+        validLineItems.flatMap((item, index) => (item.matchedTicketID ? [[String(index), item.matchedTicketID]] : []))
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(validLineItems)]
+  );
+
   const readyToPreview = Boolean(
     draft.receiptImageURL && draft.vendorName.trim() && draft.receiptDate && amountIsValid && allLinesValid && totalMatches
   );
@@ -128,6 +166,7 @@ export function SplitReceiptPage() {
     setKnown({});
     setPreviewError("");
     setSubmitProblems([]);
+    setNote("");
   }
 
   /** Validate and scan a selected receipt, replacing the draft and clearing its old allocation. */
@@ -176,7 +215,7 @@ export function SplitReceiptPage() {
     setPreviewing(true);
     setPreviewError("");
     const timer = setTimeout(() => {
-      previewAllocation(splitLines, { excludeTicketIDs: excluded, feeTargets })
+      previewAllocation(splitLines, { excludeTicketIDs: excluded, feeTargets, lineTargets })
         .then((next) => {
           if (cancelled) return;
           setPlan(next);
@@ -203,7 +242,7 @@ export function SplitReceiptPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, refreshKey, t]);
+  }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, lineTargets, refreshKey, t]);
 
   /** Clear submission problems and refresh the preview to include newly opened requests. */
   function retryPreview() {
@@ -222,8 +261,72 @@ export function SplitReceiptPage() {
     setFeeTargets((prev) => ({ ...prev, [String(lineIndex)]: ticketID }));
   }
 
+  /** Match one receipt line to a request. A fee line (quantity 0) keeps its name; any other line takes the request's material name. */
+  function matchLine(index, request) {
+    setSubmitProblems([]);
+    setDraft((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((item, i) => {
+        if (i !== index) return item;
+        const isFee = Number(item.quantity) === 0 && item.quantity !== "";
+        return isFee
+          ? { ...item, matchedTicketID: request.ticketID }
+          : { ...item, description: request.materialType, matchedTicketID: request.ticketID };
+      }),
+    }));
+    setPickingIndex(null);
+  }
+
+  /** Forget a hand match so the line is matched by its words again. */
+  function clearMatch(index) {
+    setSubmitProblems([]);
+    setDraft((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((item, i) => (i === index ? { ...item, matchedTicketID: null } : item)),
+    }));
+  }
+
+  /**
+   * The lines and the receipt total differ: add an "Adjustment" line for the gap, or take an
+   * overage off the biggest line as a discount and note it. Either one sends the expense to PM review.
+   */
+  function applyAdjustment() {
+    const gap = toCents(draft.amount) - linesCents;
+    if (gap === 0) return;
+    setDraft((current) => {
+      if (gap > 0) {
+        return {
+          ...current,
+          lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
+        };
+      }
+      const over = -gap;
+      let biggest = -1;
+      current.lineItems.forEach((item, i) => {
+        if (Number(item.quantity) > 0 && (biggest < 0 || toCents(item.amount) > toCents(current.lineItems[biggest].amount))) biggest = i;
+      });
+      if (biggest < 0) return current;
+      const lineItems = current.lineItems.map((item, i) =>
+        i === biggest ? editLine(item, "amount", ((toCents(item.amount) - over) / 100).toFixed(2)) : item
+      );
+      lineItems.push({
+        description: `${ADJUSTMENT_PREFIX}: ${peso(over / 100)} discount taken off ${current.lineItems[biggest].description}`,
+        quantity: "0",
+        amount: "0.00",
+        unitPrice: "",
+      });
+      return { ...current, lineItems };
+    });
+  }
+
+  // Extra quantity or spending past the allowance needs a few words for the PM.
+  const extraPortions = (plan?.portions ?? []).filter((p) => Number(p.extraQuantity) > 0);
+  const overAllowancePortions = (plan?.portions ?? []).filter((p) => p.overAllowance);
+  const needsReason = extraPortions.length > 0 || overAllowancePortions.length > 0;
+  const reasonOk = !needsReason || note.trim().length > 0;
+
   const canSubmit = Boolean(
-    plan?.ok && draft.category && readyToPreview && !previewing && !scanning && !submitting && !result
+    plan?.ok && draft.category && readyToPreview && reasonOk && !previewing && !scanning && !submitting && !result
   );
 
   /** Submit a valid split once, displaying saved results or refreshing stale request capacity. */
@@ -246,6 +349,8 @@ export function SplitReceiptPage() {
         lineItems: splitLines,
         excludeTicketIDs: excluded,
         feeTargets,
+        lineTargets,
+        note: needsReason ? note.trim() : undefined,
       });
       setResult(saved);
     } catch (error) {
@@ -320,7 +425,7 @@ export function SplitReceiptPage() {
     );
   }
 
-  const needsRetry = Boolean(plan && (plan.uncovered.length + plan.unmatched.length > 0 || plan.portions.length === 0));
+  const needsRetry = Boolean(plan && (plan.unmatched.length > 0 || plan.portions.length === 0));
   const portionByTicket = new Map((plan?.portions ?? []).map((p) => [p.ticketID, p]));
   const requestIDs = [
     ...(plan?.portions ?? []).map((p) => p.ticketID),
@@ -418,19 +523,47 @@ export function SplitReceiptPage() {
           </div>
           <div className="submit-expense-items">
             {draft.lineItems.map((item, index) => (
-              <div className="submit-expense-item-row" key={`item-${index}`}>
+              <div className="split-line-block" key={`item-${index}`}>
+              <div className="submit-expense-item-row">
                 <Field label={t("submit.item_n", { n: index + 1 })} required value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder={t("submit.description")} />
                 <Field label={t("submit.item_amount")} required type="number" min="0" step="0.01" value={item.amount} onChange={(e) => updateLineItem(index, "amount", e.target.value)} />
                 <Field label={t("split.quantity_fees")} required type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
                 <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(e) => updateLineItem(index, "unitPrice", e.target.value)} />
                 <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
               </div>
+              {item.description.trim() && openRequests.length > 0 && (
+                <div className="split-match-row">
+                  {item.matchedTicketID ? (
+                    <>
+                      <span className="split-match-chip">
+                        {t("rv.matched_chip", {
+                          request: openRequests.find((r) => r.ticketID === item.matchedTicketID)?.materialType ?? item.description,
+                          project: openRequests.find((r) => r.ticketID === item.matchedTicketID)?.projectName ?? "",
+                        })}
+                      </span>
+                      <Button type="button" variant="ghost" onClick={() => clearMatch(index)}>{t("rv.remove_match")}</Button>
+                    </>
+                  ) : null}
+                  <Button type="button" variant="secondary" onClick={() => setPickingIndex(index)}>{t("rv.match_material")}</Button>
+                </div>
+              )}
+              </div>
             ))}
           </div>
 
           {allLinesValid && amountIsValid && !totalMatches && (
-            <Banner tone="warning" title={t("split.mismatch_title")}>
-              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}
+            <Banner
+              tone="warning"
+              title={t("split.mismatch_title")}
+              action={
+                <Button type="button" variant="secondary" onClick={applyAdjustment}>
+                  {toCents(draft.amount) > linesCents
+                    ? t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })
+                    : t("rv.fix_discount_web", { gap: peso((linesCents - toCents(draft.amount)) / 100) })}
+                </Button>
+              }
+            >
+              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })} {t("split.adjust_hint")}
             </Banner>
           )}
 
@@ -442,6 +575,13 @@ export function SplitReceiptPage() {
           )}
         </section>
       </Card>
+
+      <RequestPickerModal
+        line={pickingIndex !== null ? draft.lineItems[pickingIndex] ?? null : null}
+        requests={openRequests}
+        onPick={(request) => matchLine(pickingIndex, request)}
+        onClose={() => setPickingIndex(null)}
+      />
 
       {allocating && (
         <Card className="submit-expense-card">
@@ -482,10 +622,39 @@ export function SplitReceiptPage() {
                 {needsRetry && <p className="split-muted">{t("split.retry_hint")}</p>}
               </Banner>
             )}
-            {plan?.warnings?.length > 0 && (
-              <Banner tone="warning" title={t("dashboard.over_budget")}>
-                {t("split.over_budget_body")}
+            {extraPortions.length > 0 && (
+              <Banner tone="warning" title={t("split.extra_title")}>
+                <ul className="split-problems">
+                  {extraPortions.map((p) => (
+                    <li key={p.ticketID}>{t("ck.extra", { qty: p.extraQuantity, material: p.materialType, project: p.projectName })}</li>
+                  ))}
+                </ul>
               </Banner>
+            )}
+            {plan?.warnings?.some((w) => w.type === "OVER_BUDGET") && (
+              <Banner tone="warning" title={t("dashboard.over_budget")}>
+                {overAllowancePortions.length > 0 ? t("split.over_allowance_body") : t("split.over_budget_body")}
+              </Banner>
+            )}
+            {needsReason && (
+              <div className="split-note">
+                <Field
+                  as="textarea"
+                  label={t("ck.reason_title")}
+                  required
+                  maxLength={200}
+                  placeholder={t("ck.reason_hint")}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                <div className="split-note-quick">
+                  {QUICK_REASONS.map((reason) => (
+                    <Button key={reason.key} type="button" variant="secondary" onClick={() => setNote((current) => (current ? `${current} ${reason.text}` : reason.text))}>
+                      {t(reason.key)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div className="split-portions">
@@ -515,6 +684,7 @@ export function SplitReceiptPage() {
                             {portion.resolvesTicket ? t("split.completes") : t("split.stays_open", { remaining: portion.remainingAfter })}
                           </span>
                           {warning && <span className="split-over">{t("split.over_budget_left", { amount: warning.remainingBudget })}</span>}
+                          {Number(portion.extraQuantity) > 0 && <span className="split-over">{t("split.extra_badge", { qty: portion.extraQuantity })}</span>}
                         </div>
                         <table className="split-lines">
                           <thead><tr><th>{t("split.col_line")}</th><th>{t("split.col_qty")}</th><th>{t("dashboard.amount")}</th></tr></thead>
@@ -544,11 +714,11 @@ export function SplitReceiptPage() {
               )}
             </div>
 
-            {plan && plan.uncovered.length + plan.unmatched.length > 0 && (
+            {plan && plan.unmatched.length > 0 && (
               <div className="split-uncovered">
                 <h3>{t("split.uncovered_title")}</h3>
                 <ul>
-                  {[...plan.unmatched, ...plan.uncovered].map((line, i) => (
+                  {plan.unmatched.map((line, i) => (
                     <li key={i}>{t("split.uncovered_line", { description: line.description, quantity: line.quantity, amount: peso(line.amount) })}</li>
                   ))}
                 </ul>

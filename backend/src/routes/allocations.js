@@ -284,11 +284,28 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   }
 });
 
-// POST /trip-cost — a cost with no request to match (gas, toll, delivery). The Purchaser
+// The projects, among the ones asked for, that this caller may charge a trip cost to.
+async function chargeableProjects(client, user, projectIds) {
+  if (user.role === "Project Manager" || user.role === "General Manager") {
+    const scope = user.role === "Project Manager" ? "AND projectmanagerid = $2" : "";
+    const params = user.role === "Project Manager" ? [projectIds, user.id] : [projectIds];
+    const result = await client.query(
+      `SELECT projectid FROM projects WHERE status = 'Active' AND projectid = ANY($1::uuid[]) ${scope}`,
+      params
+    );
+    return new Set(result.rows.map((row) => String(row.projectid).toLowerCase()));
+  }
+  const open = await loadOpenRequests(user, client);
+  return new Set(open.map((row) => String(row.projectID).toLowerCase()));
+}
+
+// POST /trip-cost — a cost with no request to match (gas, toll, delivery). The caller
 // ticks the projects the trip served and the receipt is split evenly between them: one
 // ticketless expense per project, each approved by that project's Project Manager.
-// Only projects where the caller has an open request can be charged.
-router.post("/trip-cost", requireRole("Purchaser", "Site Manager"), async (req, res, next) => {
+// Who can be charged: a Purchaser or Site Manager, the projects where they have an open
+// request; a Project Manager, the Active projects they manage; a General Manager, any
+// Active project. (A Project Manager cannot approve their own expense; a GM does.)
+router.post("/trip-cost", requireRole("Purchaser", "Site Manager", "Project Manager", "General Manager"), async (req, res, next) => {
   try {
     const { receiptImageURL, vendorName, receiptDate, reason } = req.body ?? {};
     const clientReceiptID = req.body?.commonReceiptID == null ? null : String(req.body.commonReceiptID).toLowerCase();
@@ -320,11 +337,14 @@ router.post("/trip-cost", requireRole("Purchaser", "Site Manager"), async (req, 
         if (earlier) return earlier;
       }
 
-      const open = await loadOpenRequests(req.user, client);
-      const allowed = new Set(open.map((row) => String(row.projectID).toLowerCase()));
-      const refused = projectIds.filter((id) => !allowed.has(id));
-      if (refused.length > 0) {
-        throw httpError(400, "A trip cost can only be charged to a project where you have an open request");
+      const allowed = await chargeableProjects(client, req.user, projectIds);
+      if (projectIds.some((id) => !allowed.has(id))) {
+        throw httpError(
+          400,
+          req.user.role === "Purchaser" || req.user.role === "Site Manager"
+            ? "A trip cost can only be charged to a project where you have an open request"
+            : "A trip cost can only be charged to an Active project you manage"
+        );
       }
 
       const commonReceiptID = clientReceiptID ?? crypto.randomUUID();

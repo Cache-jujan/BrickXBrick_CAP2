@@ -326,7 +326,19 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
 
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const result = await query(
-            `SELECT e.*, u.name AS submittedbyname
+            // The extra columns label the row: what it was bought for, whether it is a trip cost
+            // (gas, toll, delivery: no request), and the other projects sharing the same receipt.
+            `SELECT e.*, u.name AS submittedbyname,
+                    (SELECT t.subject FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticketsubject,
+                    (e.ticketID IS NULL AND e.submitNote LIKE 'Trip cost:%') AS istripcost,
+                    (SELECT ra.commonReceiptID FROM ReceiptAllocations ra WHERE ra.expenseID = e.expenseID LIMIT 1) AS commonreceiptid,
+                    (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
+                                                       'amount', e2.amount, 'status', e2.status))
+                       FROM ReceiptAllocations ra
+                       JOIN ReceiptAllocations ra2 ON ra2.commonReceiptID = ra.commonReceiptID AND ra2.expenseID <> e.expenseID
+                       JOIN Expenses e2 ON e2.expenseID = ra2.expenseID
+                       JOIN Projects p2 ON p2.projectID = e2.projectID
+                      WHERE ra.expenseID = e.expenseID) AS siblings
                FROM Expenses e JOIN Users u ON u.userid = e.submittedBy
                ${where}
               ORDER BY e.submittedAt DESC`,

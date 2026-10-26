@@ -22,6 +22,8 @@ import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
 import { SubmitExpensePage } from "./pages/Expenses/SubmitExpensePage";
 import { SplitReceiptPage } from "./pages/Expenses/SplitReceiptPage";
+import { TripCostPage } from "./pages/Expenses/TripCostPage";
+import { OpenRequestsPage } from "./pages/Requests/OpenRequestsPage";
 import { MyExpensesPage } from "./pages/Expenses/MyExpensesPage";
 import { NotificationsPage } from "./pages/Notifications/NotificationsPage";
 import { ForgotPasswordPage } from "./pages/Auth/ForgotPasswordPage";
@@ -195,6 +197,24 @@ export default function App() {
               element={
                 <RoleRoute allow={WEB_BROADCAST_ROLES}>
                   <SplitReceiptPage />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/expenses/trip-cost"
+              element={
+                <RoleRoute allow={["General Manager", "Project Manager"]}>
+                  <TripCostPage />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/requests"
+              element={
+                <RoleRoute allow={["General Manager", "Project Manager"]}>
+                  <OpenRequestsPage />
                 </RoleRoute>
               }
             />

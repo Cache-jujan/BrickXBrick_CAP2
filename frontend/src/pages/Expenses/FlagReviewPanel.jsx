@@ -13,6 +13,24 @@ function whyText(t, flagType) {
 
 const num = (value) => (value == null || value === "" ? null : Number(value));
 
+/** The other projects sharing one split receipt, with their amounts. Shown for any expense that has siblings. */
+export function SplitSiblings({ siblings }) {
+  const { t, tv } = useLocale();
+  if (!siblings || siblings.length === 0) return null;
+  return (
+    <section className="flag-review-block">
+      <h3 className="flag-review-title">{t("flagx.split_title")}</h3>
+      <ul className="flag-review-list">
+        {siblings.map((s) => (
+          <li key={s.expenseId}>
+            {s.projectName} — {PESO.format(s.amount)} ({tv("status", s.status)})
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /**
  * What a GM/PM needs to decide on a flagged expense: why each flag was raised, the request next to
  * the receipt, the other projects sharing the receipt, and the earlier expense a duplicate points at.
@@ -78,18 +96,7 @@ export function FlagReviewPanel({ expense, flags, showEffect }) {
         </section>
       )}
 
-      {siblings.length > 0 && (
-        <section className="flag-review-block">
-          <h3 className="flag-review-title">{t("flagx.split_title")}</h3>
-          <ul className="flag-review-list">
-            {siblings.map((s) => (
-              <li key={s.expenseId}>
-                {s.projectName} — {PESO.format(s.amount)} ({tv("status", s.status)})
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <SplitSiblings siblings={siblings} />
 
       {duplicate && (
         <section className="flag-review-block">
