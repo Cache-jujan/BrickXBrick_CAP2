@@ -1,5 +1,12 @@
 .psg { display: flex; flex-direction: column; gap: var(--space-5); }
 .psg-lead { margin: 0; padding: var(--space-4) var(--space-5); color: var(--color-ink-soft); font-size: var(--text-base); line-height: 1.5; background: var(--color-surface); border: 1px solid var(--color-border); border-left: 3px solid var(--color-brick); border-radius: var(--radius-md); }
+.psg-tip { margin: calc(var(--space-3) * -1) 0 0; font-size: var(--text-sm); color: var(--color-ink-soft); }
+/* Like Word's New screen: the heading and the action bar stay put, the tiles scroll in between. */
+.psg-scroll {
+  display: flex; flex-direction: column; gap: var(--space-5);
+  min-height: 260px; max-height: calc(100vh - 380px); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+}
 .psg-heading { margin: 0 0 var(--space-3); font-size: var(--text-md); }
 .psg-group { margin-bottom: var(--space-4); }
 .psg-type { margin: 0 0 var(--space-2); padding-left: var(--space-2); font-size: var(--text-base); font-weight: 700; color: var(--color-ink); border-left: 3px solid var(--color-brick); }
@@ -12,6 +19,7 @@
 .psg-tile {
   position: relative; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1);
   min-width: 0; padding: var(--space-3); font: inherit; text-align: left; cursor: pointer;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
   background: var(--color-surface); border: 2px solid var(--color-border); border-radius: var(--radius-lg);
   transition: border-color var(--duration, 0.15s) var(--ease, ease), box-shadow var(--duration, 0.15s) var(--ease, ease);
 }
@@ -52,9 +60,8 @@
 .psg-none { padding: var(--space-2); font-size: var(--text-sm); color: var(--color-ink-soft); }
 .psg-note { margin: 0; font-size: var(--text-xs); color: var(--color-ink-soft); }
 
-/* Next stays on screen while scrolling, with what is chosen next to it. */
+/* Next stays on screen while the tiles scroll, with what is chosen next to it. */
 .psg-actions {
-  position: sticky; bottom: var(--space-3); z-index: 2;
   display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3);
   padding: var(--space-3) var(--space-4); background: var(--color-surface);
   border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 -4px 12px rgba(48, 47, 40, 0.06);
@@ -64,4 +71,5 @@
 @media (max-width: 600px) {
   .psg-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .psg-picked { display: none; }
+  .psg-scroll { max-height: calc(100vh - 330px); }
 }

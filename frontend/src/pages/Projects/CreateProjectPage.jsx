@@ -81,15 +81,18 @@ export function CreateProjectPage() {
     setError("");
   }
 
-  async function handleNext() {
+  // `picked` comes from a double-click on a tile (state has not updated yet);
+  // the Next button passes nothing and uses the current choice. null = blank.
+  async function handleNext(picked) {
     setError("");
-    if (!choice) {
+    const pick = picked === undefined ? choice : picked;
+    if (!pick) {
       setStep("basics");
       return;
     }
     setLoadingChecklist(true);
     try {
-      const data = choice.mode === "template" ? await getProjectTemplate(choice.templateId) : await getCopySource(choice.sourceProjectId);
+      const data = pick.mode === "template" ? await getProjectTemplate(pick.templateId) : await getCopySource(pick.sourceProjectId);
       setChecklist(data);
       setStep("basics");
     } catch (err) {

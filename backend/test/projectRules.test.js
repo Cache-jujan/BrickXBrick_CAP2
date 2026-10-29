@@ -25,6 +25,18 @@ test("dates: development <= construction <= completion is valid", () => {
   );
 });
 
+test("dates: a year before 2000 (e.g. 0009) is rejected, so it can't break the Reports page", () => {
+  const errors = validateProjectDates({ startDate: "0009-11-07", constructionStartDate: "2027-02-01", endDate: "2027-06-30" });
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].field, "startDate");
+  assert.match(errors[0].message, /years 2000 to 2100/);
+});
+
+test("dates: a year after 2100 is rejected", () => {
+  const errors = validateProjectDates({ startDate: "2027-01-04", constructionStartDate: "2027-02-01", endDate: "9999-06-30" });
+  assert.deepEqual(errors.map((e) => e.field), ["endDate"]);
+});
+
 test("dates: all three may fall on the same day", () => {
   assert.deepEqual(
     validateProjectDates({ startDate: "2027-01-04", constructionStartDate: "2027-01-04", endDate: "2027-01-04" }),
