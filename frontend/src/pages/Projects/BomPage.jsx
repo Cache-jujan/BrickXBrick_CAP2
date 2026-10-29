@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { BackLink } from "../../components/ui/BackLink";
 import { BudgetJustification } from "../../components/bom/BudgetJustification";
+import { BomDropZone } from "../../components/bom/BomDropZone";
 import { COST_CATEGORIES, DEFAULT_COST_CATEGORY, MAX_ESCALATION_PCT } from "../../utils/costCategories";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./BomPage.css";
@@ -154,6 +155,7 @@ export function BomPage() {
   const [importReport, setImportReport] = useState(null);
   const [notice, setNotice] = useState("");
   const [dialog, setDialog] = useState(null); // "approve" | "reopen" | "delete" | "replace"
+  const [droppedFile, setDroppedFile] = useState(null); // dropped on the zone, waiting for the "replace?" answer
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [agreement, setAgreement] = useState({ clientAgreedOn: "", clientAgreedBy: "", agreementRef: "" });
@@ -294,6 +296,7 @@ export function BomPage() {
   }
 
   function chooseFile() {
+    setDroppedFile(null);
     if (dirty || bom) {
       setDialog("replace");
       return;
@@ -301,15 +304,31 @@ export function BomPage() {
     fileInput.current?.click();
   }
 
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  async function importFile(file) {
     await run("import", async () => {
       const resp = await importBom(id, file);
       applyResponse(resp);
       setImportReport(resp.importReport);
     }, t("errors.import_failed"));
+  }
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    await importFile(file);
+  }
+
+  // A file dropped on the drop zone. A BOM or unsaved edits already on the page
+  // get the same "replace?" question as the Replace button.
+  function handleDrop(file) {
+    if (dirty || bom) {
+      setActionError("");
+      setDroppedFile(file);
+      setDialog("replace");
+      return;
+    }
+    importFile(file);
   }
 
   async function handleSave() {
@@ -457,6 +476,10 @@ export function BomPage() {
       {actionError && !dialog && <Banner tone="error" title={actionError} />}
       {notice && <Banner tone="success" title={notice} />}
 
+      {isGM && !projectClosed && draft && (!bom || bom.status === "Draft") && (
+        <BomDropZone compact onFile={handleDrop} onBrowse={chooseFile} onReject={setActionError} busy={busy === "import"} />
+      )}
+
       {bom?.status === "Approved" && (
         <p className="bom-status-line">
           {bom.clientAgreedOn && <strong className="bom-agreement">{agreementText(bom, t, formatDate)}.</strong>}{" "}
@@ -509,10 +532,8 @@ export function BomPage() {
           {isGM && !projectClosed ? (
             <>
               <p>{t("bom.import_help")}</p>
+              <BomDropZone onFile={handleDrop} onBrowse={chooseFile} onReject={setActionError} busy={busy === "import"} />
               <div className="bom-empty-actions">
-                <Button onClick={chooseFile} disabled={Boolean(busy)}>
-                  {busy === "import" ? t("bom.importing") : t("bom.import_xlsx")}
-                </Button>
                 <Button variant="ghost" onClick={startManual}>{t("bom.enter_by_hand")}</Button>
               </div>
             </>
@@ -878,12 +899,14 @@ export function BomPage() {
             {dialog === "replace" && (
               <>
                 <h2 id="bom-dialog-title" className="modal-title">{t("bom.replace_title")}</h2>
-                <p className="modal-body">{t("bom.replace_body")}</p>
+                <p className="modal-body">
+                  {droppedFile ? t("bom.replace_dropped_body", { file: droppedFile.name }) : t("bom.replace_body")}
+                </p>
               </>
             )}
             {actionError && <Banner tone="error" title={actionError} />}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setDialog(null)} disabled={Boolean(busy)}>{t("bom.back")}</Button>
+              <Button variant="secondary" onClick={() => { setDialog(null); setDroppedFile(null); }} disabled={Boolean(busy)}>{t("bom.back")}</Button>
               {dialog === "approve" && (
                 <Button
                   onClick={handleApprove}
@@ -911,10 +934,16 @@ export function BomPage() {
                 <Button
                   onClick={() => {
                     setDialog(null);
-                    fileInput.current?.click();
+                    if (droppedFile) {
+                      const file = droppedFile;
+                      setDroppedFile(null);
+                      importFile(file);
+                    } else {
+                      fileInput.current?.click();
+                    }
                   }}
                 >
-                  {t("bom.choose_file")}
+                  {droppedFile ? t("bom.replace_with") : t("bom.choose_file")}
                 </Button>
               )}
             </div>

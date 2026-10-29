@@ -1,0 +1,18 @@
+/* Drop target for the BOM Excel file. */
+.bom-drop {
+  display: flex; align-items: center; justify-content: center; gap: var(--space-3);
+  padding: var(--space-6) var(--space-5); margin-bottom: var(--space-4); text-align: center; cursor: pointer;
+  color: var(--color-ink); background: var(--color-surface-muted);
+  border: 2px dashed var(--color-border-strong); border-radius: var(--radius-lg);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.bom-drop:hover, .bom-drop:focus-visible { border-color: var(--color-brick); outline: none; }
+.bom-drop-over { border-color: var(--color-brick); border-style: solid; background: var(--color-brick-tint); }
+.bom-drop-busy { cursor: progress; opacity: 0.7; }
+.bom-drop-icon { font-size: 2rem; line-height: 1; color: var(--color-brick); }
+.bom-drop-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.bom-drop-text strong { font-size: var(--text-base); }
+.bom-drop-text span { font-size: var(--text-sm); color: var(--color-ink-soft); }
+.bom-drop-compact { flex-direction: row; padding: var(--space-3) var(--space-4); }
+.bom-drop-compact .bom-drop-icon { font-size: 1.25rem; }
+.bom-drop-compact .bom-drop-text strong { font-size: var(--text-sm); font-weight: 600; }
