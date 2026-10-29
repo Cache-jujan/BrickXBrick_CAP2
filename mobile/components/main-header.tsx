@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
@@ -5,7 +6,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { LanguageButton } from "@/components/language-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
-import { getSession } from "@/lib/auth";
+import { getSession, subscribeSession } from "@/lib/auth";
 import { useLocale } from "@/lib/i18n-context";
 
 type Props = {
@@ -28,8 +29,9 @@ export function initialsOf(name: string) {
 // any, goes under it. It sits on the page background, so there is no box.
 export function MainHeader({ title, tagline, hideAvatar }: Props) {
   const { t } = useLocale();
-  const name = getSession()?.user.name ?? "";
-  const avatarUrl = getSession()?.user.avatarUrl;
+  // Listens for changes, so a new photo or name shows here without signing in again.
+  const name = useSyncExternalStore(subscribeSession, () => getSession()?.user.name ?? "");
+  const avatarUrl = useSyncExternalStore(subscribeSession, () => getSession()?.user.avatarUrl ?? null);
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
