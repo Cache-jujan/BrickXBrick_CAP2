@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, router, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
@@ -28,6 +28,9 @@ export default function SettingsScreen() {
   // The sub-screens change the session; re-read it when we come back to this list.
   const [, refresh] = useState(0);
   useFocusEffect(useCallback(() => refresh((n) => n + 1), []));
+  // The chosen picture is shown at once while it uploads, so the circle is never just an empty disc.
+  const [preview, setPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const session = getSession();
   if (!session) return <Redirect href="/login" />;
@@ -43,10 +46,17 @@ export default function SettingsScreen() {
     try {
       const picked = result.assets[0];
       const small = await compressAvatarImage(picked.uri, picked.width, picked.height);
-      setAvatarUrl(await uploadAvatar(small.uri));
-      refresh((n) => n + 1);
+      setSaving(true);
+      setPreview(small.uri);
+      const url = await uploadAvatar(small.uri);
+      await Image.prefetch(url).catch(() => false); // downloaded before it replaces the preview
+      setAvatarUrl(url);
     } catch (err) {
       Alert.alert(t("settings.photo_failed"), err instanceof Error ? err.message : "");
+    } finally {
+      setPreview(null);
+      setSaving(false);
+      refresh((n) => n + 1);
     }
   }
 
@@ -61,6 +71,7 @@ export default function SettingsScreen() {
   }
 
   function openPhotoMenu() {
+    if (saving) return;
     Alert.alert(t("settings.photo_title"), undefined, [
       { text: t("settings.photo_choose"), onPress: choosePhoto },
       ...(avatarUrl ? [{ text: t("account.photo_remove"), style: "destructive" as const, onPress: dropPhoto }] : []),
@@ -94,11 +105,16 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.profile}>
           <Pressable onPress={openPhotoMenu} style={styles.avatar} accessibilityRole="button" accessibilityLabel={t("settings.photo_title")}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} accessibilityIgnoresInvertColors />
+            {preview || avatarUrl ? (
+              <Image source={{ uri: preview ?? avatarUrl ?? undefined }} style={styles.avatarImage} accessibilityIgnoresInvertColors />
             ) : (
               <Text style={styles.avatarText}>{initialsOf(name)}</Text>
             )}
+            {saving ? (
+              <View style={styles.avatarBusy}>
+                <ActivityIndicator color="#FFFFFF" />
+              </View>
+            ) : null}
           </Pressable>
           <Pressable onPress={openPhotoMenu} hitSlop={8} accessibilityRole="button">
             <Text style={styles.changePhoto}>{t(avatarUrl ? "account.photo_change" : "account.photo_add")}</Text>
@@ -154,6 +170,7 @@ const styles = StyleSheet.create({
   profile: { alignItems: "center", paddingVertical: 12 },
   avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 40, height: 80, justifyContent: "center", overflow: "hidden", width: 80 },
   avatarImage: { height: 80, width: 80 },
+  avatarBusy: { alignItems: "center", backgroundColor: "rgba(0,0,0,0.35)", bottom: 0, justifyContent: "center", left: 0, position: "absolute", right: 0, top: 0 },
   changePhoto: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13, marginTop: 8 },
   avatarText: { color: "#FFFFFF", fontFamily: FONT.extrabold, fontSize: 28 },
   name: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 20, marginTop: 12, maxWidth: "90%" },

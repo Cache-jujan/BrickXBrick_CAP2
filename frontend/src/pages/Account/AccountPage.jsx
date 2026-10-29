@@ -12,12 +12,26 @@ import { PasswordChecklist } from "../../components/ui/PasswordChecklist";
 import { ShieldCheckIcon } from "../../components/ui/icons";
 import { CameraGlyph, CheckSquareGlyph, LockGlyph, MonitorGlyph, RefreshGlyph, UserGlyph } from "../../components/ui/glyphs";
 import { passwordMeetsRules } from "../../utils/passwordRules";
+import { resizeForAvatar } from "../../utils/resizeImage";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./AccountPage.css";
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
 const AVATAR_TYPES = ["image/jpeg", "image/png"];
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_PICK_MAX_BYTES = 25 * 1024 * 1024; // what may be picked; it is shrunk before it is sent
+
+// Loads a picture into the browser cache, so it appears at once when it replaces the preview.
+function preload(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const done = () => resolve();
+    img.onload = done;
+    img.onerror = done;
+    img.src = url;
+    setTimeout(done, 8000);
+  });
+}
 const TIPS = [
   { key: "account.tip_1", Icon: LockGlyph },
   { key: "account.tip_2", Icon: CheckSquareGlyph },
@@ -44,6 +58,7 @@ export function AccountPage() {
   const fileInput = useRef(null);
   const [avatarMsg, setAvatarMsg] = useState(null);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [preview, setPreview] = useState(null); // the chosen picture, shown while it uploads
 
   const roleSlug = String(user?.role || "").toLowerCase().replace(/\s+/g, "-");
   const label = `${username.trim() || "username"}.${roleSlug}`;
@@ -56,15 +71,24 @@ export function AccountPage() {
     e.target.value = ""; // so choosing the same file again still fires
     if (!file) return;
     if (!AVATAR_TYPES.includes(file.type)) return setAvatarMsg({ type: "error", text: t("account.photo_type") });
-    if (file.size > AVATAR_MAX_BYTES) return setAvatarMsg({ type: "error", text: t("account.photo_size") });
+    if (file.size > AVATAR_PICK_MAX_BYTES) return setAvatarMsg({ type: "error", text: t("account.photo_size") });
     setSavingAvatar(true);
     setAvatarMsg(null);
+    let local = null;
     try {
-      markAvatarChanged(await uploadAvatar(file));
+      const small = await resizeForAvatar(file);
+      if (small.size > AVATAR_MAX_BYTES) throw new Error(t("account.photo_size"));
+      local = URL.createObjectURL(small);
+      setPreview(local);
+      const url = await uploadAvatar(small);
+      await preload(url);
+      markAvatarChanged(url);
       setAvatarMsg({ type: "success", text: t("account.photo_saved") });
     } catch (err) {
       setAvatarMsg({ type: "error", text: extractErrorMessage(err) });
     } finally {
+      setPreview(null);
+      if (local) URL.revokeObjectURL(local);
       setSavingAvatar(false);
     }
   }
@@ -141,7 +165,7 @@ export function AccountPage() {
             </div>
 
             <div className="account-who">
-              <Avatar className="account-avatar" url={user?.avatarUrl} initial={initial} />
+              <Avatar className="account-avatar" url={preview || user?.avatarUrl} initial={initial} />
               <div className="account-who-text">
                 <p className="account-who-name">{user?.name}</p>
                 <p className="account-who-role">{user?.role}</p>
@@ -149,7 +173,7 @@ export function AccountPage() {
               <div className="account-photo-actions">
                 <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
                 <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
-                  <CameraGlyph size={18} /> {t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
+                  <CameraGlyph size={18} /> {savingAvatar ? t("account.photo_saving") : t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
                 </Button>
                 {user?.avatarUrl && (
                   <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
