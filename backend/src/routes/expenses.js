@@ -7,6 +7,7 @@ const { query, withTransaction } = require("../lib/db");
 const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
+const { notifyGeneralManagers } = require("../lib/notify");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { assertProjectActive } = require("../lib/projectRules");
@@ -453,6 +454,15 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
                     [expense.submittedby, req.params.id, `Your expense was approved: ${expense.vendorname}`]
                 );
             }
+            // A Project Manager's decision is also news for the General Manager.
+            if (req.user.role === "Project Manager") {
+                await notifyGeneralManagers(client, {
+                    type: "ExpenseApproved",
+                    entityType: "Expense",
+                    entityId: req.params.id,
+                    message: `${req.user.name} approved an expense: ${expense.vendorname} (₱${Number(expense.amount).toLocaleString("en-PH")}).`,
+                });
+            }
         });
 
         // Read the row again so the fingerprint includes who approved it.
@@ -530,6 +540,14 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
                  VALUES ($1, 'ExpenseRejected', 'Expense', $2, $3)`,
                 [expense.submittedby, req.params.id, `Your expense was rejected: ${reason.trim()}`]
             );
+            if (req.user.role === "Project Manager") {
+                await notifyGeneralManagers(client, {
+                    type: "ExpenseRejected",
+                    entityType: "Expense",
+                    entityId: req.params.id,
+                    message: `${req.user.name} rejected an expense: ${expense.vendorname} (₱${Number(expense.amount).toLocaleString("en-PH")}). Reason: ${reason.trim()}`,
+                });
+            }
             return result.rows[0];
         });
 
