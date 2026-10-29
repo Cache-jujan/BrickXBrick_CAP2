@@ -6,11 +6,11 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { Card } from "../../components/ui/Card";
 import { EyeIcon, EyeOffIcon } from "../../components/ui/icons";
+import { PasswordChecklist } from "../../components/ui/PasswordChecklist";
+import { passwordMeetsRules } from "../../utils/passwordRules";
 import { LINK_TYPE_KEY } from "../../auth/authLinkRedirect";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./AuthPages.css";
-
-const MIN_LENGTH = 8;
 
 /** Return the link type saved before Supabase clears the URL, or null if absent or storage is blocked. */
 function readLinkType() {
@@ -79,7 +79,7 @@ export function SetPasswordPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (password.length < MIN_LENGTH) return setError(t("errors.password_short", { min: MIN_LENGTH }));
+    if (!passwordMeetsRules(password)) return setError(t("pw.rules_not_met"));
     if (password !== confirm) return setError(t("errors.password_mismatch"));
 
     setBusy(true);
@@ -124,6 +124,7 @@ export function SetPasswordPage() {
             </p>
             <PasswordField label={t("auth.new_password")} value={password}
               onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+            <PasswordChecklist password={password} />
             <PasswordField label={t("auth.confirm_password")} value={confirm}
               onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
             {error && <Banner tone="error" title={error} />}

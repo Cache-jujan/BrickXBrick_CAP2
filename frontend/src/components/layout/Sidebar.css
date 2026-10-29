@@ -241,3 +241,16 @@
   color: #fff;
   font-weight: 650;
 }
+
+/* Settings sits under the role's own links, set apart by a thin line. */
+.sidebar-link-settings {
+  margin-top: var(--space-3);
+}
+.sidebar-link-settings::before {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  top: calc(var(--space-2) * -1 - 1px);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}

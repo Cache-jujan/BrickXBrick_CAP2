@@ -70,7 +70,7 @@ async function change(body) {
   }
 }
 
-const good = { currentPassword: "old-password", newPassword: "new-password-1" };
+const good = { currentPassword: "old-password", newPassword: "New-password-1!" };
 
 test("a wrong current password is refused, counted, and says how many tries are left", async () => {
   reset({ passwordOk: false, attempts: 0 });
@@ -114,14 +114,25 @@ test("the right current password changes it and clears earlier wrong guesses", a
   const r = await change(good);
   assert.equal(r.status, 204);
   assert.equal(state.adminUpdates.length, 1);
-  assert.equal(state.adminUpdates[0].body.password, "new-password-1");
+  assert.equal(state.adminUpdates[0].body.password, "New-password-1!");
   assert.ok(state.updates.some((u) => u.text.includes("failedloginattempts = 0")));
 });
 
 test("the new password must differ, be long enough, and the current one is required", async () => {
   reset();
-  assert.equal((await change({ currentPassword: "same-pass-1", newPassword: "same-pass-1" })).status, 400);
+  assert.equal((await change({ currentPassword: "Same-pass-1!", newPassword: "Same-pass-1!" })).status, 400);
   assert.equal((await change({ currentPassword: "old-password", newPassword: "short" })).status, 400);
-  assert.equal((await change({ newPassword: "new-password-1" })).status, 400);
+  assert.equal((await change({ newPassword: "New-password-1!" })).status, 400);
   assert.equal(state.signIns, 0, "bad input never reaches the password check");
+});
+
+test("the new password needs 8 characters, an uppercase letter, a number and a special character", async () => {
+  reset();
+  for (const weak of ["Ab1!", "new-password-1!", "New-password-!!", "NewPassword12"]) {
+    const r = await change({ currentPassword: "old-password", newPassword: weak });
+    assert.equal(r.status, 400, weak);
+    assert.match(r.body.error, /uppercase letter, one number and one special character/);
+  }
+  assert.equal(state.signIns, 0, "a weak password never reaches the password check");
+  assert.equal(state.adminUpdates.length, 0);
 });

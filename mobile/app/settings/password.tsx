@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Redirect, router } from "expo-router";
 
 import { AppButton } from "@/components/app-button";
@@ -10,6 +11,7 @@ import { changePassword } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { confirmAction } from "@/lib/confirm";
 import { useLocale } from "@/lib/i18n-context";
+import { PASSWORD_RULES, passwordMeetsRules } from "@/lib/password-rules";
 
 export default function PasswordScreen() {
   const { t } = useLocale();
@@ -22,7 +24,8 @@ export default function PasswordScreen() {
   if (!getSession()) return <Redirect href="/login" />;
 
   const dirty = !!(current || next || confirm);
-  const ready = !!current && next.length >= 8 && next === confirm;
+  const ready = !!current && passwordMeetsRules(next) && next === confirm;
+  const mismatch = confirm.length > 0 && next !== confirm;
 
   async function leave() {
     if (dirty && !(await confirmAction({
@@ -36,7 +39,7 @@ export default function PasswordScreen() {
   }
 
   async function save() {
-    if (next.length < 8) return setError(t("settings.password_short"));
+    if (!passwordMeetsRules(next)) return setError(t("pw.rules_not_met"));
     if (next !== confirm) return setError(t("settings.password_mismatch"));
     const ok = await confirmAction({
       title: t("settings.confirm_password_title"),
@@ -65,17 +68,20 @@ export default function PasswordScreen() {
     return (
       <>
         <Text style={styles.label}>{label}</Text>
-        <TextInput
-          value={value}
-          onChangeText={(v) => { set(v); setError(""); }}
-          secureTextEntry={!show}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete={autoComplete}
-          placeholder={label}
-          placeholderTextColor={COLORS.muted}
-          style={styles.input}
-        />
+        <View style={styles.inputRow}>
+          <MaterialIcons name="lock-outline" size={20} color={COLORS.muted} />
+          <TextInput
+            value={value}
+            onChangeText={(v) => { set(v); setError(""); }}
+            secureTextEntry={!show}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete={autoComplete}
+            placeholder={label}
+            placeholderTextColor={COLORS.muted}
+            style={styles.input}
+          />
+        </View>
       </>
     );
   }
@@ -87,13 +93,32 @@ export default function PasswordScreen() {
     >
       {field(t("settings.current_password"), current, setCurrent, "current-password")}
       {field(t("settings.new_password"), next, setNext, "new-password")}
+      <View style={styles.rules}>
+        <Text style={styles.rulesTitle}>{t("pw.requirements")}</Text>
+        {PASSWORD_RULES.map((rule) => {
+          const ok = rule.test(next);
+          return (
+            <View key={rule.id} style={styles.rule} accessible accessibilityLabel={`${t(rule.labelKey)}, ${t(ok ? "pw.met" : "pw.not_met")}`}>
+              <MaterialIcons name={ok ? "check-circle" : "radio-button-unchecked"} size={18} color={ok ? COLORS.success : COLORS.muted} />
+              <Text style={[styles.ruleText, ok && styles.ruleOk]}>{t(rule.labelKey)}</Text>
+            </View>
+          );
+        })}
+      </View>
       {field(t("settings.confirm_password"), confirm, setConfirm, "new-password")}
-      <Pressable onPress={() => setShow((v) => !v)} hitSlop={8} style={styles.toggle} accessibilityRole="button">
-        <Text style={styles.toggleText}>{t(show ? "login.hide" : "login.show")}</Text>
-      </Pressable>
+      {mismatch ? <Text style={styles.error} accessibilityRole="alert">{t("pw.must_match")}</Text> : null}
+      <View style={styles.showRow}>
+        <Text style={styles.showText}>{t("pw.show_passwords")}</Text>
+        <Switch
+          value={show}
+          onValueChange={setShow}
+          trackColor={{ true: COLORS.primary, false: COLORS.inputBorder }}
+          accessibilityLabel={t("pw.show_passwords")}
+        />
+      </View>
       {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
       <View style={styles.action}>
-        <AppButton label={t("settings.save")} onPress={save} loading={saving} disabled={!ready} />
+        <AppButton label={t("pw.update")} onPress={save} loading={saving} disabled={!ready} />
       </View>
     </KeyboardScreen>
   );
@@ -102,9 +127,15 @@ export default function PasswordScreen() {
 const styles = StyleSheet.create({
   content: { padding: 16 },
   label: { color: COLORS.heading, fontFamily: FONT.bold, fontSize: 13, marginBottom: 8, marginTop: 16 },
-  input: { backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, color: COLORS.heading, fontFamily: FONT.regular, fontSize: 16, minHeight: 54, paddingHorizontal: 16 },
-  toggle: { alignSelf: "flex-start", marginTop: 12, minHeight: 32, justifyContent: "center" },
-  toggleText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
+  inputRow: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, flexDirection: "row", gap: 10, minHeight: 54, paddingHorizontal: 16 },
+  input: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 16, minHeight: 52 },
+  rules: { backgroundColor: COLORS.primaryTint, borderRadius: 14, gap: 6, marginTop: 12, padding: 14 },
+  rulesTitle: { color: COLORS.primaryTintText, fontFamily: FONT.bold, fontSize: 13, marginBottom: 2 },
+  rule: { alignItems: "center", flexDirection: "row", gap: 8 },
+  ruleText: { color: COLORS.muted, fontFamily: FONT.medium, fontSize: 13 },
+  ruleOk: { color: COLORS.success },
+  showRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
+  showText: { color: COLORS.heading, fontFamily: FONT.medium, fontSize: 14 },
   error: { color: COLORS.errorText, fontFamily: FONT.medium, fontSize: 13, marginTop: 8 },
   action: { marginTop: 24 },
 });

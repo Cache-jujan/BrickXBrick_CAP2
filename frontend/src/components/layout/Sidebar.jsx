@@ -2,47 +2,13 @@ import { Fragment, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listTamperAlerts } from "../../api/blockchainApi";
-import { GridIcon, FolderIcon, UsersIcon, ChevronIcon } from "./icons";
+import {
+  GridIcon, FolderIcon, UsersIcon, ChevronIcon, InboxIcon, WalletIcon, ReceiptPlusIcon,
+  BarChartIcon, ShieldAlertIcon, TicketIcon, PlusSquareIcon, ClipboardCheckIcon, GearIcon,
+} from "./icons";
 import { useLocale } from "../../i18n/LocaleProvider";
 
-function ReceiptIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2Z" />
-      <path d="M9 8h6M9 12h6" />
-    </svg>
-  );
-}
-
-function ChartIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-    </svg>
-  );
-}
-
-function TicketIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 5h16v14H4z" />
-      <path d="M8 9h8M8 13h5" />
-    </svg>
-  );
-}
 import "./Sidebar.css";
-
-// Inline for now — swap for a real icon from ./icons if one already fits
-// (warning triangle / shield style) rather than keeping this duplicate.
-function AlertTriangleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}
 
 // Ways to submit an expense other than a single receipt for one request; listed under "Submit expense".
 const SUBMIT_EXPENSE_CHILDREN = [
@@ -57,24 +23,24 @@ const NAV_BY_ROLE = {
   "General Manager": [
     { to: "/dashboard/gm", label: "nav.dashboard", icon: GridIcon },
     { to: "/projects", label: "nav.projects", icon: FolderIcon },
-    { to: "/requests", label: "nav.open_requests", icon: TicketIcon },
-    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon, end: true },
-    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
-    { to: "/reports", label: "nav.reports", icon: ChartIcon },
-    { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: AlertTriangleIcon, alerts: "live" },
+    { to: "/requests", label: "nav.open_requests", icon: InboxIcon },
+    { to: "/expenses", label: "nav.expenses", icon: WalletIcon, end: true },
+    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptPlusIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
+    { to: "/reports", label: "nav.reports", icon: BarChartIcon },
+    { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: ShieldAlertIcon, alerts: "live" },
   ],
   "Project Manager": [
     { to: "/dashboard/pm", label: "nav.dashboard", icon: GridIcon },
     { to: "/tickets/queue", label: "nav.tickets", icon: TicketIcon },
-    { to: "/tasks/progress-review", label: "nav.progress_review", icon: TicketIcon },
+    { to: "/tasks/progress-review", label: "nav.progress_review", icon: ClipboardCheckIcon },
     { to: "/projects", label: "nav.projects", icon: FolderIcon },
-    { to: "/requests", label: "nav.open_requests", icon: TicketIcon },
-    { to: "/expenses", label: "nav.expenses", icon: ReceiptIcon, end: true },
-    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
+    { to: "/requests", label: "nav.open_requests", icon: InboxIcon },
+    { to: "/expenses", label: "nav.expenses", icon: WalletIcon, end: true },
+    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptPlusIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
   ],
   "Site Manager": [
     { to: "/dashboard/sm", label: "nav.dashboard", icon: GridIcon },
-    { to: "/tickets/new", label: "nav.create_ticket", icon: TicketIcon },
+    { to: "/tickets/new", label: "nav.create_ticket", icon: PlusSquareIcon },
   ],
   Purchaser: [
   {
@@ -85,14 +51,14 @@ const NAV_BY_ROLE = {
   {
     to: "/expenses",
     label: "nav.my_expenses",
-    icon: ReceiptIcon,
+    icon: WalletIcon,
   },
 ],
 
   "System Administrator": [
     { to: "/dashboard/admin", label: "nav.dashboard", icon: GridIcon },
     { to: "/admin/users", label: "nav.user_accounts", icon: UsersIcon },
-    { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: AlertTriangleIcon, alerts: "live" },
+    { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: ShieldAlertIcon, alerts: "live" },
   ],
 };
 
@@ -185,6 +151,15 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
             </Fragment>
           );
         })}
+        <NavLink
+          to="/account"
+          className={({ isActive }) => "sidebar-link sidebar-link-settings" + (isActive ? " sidebar-link-active" : "")}
+          title={collapsed ? t("nav.settings") : undefined}
+          onClick={onNavigate}
+        >
+          <span className="sidebar-link-icon"><GearIcon /></span>
+          {!collapsed && <span className="sidebar-link-label">{t("nav.settings")}</span>}
+        </NavLink>
       </nav>
 
       <button

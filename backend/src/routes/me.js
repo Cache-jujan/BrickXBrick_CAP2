@@ -5,12 +5,11 @@ const { supabaseAnon } = require("../lib/supabaseAnon");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { USERNAME_RE, orgName } = require("../lib/displayName");
 const { requireAuth } = require("../middleware/auth");
+const { brokenPasswordRules, PASSWORD_RULES_MESSAGE } = require("../lib/passwordRules");
 const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
 
 const router = express.Router();
 router.use(requireAuth);
-
-const MIN_PASSWORD_LENGTH = 8;
 
 // PATCH /api/me/profile — set your username. Everyone else then sees you as
 // "username.role" (stored in Users.name, see lib/displayName.js).
@@ -48,8 +47,8 @@ router.post("/change-password", async (req, res, next) => {
   if (typeof currentPassword !== "string" || typeof newPassword !== "string" || !currentPassword || !newPassword) {
     return res.status(400).json({ error: "currentPassword and newPassword are required" });
   }
-  if (newPassword.length < MIN_PASSWORD_LENGTH) {
-    return res.status(400).json({ error: `New password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
+  if (brokenPasswordRules(newPassword).length > 0) {
+    return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
   }
   if (newPassword === currentPassword) {
     return res.status(400).json({ error: "New password must be different from the current one." });
