@@ -33,8 +33,13 @@ export async function listExpenseLinkableTickets() {
   return data;
 }
 
-export async function listPurchasers() {
-  const { data } = await apiClient.get("/api/tickets/purchasers");
+// GET /api/tickets/purchasers -> [{ userid, name, email, role }]
+// The active Purchasers. Pass a projectId (one the PM manages) to also get that
+// project's Site Manager at the end of the list (role "Site Manager"): the PM can
+// assign a Material Request to them to buy.
+export async function listPurchasers(projectId) {
+  const params = projectId ? { projectID: projectId } : undefined;
+  const { data } = await apiClient.get("/api/tickets/purchasers", { params });
   return data;
 }
 

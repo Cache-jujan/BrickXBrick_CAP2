@@ -92,19 +92,31 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
-  // A PM must assign a Purchaser at creation (the ticket is created already
-  // acknowledged), so load the Purchaser list for them.
+  // A PM must say who buys at creation (the ticket is created already
+  // acknowledged), so load the buyers for them: the Purchasers, plus the chosen
+  // project's Site Manager (role "Site Manager"), whom the PM can assign a
+  // Material Request to directly. Reloads when the project changes.
   useEffect(() => {
     if (!isPM) return undefined;
     let cancelled = false;
     setPurchasersLoading(true);
-    listPurchasers()
-      .then((data) => { if (!cancelled) setPurchasers(data); })
-      .catch((err) => { if (!cancelled) setPurchasersError(extractErrorMessage(err, t("errors.load_purchasers"))); })
+    setPurchasersError("");
+    listPurchasers(form.projectID || undefined)
+      .then((data) => {
+        if (cancelled) return;
+        setPurchasers(data);
+        // The buyer picked for another project may not be on this project's list.
+        setForm((prev) => (prev.assignedTo && !data.some((p) => p.userid === prev.assignedTo) ? { ...prev, assignedTo: "" } : prev));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPurchasers([]);
+        setPurchasersError(extractErrorMessage(err, t("errors.load_purchasers")));
+      })
       .finally(() => { if (!cancelled) setPurchasersLoading(false); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
-  }, [isPM]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the project changes, not on a language change
+  }, [isPM, form.projectID]);
 
   // Load the approved BOM items for the Material Request picker whenever the
   // project (or ticket type) changes. Only Material Requests reference the BOM.
@@ -155,7 +167,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         errors.quantity = t("tf.err_quantity");
       }
       if (!form.vendorName.trim()) errors.vendorName = t("tf.err_vendor");
-      if (isPM && !form.assignedTo) errors.assignedTo = t("tf.err_purchaser");
+      if (isPM && !form.assignedTo) errors.assignedTo = t("tf.err_buyer");
     }
 
     // Unit: an on-BOM Material Request takes it from the BOM item, so it's only
@@ -214,7 +226,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     if (isMaterialReq || isWorkItem) {
       payload.quantity = Number(form.quantity);
       payload.vendorName = form.vendorName.trim();
-      if (isPM) payload.assignedTo = form.assignedTo; // PM assigns the Purchaser now
+      if (isPM) payload.assignedTo = form.assignedTo; // PM says who buys now: a Purchaser, or the project's Site Manager
       // On-BOM Material Requests derive their unit server-side from the BOM
       // item; only send a unit when the creator picked one.
       if ((isMaterialReq && notInBom) || isWorkItem) payload.unit = form.unit;
@@ -266,6 +278,15 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const onBomUnit = isMaterialReq && form.bomItemID && !notInBom ? selectedBomItem?.unit : null;
   const needsUnitPicker = (isMaterialReq && notInBom) || isWorkItem;
 
+  // Who the PM can assign to buy: Purchasers, plus the project's Site Manager (either ticket type).
+  const projectSiteManagers = purchasers.filter((p) => p.role === "Site Manager");
+  const purchaserOptions = purchasers.filter((p) => p.role !== "Site Manager");
+  const siteManagerOptions = projectSiteManagers;
+  const buyerCount = purchaserOptions.length + siteManagerOptions.length;
+  const renderBuyer = (p) => <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>;
+  // After a PM create: was it handed to the Site Manager to buy (the confirmation says so)?
+  const createdForSiteManager = Boolean(created && projectSiteManagers.some((p) => p.userid === created.assignedto));
+
   // Group the BOM items by their section for the picker.
   const groupedBomItems = Object.entries(
     bomItems.reduce((acc, it) => {
@@ -285,7 +306,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         </span>
         <h3 className="ticket-form-success-title">{t("tf.created_title")}</h3>
         <p className="ticket-form-success-text">
-          {t(isPM ? "tf.created_pm" : "tf.created_sm", { subject: created.subject })}
+          {t(isPM ? (createdForSiteManager ? "tf.created_pm_sm" : "tf.created_pm") : "tf.created_sm", { subject: created.subject })}
         </p>
         <div className="ticket-form-success-actions">
           <Button type="button" variant="secondary" onClick={handleCreateAnother}>
@@ -487,20 +508,25 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
           {isPM && (
             <Field
-              label={t("tf.assign_purchaser")}
+              label={t("tf.assign_buyer")}
               as="select"
               required
               value={form.assignedTo}
               error={fieldErrors.assignedTo}
-              disabled={purchasersLoading || purchasers.length === 0}
+              disabled={purchasersLoading || buyerCount === 0}
               onChange={(e) => updateField("assignedTo", e.target.value)}
             >
               <option value="">
-                {purchasersLoading ? t("tf.loading_purchasers") : purchasers.length ? t("tf.select_purchaser") : t("tf.no_purchasers")}
+                {purchasersLoading ? t("tf.loading_buyers") : buyerCount ? t("tf.select_buyer") : t("tf.no_buyers")}
               </option>
-              {purchasers.map((p) => (
-                <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>
-              ))}
+              {siteManagerOptions.length > 0 ? (
+                <>
+                  {purchaserOptions.length > 0 && <optgroup label={t("tf.buyer_group_purchasers")}>{purchaserOptions.map(renderBuyer)}</optgroup>}
+                  <optgroup label={t("tf.buyer_group_sm")}>{siteManagerOptions.map(renderBuyer)}</optgroup>
+                </>
+              ) : (
+                purchaserOptions.map(renderBuyer)
+              )}
             </Field>
           )}
 
