@@ -73,11 +73,3 @@
   .psg-picked { display: none; }
   .psg-scroll { max-height: calc(100vh - 330px); }
 }
-
-/* Tiles on the left, the chosen template's details beside them once something is chosen. */
-.psg-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-.psg-body-with-details { grid-template-columns: minmax(0, 1fr) 340px; }
-@media (max-width: 1000px) {
-  .psg-body-with-details { grid-template-columns: minmax(0, 1fr); }
-  .psg-body-with-details .tsum { max-height: none; }
-}

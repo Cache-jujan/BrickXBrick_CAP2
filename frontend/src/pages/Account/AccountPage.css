@@ -1,50 +1,55 @@
-/* Account settings — kept compact: the cards sit close together and related fields share a row. */
-.account { display: flex; flex-direction: column; gap: var(--space-4); max-width: 1080px; }
+/* Account settings: one panel in two columns (profile | password), so it fits on one screen without empty margins. */
+.account { display: flex; flex-direction: column; gap: var(--space-3); max-width: 1240px; }
+.account-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-3); }
 .account-head h1 { margin: 0; font-size: var(--text-lg); }
-.account-head p { margin: 2px 0 0; color: var(--color-ink-soft); font-size: var(--text-sm); }
+.account-head p { margin: 0; color: var(--color-ink-soft); font-size: var(--text-sm); }
 
-.account-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-4); align-items: start; }
-.account-main { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-
-.account-card { padding: var(--space-4) var(--space-5); }
-.account-card h2 { margin: 0 0 var(--space-3); font-size: var(--text-md); display: flex; align-items: center; gap: var(--space-2); }
+.account-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0; }
+.account-col { padding: var(--space-4) var(--space-5); min-width: 0; }
+.account-col + .account-col { border-left: 1px solid var(--color-border); }
+.account h2 { margin: 0 0 var(--space-3); font-size: var(--text-base); display: flex; align-items: center; gap: var(--space-2); }
 .account-sub { margin: calc(var(--space-2) * -1) 0 var(--space-3); color: var(--color-ink-soft); font-size: var(--text-sm); }
 
 /* Tighter fields than the app default, only on this page. */
-.account .field { margin-bottom: var(--space-3); gap: 6px; }
-.account .field-control { height: 40px; }
-.account .pwf-toggle { top: 24px; width: 30px; height: 30px; }
+.account .field { margin-bottom: var(--space-3); gap: 4px; }
+.account .field-control { height: 38px; }
+.account .pwf-toggle { top: 22px; width: 28px; height: 28px; }
 .account .banner { margin-bottom: var(--space-3); }
 
-.account-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-4); }
-.account-hint { margin: calc(var(--space-2) * -1) 0 var(--space-3); font-size: var(--text-xs); color: var(--color-ink-soft); }
+.account-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-3); }
+.account-hint { margin: calc(var(--space-2) * -1) 0 var(--space-3); font-size: var(--text-xs); color: var(--color-ink-soft); overflow-wrap: anywhere; }
 .account-actions { display: flex; justify-content: flex-end; }
+.account .btn { height: 36px; padding: 0 var(--space-4); font-size: var(--text-sm); }
 
-.account-who { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.account-who { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); }
 .account-avatar {
-  width: 64px; height: 64px; border-radius: 50%;
+  width: 52px; height: 52px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--color-brick); color: #fff; font-size: var(--text-lg); font-weight: 700;
+  background: var(--color-brick); color: #fff; font-size: var(--text-md); font-weight: 700;
   flex-shrink: 0; overflow: hidden;
 }
 .account-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.account-who-name { margin: 0; font-weight: 600; line-height: 1.3; }
+.account-who-text { min-width: 0; flex: 1; }
+.account-who-name { margin: 0; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-who-role { margin: 0; color: var(--color-ink-soft); font-size: var(--text-sm); line-height: 1.3; }
-.account-photo-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
-.account-photo-actions .btn { height: 34px; padding: 0 12px; font-size: var(--text-sm); }
+.account-photo-actions { display: flex; gap: var(--space-1); flex-shrink: 0; }
 
-.account-tips { position: sticky; top: var(--space-4); }
-.account-tips ul { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-2); color: var(--color-ink-soft); font-size: var(--text-sm); }
+/* Tips sit under the profile as plain text, not a card of their own. */
+.account-tips { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+.account-tips h2 { margin-bottom: var(--space-2); font-size: var(--text-sm); color: var(--color-ink-soft); }
+.account-tips ul { margin: 0; padding-left: var(--space-4); display: grid; gap: 4px; color: var(--color-ink-soft); font-size: var(--text-sm); }
 
 /* The requirement list: two columns, so it doesn't push the button far down. */
-.account .pw-checklist { padding: var(--space-3); margin-bottom: var(--space-3); }
+.account .pw-checklist { padding: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
 .account .pw-checklist ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-@media (max-width: 860px) {
-  .account-grid { grid-template-columns: minmax(0, 1fr); }
-  .account-tips { position: static; }
+@media (max-width: 900px) {
+  .account-panel { grid-template-columns: minmax(0, 1fr); }
+  .account-col + .account-col { border-left: 0; border-top: 1px solid var(--color-border); }
 }
 @media (max-width: 560px) {
+  .account-who { flex-wrap: wrap; }
+  .account-photo-actions { flex-basis: 100%; }
   .account-fields { grid-template-columns: minmax(0, 1fr); }
   .account .pw-checklist ul { grid-template-columns: minmax(0, 1fr); }
 }

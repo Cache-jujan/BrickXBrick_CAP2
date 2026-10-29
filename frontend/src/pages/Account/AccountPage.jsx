@@ -123,74 +123,73 @@ export function AccountPage() {
         <p>{t("account.subtitle")}</p>
       </header>
 
-      <div className="account-grid">
-        <div className="account-main">
-          <Card className="account-card">
-            <h2>{t("account.profile_info")}</h2>
-            <div className="account-who">
-              <Avatar className="account-avatar" url={user?.avatarUrl} initial={initial} />
-              <div className="account-who-text">
-                <p className="account-who-name">{user?.name}</p>
-                <p className="account-who-role">{user?.role}</p>
-                <div className="account-photo-actions">
-                  <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
-                  <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
-                    {t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
-                  </Button>
-                  {user?.avatarUrl && (
-                    <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
-                      {t("account.photo_remove")}
-                    </Button>
-                  )}
-                </div>
-              </div>
+      <Card className="account-panel">
+        <section className="account-col">
+          <div className="account-who">
+            <Avatar className="account-avatar" url={user?.avatarUrl} initial={initial} />
+            <div className="account-who-text">
+              <p className="account-who-name">{user?.name}</p>
+              <p className="account-who-role">{user?.role}</p>
             </div>
-            {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
-            <form onSubmit={saveUsername}>
-              <div className="account-fields">
-                <div>
-                  <Field label={t("settings.username")} value={username} maxLength={30}
-                    autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
-                  <p className="account-hint">{t("settings.username_hint", { label })}</p>
-                </div>
-                <Field label={t("account.email")} value={user?.email || ""} disabled readOnly />
-              </div>
-              {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
-              <div className="account-actions">
-                <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
-              </div>
-            </form>
-          </Card>
+            <div className="account-photo-actions">
+              <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
+              <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
+                {t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
+              </Button>
+              {user?.avatarUrl && (
+                <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
+                  {t("account.photo_remove")}
+                </Button>
+              )}
+            </div>
+          </div>
+          {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
 
-          <Card className="account-card">
+          <form onSubmit={saveUsername}>
+            <h2>{t("account.profile_info")}</h2>
+            <div className="account-fields">
+              <div>
+                <Field label={t("settings.username")} value={username} maxLength={30}
+                  autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
+                <p className="account-hint">{t("settings.username_hint", { label })}</p>
+              </div>
+              <Field label={t("account.email")} value={user?.email || ""} disabled readOnly />
+            </div>
+            {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
+            <div className="account-actions">
+              <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
+            </div>
+          </form>
+
+          <div className="account-tips">
+            <h2><ShieldCheckIcon size={16} /> {t("account.tips_title")}</h2>
+            <ul>
+              {TIP_KEYS.map((key) => <li key={key}>{t(key)}</li>)}
+            </ul>
+          </div>
+        </section>
+
+        <section className="account-col">
+          <form onSubmit={savePassword}>
             <h2>{t("settings.change_password")}</h2>
             <p className="account-sub">{t("account.password_sub")}</p>
-            <form onSubmit={savePassword}>
-              <PasswordField label={t("settings.current_password")} autoComplete="current-password"
-                value={current} onChange={(e) => setCurrent(e.target.value)} />
-              <div className="account-fields">
-                <PasswordField label={t("settings.new_password")} autoComplete="new-password"
-                  value={next} onChange={(e) => setNext(e.target.value)} />
-                <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
-                  value={confirm} onChange={(e) => setConfirm(e.target.value)}
-                  error={mismatch ? t("pw.must_match") : undefined} />
-              </div>
-              <PasswordChecklist password={next} />
-              {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
-              <div className="account-actions">
-                <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-
-        <Card className="account-card account-tips">
-          <h2><ShieldCheckIcon size={18} /> {t("account.tips_title")}</h2>
-          <ul>
-            {TIP_KEYS.map((key) => <li key={key}>{t(key)}</li>)}
-          </ul>
-        </Card>
-      </div>
+            <PasswordField label={t("settings.current_password")} autoComplete="current-password"
+              value={current} onChange={(e) => setCurrent(e.target.value)} />
+            <div className="account-fields">
+              <PasswordField label={t("settings.new_password")} autoComplete="new-password"
+                value={next} onChange={(e) => setNext(e.target.value)} />
+              <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
+                value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                error={mismatch ? t("pw.must_match") : undefined} />
+            </div>
+            <PasswordChecklist password={next} />
+            {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
+            <div className="account-actions">
+              <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
+            </div>
+          </form>
+        </section>
+      </Card>
     </div>
   );
 }

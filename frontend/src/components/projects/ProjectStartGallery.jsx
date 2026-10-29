@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "../ui/Button";
-import { TemplateSummary } from "./TemplateSummary";
+import { TemplateSummaryDialog } from "./TemplateSummary";
 import "./ProjectStartGallery.css";
 
 // First screen of "New project", laid out like the New screen in Word: a row
@@ -29,6 +29,7 @@ function useDoubleTap(onSingle, onDouble) {
 
 export function ProjectStartGallery({ templates, sources, value, onChange, onNext, onCancel }) {
   const [search, setSearch] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
   const mode = value?.mode || "blank";
 
   const groups = useMemo(() => {
@@ -75,7 +76,6 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       </p>
       <p className="psg-tip">Tip: double-click (or double-tap) a tile to open it right away.</p>
 
-      <div className={"psg-body" + (hasDetails ? " psg-body-with-details" : "")}>
       <div className="psg-scroll">
 
       <section aria-labelledby="psg-start">
@@ -157,14 +157,24 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
         ))}
       </section>
       </div>
-      {hasDetails && <TemplateSummary value={value} template={pickedTemplate} />}
-      </div>
 
       <div className="psg-actions">
         <span className="psg-picked">{pickedLabel}</span>
+        {hasDetails && (
+          <Button type="button" variant="secondary" onClick={() => setShowSummary(true)}>View summary</Button>
+        )}
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="button" disabled={!canContinue} onClick={() => onNext()}>Next →</Button>
       </div>
+
+      {showSummary && hasDetails && (
+        <TemplateSummaryDialog
+          value={value}
+          template={pickedTemplate}
+          onClose={() => setShowSummary(false)}
+          onUse={() => { setShowSummary(false); onNext(); }}
+        />
+      )}
     </div>
   );
 }
