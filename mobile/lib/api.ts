@@ -456,10 +456,17 @@ export async function uploadAvatar(uri: string): Promise<string> {
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
     fieldName: "photo",
     mimeType: "image/jpeg",
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
+    // The ngrok header skips its browser-warning page when the backend is tunnelled during testing.
+    headers: { Authorization: `Bearer ${getAuthToken()}`, "ngrok-skip-browser-warning": "1" },
   });
   if (result.status === 401) handleUnauthorized();
-  const data = JSON.parse(result.body || "{}");
+  let data: { error?: string; avatarUrl?: string } = {};
+  try {
+    data = JSON.parse(result.body || "{}");
+  } catch {
+    // An HTML answer means the request did not reach this API (wrong URL, a tunnel page, or a backend without this route).
+    throw new Error(`The server did not answer like the API (status ${result.status}). Check EXPO_PUBLIC_API_URL.`);
+  }
   if (result.status < 200 || result.status >= 300) throw new Error(data.error || "Failed to save the picture");
   return data.avatarUrl as string;
 }
