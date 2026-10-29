@@ -12,6 +12,8 @@ export type MobileUser = {
   // Shown as "username.role" once a username is set.
   name: string;
   username?: string | null;
+  // Public URL of the profile picture; missing or null means the initials circle.
+  avatarUrl?: string | null;
   email: string;
   role: MobileRole;
   // false until the current Terms of Use / Privacy Notice is accepted
@@ -166,6 +168,13 @@ export function setTermsAccepted(version: string) {
 export function setUsername(username: string, name: string) {
   if (!session) return;
   session = { ...session, user: { ...session.user, username, name } };
+  persistSession(session);
+}
+
+// Called by app/settings once the profile picture was saved or removed.
+export function setAvatarUrl(avatarUrl: string | null) {
+  if (!session) return;
+  session = { ...session, user: { ...session.user, avatarUrl } };
   persistSession(session);
 }
 

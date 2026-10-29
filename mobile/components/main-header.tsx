@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { BrandMark } from "@/components/brand-mark";
@@ -29,6 +29,7 @@ export function initialsOf(name: string) {
 export function MainHeader({ title, tagline, hideAvatar }: Props) {
   const { t } = useLocale();
   const name = getSession()?.user.name ?? "";
+  const avatarUrl = getSession()?.user.avatarUrl;
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
@@ -50,7 +51,11 @@ export function MainHeader({ title, tagline, hideAvatar }: Props) {
               accessibilityRole="button"
               accessibilityLabel={t("mh.open_settings")}
             >
-              <Text style={styles.avatarText}>{initialsOf(name)}</Text>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} accessibilityIgnoresInvertColors />
+              ) : (
+                <Text style={styles.avatarText}>{initialsOf(name)}</Text>
+              )}
             </Pressable>
           )}
         </View>
@@ -67,7 +72,8 @@ const styles = StyleSheet.create({
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
   tagline: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 11, marginTop: 1 },
   actions: { alignItems: "center", flexDirection: "row", gap: 4 },
-  avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: MIN_TAP, justifyContent: "center", width: MIN_TAP },
+  avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: MIN_TAP, justifyContent: "center", overflow: "hidden", width: MIN_TAP },
+  avatarImage: { height: MIN_TAP, width: MIN_TAP },
   avatarText: { color: "#FFFFFF", fontFamily: FONT.extrabold, fontSize: 15 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 28, letterSpacing: -0.5, marginTop: 14 },
 });

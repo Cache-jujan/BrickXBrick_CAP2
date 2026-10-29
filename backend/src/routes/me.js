@@ -1,15 +1,31 @@
 // me.js — what any signed-in user may change about their own account.
 const express = require("express");
+const multer = require("multer");
 const { query } = require("../lib/db");
 const { supabaseAnon } = require("../lib/supabaseAnon");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { USERNAME_RE, orgName } = require("../lib/displayName");
 const { requireAuth } = require("../middleware/auth");
+const { uploadBuffer } = require("../lib/r2");
+const { AVATAR_MAX_BYTES, sniffImageType } = require("../lib/avatar");
 const { brokenPasswordRules, PASSWORD_RULES_MESSAGE } = require("../lib/passwordRules");
 const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
 
 const router = express.Router();
 router.use(requireAuth);
+
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: AVATAR_MAX_BYTES, files: 1 } });
+
+function receiveAvatar(req, res, next) {
+  avatarUpload.single("photo")(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      const message = err.code === "LIMIT_FILE_SIZE" ? "The picture must be 2 MB or smaller." : err.message;
+      return res.status(400).json({ error: message });
+    }
+    return next(err);
+  });
+}
 
 // PATCH /api/me/profile — set your username. Everyone else then sees you as
 // "username.role" (stored in Users.name, see lib/displayName.js).
@@ -86,6 +102,34 @@ router.post("/change-password", async (req, res, next) => {
     // The right password proves who is typing: clear any earlier wrong guesses.
     await query(`UPDATE users SET failedloginattempts = 0, lockoutuntil = NULL WHERE userid = $1`, [req.user.id]);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/me/avatar — set your profile picture. multipart/form-data, field "photo"
+// (a JPEG or PNG, up to 2 MB).
+// 200 { avatarUrl }   400 missing / wrong type / too large
+router.post("/avatar", receiveAvatar, async (req, res, next) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: "Choose a picture to upload." });
+  const type = sniffImageType(file.buffer);
+  if (!type) return res.status(400).json({ error: "The picture must be a JPEG or PNG image." });
+  try {
+    const avatarUrl = await uploadBuffer(file.buffer, { contentType: type, keyPrefix: `avatars/${req.user.id}` });
+    await query(`UPDATE users SET avatarurl = $1 WHERE userid = $2`, [avatarUrl, req.user.id]);
+    res.json({ avatarUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/me/avatar — go back to the initial-letter circle.
+// 200 { avatarUrl: null }
+router.delete("/avatar", async (req, res, next) => {
+  try {
+    await query(`UPDATE users SET avatarurl = NULL WHERE userid = $1`, [req.user.id]);
+    res.json({ avatarUrl: null });
   } catch (err) {
     next(err);
   }

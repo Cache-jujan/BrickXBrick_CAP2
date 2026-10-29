@@ -448,6 +448,27 @@ export async function updateUsername(username: string): Promise<{ id: string; na
   return (await readJson(res, "Failed to save the username")).user;
 }
 
+// Sets the profile picture from a local image file. Resolves to its public URL.
+export async function uploadAvatar(uri: string): Promise<string> {
+  await ensureFreshToken();
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/me/avatar`, uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "photo",
+    mimeType: "image/jpeg",
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  if (result.status === 401) handleUnauthorized();
+  const data = JSON.parse(result.body || "{}");
+  if (result.status < 200 || result.status >= 300) throw new Error(data.error || "Failed to save the picture");
+  return data.avatarUrl as string;
+}
+
+export async function removeAvatar(): Promise<void> {
+  const res = await apiFetch(`${API_URL}/api/me/avatar`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) await readJson(res, "Failed to remove the picture");
+}
+
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const res = await apiFetch(`${API_URL}/api/me/change-password`, {
     method: "POST",

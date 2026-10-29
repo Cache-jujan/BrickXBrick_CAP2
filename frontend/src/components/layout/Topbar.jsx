@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
+import { Avatar } from "../ui/Avatar";
 import {
   listMyNotifications,
   getUnreadCount,
@@ -270,7 +271,7 @@ export function Topbar({ onMenuClick }) {
               aria-haspopup="true"
               aria-expanded={menuOpen}
             >
-              <span className="topbar-avatar">{initial}</span>
+              <Avatar className="topbar-avatar" url={user?.avatarUrl} initial={initial} />
               <span className="topbar-user-text">
                 <span className="topbar-user-name">{user?.name}</span>
                 <span className="topbar-user-role">{user?.role}</span>

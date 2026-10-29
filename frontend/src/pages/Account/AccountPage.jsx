@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { changePassword, updateUsername } from "../../api/accountApi";
+import { useRef, useState } from "react";
+import { changePassword, removeAvatar, updateUsername, uploadAvatar } from "../../api/accountApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
+import { Avatar } from "../../components/ui/Avatar";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { PasswordField } from "../../components/ui/PasswordField";
@@ -14,12 +15,14 @@ import { useLocale } from "../../i18n/LocaleProvider";
 import "./AccountPage.css";
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
+const AVATAR_TYPES = ["image/jpeg", "image/png"];
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const TIP_KEYS = ["account.tip_1", "account.tip_2", "account.tip_3", "account.tip_4"];
 
 // /account — every signed-in user can set a username and change their password.
 // Others see the username as "username.role".
 export function AccountPage() {
-  const { user, markUsernameChanged } = useAuth();
+  const { user, markUsernameChanged, markAvatarChanged } = useAuth();
   const { t } = useLocale();
 
   const [username, setUsername] = useState(user?.username || "");
@@ -32,11 +35,47 @@ export function AccountPage() {
   const [passwordMsg, setPasswordMsg] = useState(null);
   const [savingPassword, setSavingPassword] = useState(false);
 
+  const fileInput = useRef(null);
+  const [avatarMsg, setAvatarMsg] = useState(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+
   const roleSlug = String(user?.role || "").toLowerCase().replace(/\s+/g, "-");
   const label = `${username.trim() || "username"}.${roleSlug}`;
   const initial = (user?.name || user?.username || "?").trim()[0]?.toUpperCase() || "?";
   const mismatch = confirm.length > 0 && next !== confirm;
   const canSubmit = !!current && passwordMeetsRules(next) && next === confirm && !savingPassword;
+
+  async function pickAvatar(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so choosing the same file again still fires
+    if (!file) return;
+    if (!AVATAR_TYPES.includes(file.type)) return setAvatarMsg({ type: "error", text: t("account.photo_type") });
+    if (file.size > AVATAR_MAX_BYTES) return setAvatarMsg({ type: "error", text: t("account.photo_size") });
+    setSavingAvatar(true);
+    setAvatarMsg(null);
+    try {
+      markAvatarChanged(await uploadAvatar(file));
+      setAvatarMsg({ type: "success", text: t("account.photo_saved") });
+    } catch (err) {
+      setAvatarMsg({ type: "error", text: extractErrorMessage(err) });
+    } finally {
+      setSavingAvatar(false);
+    }
+  }
+
+  async function dropAvatar() {
+    setSavingAvatar(true);
+    setAvatarMsg(null);
+    try {
+      await removeAvatar();
+      markAvatarChanged(null);
+      setAvatarMsg({ type: "success", text: t("account.photo_removed") });
+    } catch (err) {
+      setAvatarMsg({ type: "error", text: extractErrorMessage(err) });
+    } finally {
+      setSavingAvatar(false);
+    }
+  }
 
   async function saveUsername(e) {
     e.preventDefault();
@@ -89,12 +128,24 @@ export function AccountPage() {
           <Card className="account-card">
             <h2>{t("account.profile_info")}</h2>
             <div className="account-who">
-              <span className="account-avatar" aria-hidden="true">{initial}</span>
-              <div>
+              <Avatar className="account-avatar" url={user?.avatarUrl} initial={initial} />
+              <div className="account-who-text">
                 <p className="account-who-name">{user?.name}</p>
                 <p className="account-who-role">{user?.role}</p>
+                <div className="account-photo-actions">
+                  <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
+                  <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
+                    {t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
+                  </Button>
+                  {user?.avatarUrl && (
+                    <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
+                      {t("account.photo_remove")}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
+            {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
             <form onSubmit={saveUsername}>
               <Field label={t("settings.username")} value={username} maxLength={30}
                 autoComplete="username" onChange={(e) => setUsername(e.target.value)} />

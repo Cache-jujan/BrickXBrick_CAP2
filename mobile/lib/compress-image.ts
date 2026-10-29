@@ -20,3 +20,16 @@ export async function compressReceiptImage(uri: string, width?: number, height?:
   const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: JPEG_QUALITY });
   return { uri: saved.uri, mimeType: "image/jpeg", width: saved.width, height: saved.height };
 }
+
+const AVATAR_EDGE = 512;
+
+// A profile picture only needs to look sharp in a small circle: 512px, JPEG.
+export async function compressAvatarImage(uri: string, width?: number, height?: number): Promise<CompressedImage> {
+  const context = ImageManipulator.manipulate(uri);
+  if (width && height && Math.max(width, height) > AVATAR_EDGE) {
+    context.resize(width >= height ? { width: AVATAR_EDGE, height: null } : { width: null, height: AVATAR_EDGE });
+  }
+  const rendered = await context.renderAsync();
+  const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
+  return { uri: saved.uri, mimeType: "image/jpeg", width: saved.width, height: saved.height };
+}
