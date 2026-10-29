@@ -147,12 +147,18 @@ export function AccountPage() {
             </div>
             {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
             <form onSubmit={saveUsername}>
-              <Field label={t("settings.username")} value={username} maxLength={30}
-                autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
-              <p className="field-hint">{t("settings.username_hint", { label })}</p>
-              <Field label={t("account.email")} value={user?.email || ""} disabled readOnly />
+              <div className="account-fields">
+                <div>
+                  <Field label={t("settings.username")} value={username} maxLength={30}
+                    autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
+                  <p className="account-hint">{t("settings.username_hint", { label })}</p>
+                </div>
+                <Field label={t("account.email")} value={user?.email || ""} disabled readOnly />
+              </div>
               {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
-              <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
+              <div className="account-actions">
+                <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
+              </div>
             </form>
           </Card>
 
@@ -162,14 +168,18 @@ export function AccountPage() {
             <form onSubmit={savePassword}>
               <PasswordField label={t("settings.current_password")} autoComplete="current-password"
                 value={current} onChange={(e) => setCurrent(e.target.value)} />
-              <PasswordField label={t("settings.new_password")} autoComplete="new-password"
-                value={next} onChange={(e) => setNext(e.target.value)} />
+              <div className="account-fields">
+                <PasswordField label={t("settings.new_password")} autoComplete="new-password"
+                  value={next} onChange={(e) => setNext(e.target.value)} />
+                <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
+                  value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                  error={mismatch ? t("pw.must_match") : undefined} />
+              </div>
               <PasswordChecklist password={next} />
-              <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
-                value={confirm} onChange={(e) => setConfirm(e.target.value)}
-                error={mismatch ? t("pw.must_match") : undefined} />
               {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
-              <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
+              <div className="account-actions">
+                <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
+              </div>
             </form>
           </Card>
         </div>
