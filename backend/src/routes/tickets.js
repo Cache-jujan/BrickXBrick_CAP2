@@ -56,7 +56,7 @@ async function notifySubmission(client, submitter, tickets) {
 
 async function getTicket(ticketId) {
     const result = await query(
-        `SELECT t.*, p.name AS projectName, p.projectManagerId
+        `SELECT t.*, p.name AS projectName, p.projectManagerId, p.siteManagerId
            FROM tickets t
            JOIN projects p ON p.projectId = t.projectId
           WHERE t.ticketId = $1`,
@@ -79,7 +79,8 @@ async function getTicket(ticketId) {
 //   Project Manager creates directly on a project they manage, to tell the
 //                   Purchaser what to buy this phase. Because the PM is the
 //                   approver, the ticket is created already Acknowledged: the PM
-//                   picks the Purchaser (assignedTo) now and, for a Material
+//                   picks who buys it (assignedTo) now: a Purchaser, or the
+//                   project's own Site Manager. For a Material
 //                   Request, sets the approvedBudget. PMs create Material Request
 //                   or Work Item only (Reports are the SM's channel).
 //
@@ -185,9 +186,9 @@ async function createTicketRecord(client, user, body) {
             throw err;
         }
 
-        // A PM-created ticket is born Acknowledged, so it needs its Purchaser now.
+        // A PM-created ticket is born Acknowledged, so it needs its buyer now.
         if (isPM && (isMaterialReq || isWorkItem) && !assignedTo) {
-            const err = new Error("assignedTo (a Purchaser's userId) is required when a Project Manager creates a ticket");
+            const err = new Error("assignedTo (a Purchaser's userId, or this project's Site Manager) is required when a Project Manager creates a ticket");
             err.status = 400;
             throw err;
         }
@@ -222,7 +223,9 @@ async function createTicketRecord(client, user, body) {
             throw err;
         }
 
-        // Validate the Purchaser the PM is assigning (same rules as /acknowledge).
+        // Validate who the PM is assigning to buy. Normally a Purchaser (same rules as
+        // /acknowledge). The PM may also hand a Material Request straight to the project's
+        // own Site Manager, instead of waiting for the Site Manager to request it.
         if (isPM) {
             const assigneeResult = await query(
                 "SELECT userId, role, status FROM users WHERE userId = $1",
@@ -239,8 +242,16 @@ async function createTicketRecord(client, user, body) {
                 err.status = 400;
                 throw err;
             }
-            if (assignee.role !== "Purchaser") {
-                const err = new Error(`assignedTo must be a Purchaser, but user ${assignedTo} is a ${assignee.role}`);
+            if (assignee.role === "Site Manager") {
+                // Only the Site Manager on this project can see and buy its requests. They buy
+                // the same ticket types a Purchaser does (Material Request and Work Item).
+                if (assignee.userid !== project.sitemanagerid) {
+                    const err = new Error("A Site Manager can only be assigned a purchase on the project they are assigned to");
+                    err.status = 400;
+                    throw err;
+                }
+            } else if (assignee.role !== "Purchaser") {
+                const err = new Error(`assignedTo must be a Purchaser or this project's Site Manager, but user ${assignedTo} is a ${assignee.role}`);
                 err.status = 400;
                 throw err;
             }
@@ -646,16 +657,34 @@ router.get("/managed", requireRole("Project Manager"), async (req, res, next) =>
     }
 });
 
-// GET /purchasers — active Purchasers available to a PM for assignment.
+// GET /purchasers — who a PM can assign a purchase to: the active Purchasers.
+// With ?projectID=<id> for a project this PM manages, that project's active Site
+// Manager is added to the end of the list (role "Site Manager"), because the PM can
+// hand a purchase straight to them instead of waiting for their request.
 router.get("/purchasers", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const result = await query(
-            `SELECT userId, name, email
+            `SELECT userId, name, email, role
                FROM users
               WHERE role = 'Purchaser' AND status = 'Active'
               ORDER BY name ASC`
         );
-        res.json(result.rows);
+        const people = result.rows;
+        const { projectID } = req.query;
+        if (projectID) {
+            const siteManager = await query(
+                `SELECT u.userId, u.name, u.email, u.role
+                   FROM projects p
+                   JOIN users u ON u.userId = p.siteManagerId
+                  WHERE p.projectId = $1
+                    AND p.projectManagerId = $2
+                    AND u.role = 'Site Manager'
+                    AND u.status = 'Active'`,
+                [projectID, req.user.id]
+            );
+            people.push(...siteManager.rows);
+        }
+        res.json(people);
     } catch (err) {
         next(err);
     }
@@ -796,13 +825,14 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
     }
 });
 
-// PATCH /:id/resolve — Material Request/Work Item: assigned Purchaser only,
+// PATCH /:id/resolve — Material Request/Work Item: the assigned buyer only (a
+// Purchaser, or the project's Site Manager when the PM assigned them),
 // Acknowledged -> Resolved. Report: Project Manager only, Pending ->
 // Resolved directly — Report never goes through /acknowledge, so this is
 // intentionally NOT run through assertLegalTransition (that table only
 // knows Acknowledged -> Resolved; Pending -> Resolved is a Report-only
 // exception, not a general state-machine rule).
-router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager"), async (req, res, next) => {
+router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
 
@@ -818,13 +848,19 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager"), async 
                 throw err;
             }
         } else {
-            if (req.user.role !== "Purchaser") {
-                const err = new Error("Only the assigned Purchaser can resolve this ticket");
+            // The buyer: the assigned Purchaser, or the project's Site Manager when the PM assigned them.
+            if (req.user.role !== "Purchaser" && req.user.role !== "Site Manager") {
+                const err = new Error("Only the assigned Purchaser or Site Manager can resolve this ticket");
                 err.status = 403;
                 throw err;
             }
             if (ticket.assignedto !== req.user.id) {
-                const err = new Error("Only the assigned Purchaser can resolve this ticket");
+                const err = new Error("Only the assigned Purchaser or Site Manager can resolve this ticket");
+                err.status = 403;
+                throw err;
+            }
+            if (req.user.role === "Site Manager" && ticket.sitemanagerid !== req.user.id) {
+                const err = new Error("You are no longer the Site Manager of this project");
                 err.status = 403;
                 throw err;
             }
@@ -863,7 +899,7 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager"), async 
 });
 
 // PATCH /:id/reject — PM (Pending only) or assigned Purchaser (Acknowledged only).
-router.patch("/:id/reject", requireRole("Project Manager", "Purchaser"), async (req, res, next) => {
+router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
 
@@ -882,14 +918,19 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser"), async (
                 throw err;
             }
         } else {
-            // Purchaser
+            // The buyer: the assigned Purchaser, or the project's Site Manager when the PM assigned them.
             if (ticket.assignedto !== req.user.id) {
-                const err = new Error("Only the assigned Purchaser can reject this ticket");
+                const err = new Error("Only the assigned Purchaser or Site Manager can reject this ticket");
+                err.status = 403;
+                throw err;
+            }
+            if (req.user.role === "Site Manager" && ticket.sitemanagerid !== req.user.id) {
+                const err = new Error("You are no longer the Site Manager of this project");
                 err.status = 403;
                 throw err;
             }
             if (ticket.status !== "Acknowledged") {
-                const err = new Error("Purchaser may only reject a ticket while it is Acknowledged");
+                const err = new Error("The buyer may only reject a ticket while it is Acknowledged");
                 err.status = 409;
                 throw err;
             }

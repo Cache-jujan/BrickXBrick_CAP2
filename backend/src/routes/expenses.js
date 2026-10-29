@@ -163,10 +163,12 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
                     throw httpError(403, "You may only submit an expense against a ticket assigned to you");
                 }
             } else if (req.user.role === "Site Manager") {
-                if (ticket.submittedby !== req.user.id) {
-                    throw httpError(403, "You may only submit an expense against a ticket you created");
+                // Their own request, or a purchase the PM assigned to them to buy (like a Purchaser, any type).
+                const assignedToMe = ticket.assignedto === req.user.id;
+                if (ticket.submittedby !== req.user.id && !assignedToMe) {
+                    throw httpError(403, "You may only submit an expense against a ticket you created or that is assigned to you");
                 }
-                if (ticket.tickettype !== "Material Request") {
+                if (ticket.tickettype !== "Material Request" && !assignedToMe) {
                     throw httpError(400, "Site Manager expenses can only be linked to a Material Request ticket");
                 }
             } else if (ticket.tickettype !== "Material Request") {

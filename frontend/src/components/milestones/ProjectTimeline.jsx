@@ -1,6 +1,10 @@
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { Banner } from "../ui/Banner";
+import { extractErrorMessage } from "../../api/client";
+import { uploadTaskDocument } from "../../api/taskDocumentsApi";
 import { MilestoneBoard } from "./MilestoneBoard";
+import { checkDroppedFile } from "./useTaskFileDrop";
 import { MilestoneGroup, PhaseRow } from "./TimelineRows";
 import { DATE_OPTIONS, FloatingCard, MilestonePopover, TaskTooltip } from "./TimelineOverlays";
 import { buildSchedule, clamp, getMonthCells, getMonthRange, getRange, getWeekCells } from "./timelineSchedule";
@@ -63,6 +67,9 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
   const [openTaskKey, setOpenTaskKey] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [chartWidth, setChartWidth] = useState(0);
+  // Result of dropping files onto a task: { tone: "info" | "success" | "error", text }.
+  const [dropStatus, setDropStatus] = useState(null);
+  const uploadingRef = useRef(false);
   const leaveTimer = useRef(null);
   const scrollRef = useRef(null);
   const canHover = useMedia("(hover: hover)");
@@ -85,6 +92,42 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
   const fullTrackPx = zoom === "weeks" ? cells.length * WEEK_PX : trackPx;
 
   useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+
+  // The "attached" notice clears itself; an error stays until the next drop.
+  useEffect(() => {
+    if (dropStatus?.tone !== "success") return undefined;
+    const timer = window.setTimeout(() => setDropStatus(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [dropStatus]);
+
+  // Files dropped on a Planning task are attached right away (the same upload as the Documents dialog).
+  // Every file is checked before the first one is sent, so a bad file in a batch uploads nothing.
+  const handleDropFiles = useCallback(async (task, files) => {
+    if (uploadingRef.current) return; // one drop at a time
+    for (const file of files) {
+      const problem = checkDroppedFile(file);
+      if (problem) {
+        setDropStatus({ tone: "error", text: `${file.name}: ${t(problem)}` });
+        return;
+      }
+    }
+    uploadingRef.current = true;
+    let attached = 0;
+    try {
+      for (const file of files) {
+        setDropStatus({ tone: "info", text: t("docs.drop_uploading", { name: file.name, task: task.taskname }) });
+        await uploadTaskDocument(task.taskid, file);
+        attached += 1;
+      }
+      setDropStatus({ tone: "success", text: t(attached === 1 ? "docs.drop_done_one" : "docs.drop_done_other", { count: attached, task: task.taskname }) });
+    } catch (err) {
+      const base = extractErrorMessage(err, t("docs.err_attach"));
+      // Earlier files in the same drop may already be attached; say so rather than imply nothing happened.
+      setDropStatus({ tone: "error", text: attached > 0 ? `${t("docs.drop_partial", { count: attached, task: task.taskname })} ${base}` : base });
+    } finally {
+      uploadingRef.current = false;
+    }
+  }, [t]);
 
   // A popover opened on old data (or a bar that no longer exists) must not linger after a refresh.
   useEffect(() => {
@@ -147,6 +190,8 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
   const hoveredMilestone = hovered?.type === "milestone" ? hovered.item : null;
   const hoveredTask = hovered?.type === "task" ? hovered.item : null;
   const subtitle = view === "board" ? t("tl.subtitle.board") : t(canHover ? "tl.subtitle" : "tl.subtitle.tap");
+  // Only people who can open a task's documents can drop files on it (the backend enforces the same).
+  const onDropFiles = onOpenDocuments ? handleDropFiles : undefined;
 
   return (
     <section className="project-timeline" aria-labelledby="project-timeline-title">
@@ -176,8 +221,14 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
         </div>
       </header>
 
+      {dropStatus && (
+        <div className="file-drop-status" role={dropStatus.tone === "error" ? undefined : "status"}>
+          <Banner tone={dropStatus.tone} title={dropStatus.text} />
+        </div>
+      )}
+
       {view === "board" ? (
-        <MilestoneBoard milestones={milestones} canManage={canManage} hasSiteManager={hasSiteManager} onAddTask={onAddTask} onCompleteTask={onCompleteTask} onOpenDocuments={onOpenDocuments} />
+        <MilestoneBoard milestones={milestones} canManage={canManage} hasSiteManager={hasSiteManager} onAddTask={onAddTask} onCompleteTask={onCompleteTask} onOpenDocuments={onOpenDocuments} onDropFiles={onDropFiles} />
       ) : (
         <>
           <div className="tl-toolbar">
@@ -261,6 +312,7 @@ export const ProjectTimeline = memo(function ProjectTimeline({ project, canManag
                                 onAddTask={onAddTask}
                                 onCompleteTask={onCompleteTask}
                                 onOpenDocuments={onOpenDocuments}
+                                onDropFiles={onDropFiles}
                               />
                             );
                           })}
