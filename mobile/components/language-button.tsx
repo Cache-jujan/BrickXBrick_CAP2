@@ -1,21 +1,18 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
-import { confirmAction } from "@/lib/confirm";
-import { useLocale, type AppLocale } from "@/lib/i18n-context";
+import { useLocale } from "@/lib/i18n-context";
+import { useLanguageChoice } from "@/lib/use-language-choice";
 
-const OPTIONS: { code: AppLocale; short: string; nameKey: string }[] = [
-  { code: "en", short: "EN", nameKey: "language.english" },
-  { code: "ceb", short: "CEB", nameKey: "language.bisaya" },
-  { code: "fil", short: "FIL", nameKey: "language.filipino" },
-];
-
-// A globe button for any screen's top bar. Tapping it opens a small picker, so
-// the language can be changed without going to Settings.
+// A globe button that opens a small language picker. The signed-in screens
+// change language in Settings; this button is kept for the sign-in screen,
+// where Settings cannot be reached yet. Choosing a language asks first
+// (see useLanguageChoice, shared with the Settings screen).
 export function LanguageButton({ color = COLORS.heading }: { color?: string }) {
-  const { locale, setLanguage, t } = useLocale();
+  const { t } = useLocale();
+  const { locale, options, choose } = useLanguageChoice();
   const [open, setOpen] = useState(false);
 
   return (
@@ -34,24 +31,19 @@ export function LanguageButton({ color = COLORS.heading }: { color?: string }) {
           {/* Inner Pressable swallows taps so only the backdrop closes the picker. */}
           <Pressable style={styles.sheet} onPress={() => {}} accessibilityRole="radiogroup">
             <Text style={styles.title}>{t("language.name")}</Text>
-            {OPTIONS.map((option) => {
+            {options.map((option) => {
               const selected = locale === option.code;
               return (
                 <Pressable
                   key={option.code}
-                  onPress={async () => {
+                  onPress={() => {
+                    // Close the picker first, then ask; a tap on the language already in use only closes it.
                     setOpen(false);
-                    if (selected) return;
-                    const ok = await confirmAction({
-                      title: t("settings.confirm_language_title"),
-                      message: t("settings.confirm_language_body", { language: t(option.nameKey) }),
-                      confirmLabel: t("settings.confirm_yes"),
-                      cancelLabel: t("common.cancel"),
-                    });
-                    if (ok) setLanguage(option.code);
+                    choose(option.code);
                   }}
                   style={({ pressed }) => [styles.option, selected && styles.optionOn, pressed && { opacity: 0.8 }]}
                   accessibilityRole="radio"
+                  accessibilityLabel={t(option.nameKey)}
                   accessibilityState={{ checked: selected }}
                 >
                   <Text style={styles.optionText}>{t(option.nameKey)}</Text>

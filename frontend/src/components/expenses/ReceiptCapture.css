@@ -1,0 +1,5 @@
+.camera-modal { max-width: 720px; }
+.camera-stage { position: relative; display: grid; place-items: center; min-height: 240px; margin: var(--space-3) 0; border-radius: var(--radius-sm); background: #1b1a17; overflow: hidden; }
+.camera-video { display: block; width: 100%; max-height: 60vh; object-fit: contain; }
+.camera-note { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-5); text-align: center; color: #fff; font-size: var(--text-sm); }
+.camera-hint { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--color-ink-soft); }

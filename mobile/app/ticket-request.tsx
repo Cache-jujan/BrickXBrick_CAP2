@@ -32,6 +32,7 @@ import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
 import type { Cached } from "@/lib/cached-api";
 import { useLocale } from "@/lib/i18n-context";
+import { searchRequests } from "@/lib/request-search";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -307,8 +308,8 @@ export default function TicketRequestScreen() {
 
   const cardErrors = cards.map(validateCard);
   const canSubmit = cardErrors.every((e) => e === null) && !submitting && !!project;
-  // The button stays tappable while the form is incomplete: tapping it shows
-  // what's missing (list above the button, red outline on each ticket).
+  // The button stays tappable while the form is incomplete. What is missing is always
+  // listed above it; tapping the button adds the red outline on each ticket.
   const blockedReasons = [
     !project && t("tr.choose_project"),
     ...cardErrors.map((e, i) => e && (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
@@ -491,15 +492,24 @@ export default function TicketRequestScreen() {
                 }
                 open={openKey === k("bom")}
                 onToggle={() => setOpenKey(openKey === k("bom") ? null : k("bom"))}
+                search={{
+                  label: t("tf.bom_search_label"),
+                  placeholder: t("tf.bom_search_ph"),
+                  clear: t("tf.bom_search_clear"),
+                  noMatch: (query) => t("tf.bom_no_match", { query }),
+                }}
                 options={[
                   ...bomItems.map((it) => ({
                     key: it.bomItemId,
                     label: `${it.description} (${it.unit})`,
+                    // Search the name and the section it sits in (no item code exists).
+                    searchText: `${it.description} ${it.section ?? ""}`,
                     onPress: () => { updateCard(card.id, { bomItemID: it.bomItemId }); setOpenKey(null); },
                   })),
                   {
                     key: NOT_IN_BOM,
                     label: t("tf.not_in_bom"),
+                    pinned: true, // stays at the bottom whatever is searched
                     onPress: () => { updateCard(card.id, { bomItemID: NOT_IN_BOM }); setOpenKey(null); },
                   },
                 ]}
@@ -606,7 +616,7 @@ export default function TicketRequestScreen() {
         </Pressable>
       )}
 
-      {triedSubmit && <BlockedReasons reasons={blockedReasons} />}
+      <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
       <Pressable onPress={handleSubmit} disabled={submitting} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
           {submitting
@@ -634,8 +644,39 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = false, onToggle, options }: { label: string; value: string; open: boolean; disabled?: boolean; placeholder?: boolean; onToggle: () => void; options: { key: string; label: string; onPress: () => void }[] }) {
+type DropdownOption = {
+  key: string;
+  label: string;
+  onPress: () => void;
+  // Text the search looks in. Defaults to the label.
+  searchText?: string;
+  // Always shown, last, whatever is typed in the search (e.g. "Not in the BOM").
+  pinned?: boolean;
+};
+
+// Turns a Dropdown into a searchable one: a search box on top of the open menu.
+// The texts come from the caller so this component stays generic.
+type DropdownSearch = { label: string; placeholder: string; clear: string; noMatch: (query: string) => string };
+
+function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = false, onToggle, options, search }: { label: string; value: string; open: boolean; disabled?: boolean; placeholder?: boolean; onToggle: () => void; options: DropdownOption[]; search?: DropdownSearch }) {
   const { t } = useLocale();
+  const [query, setQuery] = useState("");
+  // Closing the menu, or picking an item, starts the next search from scratch.
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  // Filter in memory: the list is already loaded (and cached for offline), so
+  // typing never calls the server. The options array itself is not changed.
+  const typed = query.trim();
+  const choices = options.filter((option) => !option.pinned);
+  const pinned = options.filter((option) => option.pinned);
+  const matches = search && typed
+    ? (searchRequests(typed, choices, (option: DropdownOption) => option.searchText ?? option.label) as DropdownOption[])
+    : choices;
+  const shown = [...matches, ...pinned];
+  const noMatch = !!search && typed !== "" && matches.length === 0;
+
   return (
     <View style={styles.dropdownWrap}>
       <Text style={styles.label}>{label}</Text>
@@ -644,11 +685,34 @@ function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = f
         <Text style={styles.chevron}>{open ? "⌃" : "⌄"}</Text>
       </Pressable>
       {open && (
-        // A ScrollView, because the BOM can have far more items than fit in
-        // 260px. nestedScrollEnabled lets Android scroll it inside the page.
         <View style={styles.dropdownMenu}>
-          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-            {options.length === 0 ? <Text style={styles.noOptions}>{t("tr.no_options")}</Text> : options.map((option) => (
+          {search ? (
+            // Outside the ScrollView, so the search box stays put while the list scrolls.
+            <View style={styles.searchRow}>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={search.placeholder}
+                placeholderTextColor="#A79E8C"
+                accessibilityLabel={search.label}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                style={styles.searchInput}
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery("")} hitSlop={8} style={styles.searchClear} accessibilityRole="button" accessibilityLabel={search.clear}>
+                  <Text style={styles.searchClearText}>×</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {/* A ScrollView, because the BOM can have far more items than fit in
+              the menu. nestedScrollEnabled lets Android scroll it inside the page. */}
+          <ScrollView style={search ? styles.dropdownList : undefined} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+            {options.length === 0 ? <Text style={styles.noOptions}>{t("tr.no_options")}</Text> : null}
+            {noMatch && search ? <Text style={styles.noOptions}>{search.noMatch(typed)}</Text> : null}
+            {shown.map((option) => (
               <Pressable key={option.key} onPress={option.onPress} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{option.label}</Text></Pressable>
             ))}
           </ScrollView>
@@ -715,6 +779,13 @@ const styles = StyleSheet.create({
   dropdownOption: { borderBottomColor: "#EFE7DC", borderBottomWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
   dropdownOptionText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
   noOptions: { color: COLORS.muted, fontSize: 13, padding: 13 },
+  // Search box inside a searchable dropdown. The list under it gets a shorter
+  // max height so the box and the list together still fit the 260px menu.
+  searchRow: { alignItems: "center", borderBottomColor: "#EFE7DC", borderBottomWidth: 1, flexDirection: "row", minHeight: 48, paddingHorizontal: 6 },
+  searchInput: { color: COLORS.heading, flex: 1, fontSize: 14, minHeight: 44, paddingHorizontal: 8 },
+  searchClear: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  searchClearText: { color: COLORS.muted, fontSize: 22, lineHeight: 24 },
+  dropdownList: { maxHeight: 210 },
   field: { marginTop: 2 },
   input: { backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11 },
   multilineInput: { minHeight: 84, textAlignVertical: "top" },

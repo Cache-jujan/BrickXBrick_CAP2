@@ -77,58 +77,54 @@ export function OpenRequestsPage() {
   return (
     <div className="open-requests-page">
       <div className="open-requests-header">
-        <div>
+        <div className="open-requests-title">
           <h1>{t("open_requests.title")}</h1>
           <p className="open-requests-subtitle">
             {user.role === "General Manager" ? t("open_requests.subtitle_gm") : t("open_requests.subtitle_pm")}
+            {groups.length > 0 && unfiltered && <span className="open-requests-total">{countLabel(shown.length)}</span>}
           </p>
         </div>
-        <Button type="button" variant="secondary" onClick={load} disabled={loading}>
-          {loading ? t("common.checking") : t("open_requests.refresh")}
-        </Button>
+
+        <div className="open-requests-controls">
+          <div className="open-requests-toggle" role="group" aria-label={t("open_requests.view")}>
+            {["store", "project"].map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`open-requests-toggle-btn${view === mode ? " open-requests-toggle-on" : ""}`}
+                aria-pressed={view === mode}
+                onClick={() => setView(mode)}
+              >
+                {t(mode === "store" ? "tb.view_store" : "tb.view_project")}
+              </button>
+            ))}
+          </div>
+
+          {view === "store" ? (
+            <Field as="select" label={t("tb.filter_store")} value={activeVendor ?? ""} onChange={(e) => setVendorFilter(e.target.value)}>
+              <option value="">{t("tb.all_stores")}</option>
+              {stores.map((s) => <option key={s.key} value={s.key}>{s.vendorName}</option>)}
+            </Field>
+          ) : (
+            <Field as="select" label={t("tb.filter_project")} value={activeProject ?? ""} onChange={(e) => setProjectFilter(e.target.value)}>
+              <option value="">{t("tb.all_projects")}</option>
+              {projects.map((p) => <option key={p.projectId} value={p.projectId}>{p.projectName}</option>)}
+            </Field>
+          )}
+
+          <Button type="button" variant="secondary" onClick={load} disabled={loading}>
+            {loading ? t("common.checking") : t("open_requests.refresh")}
+          </Button>
+        </div>
       </div>
 
       {error && <Banner tone="error" title={t("open_requests.load_failed")}>{error}</Banner>}
-
-      <div className="open-requests-controls">
-        <div className="open-requests-toggle" role="group" aria-label={t("open_requests.view")}>
-          {["store", "project"].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={`open-requests-toggle-btn${view === mode ? " open-requests-toggle-on" : ""}`}
-              aria-pressed={view === mode}
-              onClick={() => setView(mode)}
-            >
-              {t(mode === "store" ? "tb.view_store" : "tb.view_project")}
-            </button>
-          ))}
-        </div>
-
-        {view === "store" ? (
-          <Field as="select" label={t("tb.filter_store")} value={activeVendor ?? ""} onChange={(e) => setVendorFilter(e.target.value)}>
-            <option value="">{t("tb.all_stores")}</option>
-            {stores.map((s) => <option key={s.key} value={s.key}>{s.vendorName}</option>)}
-          </Field>
-        ) : (
-          <Field as="select" label={t("tb.filter_project")} value={activeProject ?? ""} onChange={(e) => setProjectFilter(e.target.value)}>
-            <option value="">{t("tb.all_projects")}</option>
-            {projects.map((p) => <option key={p.projectId} value={p.projectId}>{p.projectName}</option>)}
-          </Field>
-        )}
-      </div>
 
       {!loading && groups.length === 0 && !error && (
         <Banner tone="empty" title={t("open_requests.empty_title")}>{t("open_requests.empty_body")}</Banner>
       )}
 
-      {groups.length > 0 && unfiltered && (
-        <div className="open-requests-all" role="heading" aria-level={2}>
-          <strong>{t(view === "store" ? "tb.all_stores" : "tb.all_projects")}</strong>
-          <span>{countLabel(shown.length)}</span>
-        </div>
-      )}
-
+      <div className="open-requests-groups">
       {groups.map((group) => (
         <Card key={group.key} className="open-requests-group">
           <div className="open-requests-group-head">
@@ -166,6 +162,7 @@ export function OpenRequestsPage() {
           </ul>
         </Card>
       ))}
+      </div>
     </div>
   );
 }

@@ -21,7 +21,7 @@ export type ScanContext = {
   projectIds?: string[];
   // The names to show for those projects ("Scanning for ...") without another lookup.
   projectNames?: string[];
-  // "trip": a gas / toll / delivery receipt with no request; it ends on the Trip cost screen.
+  // "trip": a petty cash receipt with no request; it ends on the Petty cash screen.
   kind?: "trip";
 };
 

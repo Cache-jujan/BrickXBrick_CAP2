@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-// F8 split receipt and trip costs. The split routes allow Purchaser, Project Manager and
+// F8 split receipt and petty cash (first called trip costs). The split routes allow Purchaser, Project Manager and
 // General Manager (and Site Manager); the server scopes the open requests to the caller.
 
 /** Fetch the caller's open material requests, ordered oldest first. */
@@ -33,7 +33,7 @@ export async function submitAllocation(payload) {
 }
 
 /**
- * Charge a gas / toll / delivery receipt, split evenly, to the ticked projects. No request is needed.
+ * Charge a petty cash receipt (snacks, gas for delivery, allowance, other), split evenly, to the ticked projects. No request is needed; payload.note (what it was for) is required.
  * A Project Manager can charge the Active projects they manage; a General Manager any Active project.
  * @param {{receiptImageURL: string, vendorName: string, receiptDate: string, receiptTotal: number,
  *   reason: "Gas"|"Toll"|"Delivery"|"Other", projectIds: string[], tin?: string|null,

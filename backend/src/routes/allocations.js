@@ -34,7 +34,7 @@ const {
   parseMoneyCents,
   UUID_PATTERN,
 } = require("../lib/allocationValidation");
-const { REASONS, splitTripCost } = require("../lib/tripCostPlan");
+const { REASONS, NOTE_MAX, splitTripCost } = require("../lib/tripCostPlan");
 const { planAllocation, presentPlan, submitNoteFor } = require("../lib/allocationPlan");
 const { ALLOCATION_ROLES, loadOpenRequests, buildLockQuery, ticketScope } = require("../lib/openRequests");
 
@@ -284,7 +284,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   }
 });
 
-// The projects, among the ones asked for, that this caller may charge a trip cost to.
+// The projects, among the ones asked for, that this caller may charge petty cash to.
 async function chargeableProjects(client, user, projectIds) {
   if (user.role === "Project Manager" || user.role === "General Manager") {
     const scope = user.role === "Project Manager" ? "AND projectmanagerid = $2" : "";
@@ -299,8 +299,10 @@ async function chargeableProjects(client, user, projectIds) {
   return new Set(open.map((row) => String(row.projectID).toLowerCase()));
 }
 
-// POST /trip-cost — a cost with no request to match (gas, toll, delivery). The caller
-// ticks the projects the trip served and the receipt is split evenly between them: one
+// POST /trip-cost — petty cash: a cost with no request to match (snacks, gas for delivery,
+// allowance, other). The route keeps its first name, "trip-cost", so existing apps keep
+// working. A note saying what the money was for is required. The caller
+// ticks the projects it served and the receipt is split evenly between them: one
 // ticketless expense per project, each approved by that project's Project Manager.
 // Who can be charged: a Purchaser or Site Manager, the projects where they have an open
 // request; a Project Manager, the Active projects they manage; a General Manager, any
@@ -328,8 +330,11 @@ router.post("/trip-cost", requireRole("Purchaser", "Site Manager", "Project Mana
     const totalCents = parseMoneyCents(req.body.receiptTotal, "receiptTotal");
     const bir = normalizeBirFields({ tin: req.body.tin, birPermitNumber: req.body.birPermitNumber, birNumber: req.body.birNumber });
     const { birValidationStatus } = classifyBir(bir);
-    const extraNote = typeof req.body.note === "string" ? req.body.note.trim().slice(0, 300) : "";
-    const submitNote = [`Trip cost: ${reason}.`, extraNote].filter(Boolean).join(" ");
+    // The approver needs to know what the money was for, so the note is not optional.
+    const extraNote = typeof req.body.note === "string" ? req.body.note.trim().slice(0, NOTE_MAX) : "";
+    if (!extraNote) throw httpError(400, "note is required: say what this expense was for");
+    // "Petty cash:" marks the row (GET /expenses also still recognises the older "Trip cost:").
+    const submitNote = `Petty cash: ${reason}. ${extraNote}`;
 
     const saved = await withTransaction(async (client) => {
       if (clientReceiptID) {
@@ -342,8 +347,8 @@ router.post("/trip-cost", requireRole("Purchaser", "Site Manager", "Project Mana
         throw httpError(
           400,
           req.user.role === "Purchaser" || req.user.role === "Site Manager"
-            ? "A trip cost can only be charged to a project where you have an open request"
-            : "A trip cost can only be charged to an Active project you manage"
+            ? "Petty cash can only be charged to a project where you have an open request"
+            : "Petty cash can only be charged to an Active project you manage"
         );
       }
 
@@ -369,7 +374,7 @@ router.post("/trip-cost", requireRole("Purchaser", "Site Manager", "Project Mana
             bir.birNumber,
             bir.tin,
             bir.birPermitNumber,
-            JSON.stringify([{ description: `${reason} (trip cost)`, quantity: 1, amount: portion.amountCents / 100, unitPrice: portion.amountCents / 100 }]),
+            JSON.stringify([{ description: `${reason} (petty cash)`, quantity: 1, amount: portion.amountCents / 100, unitPrice: portion.amountCents / 100 }]),
             submitNote,
           ]
         );

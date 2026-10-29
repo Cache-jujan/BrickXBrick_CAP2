@@ -1,8 +1,8 @@
 .submit-expense-page {
   width: 100%;
-  max-width: 1040px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
 }
 
 .submit-expense-header,
@@ -241,3 +241,139 @@
     width: 100%;
   }
 }
+
+/* ---- Shared layout for Submit expense, Split receipt and Petty cash -------------------------
+   Receipt on the left, details on the right, submit bar pinned to the bottom: on a laptop the
+   whole job fits on one screen, with little or no scrolling. */
+.xp-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.xp-receipt {
+  position: sticky;
+  top: 84px; /* just under the top bar */
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.xp-receipt .submit-expense-section-heading { margin-bottom: var(--space-3); }
+.xp-receipt .submit-expense-upload-actions .btn { flex: 1 1 auto; }
+.xp-receipt .submit-expense-receipt-preview { margin-top: var(--space-3); padding: var(--space-2); }
+.xp-receipt .submit-expense-image-preview { max-height: min(36vh, 320px); }
+.xp-receipt .submit-expense-pdf-preview { height: min(36vh, 320px); }
+.xp-receipt .submit-expense-filename { display: none; } /* the list of receipts already shows the name */
+.xp-receipt .scan-tray-head p { display: none; }
+
+/* The details card measures its OWN width (not the window's), because the receipt column takes a
+   slice of it: columns below are chosen by the room the fields really have. */
+.xp-details { container: xpd / inline-size; min-width: 0; }
+.xp-details .submit-expense-section-heading { margin-bottom: var(--space-3); }
+.xp-details .field { margin-bottom: var(--space-3); min-width: 0; }
+.xp-details .field-control { width: 100%; min-width: 0; }
+.xp-details select.field-control { padding-right: var(--space-6); text-overflow: ellipsis; }
+/* The step titles say enough; the long help lines are what made the page tall. */
+.xp-details .submit-expense-section-heading p { display: none; }
+.xp-receipt .submit-expense-section-heading p { font-size: var(--text-xs); }
+
+/* Main fields: one column on a phone, two on a narrow card, one row of four on a wide one.
+   Inputs are bottom-aligned, so a label that wraps never pushes its box out of line. */
+.xp-details .xp-main-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-3); align-items: end; }
+/* Narrow (a phone): store name and category get a full row, total and date share one. */
+.xp-details .xp-main-fields > :nth-child(1),
+.xp-details .xp-main-fields:not(.xp-main-fields-3) > :nth-child(4) { grid-column: 1 / -1; }
+@container xpd (min-width: 480px) {
+  .xp-details .xp-main-fields:not(.xp-main-fields-3) > :nth-child(4) { grid-column: auto; }
+  .xp-details .xp-main-fields:not(.xp-main-fields-3) > :nth-child(1) { grid-column: auto; }
+}
+@container xpd (min-width: 760px) {
+  .xp-details .xp-main-fields { grid-template-columns: minmax(0, 2fr) minmax(110px, 1fr) minmax(150px, 1.1fr) minmax(130px, 1.1fr); }
+  .xp-details .xp-main-fields-3 { grid-template-columns: minmax(0, 2fr) minmax(110px, 1fr) minmax(150px, 1.1fr); }
+  .xp-details .xp-main-fields > :nth-child(1) { grid-column: auto; }
+}
+
+/* Line items: the description gets a full row, the three numbers share the row under it and
+   "Remove" sits at the end. Every column is allowed to shrink, so a row can never push past
+   (and paint over) the edge of the card. */
+.xp-details .submit-expense-items-heading { margin: var(--space-3) 0 var(--space-2); padding-top: var(--space-3); }
+.xp-details .submit-expense-items { gap: var(--space-2); }
+.xp-details .submit-expense-item-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 0 var(--space-3);
+  padding: var(--space-3);
+  min-width: 0;
+  background: var(--color-bg);
+}
+.xp-details .submit-expense-item-row > :first-child { grid-column: 1 / -1; }
+.xp-details .submit-expense-item-row .field { margin-bottom: var(--space-2); }
+.xp-details .submit-expense-item-row .field-label { font-size: var(--text-xs); }
+.xp-details .submit-expense-remove-item { margin-bottom: var(--space-2); white-space: nowrap; }
+@container xpd (min-width: 760px) {
+  .xp-details .submit-expense-item-row { grid-template-columns: minmax(0, 2.4fr) repeat(3, minmax(0, 1fr)) auto; }
+  .xp-details .submit-expense-item-row > :first-child { grid-column: auto; }
+}
+@container xpd (max-width: 519px) {
+  .xp-details .submit-expense-item-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .xp-details .submit-expense-remove-item { grid-column: 1 / -1; justify-self: end; margin-bottom: 0; }
+}
+.xp-details .trip-cost-projects { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.xp-section-next { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+
+/* The optional tax fields, folded away. */
+.xp-tax { margin: 0 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); }
+.xp-tax > summary { padding: 10px var(--space-3); cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--color-ink); }
+.xp-tax > summary:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-brick) 35%, transparent); outline-offset: 2px; }
+.xp-tax-optional { font-weight: 400; color: var(--color-ink-soft); }
+.xp-tax-filled { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--color-brick-tint); color: var(--color-brick-dark); font-size: var(--text-xs); font-weight: 700; }
+.xp-tax .submit-expense-fields { grid-template-columns: minmax(0, 1fr); padding: var(--space-1) var(--space-3) 0; column-gap: var(--space-3); align-items: end; }
+@container xpd (min-width: 420px) { .xp-tax .submit-expense-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container xpd (min-width: 640px) { .xp-tax .submit-expense-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* The action bar stays in view, so the button is never scrolled away. */
+.xp-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  grid-column: 1 / -1;
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 980px) {
+  .xp-layout { grid-template-columns: minmax(0, 1fr); }
+  .xp-receipt { position: static; max-height: none; overflow: visible; }
+}
+
+@media (max-width: 640px) {
+  .xp-footer { padding: var(--space-2) var(--space-3); gap: var(--space-2); }
+  .xp-footer p { font-size: var(--text-xs); line-height: 1.35; }
+  .xp-footer .btn { min-height: 48px; }
+}
+@media (max-width: 480px) {
+  .xp-footer > p { display: none; } /* the button says it all on a phone; keep the bar short */
+}
+
+/* Why Submit is greyed out: the missing items, right beside the button. */
+.xp-blockers { min-width: 0; font-size: var(--text-sm); }
+.xp-blockers strong { display: block; margin-bottom: 4px; color: var(--color-warning); }
+.xp-blockers ul { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0; padding: 0; list-style: none; }
+.xp-blockers li {
+  padding: 1px 9px;
+  border: 1px solid var(--color-warning);
+  border-radius: 999px;
+  background: var(--color-warning-bg);
+  color: var(--color-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.xp-blockers li.xp-blockers-more { border-color: transparent; background: none; color: var(--color-ink-soft); }
+@media (max-width: 640px) { .xp-blockers strong { margin-bottom: 2px; font-size: var(--text-xs); } }
+
+.xp-details textarea.field-control { min-height: 64px; }

@@ -169,8 +169,8 @@ export default function ReviewScreen() {
   const dateProblem = receiptDateProblem(receiptDate, t);
   const vendorMissing = vendorName.trim().length === 0;
   const canContinue = allLinesValid && totalsMatch && !dateProblem && !vendorMissing;
-  // Everything still blocking Continue. Shown above the button once the user
-  // has tapped it, next to the red outlines on the fields themselves.
+  // Everything still blocking Continue. Always listed above the button, next to the
+  // "Required" tags on the fields themselves.
   const blockedReasons = [
     vendorMissing && t("rv.err_vendor"),
     dateProblem,
@@ -256,7 +256,7 @@ export default function ReviewScreen() {
       ...result!, vendorName: vendorName.trim(), tin, birPermitNumber, birNumber, amount: clean(amount), receiptDate: receiptDate.trim(),
       lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: unitPriceForPayload(it), bomItemID: it.bomItemID ?? null, matchedTicketID: it.matchedTicketID ?? null })),
     });
-    // A gas / toll receipt is charged to projects; every other split receipt is matched to requests.
+    // A petty cash receipt is charged to projects; every other split receipt is matched to requests.
     router.push(draft.kind === "trip" ? "/expense/trip-cost" : isSplit ? "/expense/allocate" : "/expense/link");
   }
 
@@ -360,7 +360,7 @@ export default function ReviewScreen() {
 
           <Section title={t("rv.section_amount")}>
             <View style={styles.pair}>
-              <Field style={styles.half} label={t("rv.total_php")} value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? t("rv.enter_total") : null} />
+              <Field style={styles.half} label={t("rv.total_php")} value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? REQUIRED : null} />
               {Platform.OS === "web" ? (
                 // The native picker has no web build, so the web preview keeps a typed date.
                 <Field style={styles.half} label={t("dashboard.date")} value={receiptDate} onChangeText={edit("receiptDate", setReceiptDate)} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" check={isLowConfidence("receiptDate")} error={dateProblem} />
@@ -414,13 +414,14 @@ export default function ReviewScreen() {
                   <View style={styles.itemTop}>
                     <View style={styles.itemLabelRow}>
                       <Text style={styles.itemIndex}>{t("submit.item_n", { n: index + 1 })}</Text>
+                      {namedItems.length === 0 && index === 0 && <Text style={styles.requiredTag}>{t("mx.required_tag")}</Text>}
                       {item.ocr && <Text style={styles.checkTag}>{t("rv.check_tag")}</Text>}
                     </View>
                     <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={t("submit.remove_item_n", { n: index + 1 })}>
                       <Text style={styles.removeText}>{t("common.remove")}</Text>
                     </Pressable>
                   </View>
-                  <TextInput style={styles.input} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} />
+                  <TextInput style={[styles.input, namedItems.length === 0 && index === 0 && styles.inputRequired]} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} />
                   {item.scanned && simpleText(item.scanned) !== simpleText(item.name) && (
                     <Text style={styles.scannedNote}>
                       {t("rv.receipt_says", { scanned: item.scanned })}
@@ -447,7 +448,7 @@ export default function ReviewScreen() {
                   )}
                   <View style={styles.itemRow}>
                     <View style={styles.itemQty}>
-                      <Text style={styles.miniLabel}>{t("split.col_qty")}</Text>
+                      <Text style={styles.miniLabel}>{t("split.col_qty")}{qtyBad ? <Text style={styles.requiredTag}> {t("mx.required_tag")}</Text> : null}</Text>
                       <TextInput style={[styles.input, qtyBad && styles.inputError]} placeholder="0" placeholderTextColor={COLORS.muted} value={item.quantity} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "quantity", v)} />
                     </View>
                     <View style={styles.itemAmount}>
@@ -455,7 +456,7 @@ export default function ReviewScreen() {
                       <TextInput style={styles.input} placeholder={t("submit.calculated")} placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", v)} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
                     </View>
                     <View style={styles.itemAmount}>
-                      <Text style={styles.miniLabel}>{t("rv.line_amount")}</Text>
+                      <Text style={styles.miniLabel}>{t("rv.line_amount")}{amountBad ? <Text style={styles.requiredTag}> {t("mx.required_tag")}</Text> : null}</Text>
                       <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "price", v)} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
                     </View>
                   </View>
@@ -478,7 +479,7 @@ export default function ReviewScreen() {
               <Text style={styles.fixButtonHint}>{t("rv.fix_hint2")}</Text>
             </Pressable>
           )}
-          {triedContinue && <BlockedReasons reasons={blockedReasons} />}
+          <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
           <Pressable style={[styles.submitButton, !canContinue && styles.submitButtonDisabled]} onPress={handleContinue} accessibilityRole="button" accessibilityState={{ disabled: !canContinue }}>
             <Text style={styles.submitButtonText}>{t("rv.continue")}</Text>
           </Pressable>

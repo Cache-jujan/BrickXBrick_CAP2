@@ -11,7 +11,7 @@ import {
 } from "../../api/notificationsApi";
 import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
-import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
+import { metaFor, relativeTime, groupByDay, routeForNotification, notificationText } from "../../utils/notificationMeta";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { LanguageToggle } from "../../i18n/LanguageToggle";
 import "./Topbar.css";
@@ -196,6 +196,7 @@ export function Topbar({ onMenuClick }) {
         <span className="topbar-spacer" />
 
         <div className="topbar-actions">
+          <LanguageToggle variant="icon" />
           <div className="topbar-notif" ref={notifRef}>
             <button
               type="button"
@@ -234,7 +235,7 @@ export function Topbar({ onMenuClick }) {
                         <p className="topbar-notif-group-label">{tv("notifications.group", label)}</p>
                         <ul className="topbar-notif-list">
                           {items.map((n) => {
-                            const { Icon, bg, fg, fallbackKey } = metaFor(n.type);
+                            const { Icon, bg, fg } = metaFor(n.type);
                             const clickable = !n.isread || routeForNotification(n, user?.role);
                             return (
                               <li
@@ -246,7 +247,7 @@ export function Topbar({ onMenuClick }) {
                                   <Icon />
                                 </span>
                                 <span className="topbar-notif-body">
-                                  <p className="topbar-notif-message">{humanizeNotification(n.message, t) || t(fallbackKey)}</p>
+                                  <p className="topbar-notif-message">{notificationText(n, t, humanizeNotification)}</p>
                                   <p className="topbar-notif-time">{relativeTime(n.createdat, t, formatDate)}</p>
                                 </span>
                                 {!n.isread && <span className="topbar-notif-dot" aria-hidden="true" />}
@@ -292,7 +293,6 @@ export function Topbar({ onMenuClick }) {
                   <p className="topbar-menu-name">{user?.name}</p>
                   <p className="topbar-menu-email">{user?.email}</p>
                 </div>
-                <LanguageToggle variant="menu" />
                 <Link
                   to="/account"
                   className="topbar-menu-item"

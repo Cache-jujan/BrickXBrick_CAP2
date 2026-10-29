@@ -50,6 +50,30 @@ export async function scanReceipt(file) {
   return data;
 }
 
+// Background scanning (backend routes/receipts.js). POST /scans answers at once with a
+// scanID while OCR keeps running on the server, so the user can go on working.
+// `context` is a small JSON object the app gets back later ({ source, mode, fileName }).
+export async function startReceiptScan(file, context) {
+  const fd = new FormData();
+  fd.append("context", JSON.stringify(context));
+  fd.append("file", file);
+  const { data } = await apiClient.post("/api/receipts/scans", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+// GET /api/receipts/scans — the caller's recent scans: Scanning, Ready (with the draft) or Failed.
+export async function listReceiptScans() {
+  const { data } = await apiClient.get("/api/receipts/scans");
+  return data;
+}
+
+// DELETE /api/receipts/scans/:id — hides a scan (submitted, or discarded).
+export async function dismissReceiptScan(scanID) {
+  await apiClient.delete(`/api/receipts/scans/${scanID}`);
+}
+
 export async function submitExpense(payload) {
   const { data } = await apiClient.post("/api/expenses", payload);
   return data;
