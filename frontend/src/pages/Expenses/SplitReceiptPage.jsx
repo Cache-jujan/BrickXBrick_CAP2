@@ -558,7 +558,20 @@ export function SplitReceiptPage() {
                       <Button type="button" variant="ghost" onClick={() => clearMatch(index)}>{t("rv.remove_match")}</Button>
                     </>
                   ) : null}
-                  <Button type="button" variant="secondary" onClick={() => setPickingIndex(index)}>{t("rv.match_material")}</Button>
+                  <Button
+                    type="button"
+                    variant={item.matchedTicketID ? "secondary" : "primary"}
+                    className={item.matchedTicketID ? undefined : "split-match-cta"}
+                    onClick={() => setPickingIndex(index)}
+                  >
+                    {!item.matchedTicketID && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+                        <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+                      </svg>
+                    )}
+                    {t("rv.match_material")}
+                  </Button>
                 </div>
               )}
               </div>
