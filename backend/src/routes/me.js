@@ -5,6 +5,7 @@ const { supabaseAnon } = require("../lib/supabaseAnon");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { USERNAME_RE, orgName } = require("../lib/displayName");
 const { requireAuth } = require("../middleware/auth");
+const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -34,9 +35,14 @@ router.patch("/profile", async (req, res, next) => {
   }
 });
 
-// POST /api/me/change-password — change your password while signed in.
+// POST /api/me/change-password — change your password while signed in (like
+// Facebook: the current password plus the new one).
+// A wrong current password counts on the same counter as a wrong password at
+// login: after MAX_ATTEMPTS the account is locked for LOCKOUT_MINUTES. Without
+// that, someone holding a stolen session could guess the current password
+// without limit.
 // Body: { currentPassword, newPassword }
-// 204 changed   400 invalid   401 current password wrong
+// 204 changed   400 invalid   401 current password wrong   423 locked
 router.post("/change-password", async (req, res, next) => {
   const { currentPassword, newPassword } = req.body || {};
   if (typeof currentPassword !== "string" || typeof newPassword !== "string" || !currentPassword || !newPassword) {
@@ -49,15 +55,37 @@ router.post("/change-password", async (req, res, next) => {
     return res.status(400).json({ error: "New password must be different from the current one." });
   }
   try {
-    const found = await query(`SELECT email, supabaseuserid FROM users WHERE userid = $1`, [req.user.id]);
-    const { email, supabaseuserid } = found.rows[0];
+    const found = await query(
+      `SELECT email, supabaseuserid, failedloginattempts FROM users WHERE userid = $1`,
+      [req.user.id]
+    );
+    const { email, supabaseuserid, failedloginattempts } = found.rows[0];
 
     // Prove the current password first; a stolen token alone must not be enough.
     const { error: signInError } = await supabaseAnon.auth.signInWithPassword({ email, password: currentPassword });
-    if (signInError) return res.status(401).json({ error: "Current password is incorrect." });
+    if (signInError) {
+      const attempts = (failedloginattempts || 0) + 1;
+      const locking = attempts >= MAX_ATTEMPTS;
+      await query(
+        `UPDATE users SET failedloginattempts = $1, lockoutuntil = $2 WHERE userid = $3`,
+        [locking ? 0 : attempts, locking ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : null, req.user.id]
+      );
+      if (locking) {
+        return res.status(423).json({
+          error: `Too many wrong passwords. Your account is locked for ${LOCKOUT_MINUTES} minutes.`,
+        });
+      }
+      const left = MAX_ATTEMPTS - attempts;
+      return res.status(401).json({
+        error: `Current password is incorrect. ${left} ${left === 1 ? "attempt" : "attempts"} left before your account is locked.`,
+      });
+    }
 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(supabaseuserid, { password: newPassword });
     if (error) return res.status(400).json({ error: error.message });
+
+    // The right password proves who is typing: clear any earlier wrong guesses.
+    await query(`UPDATE users SET failedloginattempts = 0, lockoutuntil = NULL WHERE userid = $1`, [req.user.id]);
     res.status(204).end();
   } catch (err) {
     next(err);

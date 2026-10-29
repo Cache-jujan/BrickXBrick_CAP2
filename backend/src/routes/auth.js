@@ -6,8 +6,7 @@ const { termsFields } = require("./legal");
 
 const router = express.Router();
 
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
+const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
 
 
 // Tentative need adjustment if na implement na ang frontend
