@@ -1,0 +1,27 @@
+/* Details of the chosen template: sits beside the tiles on wide screens, below them on narrow ones. */
+.tsum {
+  min-width: 0; padding: var(--space-4); align-self: start;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-top: 3px solid var(--color-brick); border-radius: var(--radius-md);
+  max-height: calc(100vh - 380px); overflow-y: auto; overscroll-behavior: contain;
+}
+.tsum-title { margin: 0; font-size: var(--text-md); }
+.tsum-kind { margin: 2px 0 var(--space-2); font-size: var(--text-xs); color: var(--color-ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.tsum-desc { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--color-ink-soft); line-height: 1.45; }
+.tsum-note { margin: var(--space-3) 0 0; font-size: var(--text-xs); color: var(--color-ink-soft); }
+
+.tsum-stats { display: flex; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.tsum-stats div { flex: 1; padding: var(--space-2) var(--space-3); background: var(--color-surface-muted); border-radius: var(--radius-sm); }
+.tsum-stats dt { font-size: var(--text-xs); color: var(--color-ink-soft); }
+.tsum-stats dd { margin: 0; font-size: var(--text-lg); font-weight: 700; line-height: 1.2; }
+.tsum-handlers { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--color-ink-soft); }
+
+.tsum-phase { margin-top: var(--space-3); }
+.tsum-phase h4 { display: flex; justify-content: space-between; gap: var(--space-2); margin: 0 0 var(--space-1); padding-bottom: var(--space-1); border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
+.tsum-phase h4 span { font-weight: 500; font-size: var(--text-xs); color: var(--color-ink-soft); }
+.tsum-phase ul { list-style: none; margin: 0; padding: 0; }
+.tsum-phase summary { display: flex; justify-content: space-between; gap: var(--space-2); padding: 5px 0; font-size: var(--text-sm); cursor: pointer; }
+.tsum-phase summary em { flex-shrink: 0; font-style: normal; font-size: var(--text-xs); color: var(--color-ink-soft); }
+.tsum-tasks { margin: 0 0 var(--space-2) var(--space-3) !important; padding-left: var(--space-3) !important; border-left: 2px solid var(--color-border); }
+.tsum-tasks li { display: flex; justify-content: space-between; gap: var(--space-2); padding: 2px 0; font-size: var(--text-xs); color: var(--color-ink-soft); }
+.tsum-tasks small { flex-shrink: 0; color: var(--color-ink-faint); }
+.tsum-none { font-style: italic; }

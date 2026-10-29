@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "../ui/Button";
+import { TemplateSummary } from "./TemplateSummary";
 import "./ProjectStartGallery.css";
 
 // First screen of "New project", laid out like the New screen in Word: a row
@@ -60,6 +61,9 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
     onNext(next);
   }
 
+  // Details show once a template, or a past project to copy, is chosen.
+  const hasDetails = mode === "template" || (mode === "copy" && Boolean(value?.sourceProjectId));
+
   const canContinue = mode === "blank" || mode === "template" || (mode === "copy" && value?.sourceProjectId);
 
   return (
@@ -71,6 +75,7 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
       </p>
       <p className="psg-tip">Tip: double-click (or double-tap) a tile to open it right away.</p>
 
+      <div className={"psg-body" + (hasDetails ? " psg-body-with-details" : "")}>
       <div className="psg-scroll">
 
       <section aria-labelledby="psg-start">
@@ -150,13 +155,9 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
               </div>
             </div>
         ))}
-        {pickedTemplate && (
-          <div className="psg-describe" role="status">
-            <strong>{pickedTemplate.projectType} · {pickedTemplate.size === "custom" ? "Custom" : pickedTemplate.size === "small" ? "Small" : "Large"}</strong>
-            <p>{pickedTemplate.description || "No description has been written for this template yet."}</p>
-          </div>
-        )}
       </section>
+      </div>
+      {hasDetails && <TemplateSummary value={value} template={pickedTemplate} />}
       </div>
 
       <div className="psg-actions">
