@@ -3,7 +3,6 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { BrandMark } from "@/components/brand-mark";
-import { LanguageButton } from "@/components/language-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { getSession, subscribeSession } from "@/lib/auth";
@@ -43,7 +42,6 @@ export function MainHeader({ title, tagline, hideAvatar }: Props) {
           </View>
         </View>
         <View style={styles.actions}>
-          <LanguageButton />
           <NotificationBell color={COLORS.heading} />
           {hideAvatar ? null : (
             <Pressable

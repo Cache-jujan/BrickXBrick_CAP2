@@ -35,3 +35,44 @@
   margin: 0 0 var(--space-3);
   padding-left: var(--space-5);
 }
+
+/* Petty cash: "what was it for" as buttons instead of a dropdown. */
+.petty-cash-reason {
+  margin-bottom: var(--space-4);
+}
+
+.petty-cash-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.petty-cash-chip {
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+
+.petty-cash-chip:hover {
+  background: var(--color-surface-muted);
+}
+
+.petty-cash-chip-on,
+.petty-cash-chip-on:hover {
+  border-color: var(--color-primary, #bf4307);
+  background: var(--color-primary-tint, #fff1e6);
+  color: var(--color-primary, #bf4307);
+}
+
+.petty-cash-chip:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brick) 35%, transparent);
+  outline-offset: 2px;
+}

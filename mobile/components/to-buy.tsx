@@ -177,7 +177,7 @@ export function ToBuy() {
     router.push("/expense/capture");
   }
 
-  // Gas, toll and other trip costs have no request: the photo goes to Turn In tagged as a trip cost.
+  // Petty cash (snacks, gas for delivery, allowance...) has no request: the photo goes to Turn In tagged as petty cash.
   function snapGas() {
     reset();
     startSplit({ kind: "trip" });

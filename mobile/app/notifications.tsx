@@ -17,7 +17,7 @@ import {
   markAllNotificationsRead,
   type AppNotification,
 } from "@/lib/api";
-import { metaFor, relativeTime, groupByDay, routeForNotification } from "@/lib/notificationMeta";
+import { metaFor, relativeTime, groupByDay, routeForNotification, notificationText } from "@/lib/notificationMeta";
 import { getSession } from "@/lib/auth";
 import { describeLoadError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -184,7 +184,7 @@ export default function NotificationsScreen() {
             <View style={styles.group}>
               <Text style={styles.groupLabel}>{tv("notifications.group", label)}</Text>
               {rows.map((n) => {
-                const { icon, bg, fg, fallbackKey } = metaFor(n.type);
+                const { icon, bg, fg } = metaFor(n.type);
                 const clickable = !n.isread || !!routeForNotification(n, role as "Purchaser" | "Site Manager");
                 return (
                   <Pressable
@@ -197,7 +197,7 @@ export default function NotificationsScreen() {
                     </View>
                     <View style={styles.rowBody}>
                       <Text style={[styles.rowMessage, !n.isread && styles.rowMessageUnread]}>
-                        {n.message || t(fallbackKey)}
+                        {notificationText(n, t)}
                       </Text>
                       <Text style={styles.rowTime}>{relativeTime(n.createdat, t, intlLocale)}</Text>
                     </View>

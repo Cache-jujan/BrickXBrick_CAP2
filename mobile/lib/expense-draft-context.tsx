@@ -13,7 +13,7 @@ export type DraftMode = "single" | "split";
 type Resubmit = { expenseID: string; reason: string | null };
 // scope: the projects a split receipt was scanned for (null = it may match any project).
 type Scope = { projectIds: string[]; projectNames: string[] } | null;
-// "trip": a gas / toll / delivery receipt that is charged to projects, not matched to requests.
+// "trip": a petty cash receipt that is charged to projects, not matched to requests.
 type Kind = "trip" | null;
 type StartOptions = { projectIds: string[]; projectNames: string[] } | { kind: "trip" } | null;
 type ExpenseDraft = {

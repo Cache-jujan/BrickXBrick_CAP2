@@ -33,7 +33,7 @@ export function trayRows(scans, queued) {
       state: scan.status === "Scanning" ? "reading" : scan.status === "Failed" ? "failed" : "review",
       vendor: scan.status === "Ready" ? scan.result?.vendorName ?? null : null,
       amount: scan.status === "Ready" && Number.isFinite(amount) ? amount : null,
-      // A gas / toll receipt: it ends on the Trip cost screen instead of Check receipt.
+      // A petty cash receipt: it ends on the Petty cash screen instead of Check receipt.
       trip: scan.context?.kind === "trip",
       createdAt: scan.createdAt,
       scan,

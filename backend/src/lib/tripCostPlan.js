@@ -1,10 +1,18 @@
-// tripCostPlan.js — splits a trip cost (gas, toll, delivery) across projects.
+// tripCostPlan.js — splits a petty cash expense (snacks, gas for delivery,
+// allowance, other) across projects. The code and URL still say "trip cost", the
+// feature's first name; people now see it as "Petty cash".
 //
-// A trip cost has no request to match, so the Purchaser ticks the projects the
-// trip served and the receipt is split evenly in whole centavos. Pure, so it is
+// A petty cash expense has no request to match, so the person ticks the projects it
+// served and the receipt is split evenly in whole centavos. Pure, so it is
 // tested without a database (test/tripCostPlan.test.js).
 
-const REASONS = ["Gas", "Toll", "Delivery", "Other"];
+// What the app offers now.
+const PETTY_CASH_REASONS = ["Snacks", "Gas", "Allowance", "Other"];
+// Toll and Delivery were offered before petty cash; they are still accepted so an
+// older app version can keep submitting. New screens do not show them.
+const REASONS = [...PETTY_CASH_REASONS, "Toll", "Delivery"];
+// The note saying what the money was for is required and kept to this length.
+const NOTE_MAX = 300;
 
 /**
  * @param {number} totalCents  receipt total in centavos (a positive integer)
@@ -23,4 +31,4 @@ function splitTripCost(totalCents, projectIDs) {
   return ids.map((projectID, index) => ({ projectID, amountCents: share + (index < leftover ? 1 : 0) }));
 }
 
-module.exports = { REASONS, splitTripCost };
+module.exports = { REASONS, PETTY_CASH_REASONS, NOTE_MAX, splitTripCost };

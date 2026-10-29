@@ -1,0 +1,55 @@
+/* Each page sets data-mode; the colours below are what make the three pages look different. */
+.submit-expense-page[data-mode="submit"] { --mode: #bf4307; --mode-dark: #9e3505; --mode-tint: #fcebe0; }
+.submit-expense-page[data-mode="split"]  { --mode: #1d4ed8; --mode-dark: #1e3a8a; --mode-tint: #e3ecff; }
+.submit-expense-page[data-mode="petty"]  { --mode: #15803d; --mode-dark: #166534; --mode-tint: #dcf5e4; }
+/* Buttons, focus rings and chips on the page follow the page's colour. */
+.submit-expense-page[data-mode] {
+  --color-brick: var(--mode);
+  --color-brick-dark: var(--mode-dark);
+  --color-brick-darker: var(--mode-dark);
+  --color-brick-tint: var(--mode-tint);
+  --color-primary: var(--mode);
+  --color-primary-tint: var(--mode-tint);
+}
+
+.mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--mode-tint);
+  border: 1px solid color-mix(in srgb, var(--mode) 25%, transparent);
+  border-left: 6px solid var(--mode);
+  border-radius: var(--radius-md, 10px);
+}
+.mode-bar-title { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.mode-bar-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; background: var(--mode); color: #fff; }
+.mode-bar-title h1 { margin: 0; font-size: var(--text-lg, 1.25rem); color: var(--color-ink); line-height: 1.2; }
+.mode-bar-title p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-ink-soft); }
+
+.mode-bar-tabs { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.mode-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 0 14px;
+  border: 1px solid var(--color-border-strong); border-radius: 999px;
+  background: var(--color-surface); color: var(--color-ink);
+  font-size: var(--text-sm); font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.mode-tab svg { width: 18px; height: 18px; }
+.mode-tab-submit svg { color: #bf4307; }
+.mode-tab-split svg { color: #1d4ed8; }
+.mode-tab-petty svg { color: #15803d; }
+.mode-tab:hover { background: var(--color-surface-muted); }
+.mode-tab-on, .mode-tab-on:hover { background: var(--mode); border-color: var(--mode); color: #fff; }
+.mode-tab-on svg { color: #fff; }
+.mode-tab:focus-visible { outline: 3px solid color-mix(in srgb, var(--mode) 40%, transparent); outline-offset: 2px; }
+.mode-bar-role { display: none; }
+
+@media (max-width: 760px) {
+  .mode-bar-tabs { width: 100%; }
+  .mode-tab { flex: 1 1 0; justify-content: center; padding: 0 8px; font-size: var(--text-xs); }
+  .mode-tab span { overflow: hidden; text-overflow: ellipsis; }
+}

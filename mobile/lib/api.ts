@@ -595,7 +595,10 @@ export type TripCostSubmission = {
   vendorName: string;
   receiptDate: string;
   receiptTotal: number;
-  reason: "Gas" | "Toll" | "Delivery" | "Other";
+  // What the money was for (the buttons on the Petty cash screen).
+  reason: "Snacks" | "Gas" | "Allowance" | "Other";
+  // Required: a few words saying what the expense was for (the server rejects it empty).
+  note: string;
   projectIds: string[];
   tin?: string | null;
   birPermitNumber?: string | null;
@@ -603,14 +606,15 @@ export type TripCostSubmission = {
   commonReceiptID: string;
 };
 
-// A cost with no request (gas, toll, delivery), shared evenly between the ticked projects.
+// Petty cash: a cost with no request (snacks, gas for delivery, allowance, other), shared
+// evenly between the ticked projects. The route is still called "trip-cost".
 export async function submitTripCost(body: TripCostSubmission): Promise<AllocationResult> {
   const res = await apiFetch(`${API_URL}/api/allocations/trip-cost`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
-  return readJson(res, "Failed to send the trip cost");
+  return readJson(res, "Failed to send the petty cash");
 }
 
 // "That's all I could buy": close a part-bought request with a reason.

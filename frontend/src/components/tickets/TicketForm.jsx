@@ -5,6 +5,7 @@ import { getBomItems } from "../../api/bomApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Field } from "../ui/Field";
+import { SearchableSelect } from "../ui/SearchableSelect";
 import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
@@ -68,6 +69,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const [bomItems, setBomItems] = useState([]);
   const [bomItemsLoading, setBomItemsLoading] = useState(false);
   const [bomItemsError, setBomItemsError] = useState("");
+  // What is typed in the BOM search box. Only narrows the list shown; it is not
+  // part of the form data and is never sent to the server.
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -148,6 +151,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       }
       return next;
     });
+    // The search belongs to one project's BOM, so it starts over with the selection.
     setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
     setFormError("");
   }
@@ -283,18 +287,19 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const purchaserOptions = purchasers.filter((p) => p.role !== "Site Manager");
   const siteManagerOptions = projectSiteManagers;
   const buyerCount = purchaserOptions.length + siteManagerOptions.length;
-  const renderBuyer = (p) => <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>;
+  const buyerOption = (p) => ({ value: p.userid, label: `${p.name} (${p.email})` });
+  const buyerPlaceholder = purchasersLoading ? t("tf.loading_buyers") : buyerCount ? t("tf.select_buyer") : t("tf.no_buyers");
   // After a PM create: was it handed to the Site Manager to buy (the confirmation says so)?
   const createdForSiteManager = Boolean(created && projectSiteManagers.some((p) => p.userid === created.assignedto));
 
-  // Group the BOM items by their section for the picker.
-  const groupedBomItems = Object.entries(
-    bomItems.reduce((acc, it) => {
-      const key = it.section || "Other";
-      (acc[key] = acc[key] || []).push(it);
-      return acc;
-    }, {})
-  );
+  // Options for the type-to-filter BOM picker. Grouped by section; "Not in the
+  // BOM" is pinned so it stays reachable whatever was typed. The unit and the
+  // payload still come from the full list (selectedBomItem above).
+  const bomOptions = [
+    { value: "", label: !form.projectID ? t("tf.select_project_first") : bomItemsLoading ? t("tf.loading_bom") : t("tf.select_bom"), pinned: true },
+    ...bomItems.map((it) => ({ value: it.bomItemId, label: `${it.description} (${it.unit})`, group: it.section || "Other", searchText: it.unit })),
+    { value: NOT_IN_BOM, label: t("tf.not_in_bom"), pinned: true },
+  ];
 
   if (created) {
     return (
@@ -326,22 +331,21 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       {vendorsError && <Banner tone="error" title={vendorsError} />}
       {isPM && purchasersError && <Banner tone="error" title={purchasersError} />}
 
-      <Field
+      <SearchableSelect
         label={t("nav.project")}
-        as="select"
         required
         value={form.projectID}
         error={fieldErrors.projectID}
         disabled={projectsLoading || projects.length === 0}
-        onChange={(e) => updateField("projectID", e.target.value)}
-      >
-        <option value="">{projectsLoading ? t("common.loading") : t("tf.select_project")}</option>
-        {projects.map((project) => (
-          <option key={project.projectid} value={project.projectid}>
-            {project.name}
-          </option>
-        ))}
-      </Field>
+        onChange={(v) => updateField("projectID", v)}
+        options={[
+          { value: "", label: projectsLoading ? t("common.loading") : t("tf.select_project"), pinned: true },
+          ...projects.map((project) => ({ value: project.projectid, label: project.name })),
+        ]}
+        placeholder={projectsLoading ? t("common.loading") : t("tf.select_project")}
+        searchPlaceholder={t("ss.search_ph")}
+        noMatchText={t("ss.no_match", { query: "{query}" })}
+      />
 
       <Field
         label={t("tf.ticket_type")}
@@ -379,33 +383,18 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
           {isMaterialReq && (
             <>
-              <Field
+              <SearchableSelect
                 label={t("tf.bom_item")}
-                as="select"
                 required
                 value={form.bomItemID}
                 error={fieldErrors.bomItemID}
                 disabled={!form.projectID || bomItemsLoading}
-                onChange={(e) => updateField("bomItemID", e.target.value)}
-              >
-                <option value="">
-                  {!form.projectID
-                    ? t("tf.select_project_first")
-                    : bomItemsLoading
-                    ? t("tf.loading_bom")
-                    : t("tf.select_bom")}
-                </option>
-                {groupedBomItems.map(([section, items]) => (
-                  <optgroup key={section} label={section}>
-                    {items.map((it) => (
-                      <option key={it.bomItemId} value={it.bomItemId}>
-                        {it.description} ({it.unit})
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                <option value={NOT_IN_BOM}>{t("tf.not_in_bom")}</option>
-              </Field>
+                onChange={(v) => updateField("bomItemID", v)}
+                options={bomOptions}
+                placeholder={bomOptions[0].label}
+                searchPlaceholder={t("tf.bom_search_ph")}
+                noMatchText={t("tf.bom_no_match", { query: "{query}" })}
+              />
 
               {bomItemsError && <Banner tone="error" title={bomItemsError} />}
               {!bomItemsLoading && form.projectID && bomItems.length === 0 && !bomItemsError && (
@@ -486,48 +475,42 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             )}
           </div>
 
-          <Field
+          <SearchableSelect
             label={t("tf.preferred_vendor")}
-            as="select"
             required
             value={form.vendorName}
             error={fieldErrors.vendorName}
             disabled={vendorsLoading || vendors.length === 0}
-            onChange={(e) => updateField("vendorName", e.target.value)}
-          >
-            <option value="">
-              {vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
-            </option>
-            {vendors.map((vendor) => (
-              <option key={vendor.vendorID} value={vendor.vendorName}>{vendor.vendorName}</option>
-            ))}
-          </Field>
+            onChange={(v) => updateField("vendorName", v)}
+            options={[
+              { value: "", label: vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors"), pinned: true },
+              ...vendors.map((vendor) => ({ value: vendor.vendorName, label: vendor.vendorName })),
+            ]}
+            placeholder={vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
+            searchPlaceholder={t("ss.search_ph")}
+            noMatchText={t("ss.no_match", { query: "{query}" })}
+          />
           {!vendorsLoading && vendors.length === 0 && !vendorsError && (
             <p role="status">{t("tf.no_vendors_help")}</p>
           )}
 
           {isPM && (
-            <Field
+            <SearchableSelect
               label={t("tf.assign_buyer")}
-              as="select"
               required
               value={form.assignedTo}
               error={fieldErrors.assignedTo}
               disabled={purchasersLoading || buyerCount === 0}
-              onChange={(e) => updateField("assignedTo", e.target.value)}
-            >
-              <option value="">
-                {purchasersLoading ? t("tf.loading_buyers") : buyerCount ? t("tf.select_buyer") : t("tf.no_buyers")}
-              </option>
-              {siteManagerOptions.length > 0 ? (
-                <>
-                  {purchaserOptions.length > 0 && <optgroup label={t("tf.buyer_group_purchasers")}>{purchaserOptions.map(renderBuyer)}</optgroup>}
-                  <optgroup label={t("tf.buyer_group_sm")}>{siteManagerOptions.map(renderBuyer)}</optgroup>
-                </>
-              ) : (
-                purchaserOptions.map(renderBuyer)
-              )}
-            </Field>
+              onChange={(v) => updateField("assignedTo", v)}
+              options={[
+                { value: "", label: buyerPlaceholder, pinned: true },
+                ...purchaserOptions.map((p) => ({ ...buyerOption(p), group: siteManagerOptions.length ? t("tf.buyer_group_purchasers") : undefined })),
+                ...siteManagerOptions.map((p) => ({ ...buyerOption(p), group: t("tf.buyer_group_sm") })),
+              ]}
+              placeholder={buyerPlaceholder}
+              searchPlaceholder={t("ss.search_ph")}
+              noMatchText={t("ss.no_match", { query: "{query}" })}
+            />
           )}
 
           {isMaterialReq && !isPM && (

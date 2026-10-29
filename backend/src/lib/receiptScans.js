@@ -16,6 +16,9 @@
 const STALE_AFTER_MS = 3 * 60 * 1000;
 const STALE_MESSAGE = "Reading this receipt took too long. Enter the details manually from the photo.";
 const FAILED_MESSAGE = "Couldn't read this receipt. Enter the details manually from the photo.";
+// English fallback text for the notification rows (clients translate by type).
+const READY_NOTICE = "Your receipt has been read and is ready to review.";
+const FAILED_NOTICE = "A receipt could not be read. Enter its details manually.";
 const LIST_DAYS = 7;
 const LIST_LIMIT = 20;
 const MAX_CONTEXT_BYTES = 4096;
@@ -73,23 +76,45 @@ function createReceiptScans({ query, buildScanDraft }) {
     );
   }
 
+  // Tells the owner a background scan finished, so a user who went to another
+  // page (or closed the app) finds it in the bell and on the pop-up. The stored
+  // text is English only as a fallback: the web and mobile apps show their own
+  // wording for these two types in the user's language (en / ceb / fil).
+  // Never throws: a failed notification must not undo the scan result.
+  async function announce(userID, scanID, type, message) {
+    if (!userID) return;
+    try {
+      await query(
+        `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
+         VALUES ($1, $2, 'ReceiptScan', $3, $4)`,
+        [userID, type, scanID, message]
+      );
+    } catch (err) {
+      console.error(`Could not notify about scan ${scanID}:`, err.message);
+    }
+  }
+
   // Never throws: whatever happens, the row leaves 'Scanning'.
   async function runScan(scanID, buffer, mimeType, receiptImageURL) {
     try {
       const draft = await buildScanDraft(buffer, mimeType, receiptImageURL);
-      await query(
+      const done = await query(
         `UPDATE ReceiptScans SET status = 'Ready', result = $2, completedAt = NOW()
-          WHERE scanID = $1 AND status = 'Scanning'`,
+          WHERE scanID = $1 AND status = 'Scanning'
+          RETURNING submittedBy AS "userID"`,
         [scanID, JSON.stringify(draft)]
       );
+      await announce(done.rows?.[0]?.userID, scanID, "ReceiptScanReady", READY_NOTICE);
     } catch (err) {
       console.error(`Background scan ${scanID} failed:`, err);
       try {
-        await query(
+        const failed = await query(
           `UPDATE ReceiptScans SET status = 'Failed', errorMessage = $2, completedAt = NOW()
-            WHERE scanID = $1 AND status = 'Scanning'`,
+            WHERE scanID = $1 AND status = 'Scanning'
+            RETURNING submittedBy AS "userID"`,
           [scanID, FAILED_MESSAGE]
         );
+        await announce(failed.rows?.[0]?.userID, scanID, "ReceiptScanFailed", FAILED_NOTICE);
       } catch (updateErr) {
         // Left 'Scanning'; the stale rule reports it as Failed later.
         console.error(`Could not mark scan ${scanID} as Failed:`, updateErr);

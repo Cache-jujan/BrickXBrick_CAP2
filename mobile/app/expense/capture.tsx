@@ -19,6 +19,7 @@ import { useExpenseDraft, type DraftMode } from "@/lib/expense-draft-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { compressReceiptImage } from "@/lib/compress-image";
 import { startScan } from "@/lib/receipt-scans";
+import { expediteNotificationChecks } from "@/lib/notification-events";
 import { PDF_MIME_TYPE, formatBytes, receiptFileProblem, receiptMimeType } from "@/lib/receipt-file";
 import { getSession } from "@/lib/auth";
 import { useLocale } from "@/lib/i18n-context";
@@ -48,7 +49,7 @@ export default function CaptureScreen() {
 
   // Which project a receipt is for is never assumed. The person picks it here once the
   // photo is taken; only when they have exactly one project is it filled in for them.
-  // A trip cost (gas, toll) has its own project step later, and a receipt opened from a
+  // Petty cash (snacks, gas, allowance...) has its own project step later, and a receipt opened from a
   // request already has that request's project.
   const needsProject = isSplit && draft.kind !== "trip";
   const [projects, setProjects] = useState<ProjectChoice[]>([]);
@@ -207,6 +208,7 @@ export default function CaptureScreen() {
     setStatus("uploading"); setErrorMessage(null);
     try {
       const scan = await startScan(file, scanContext(file));
+      expediteNotificationChecks(); // the "receipt ready" pop-up checks often for the next minute
       setStatus("idle");
       if (isSplit) {
         // Snap now, review later: the receipt goes to the Turn In tray and OCR runs there.

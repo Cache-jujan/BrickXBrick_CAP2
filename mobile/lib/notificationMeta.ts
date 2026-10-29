@@ -37,6 +37,8 @@ const META: Record<string, Meta> = {
   CheckinFlagged:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.checkin_flagged_sm" },
   ProjectAssigned:       { icon: "folder.fill",      bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.project_assigned" },
   ProjectActivated:      { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.project_activated" },
+  ReceiptScanReady:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.scan_ready" },
+  ReceiptScanFailed:     { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.scan_failed" },
   BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.bom_approved" },
   BOMReopened:           { icon: "arrow.triangle.2.circlepath.circle", bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.bom_reopened" },
 };
@@ -48,6 +50,17 @@ export function metaFor(type: string): Meta {
 }
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+// Types whose wording the app writes itself, in the user's language, instead of the
+// English text stored by the server.
+const LOCALIZED_TYPES = new Set(["ReceiptScanReady", "ReceiptScanFailed"]);
+
+// The text to show for a notification (list and pop-up).
+export function notificationText(n: AppNotification, t: Translate): string {
+  const { fallbackKey } = metaFor(n.type);
+  if (LOCALIZED_TYPES.has(n.type)) return t(fallbackKey);
+  return n.message || t(fallbackKey);
+}
 
 // `t` and `intlLocale` come from useLocale() so the wording and month names follow the language.
 export function relativeTime(iso: string, t: Translate, intlLocale = "en-PH"): string {
@@ -102,6 +115,10 @@ export function routeForNotification(n: AppNotification, role: "Purchaser" | "Si
   if (type === "Checkin" && role === "Site Manager") {
     // A flag points at one check-in: open what was sent, with the PM's comment.
     return (n.relatedentityid ? `/site-manager/checkin/${n.relatedentityid}` : "/site-manager/checkin") as Href;
+  }
+  if (type === "ReceiptScan") {
+    // A finished receipt scan: the Purchaser's Turn In tab lists them; a Site Manager's receipts are on the Receipt tab.
+    return (role === "Purchaser" ? "/turn-in" : "/(tabs)") as Href;
   }
   // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet —
   // mark read only (mirrors the web app's "Unknown -> mark read only").

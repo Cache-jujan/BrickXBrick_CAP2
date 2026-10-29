@@ -294,7 +294,7 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
         // Beyond the flags themselves, the reviewer needs: the project, what was requested, the other
         // projects sharing this receipt, and the earlier expense a BIR duplicate flag points at.
         const result = await query(
-            `SELECT e.*, u.name AS submittedbyname,
+            `SELECT e.*, u.name AS submittedbyname, u.role AS submittedbyrole,
                     p.name AS projectname,
                     json_agg(json_build_object('flagType', ff.flagType, 'reason', ff.reason, 'flaggedAt', ff.flaggedAt)) AS flags,
                     (SELECT json_build_object('subject', t.subject, 'materialType', t.materialType, 'quantity', t.quantity,
@@ -327,7 +327,7 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
                JOIN Projects p ON p.projectID = e.projectID
                JOIN FraudFlags ff ON ff.expenseID = e.expenseID
               WHERE ${conditions.join(" AND ")}
-              GROUP BY e.expenseID, u.name, p.name
+              GROUP BY e.expenseID, u.name, u.role, p.name
               ORDER BY e.submittedAt ASC`,
             params
         );
@@ -357,11 +357,12 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
 
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const result = await query(
-            // The extra columns label the row: what it was bought for, whether it is a trip cost
-            // (gas, toll, delivery: no request), and the other projects sharing the same receipt.
-            `SELECT e.*, u.name AS submittedbyname,
+            // The extra columns label the row: what it was bought for, whether it is petty cash
+            // (no request; istripcost is its first name; rows saved earlier start "Trip cost:"),
+            // and the other projects sharing the same receipt.
+            `SELECT e.*, u.name AS submittedbyname, u.role AS submittedbyrole,
                     (SELECT t.subject FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticketsubject,
-                    (e.ticketID IS NULL AND e.submitNote LIKE 'Trip cost:%') AS istripcost,
+                    (e.ticketID IS NULL AND (e.submitNote LIKE 'Petty cash:%' OR e.submitNote LIKE 'Trip cost:%')) AS istripcost,
                     (SELECT ra.commonReceiptID FROM ReceiptAllocations ra WHERE ra.expenseID = e.expenseID LIMIT 1) AS commonreceiptid,
                     (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
                                                        'amount', e2.amount, 'status', e2.status))

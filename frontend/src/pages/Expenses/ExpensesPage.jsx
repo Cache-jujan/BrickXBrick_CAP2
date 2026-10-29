@@ -37,6 +37,16 @@ function parseLineItems(value) {
   }
 }
 
+const SUBMITTED_AT = { hour: "numeric", minute: "2-digit" };
+
+/** Who submitted: the username (without the ".Role" tail the account label carries) and the role. */
+function submitterOf(e) {
+  const role = e.submittedbyrole || "";
+  let name = e.submittedbyname || "";
+  if (role && name.endsWith(`.${role}`)) name = name.slice(0, -(role.length + 1));
+  return { name: name || "—", role };
+}
+
 /**
  * Render the GM/PM expense review queue with status filters and review actions.
  * The backend scopes PM results to their projects; the client also filters them.
@@ -215,16 +225,8 @@ export function ExpensesPage() {
               {user.role === "Project Manager" ? t("expenses.pm_subtitle") : t("expenses.gm_subtitle")}
             </p>
         </div>
+        {/* One button: Submit expense. Split receipt and Petty cash are tabs on that page. */}
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-          <Link to="/requests" className="btn btn-secondary">
-            {t("nav.open_requests")}
-          </Link>
-          <Link to="/expenses/trip-cost" className="btn btn-secondary">
-            {t("nav.trip_cost")}
-          </Link>
-          <Link to="/expenses/split" className="btn btn-secondary">
-            {t("nav.split_receipt")}
-          </Link>
           <Link to="/expenses/new" className="btn btn-primary">
             {t("nav.submit_expense")}
           </Link>
@@ -294,7 +296,9 @@ export function ExpensesPage() {
                         <th>{t("nav.project")}</th>
                         <th>{t("dashboard.category")}</th>
                         <th>{t("dashboard.amount")}</th>
-                        <th>{t("dashboard.date")}</th>
+                        <th>{t("my_expenses.receipt_date")}</th>
+                        <th>{t("expenses.col_submitted")}</th>
+                        <th>{t("expenses.col_submitted_by")}</th>
                         <th>{t("dashboard.status")}</th>
                       </tr>
                     </thead>
@@ -321,6 +325,14 @@ export function ExpensesPage() {
                               </td>
                               <td>{PESO.format(e.amount)}</td>
                               <td>{formatDate(e.receiptdate)}</td>
+                              <td className="expenses-when">
+                                <span>{formatDate(e.submittedat)}</span>
+                                <span className="expenses-when-time">{formatDate(e.submittedat, SUBMITTED_AT)}</span>
+                              </td>
+                              <td className="expenses-who">
+                                <span>{submitterOf(e).name}</span>
+                                {submitterOf(e).role && <span className="expenses-who-role">{submitterOf(e).role}</span>}
+                              </td>
                               <td>
                                 <span className="expenses-badges">
                                   <Badge status={e.status} />
@@ -337,7 +349,7 @@ export function ExpensesPage() {
                             </tr>
                             {isOpen && (
                               <tr className="expenses-detail">
-                                <td colSpan={6}>
+                                <td colSpan={8}>
                                   {flags && (
                                     <FlagReviewPanel
                                       expense={flaggedById[e.expenseid] ?? e}

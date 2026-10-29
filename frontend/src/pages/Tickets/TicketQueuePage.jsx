@@ -14,6 +14,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { TicketForm } from "../../components/tickets/TicketForm";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./TicketQueuePage.css";
@@ -460,15 +461,21 @@ export function TicketQueuePage() {
           </div>
 
           {projects.length > 1 && (
-            <label className="ticket-project-filter">
+            <div className="ticket-project-filter">
               <span>{tr("nav.project")}</span>
-              <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-                <option value="All">{tr("tq.all_projects")}</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </label>
+              <SearchableSelect
+                inline
+                value={projectFilter}
+                onChange={setProjectFilter}
+                options={[
+                  { value: "All", label: tr("tq.all_projects"), pinned: true },
+                  ...projects.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+                placeholder={tr("tq.all_projects")}
+                searchPlaceholder={tr("ss.search_ph")}
+                noMatchText={tr("ss.no_match", { query: "{query}" })}
+              />
+            </div>
           )}
         </div>
       )}
@@ -799,16 +806,25 @@ function BatchBlock(props) {
           </span>
         </div>
         {actionable.length > 0 && (
-          <label className="ticket-batch-assign">
+          <div className="ticket-batch-assign">
             <span>{tr("tq.assign_all_to")}</span>
-            <select value={batchPurchaser} disabled={busy || purchasers.length === 0} onChange={(e) => applyToAll(e.target.value)}>
-              <option value="">{tr("tq.choose_purchaser")}</option>
-              {purchasers.map((p) => (<option key={p.userid} value={p.userid}>{p.name}</option>))}
-            </select>
+            <SearchableSelect
+              inline
+              value={batchPurchaser}
+              disabled={busy || purchasers.length === 0}
+              onChange={applyToAll}
+              options={[
+                { value: "", label: tr("tq.choose_purchaser"), pinned: true },
+                ...purchasers.map((p) => ({ value: p.userid, label: p.name })),
+              ]}
+              placeholder={tr("tq.choose_purchaser")}
+              searchPlaceholder={tr("ss.search_ph")}
+              noMatchText={tr("ss.no_match", { query: "{query}" })}
+            />
             <Button type="button" disabled={busy} onClick={() => onAssignAll(tickets)}>
               {busy ? tr("tq.assigning") : tr("tq.assign_all")}
             </Button>
-          </label>
+          </div>
         )}
       </header>
       <div className="ticket-batch-body">

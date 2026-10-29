@@ -215,3 +215,11 @@
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
 }
+
+/* Who and when: two short lines each, so the two new columns stay narrow. */
+.expenses-when, .expenses-who { line-height: 1.35; }
+.expenses-when > span, .expenses-who > span { display: block; }
+.expenses-when-time, .expenses-who-role { font-size: var(--text-xs); color: var(--color-ink-soft); }
+.expenses-who > span:first-child { font-weight: 600; overflow-wrap: anywhere; }
+.expenses-table th, .expenses-table td { padding-left: var(--space-3); padding-right: var(--space-3); }
+.expenses-table td:nth-child(5), .expenses-when > span { white-space: nowrap; }

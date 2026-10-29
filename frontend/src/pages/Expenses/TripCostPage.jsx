@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { scanReceipt } from "../../api/expensesApi";
 import { submitTripCost } from "../../api/allocationsApi";
 import { listProjects } from "../../api/projectsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { useReceiptScans, useOpenWantedScan } from "../../context/ReceiptScanContext";
+import { ReceiptScanTray } from "../../components/expenses/ReceiptScanTray";
+import { ExpenseModeBar } from "../../components/expenses/ExpenseModeBar";
+import { ReceiptCapture } from "../../components/expenses/ReceiptCapture";
+import { TaxDetails } from "../../components/expenses/TaxDetails";
+import { SubmitBlockers } from "../../components/expenses/SubmitBlockers";
 import { Banner } from "../../components/ui/Banner";
-import { BackLink } from "../../components/ui/BackLink";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
@@ -16,15 +20,18 @@ import { useLocale } from "../../i18n/LocaleProvider";
 import "./SubmitExpensePage.css";
 import "./TripCostPage.css";
 
-// Gas, toll and delivery receipts have no request to match. A General Manager or Project
-// Manager scans the receipt, says what it was for and ticks the projects the trip served;
-// the server splits the total evenly and each project's Project Manager approves their share.
-// A Project Manager can charge the Active projects they manage; a General Manager any Active project.
+// Petty cash (the page and route keep their first name, "trip cost"): small cash costs with
+// no request to match, such as snacks, gas for delivery or allowance. A General Manager or
+// Project Manager scans the receipt, picks what it was for, writes a note saying what the
+// expense was for, and ticks the projects it served; the server splits the total evenly and
+// each project's Project Manager approves their share. A Project Manager can charge the
+// Active projects they manage; a General Manager any Active project.
 
+// The buttons offered. The value is what the server stores.
 const REASONS = [
+  { value: "Snacks", labelKey: "tc.reason_snacks" },
   { value: "Gas", labelKey: "tc.reason_gas" },
-  { value: "Toll", labelKey: "tc.reason_toll" },
-  { value: "Delivery", labelKey: "tc.reason_delivery" },
+  { value: "Allowance", labelKey: "tc.reason_allowance" },
   { value: "Other", labelKey: "tc.reason_other" },
 ];
 
@@ -32,24 +39,28 @@ const peso = (value) =>
   `₱${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const newReceiptId = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : null);
 
-/** Render the scan, reason, project checklist and submit flow for a gas / toll / delivery receipt. */
+/** Render the scan, reason buttons, note, project checklist and submit flow for a petty cash receipt. */
 export function TripCostPage() {
   const { user } = useAuth();
   const { t } = useLocale();
-  const cameraInput = useRef(null);
-  const imageInput = useRef(null);
-  const pdfInput = useRef(null);
   const busyRef = useRef(false);
   // One id per receipt, kept across retries, so a lost response cannot save it twice.
   const receiptIdRef = useRef(newReceiptId());
 
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT, lineItems: [] });
   const [receiptName, setReceiptName] = useState("");
-  const [scanning, setScanning] = useState(false);
+  // Only the short upload is waited for; reading the receipt happens in the background.
+  const [uploading, setUploading] = useState(false);
+  // The scan whose result is in the form now (removed from the tray once the petty cash is sent).
+  const [activeScanID, setActiveScanID] = useState("");
+  const { startScan, dismissScan } = useReceiptScans();
+  // The tax fields are folded away; the user can open them.
+  const [taxOpen, setTaxOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pageError, setPageError] = useState("");
   const [ocrNotice, setOcrNotice] = useState("");
-  const [reason, setReason] = useState("Gas");
+  // No default: the person picks what the money was for.
+  const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [projects, setProjects] = useState([]);
   const [picked, setPicked] = useState([]);
@@ -70,35 +81,41 @@ export function TripCostPage() {
     setDraft((current) => ({ ...current, [name]: value }));
   }
 
-  /** Validate and scan a selected receipt, replacing the draft. */
-  async function handleReceiptPick(event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || busyRef.current) return;
-
+  // Picking a file only uploads it and puts it in the tray; what you are filling in stays as it is.
+  async function handleReceiptPick(file) {
+    if (!file || uploading) return;
     setPageError("");
-    setOcrNotice("");
-    setReceiptName("");
-    setResult(null);
     if (!isSupportedReceipt(file)) {
       setPageError(t("errors.receipt_type"));
       return;
     }
-
-    setReceiptName(file.name);
-    busyRef.current = true;
-    setScanning(true);
+    setUploading(true);
     try {
-      const scan = await scanReceipt(file);
-      setDraft({ ...draftFromScan(scan), category: "Other" });
-      setOcrNotice(scan.ocrError || (scan.confidence === "low" ? t("split.ocr_low") : ""));
+      await startScan(file, "petty");
     } catch (error) {
       setPageError(extractErrorMessage(error, t("errors.upload_failed")));
     } finally {
-      busyRef.current = false;
-      setScanning(false);
+      setUploading(false);
     }
   }
+
+  /** Load a scan from the tray into the form (its draft, or just the photo when it could not be read). */
+  function openScan(scan) {
+    setPageError("");
+    setResult(null);
+    setReceiptName(scan.context?.fileName || "");
+    setActiveScanID(scan.scanID);
+    if (scan.status === "Ready" && scan.result) {
+      setDraft({ ...draftFromScan({ ...scan.result, receiptImageURL: scan.result.receiptImageURL || scan.receiptImageURL }), category: "Other" });
+      setOcrNotice(scan.result.ocrError || (scan.result.confidence === "low" ? t("split.ocr_low") : ""));
+    } else {
+      setDraft({ ...EMPTY_DRAFT, lineItems: [], category: "Other", receiptImageURL: scan.receiptImageURL });
+      setOcrNotice(t("scan.manual_notice"));
+    }
+  }
+
+  // Arriving from the "receipt ready" pop-up or the bell (?scan=<id>).
+  useOpenWantedScan("petty", openScan);
 
   function toggleProject(id) {
     setPicked((current) => (current.includes(id) ? current.filter((p) => p !== id) : [...current, id]));
@@ -107,11 +124,24 @@ export function TripCostPage() {
   const total = Number(draft.amount);
   const totalOk = draft.amount !== "" && Number.isFinite(total) && total > 0;
   const each = useMemo(() => (picked.length > 0 && totalOk ? total / picked.length : 0), [picked, total, totalOk]);
+  // What the money was for (a button) and the note about it are both required.
+  const noteOk = note.trim() !== "";
   const canSubmit = Boolean(
-    draft.receiptImageURL && draft.vendorName.trim() && draft.receiptDate && totalOk && picked.length > 0 && !scanning && !submitting && !result
+    draft.receiptImageURL && draft.vendorName.trim() && draft.receiptDate && totalOk && reason && noteOk && picked.length > 0 && !uploading && !submitting && !result
   );
+  // What is still missing: tags on those boxes, and the reason shown beside the greyed-out button.
+  const missing = { vendor: !draft.vendorName.trim(), amount: !totalOk, date: !draft.receiptDate, reason: !reason, note: !noteOk };
+  const gaps = [
+    !draft.receiptImageURL && t("gap.receipt"),
+    missing.vendor && t("submit.vendor_name"),
+    missing.amount && t("submit.receipt_total"),
+    missing.date && t("my_expenses.receipt_date"),
+    missing.reason && t("tc.reason_title"),
+    missing.note && t("tc.note_label"),
+    picked.length === 0 && t("gap.project"),
+  ].filter(Boolean);
 
-  /** Send the trip cost once; a retry reuses the same receipt id. */
+  /** Send the petty cash once; a retry reuses the same receipt id. */
   async function handleSubmit() {
     if (!canSubmit || busyRef.current) return;
     busyRef.current = true;
@@ -128,10 +158,11 @@ export function TripCostPage() {
         tin: draft.tin.trim() || null,
         birPermitNumber: draft.birPermitNumber.trim() || null,
         birNumber: draft.birNumber.trim() || null,
-        note: note.trim() || undefined,
+        note: note.trim(),
         commonReceiptID: receiptIdRef.current ?? undefined,
       });
       setResult(saved);
+      if (activeScanID) { dismissScan(activeScanID); setActiveScanID(""); } // this receipt is done: take it off the tray
     } catch (error) {
       // 404: an older backend without the trip-cost route.
       const text = error?.response?.status === 404 ? t("tc.server_old") : extractErrorMessage(error, t("tc.failed"));
@@ -142,9 +173,10 @@ export function TripCostPage() {
     }
   }
 
-  /** Clear the finished result and the receipt for another trip cost. */
+  /** Clear the finished result and the receipt for more petty cash. */
   function startOver() {
     setResult(null);
+    setReason("");
     setDraft({ ...EMPTY_DRAFT, lineItems: [] });
     setReceiptName("");
     setOcrNotice("");
@@ -160,13 +192,9 @@ export function TripCostPage() {
 
   if (result) {
     return (
-      <div className="submit-expense-page">
-        <div className="submit-expense-header">
-          <div>
-            <h1>{t("tc.saved_title")}</h1>
-            <p className="submit-expense-subtitle">{t("tc.saved_subtitle", { count: result.expenses.length })}</p>
-          </div>
-        </div>
+      <div className="submit-expense-page" data-mode="petty">
+        <ExpenseModeBar mode="petty" />
+        <Banner tone="info" title={t("tc.saved_title")}>{t("tc.saved_subtitle", { count: result.expenses.length })}</Banner>
         <Card className="submit-expense-card">
           <section className="submit-expense-section">
             <ul className="trip-cost-result">
@@ -188,25 +216,15 @@ export function TripCostPage() {
   }
 
   return (
-    <div className="submit-expense-page">
-      <LoadingOverlay
-        open={scanning || submitting}
-        message={scanning ? t("submit.reading") : t("split.submitting")}
-        detail={scanning ? t("submit.scan_detail") : t("split.creating")}
-      />
-      <div className="submit-expense-header">
-        <div>
-          <BackLink to="/expenses">{t("submit.back")}</BackLink>
-          <h1>{t("tc.title")}</h1>
-          <p className="submit-expense-subtitle">{t("tc.help")}</p>
-        </div>
-        <span className="submit-expense-role">{user.role}</span>
-      </div>
+    <div className="submit-expense-page" data-mode="petty">
+      <LoadingOverlay open={submitting} message={t("split.submitting")} detail={t("split.creating")} />
+      <ExpenseModeBar mode="petty" />
 
       {pageError && <Banner tone="error" title={t("submit.could_not_continue")}>{pageError}</Banner>}
       {ocrNotice && <Banner tone="warning" title={t("submit.review_carefully")}>{ocrNotice}</Banner>}
 
-      <Card className="submit-expense-card">
+      <div className="xp-layout">
+      <Card className="submit-expense-card xp-receipt">
         <section className="submit-expense-section" aria-labelledby="trip-receipt-heading">
           <div className="submit-expense-section-heading">
             <div>
@@ -216,15 +234,9 @@ export function TripCostPage() {
             {receiptName && <span className="submit-expense-filename">{receiptName}</span>}
           </div>
 
-          <input ref={cameraInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" capture="environment" onChange={handleReceiptPick} />
-          <input ref={imageInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" onChange={handleReceiptPick} />
-          <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={handleReceiptPick} />
+          <ReceiptCapture onFile={handleReceiptPick} disabled={uploading} uploading={uploading} />
 
-          <div className="submit-expense-upload-actions">
-            <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>{t("submit.capture_camera")}</Button>
-            <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>{t("submit.choose_image")}</Button>
-            <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>{t("submit.choose_pdf")}</Button>
-          </div>
+          <ReceiptScanTray mode="petty" activeScanID={activeScanID} onOpen={openScan} />
 
           {draft.receiptImageURL && (
             <div className="submit-expense-receipt-preview">
@@ -241,7 +253,7 @@ export function TripCostPage() {
         </section>
       </Card>
 
-      <Card className="submit-expense-card">
+      <Card className="submit-expense-card xp-details">
         <section className="submit-expense-section" aria-labelledby="trip-details-heading">
           <div className="submit-expense-section-heading">
             <div>
@@ -250,23 +262,51 @@ export function TripCostPage() {
             </div>
           </div>
 
-          <div className="submit-expense-fields">
-            <Field label={t("submit.vendor_name")} required value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
-            <Field label={t("submit.receipt_total")} required type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setField("amount", e.target.value)} />
-            <Field label={t("my_expenses.receipt_date")} required type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
-            <Field as="select" label={t("tc.reason_title")} required value={reason} onChange={(e) => setReason(e.target.value)}>
-              {REASONS.map((r) => <option key={r.value} value={r.value}>{t(r.labelKey)}</option>)}
-            </Field>
+          <div className={`submit-expense-fields xp-main-fields xp-main-fields-3`}>
+            <Field label={t("submit.vendor_name")} required missing={missing.vendor} value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
+            <Field label={t("submit.receipt_total")} required missing={missing.amount} type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setField("amount", e.target.value)} />
+            <Field label={t("my_expenses.receipt_date")} required missing={missing.date} type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
+          </div>
+
+          <TaxDetails open={taxOpen} onToggle={setTaxOpen} filled={Boolean(draft.tin || draft.birPermitNumber || draft.birNumber || draft.birPermitType)}>
             <Field label="TIN" value={draft.tin} onChange={(e) => setField("tin", e.target.value)} />
             <Field label={t("submit.field_bir_permit")} value={draft.birPermitNumber} onChange={(e) => setField("birPermitNumber", e.target.value)} />
             <Field label="OR / SI number" value={draft.birNumber} onChange={(e) => setField("birNumber", e.target.value)} />
-          </div>
-          <Field as="textarea" label={t("tc.note_label")} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
-        </section>
-      </Card>
+          </TaxDetails>
 
-      <Card className="submit-expense-card">
-        <section className="submit-expense-section" aria-labelledby="trip-projects-heading">
+          <div className="petty-cash-reason">
+            <span className="field-label" id="petty-cash-reason-label">
+              {t("tc.reason_title")}<span className="field-required"> *</span>
+              {missing.reason && <span className="field-missing-tag">{t("gap.needed")}</span>}
+            </span>
+            <div className="petty-cash-chips" role="radiogroup" aria-labelledby="petty-cash-reason-label">
+              {REASONS.map((r) => (
+                <button
+                  key={r.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={reason === r.value}
+                  className={`petty-cash-chip${reason === r.value ? " petty-cash-chip-on" : ""}`}
+                  onClick={() => setReason(r.value)}
+                >
+                  {t(r.labelKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Field
+            as="textarea"
+            label={t("tc.note_label")}
+            required
+            missing={missing.note}
+            maxLength={300}
+            placeholder={t("tc.note_ph")}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </section>
+
+        <section className="submit-expense-section xp-section-next" aria-labelledby="trip-projects-heading">
           <div className="submit-expense-section-heading">
             <div>
               <h2 id="trip-projects-heading">{t("tc.projects_title")}</h2>
@@ -290,14 +330,15 @@ export function TripCostPage() {
             <p className="trip-cost-share">{t("tc.share", { count: picked.length, each: peso(each) })}</p>
           )}
 
-          <div className="submit-expense-footer">
-            <p>{picked.length === 0 ? t("tc.pick_project") : t("tc.footer_note")}</p>
+          <div className="submit-expense-footer xp-footer">
+            <SubmitBlockers gaps={gaps} note={t("tc.footer_note")} />
             <Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
               {submitting ? t("common.submitting") : totalOk ? t("tc.submit", { amount: peso(total) }) : t("tc.title")}
             </Button>
           </div>
         </section>
       </Card>
+      </div>
     </div>
   );
 }

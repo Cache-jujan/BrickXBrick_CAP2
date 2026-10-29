@@ -1,32 +1,72 @@
+/* Open requests: a read-only board. Built to fit one laptop screen: one toolbar row, small type,
+   and the stores/projects laid out side by side instead of one tall stack. */
 .open-requests-page {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .open-requests-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-4);
+}
+
+.open-requests-title h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: 1.2;
 }
 
 .open-requests-subtitle {
-  margin: var(--space-1) 0 0;
+  margin: 2px 0 0;
   color: var(--color-ink-soft);
+  font-size: var(--text-sm);
 }
 
+.open-requests-total {
+  margin-left: var(--space-2);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-primary-tint, #fff1e6);
+  color: var(--color-primary-ink, #8f3705);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* View switch, filter and refresh share one row. */
 .open-requests-controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
 }
 
 .open-requests-controls .field {
-  min-width: 260px;
-  margin-bottom: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
 }
+
+.open-requests-controls .field-label {
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+  white-space: nowrap;
+}
+
+.open-requests-controls .field-control,
+.open-requests-controls .btn {
+  height: 36px;
+  min-height: 36px;
+  font-size: var(--text-sm);
+}
+
+.open-requests-controls .field-control { min-width: 190px; max-width: 260px; padding: 0 var(--space-3); }
+.open-requests-controls .btn { padding: 0 var(--space-3); }
 
 .open-requests-toggle {
   display: inline-flex;
@@ -41,9 +81,9 @@
 .open-requests-toggle-btn {
   border: 0;
   background: transparent;
-  padding: 0 var(--space-4);
+  padding: 5px 12px;
   border-radius: calc(var(--radius-md, 8px) - 2px);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-ink-soft);
   cursor: pointer;
@@ -55,34 +95,28 @@
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.12));
 }
 
-/* "All stores" / "All projects": the one solid band on the page. */
-.open-requests-all {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* Stores / projects: as many columns as fit. */
+.open-requests-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-primary, #bf4307);
-  color: #fff;
-  font-size: var(--text-md);
-  font-weight: 600;
+  align-items: start;
 }
 
 .open-requests-group {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-1);
+  padding: var(--space-3);
 }
 
-/* Each store or project: a tinted band with an accent edge. */
 .open-requests-group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: 6px var(--space-3);
   background: var(--color-primary-tint, #fff1e6);
-  border-left: 5px solid var(--color-primary, #bf4307);
+  border-left: 4px solid var(--color-primary, #bf4307);
   border-radius: var(--radius-sm, 6px);
 }
 
@@ -90,17 +124,19 @@
   margin: 0;
   font-size: var(--text-md);
   font-weight: 600;
+  line-height: 1.25;
   color: var(--color-primary-ink, #8f3705);
 }
 
 .open-requests-count {
-  padding: 2px 10px;
+  padding: 1px 8px;
   border: 1px solid var(--color-primary, #bf4307);
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-primary, #bf4307);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .open-requests-list {
@@ -112,15 +148,26 @@
 
 .open-requests-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--space-4);
-  padding: var(--space-3) 0;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding: 7px 2px;
   border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
 }
+.open-requests-list > .open-requests-row:first-child { border-top: 0; }
 
 .open-requests-row-main {
   display: grid;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
+}
+
+.open-requests-row-main strong {
+  font-size: var(--text-sm);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .open-requests-row-main strong {
@@ -128,18 +175,26 @@
 }
 
 .open-requests-meta {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+  line-height: 1.35;
   color: var(--color-ink-soft);
+}
+
+.open-requests-row-main .open-requests-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .open-requests-progress {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   align-content: center;
+  min-width: 0;
 }
 
 .open-requests-track {
-  height: 6px;
+  height: 5px;
   border-radius: 3px;
   background: var(--color-border, rgba(0, 0, 0, 0.1));
   overflow: hidden;
@@ -150,8 +205,11 @@
   background: var(--color-primary, #bf4307);
 }
 
-@media (max-width: 720px) {
-  .open-requests-row {
-    grid-template-columns: 1fr;
-  }
+/* Narrow card (a phone or tablet): progress drops under the name. */
+@media (max-width: 520px) {
+  .open-requests-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .open-requests-controls { width: 100%; }
+  .open-requests-controls .field { flex: 1 1 100%; }
+  .open-requests-controls .field-control { max-width: none; width: 100%; min-width: 0; }
+  .open-requests-controls .field-label { display: none; }
 }

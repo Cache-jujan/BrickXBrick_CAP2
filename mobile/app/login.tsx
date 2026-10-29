@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { Feather } from "@expo/vector-icons";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -138,7 +139,7 @@ export default function LoginScreen() {
             accessibilityRole="button"
             accessibilityLabel={t(showPassword ? "login.hide" : "login.show")}
           >
-            <Text style={styles.showPassword}>{t(showPassword ? "login.hide" : "login.show")}</Text>
+            <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={COLORS.muted} />
           </Pressable>
         </View>
 
@@ -187,7 +188,6 @@ const styles = StyleSheet.create({
   inputRow: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderRadius: 14, borderWidth: 1, flexDirection: "row", minHeight: 54 },
   inputInRow: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 16, minHeight: 52, paddingHorizontal: 16 },
   showButton: { justifyContent: "center", minHeight: 52, paddingHorizontal: 16 },
-  showPassword: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
   termsRow: { alignItems: "center", flexDirection: "row", gap: 12, marginBottom: 18 },
   termsText: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 14, lineHeight: 20 },
   termsLink: { color: COLORS.primary, fontFamily: FONT.bold, textDecorationLine: "underline" },

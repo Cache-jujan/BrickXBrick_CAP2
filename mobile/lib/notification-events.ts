@@ -21,3 +21,39 @@ export function useOnNewNotifications(onNew: () => void) {
     };
   }, []);
 }
+
+// A receipt scan was just started: ask the notification pop-up to check often for a while,
+// so "your receipt is ready" shows up soon after the server finishes reading it.
+const expediters = new Set<() => void>();
+
+export function expediteNotificationChecks() {
+  expediters.forEach((run) => run());
+}
+
+const EXPEDITE_EVERY_MS = 4_000;
+const EXPEDITE_FOR_MS = 60_000;
+
+export function useOnExpediteChecks(check: () => void) {
+  const latest = useRef(check);
+  latest.current = check;
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let stopAt = 0;
+    const run = () => {
+      stopAt = Date.now() + EXPEDITE_FOR_MS;
+      if (timer) return; // already checking often; just extended the time
+      timer = setInterval(() => {
+        latest.current();
+        if (Date.now() > stopAt && timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }, EXPEDITE_EVERY_MS);
+    };
+    expediters.add(run);
+    return () => {
+      expediters.delete(run);
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+}
