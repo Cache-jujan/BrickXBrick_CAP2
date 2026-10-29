@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCopySource, getProjectTemplate } from "../../api/projectTemplatesApi";
 import { Button } from "../ui/Button";
-import { BuildingGlyph, CheckSquareGlyph, FileGlyph, FlagGlyph, HelmetGlyph, LayersGlyph, WavesGlyph } from "../ui/glyphs";
+import { BuildingGlyph, CheckSquareGlyph, FileGlyph, FlagGlyph, GridGlyph, HelmetGlyph, HomeGlyph, PaintRollerGlyph, RoadGlyph, UserGlyph, WavesGlyph, WrenchGlyph } from "../ui/glyphs";
 import "./TemplateSummary.css";
 
 const SIZE_LABEL = { small: "Small", large: "Large", custom: "Custom" };
@@ -43,9 +43,13 @@ export function summarize(detail) {
 export function CategoryIcon({ type, size = 24 }) {
   const name = String(type || "").toLowerCase();
   const Icon = /drain|flood|water/.test(name) ? WavesGlyph
-    : /build|resid|commerc|house/.test(name) ? BuildingGlyph
-    : /civil|road|bridge|work/.test(name) ? HelmetGlyph
-    : LayersGlyph;
+    : /road|pavement|highway/.test(name) ? RoadGlyph
+    : /retrofit|structural|repair/.test(name) ? WrenchGlyph
+    : /fit-?out|renovat/.test(name) ? PaintRollerGlyph
+    : /resid|house|home/.test(name) ? HomeGlyph
+    : /commerc|build/.test(name) ? BuildingGlyph
+    : /civil|work/.test(name) ? HelmetGlyph
+    : GridGlyph;
   return <Icon size={size} />;
 }
 
@@ -106,46 +110,41 @@ export function TemplateSummaryDialog({ value, template, onClose, onUse }) {
         </header>
 
         <div className="tsum-body" aria-live="polite">
-          {template?.description && <p className="tsum-desc">{template.description}</p>}
           {state.status === "loading" && <p className="tsum-note">Loading the details…</p>}
           {state.status === "error" && <p className="tsum-note">The details could not be loaded. You can still continue.</p>}
 
           {summary && (
             <>
-              <dl className="tsum-stats">
-                <div><FlagGlyph size={22} /><dd>{summary.milestones}</dd><dt>milestones</dt></div>
-                <div><CheckSquareGlyph size={22} /><dd>{summary.tasks}</dd><dt>tasks</dt></div>
-                {summary.optional > 0 && <div><FileGlyph size={22} /><dd>{summary.optional}</dd><dt>optional documents</dt></div>}
-                {summary.handlers.length > 0 && (
-                  <div className="tsum-who">
-                    <dt>Handled by</dt>
-                    <dd>{summary.handlers.map(([who, n]) => `${who} (${n})`).join(", ")}</dd>
-                  </div>
-                )}
-              </dl>
+              <div className="tsum-top">
+                <ul className="tsum-stats">
+                  <li><FlagGlyph size={24} /><span><strong>{summary.milestones}</strong>milestones</span></li>
+                  <li><CheckSquareGlyph size={24} /><span><strong>{summary.tasks}</strong>tasks</span></li>
+                  {summary.optional > 0 && <li><FileGlyph size={24} /><span><strong>{summary.optional}</strong>optional documents</span></li>}
+                  {summary.handlers.length > 0 && (
+                    <li className="tsum-who" aria-label="Handled by">
+                      {summary.handlers.map(([who, n]) => (
+                        <span key={who}><UserGlyph size={18} />{who} ({n})</span>
+                      ))}
+                    </li>
+                  )}
+                </ul>
+                {template?.description && <p className="tsum-desc">{template.description}</p>}
+              </div>
 
               <div className="tsum-phases">
                 {summary.phases.map((group) => (
                   <section key={group.phase} className="tsum-phase">
                     <h3>{PHASE_LABEL[group.phase]} <span>{plural(group.milestones.length, "milestone")} · {plural(group.tasks, "task")}</span></h3>
-                    <ul>
+                    <ul className="tsum-milestones">
                       {group.milestones.map((m, i) => (
                         <li key={m.id ?? `${m.name}-${i}`}>
-                          <details>
-                            <summary>
-                              <span>{m.name}</span>
-                              <em>{plural(m.taskCount, "task")}</em>
-                            </summary>
-                            <ul className="tsum-tasks">
-                              {m.taskList.filter(included).map((task, j) => (
-                                <li key={task.id ?? `${task.name}-${j}`}>
-                                  {task.name}
-                                  {task.handledBy && <small>{task.handledBy}</small>}
-                                </li>
-                              ))}
-                              {m.taskCount === 0 && <li className="tsum-none">No tasks yet</li>}
-                            </ul>
-                          </details>
+                          <p className="tsum-milestone"><span>{m.name}</span><em>{plural(m.taskCount, "task")}</em></p>
+                          <ul className="tsum-tasks">
+                            {m.taskList.filter(included).map((task, j) => (
+                              <li key={task.id ?? `${task.name}-${j}`}>{task.name}</li>
+                            ))}
+                            {m.taskCount === 0 && <li className="tsum-none">No tasks yet</li>}
+                          </ul>
                         </li>
                       ))}
                     </ul>

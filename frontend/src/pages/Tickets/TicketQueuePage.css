@@ -123,7 +123,7 @@
   padding: var(--space-7) var(--space-5);
   text-align: center;
 }
-.ticket-queue-empty h2 { margin: 0 0 var(--space-2); font-size: var(--text-lg); }
+.ticket-queue-empty h2 { margin: 0 0 var(--space-2); font-size: var(--text-md); }
 .ticket-queue-empty p { margin: 0 auto; max-width: 48ch; color: var(--color-ink-soft); }
 .ticket-queue-empty-filtered { padding: var(--space-5); }
 

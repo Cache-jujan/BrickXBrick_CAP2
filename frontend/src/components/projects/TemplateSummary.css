@@ -12,29 +12,35 @@
 .tsum-close:hover { background: var(--color-surface-muted); color: var(--color-ink); }
 .tsum-close:focus-visible { outline: 2px solid var(--color-brick); outline-offset: 1px; }
 
-.tsum-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4) var(--space-5); }
-.tsum-desc { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--color-ink-soft); line-height: 1.5; max-width: 62ch; }
-.tsum-note { margin: 0; font-size: var(--text-sm); color: var(--color-ink-soft); }
+.tsum-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--space-4) var(--space-5) 0; }
+.tsum-note { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--color-ink-soft); }
 
-/* Totals in one quiet line instead of boxes. */
-.tsum-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); }
-.tsum-stats div { display: flex; align-items: center; gap: var(--space-2); }
-.tsum-stats svg { color: var(--color-brick); align-self: center; }
-.tsum-stats dd { margin: 0; font-size: var(--text-lg); font-weight: 700; line-height: 1; }
-.tsum-stats dt { font-size: var(--text-sm); color: var(--color-ink-soft); }
-.tsum-who { flex-basis: 100%; }
-.tsum-who dd { font-size: var(--text-sm); font-weight: 500; }
+/* Totals and who handles the work stay in view; only the list below scrolls. */
+.tsum-top { flex-shrink: 0; padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); }
+.tsum-stats { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-wrap: wrap; align-items: center; }
+.tsum-stats > li { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); border-left: 1px solid var(--color-border); }
+.tsum-stats > li:first-child { padding-left: 0; border-left: 0; }
+.tsum-stats svg { flex-shrink: 0; color: var(--color-brick); }
+.tsum-stats li > span { display: flex; flex-direction: column; font-size: var(--text-sm); color: var(--color-ink-soft); line-height: 1.2; }
+.tsum-stats strong { font-size: var(--text-lg); font-weight: 650; line-height: 1.1; color: var(--color-ink); }
+.tsum-who { gap: var(--space-4) !important; flex-wrap: wrap; font-size: var(--text-sm); font-weight: 500; }
+.tsum-who span { display: inline-flex; flex-direction: row !important; align-items: center; gap: 6px; color: var(--color-ink); }
+.tsum-who svg { color: var(--color-brick); }
+.tsum-desc { margin: 0; font-size: var(--text-sm); color: var(--color-ink-soft); line-height: 1.5; max-width: 70ch; }
 
-.tsum-phases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
-.tsum-phase h3 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-1); padding-bottom: var(--space-1); border-bottom: 2px solid var(--color-brick); font-size: var(--text-base); }
+.tsum-phases { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4) 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
+.tsum-phase h3 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-2); padding-bottom: var(--space-2); border-bottom: 2px solid var(--color-brick); font-size: var(--text-base); }
 .tsum-phase h3 span { font-weight: 500; font-size: var(--text-xs); color: var(--color-ink-soft); }
 .tsum-phase ul { list-style: none; margin: 0; padding: 0; }
-.tsum-phase > ul > li { border-bottom: 1px solid var(--color-border); }
-.tsum-phase summary { display: flex; justify-content: space-between; gap: var(--space-2); padding: 7px 0; font-size: var(--text-sm); cursor: pointer; }
-.tsum-phase summary em { flex-shrink: 0; font-style: normal; font-size: var(--text-xs); color: var(--color-ink-soft); }
-.tsum-tasks { margin: 0 0 var(--space-2) var(--space-2) !important; padding-left: var(--space-3) !important; border-left: 2px solid var(--color-border); }
-.tsum-tasks li { display: flex; justify-content: space-between; gap: var(--space-2); padding: 2px 0; font-size: var(--text-xs); color: var(--color-ink-soft); }
-.tsum-tasks small { flex-shrink: 0; color: var(--color-ink-faint); }
+.tsum-milestones > li { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+.tsum-milestones > li:last-child { border-bottom: 0; }
+/* Each milestone has a brick dot; its tasks are listed right under it, so nothing is hidden. */
+.tsum-milestone { position: relative; display: flex; justify-content: space-between; gap: var(--space-2); padding-left: var(--space-4); font-size: var(--text-sm); font-weight: 600; line-height: 1.35; }
+.tsum-milestone::before { content: ""; position: absolute; left: 0; top: 0.5em; width: 7px; height: 7px; border-radius: 50%; background: var(--color-brick); }
+.tsum-milestone em { flex-shrink: 0; font-style: normal; font-weight: 400; font-size: var(--text-xs); color: var(--color-ink-soft); }
+.tsum-tasks { margin: var(--space-1) 0 0 var(--space-4) !important; display: grid; gap: 3px; }
+.tsum-tasks li { position: relative; padding-left: var(--space-3); font-size: var(--text-xs); line-height: 1.4; color: var(--color-ink-soft); }
+.tsum-tasks li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 3px; height: 3px; border-radius: 50%; background: var(--color-ink-faint); }
 .tsum-none { font-style: italic; }
 
 .tsum-foot { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border); }
@@ -42,6 +48,7 @@
 
 @media (max-width: 640px) {
   .tsum { max-height: 92vh; }
+  .tsum-stats > li { padding: 0 var(--space-3); }
   .tsum-phases { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
   .tsum-foot { flex-wrap: wrap; }
   .tsum-foot p { flex-basis: 100%; }

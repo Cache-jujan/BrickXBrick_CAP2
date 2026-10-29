@@ -32,3 +32,8 @@ export const WavesGlyph = make(<><path d="M3 8c2 0 2-1.5 4.5-1.5S10 8 12 8s2.5-1
 export const LayersGlyph = make(<><path d="m12 3.5 9 4.5-9 4.5L3 8l9-4.5Z" /><path d="m3 12.5 9 4.5 9-4.5M3 16.5l9 4.5 9-4.5" /></>);
 export const ChevronRightGlyph = make(<path d="m9 6 6 6-6 6" />);
 export const ChevronDownGlyph = make(<path d="m6 9 6 6 6-6" />);
+export const RoadGlyph = make(<><path d="M8 3 4.5 21M16 3l3.5 18M12 4v3M12 10.5v3M12 17v3" /></>);
+export const HomeGlyph = make(<><path d="M3.5 11 12 4l8.5 7" /><path d="M5.5 9.5V20h13V9.5M10 20v-5.5h4V20" /></>);
+export const WrenchGlyph = make(<path d="M14.5 6.2a4.2 4.2 0 0 0 5.2 5.2l-8.6 8.6a2.2 2.2 0 0 1-3.1-3.1l8.6-8.6a4.2 4.2 0 0 0-2.1-2.1ZM8.4 17.1l.01 0" />);
+export const PaintRollerGlyph = make(<><rect x="4" y="3.5" width="14" height="5" rx="1.2" /><path d="M18 6h2v5h-8v3M11 14h2v6.5h-2z" /></>);
+export const GridGlyph = make(<><rect x="4" y="4" width="6.5" height="6.5" rx="1.2" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.2" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.2" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.2" /></>);
