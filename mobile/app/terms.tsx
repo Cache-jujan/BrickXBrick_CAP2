@@ -1,3 +1,4 @@
+# mobile/app/terms.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -40,8 +41,17 @@ function splitHeading(heading: string) {
 // Terms of Use + Privacy Notice (Data Privacy Act, RA 10173).
 //   /terms?accept=1  shown right after sign-in until the current version is
 //                    accepted; no back button, the app can't be used until then
-//   /terms           read-only, opened from Settings
+//   /terms           read-only, opened from Settings or the login screen
 // The text comes from the backend (GET /api/legal), the same as on the web.
+//
+// How agreeing works (same as the web: one straight scroll):
+//   - Both documents are shown one after the other.
+//   - Right under each document is its own checkbox, so the user ticks it
+//     as they reach it.
+//   - "Agree and continue" works once every box is ticked. Pressing it early
+//     scrolls to the first box still unticked and highlights it.
+// The acceptance is saved on the server, so this only comes back when the
+// terms version changes.
 export default function TermsScreen() {
   const { t, formatDate, intlLocale } = useLocale();
   const { accept } = useLocalSearchParams<{ accept?: string }>();
@@ -49,15 +59,21 @@ export default function TermsScreen() {
   const session = getSession();
 
   const [data, setData] = useState<LegalData | null>(null);
-  const [docId, setDocId] = useState("terms");
   const [loadError, setLoadError] = useState("");
   // Set when the text on screen is the copy saved on this phone.
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [checked, setChecked] = useState(false);
+  // { terms: true } once that document's box is ticked
+  const [agreed, setAgreed] = useState<Record<string, boolean>>({});
+  // The id of the box to highlight after pressing "Agree" too early
+  const [pulse, setPulse] = useState("");
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef<ScrollView>(null);
-  const readerY = useRef(0);
+  // Where each document's box sits, for scrolling to it: the card's y in the
+  // scroll plus the box's y inside the card (both from onLayout).
+  const cardY = useRef<Record<string, number>>({});
+  const boxInCardY = useRef<Record<string, number>>({});
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -79,15 +95,38 @@ export default function TermsScreen() {
     load();
   }, [load]);
 
-  if (!session) return <Redirect href="/login" />;
+  useEffect(
+    () => () => {
+      if (pulseTimer.current) clearTimeout(pulseTimer.current);
+    },
+    []
+  );
 
-  function switchDoc(id: string) {
-    setDocId(id);
-    scrollRef.current?.scrollTo({ y: Math.max(0, readerY.current - 8), animated: true });
+  // Agreeing needs a signed-in user; just reading (from the login screen) doesn't.
+  if (mustAccept && !session) return <Redirect href="/login" />;
+
+  const docs = data?.documents ?? [];
+  const firstName = session?.user.name?.split(" ")[0];
+  const doneCount = docs.filter((d) => agreed[d.id]).length;
+  const allAgreed = docs.length > 0 && doneCount === docs.length;
+
+  // "Agree and continue": if a box is still unticked, take the user to it.
+  function handleAcceptPress() {
+    if (busy || !data) return;
+    const missing = docs.find((d) => !agreed[d.id]);
+    if (missing) {
+      const y = (cardY.current[missing.id] ?? 0) + (boxInCardY.current[missing.id] ?? 0);
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 160), animated: true });
+      setPulse(missing.id);
+      if (pulseTimer.current) clearTimeout(pulseTimer.current);
+      pulseTimer.current = setTimeout(() => setPulse(""), 1600);
+      return;
+    }
+    handleAccept();
   }
 
   async function handleAccept() {
-    if (!checked || !data || !session) return;
+    if (!allAgreed || !data || !session) return;
     setBusy(true);
     setError("");
     try {
@@ -99,7 +138,7 @@ export default function TermsScreen() {
       const body = await res.json().catch(() => ({}));
       if (res.status === 409) {
         // The terms changed while this screen was open: show the new version.
-        setChecked(false);
+        setAgreed({});
         await load();
         throw new Error(body.error || t("legal.err_updated"));
       }
@@ -118,11 +157,6 @@ export default function TermsScreen() {
     router.replace("/login");
   }
 
-  const doc = data?.documents.find((d) => d.id === docId) ?? data?.documents[0];
-  const docIndex = data && doc ? data.documents.indexOf(doc) : -1;
-  const nextDoc = data && docIndex >= 0 ? data.documents[docIndex + 1] : undefined;
-  const firstName = session.user.name?.split(" ")[0];
-
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right", ...(mustAccept ? [] : (["bottom"] as const))]}>
       <FlowHeader
@@ -137,7 +171,7 @@ export default function TermsScreen() {
           <Text style={styles.heroTitle}>{mustAccept ? t("legal.title") : t("account.terms_privacy")}</Text>
           <Text style={styles.lede}>
             {mustAccept
-              ? "Brick x Brick holds company records and your personal data, so we need your agreement first. You'll only be asked again if the terms change."
+              ? "Brick x Brick holds company records and your personal data, so we need your agreement first. Scroll down and tick the box under each document. You'll only be asked again if the terms change."
               : "How Brick x Brick may be used, and how your personal data is handled under the Data Privacy Act (RA 10173)."}
           </Text>
           {data ? (
@@ -165,7 +199,7 @@ export default function TermsScreen() {
 
         {!data && !loadError ? <ActivityIndicator color={COLORS.primary} style={styles.loading} /> : null}
 
-        {data && doc ? (
+        {data ? (
           <>
             {data.highlights?.length ? (
               <View style={styles.glance}>
@@ -185,74 +219,68 @@ export default function TermsScreen() {
               </View>
             ) : null}
 
-            <View
-              onLayout={(e) => {
-                readerY.current = e.nativeEvent.layout.y;
-              }}
-              style={styles.segment}
-              accessibilityRole="tablist"
-            >
-              {data.documents.map((d) => {
-                const active = d.id === doc.id;
-                return (
-                  <Pressable
-                    key={d.id}
-                    onPress={() => switchDoc(d.id)}
-                    style={[styles.segmentItem, active && styles.segmentItemActive]}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{d.title}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={styles.docCard}>
-              <Text style={styles.docTitle}>{doc.title}</Text>
-              {doc.sections.map((s, i) => {
-                const { num, label } = splitHeading(s.heading);
-                return (
-                  <View key={s.heading} style={[styles.section, i > 0 && styles.sectionDivider]}>
-                    <View style={styles.headingRow}>
-                      {num ? (
-                        <View style={styles.numBadge}>
-                          <Text style={styles.numText}>{num}</Text>
+            {/* Both documents, one after the other. While agreeing, each
+                ends with its own box. */}
+            {docs.map((doc) => {
+              const checked = Boolean(agreed[doc.id]);
+              return (
+                <View
+                  key={doc.id}
+                  style={styles.docCard}
+                  onLayout={(e) => {
+                    cardY.current[doc.id] = e.nativeEvent.layout.y;
+                  }}
+                >
+                  <Text style={styles.docTitle}>{doc.title}</Text>
+                  {doc.sections.map((s, i) => {
+                    const { num, label } = splitHeading(s.heading);
+                    return (
+                      <View key={s.heading} style={[styles.section, i > 0 && styles.sectionDivider]}>
+                        <View style={styles.headingRow}>
+                          {num ? (
+                            <View style={styles.numBadge}>
+                              <Text style={styles.numText}>{num}</Text>
+                            </View>
+                          ) : null}
+                          <Text style={styles.heading}>{label}</Text>
                         </View>
-                      ) : null}
-                      <Text style={styles.heading}>{label}</Text>
-                    </View>
-                    {(s.paragraphs ?? []).map((p, j) => (
-                      <Text key={`p${j}`} style={styles.body}>
-                        {p}
-                      </Text>
-                    ))}
-                    {(s.bullets ?? []).map((b, j) => (
-                      <View key={`b${j}`} style={styles.bulletRow}>
-                        <View style={styles.bulletDot} />
-                        <Text style={[styles.body, styles.bulletText]}>{b}</Text>
+                        {(s.paragraphs ?? []).map((p, j) => (
+                          <Text key={`p${j}`} style={styles.body}>
+                            {p}
+                          </Text>
+                        ))}
+                        {(s.bullets ?? []).map((b, j) => (
+                          <View key={`b${j}`} style={styles.bulletRow}>
+                            <View style={styles.bulletDot} />
+                            <Text style={[styles.body, styles.bulletText]}>{b}</Text>
+                          </View>
+                        ))}
                       </View>
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
+                    );
+                  })}
 
-            {nextDoc ? (
-              <Pressable
-                onPress={() => switchDoc(nextDoc.id)}
-                style={({ pressed }) => [styles.nextCard, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-              >
-                <View>
-                  <Text style={styles.nextLabel}>{t("common.next")}</Text>
-                  <Text style={styles.nextTitle}>{nextDoc.title}</Text>
+                  {mustAccept ? (
+                    <Pressable
+                      onLayout={(e) => {
+                        boxInCardY.current[doc.id] = e.nativeEvent.layout.y;
+                      }}
+                      onPress={() => setAgreed((current) => ({ ...current, [doc.id]: !current[doc.id] }))}
+                      style={[styles.checkRow, checked && styles.checkRowOn, pulse === doc.id && styles.checkRowPulse]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked }}
+                    >
+                      <View style={[styles.checkbox, checked && styles.checkboxOn]}>
+                        {checked ? <MaterialIcons name="check" size={16} color="#FFFFFF" /> : null}
+                      </View>
+                      <Text style={styles.checkLabel}>
+                        {doc.id === "privacy" ? "I have read and acknowledge the " : "I have read and agree to the "}
+                        <Text style={styles.bold}>{doc.title}</Text>.
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
-                <MaterialIcons name="arrow-forward" size={20} color={TINT_INK} />
-              </Pressable>
-            ) : (
-              <Text style={styles.endNote}>{t("legal.end_note", { title: doc.title })}</Text>
-            )}
+              );
+            })}
           </>
         ) : null}
       </ScrollView>
@@ -260,26 +288,22 @@ export default function TermsScreen() {
       {mustAccept ? (
         <SafeAreaView edges={["bottom"]} style={styles.acceptBar}>
           {error ? <Text style={[styles.error, styles.barError]}>{error}</Text> : null}
-          <Pressable
-            onPress={() => setChecked((v) => !v)}
-            style={[styles.checkRow, checked && styles.checkRowOn]}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked }}
-          >
-            <View style={[styles.checkbox, checked && styles.checkboxOn]}>
-              {checked ? <MaterialIcons name="check" size={16} color="#FFFFFF" /> : null}
-            </View>
-            <Text style={styles.checkLabel}>
-              I have read and agree to the <Text style={styles.bold}>Terms of Use</Text>, and I acknowledge the{" "}
-              <Text style={styles.bold}>Privacy Notice</Text>.
+
+          <View style={styles.statusRow} accessibilityLiveRegion="polite">
+            {allAgreed ? <MaterialIcons name="check-circle" size={16} color={COLORS.primary} /> : null}
+            <Text style={[styles.statusText, allAgreed && styles.statusDone]}>
+              {allAgreed
+                ? "All set. You can continue."
+                : `${doneCount} of ${docs.length} accepted. Tick the box under each document.`}
             </Text>
-          </Pressable>
+          </View>
 
           <Pressable
-            onPress={handleAccept}
-            disabled={!checked || busy}
-            style={({ pressed }) => [styles.primaryButton, (!checked || busy) && styles.disabled, pressed && { opacity: 0.85 }]}
+            onPress={handleAcceptPress}
+            disabled={busy}
+            style={({ pressed }) => [styles.primaryButton, (!allAgreed || busy) && styles.disabled, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
+            accessibilityState={{ disabled: !allAgreed || busy }}
           >
             {busy ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -344,27 +368,6 @@ const styles = StyleSheet.create({
   glanceText: { fontSize: 13, fontFamily: FONT.regular, lineHeight: 19, color: COLORS.muted },
   note: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
 
-  segment: {
-    flexDirection: "row",
-    padding: 4,
-    gap: 4,
-    borderRadius: 12,
-    backgroundColor: COLORS.border,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  segmentItem: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: "center" },
-  segmentItemActive: {
-    backgroundColor: COLORS.card,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  segmentText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.muted },
-  segmentTextActive: { color: COLORS.heading },
-
   docCard: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
@@ -391,20 +394,6 @@ const styles = StyleSheet.create({
   bulletDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.primary, marginTop: 8 },
   bulletText: { flex: 1 },
 
-  nextCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-  nextLabel: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
-  nextTitle: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading },
-  endNote: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center" },
-
   savedNote: { backgroundColor: COLORS.amberBannerFill, borderRadius: 10, color: COLORS.amberBannerText, fontFamily: FONT.medium, fontSize: 12, marginBottom: 10, padding: 10 },
   errorCard: {
     backgroundColor: COLORS.card,
@@ -421,8 +410,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 10,
+    paddingTop: 10,
+    gap: 8,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -430,17 +419,23 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   barError: { textAlign: "center" },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statusText: { flex: 1, fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted },
+  statusDone: { color: COLORS.primary, fontFamily: FONT.bold },
   checkRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     backgroundColor: PAGE_BG,
+    marginTop: 20,
   },
   checkRowOn: { borderColor: COLORS.primary, backgroundColor: TINT },
+  checkRowPulse: { borderColor: COLORS.primary, borderWidth: 3, backgroundColor: TINT },
   checkbox: {
     width: 26,
     height: 26,

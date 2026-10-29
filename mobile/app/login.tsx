@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { consumeSessionExpired, login, nextRouteAfterLogin } from "@/lib/auth";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -21,7 +20,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(false);
   // Shown once when we got here because the saved sign-in expired.
   const [error, setError] = useState(() =>
     consumeSessionExpired()
@@ -47,11 +45,6 @@ export default function LoginScreen() {
       );
       return;
     }
-    if (!agreed) {
-      setError(t("login.terms_required"));
-      return;
-    }
-
     setError("");
     setSubmitting(true);
     try {
@@ -153,19 +146,11 @@ export default function LoginScreen() {
           <Text style={styles.forgotPasswordText}>{t("login.forgot")}</Text>
         </Pressable>
 
+        {/* Just a link to read them. Agreeing happens once, on the terms
+            screen after the first sign-in (app/terms.tsx), and is saved on
+            the server, so it is not asked again on every sign-in. */}
         <View style={styles.termsRow}>
-          <Pressable
-            onPress={() => setAgreed((v) => !v)}
-            hitSlop={8}
-            style={[styles.checkbox, agreed && styles.checkboxOn]}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreed }}
-            accessibilityLabel={`${t("login.terms_agree")} ${t("login.terms_link")}`}
-          >
-            {agreed ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
-          </Pressable>
           <Text style={styles.termsText}>
-            {t("login.terms_agree")}{" "}
             <Text style={styles.termsLink} accessibilityRole="link" onPress={() => router.push("/terms")}>
               {t("login.terms_link")}
             </Text>
@@ -204,8 +189,6 @@ const styles = StyleSheet.create({
   showButton: { justifyContent: "center", minHeight: 52, paddingHorizontal: 16 },
   showPassword: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
   termsRow: { alignItems: "center", flexDirection: "row", gap: 12, marginBottom: 18 },
-  checkbox: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.primary, borderRadius: 7, borderWidth: 2, height: 26, justifyContent: "center", width: 26 },
-  checkboxOn: { backgroundColor: COLORS.primary },
   termsText: { color: COLORS.heading, flex: 1, fontFamily: FONT.regular, fontSize: 14, lineHeight: 20 },
   termsLink: { color: COLORS.primary, fontFamily: FONT.bold, textDecorationLine: "underline" },
   forgotPasswordButton: { alignSelf: "flex-start", marginBottom: 14, marginTop: 14, minHeight: 32, justifyContent: "center" },

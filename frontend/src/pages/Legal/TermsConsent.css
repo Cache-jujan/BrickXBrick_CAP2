@@ -1,0 +1,90 @@
+# frontend/src/pages/Legal/TermsConsent.css
+/*
+  "Before you continue" screen (TermsAcceptPage.jsx): both documents in one
+  scroll, a checkbox under each, and a small status + button bar at the bottom.
+  The base .legal-check / .legal-consent styles live in LegalPages.css, and the
+  document text styles (.legal-article, .legal-section) in LegalReader.css.
+*/
+
+/* The two documents, one after the other. */
+.legal-stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* The checkbox under each document. */
+.legal-confirm {
+  margin-top: var(--space-6);
+  scroll-margin: 120px 0 200px;
+  padding: var(--space-4);
+  border-width: 1.5px;
+  border-color: var(--color-brick-light);
+  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease),
+    box-shadow var(--duration) var(--ease);
+}
+
+.legal-confirm .legal-check-text {
+  font-size: var(--text-base);
+}
+
+/* Pressed "Agree" too early: pulse the box still to tick. */
+.legal-confirm.is-pulsing {
+  border-color: var(--color-brick);
+  animation: legal-pulse 0.8s var(--ease) 2;
+}
+
+@keyframes legal-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(191, 67, 7, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(191, 67, 7, 0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legal-confirm.is-pulsing {
+    animation: none;
+    box-shadow: 0 0 0 4px var(--color-brick-tint);
+  }
+}
+
+/* Bottom bar: one status line and the button. */
+.legal-consent-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.legal-consent-status.is-done {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+/* Not every box is ticked yet. Still clickable, so pressing it can take the
+   user to the box they missed, but it looks unavailable. */
+.legal-consent-btn.is-incomplete {
+  opacity: 0.55;
+}
+
+.legal-consent-btn.is-incomplete:hover {
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .legal-confirm {
+    padding: var(--space-3);
+  }
+  .legal-confirm .legal-check-text {
+    font-size: var(--text-sm);
+  }
+  .legal-consent-status {
+    font-size: var(--text-xs);
+  }
+}
