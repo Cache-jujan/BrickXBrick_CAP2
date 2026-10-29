@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
+import { Avatar } from "../ui/Avatar";
 import {
   listMyNotifications,
   getUnreadCount,
@@ -42,11 +43,12 @@ const PAGE_LABELS = [
   { test: (p) => p === "/admin/users", trail: ["nav.administration", "nav.user_accounts"] },
   { test: (p) => p === "/blockchain/alerts", trail: ["nav.record_protection", "nav.tamper_alerts"] },
   { test: (p) => p === "/notifications", trail: ["nav.notifications"] },
+  { test: (p) => p === "/account", trail: ["nav.settings"] },
 ];
 
 function pageInfoFor(pathname) {
   const match = PAGE_LABELS.find((entry) => entry.test(pathname));
-  return match || { trail: ["Brick x Brick"] };
+  return match || { trail: [] };
 }
 
 export function Topbar({ onMenuClick }) {
@@ -177,6 +179,12 @@ export function Topbar({ onMenuClick }) {
 
         <nav className="topbar-trail" aria-label={t("nav.breadcrumb")}>
           <ol>
+            {trail.length === 0 && (
+              <li className="topbar-brand" aria-current="page">
+                <img src="/images/logo.png" alt="" />
+                <span>Brick x Brick</span>
+              </li>
+            )}
             {trail.map((item, i) => (
               <li key={item} aria-current={i === trail.length - 1 ? "page" : undefined}>
                 {t(item)}
@@ -270,7 +278,7 @@ export function Topbar({ onMenuClick }) {
               aria-haspopup="true"
               aria-expanded={menuOpen}
             >
-              <span className="topbar-avatar">{initial}</span>
+              <Avatar className="topbar-avatar" url={user?.avatarUrl} initial={initial} />
               <span className="topbar-user-text">
                 <span className="topbar-user-name">{user?.name}</span>
                 <span className="topbar-user-role">{user?.role}</span>

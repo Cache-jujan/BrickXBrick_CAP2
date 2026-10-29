@@ -6,8 +6,7 @@ const { termsFields } = require("./legal");
 
 const router = express.Router();
 
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
+const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
 
 
 // Tentative need adjustment if na implement na ang frontend
@@ -27,7 +26,7 @@ router.post("/login", async (req, res) => {
  
   try {
     const userResult = await query(
-      `SELECT userid, name, username, email, role, status, lockoutuntil, failedloginattempts
+      `SELECT userid, name, username, email, role, status, lockoutuntil, failedloginattempts, avatarurl
        FROM users WHERE email = $1`,
       [email]
     );
@@ -98,6 +97,7 @@ router.post("/login", async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        avatarUrl: user.avatarurl || null,
         // false until the current Terms of Use / Privacy Notice is accepted
         ...(await termsFields(user.userid)),
       },

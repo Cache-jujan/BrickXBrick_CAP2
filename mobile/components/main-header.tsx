@@ -1,11 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSyncExternalStore } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { BrandMark } from "@/components/brand-mark";
 import { LanguageButton } from "@/components/language-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
-import { getSession } from "@/lib/auth";
+import { getSession, subscribeSession } from "@/lib/auth";
 import { useLocale } from "@/lib/i18n-context";
 
 type Props = {
@@ -28,7 +29,9 @@ export function initialsOf(name: string) {
 // any, goes under it. It sits on the page background, so there is no box.
 export function MainHeader({ title, tagline, hideAvatar }: Props) {
   const { t } = useLocale();
-  const name = getSession()?.user.name ?? "";
+  // Listens for changes, so a new photo or name shows here without signing in again.
+  const name = useSyncExternalStore(subscribeSession, () => getSession()?.user.name ?? "");
+  const avatarUrl = useSyncExternalStore(subscribeSession, () => getSession()?.user.avatarUrl ?? null);
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
@@ -50,7 +53,11 @@ export function MainHeader({ title, tagline, hideAvatar }: Props) {
               accessibilityRole="button"
               accessibilityLabel={t("mh.open_settings")}
             >
-              <Text style={styles.avatarText}>{initialsOf(name)}</Text>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} accessibilityIgnoresInvertColors />
+              ) : (
+                <Text style={styles.avatarText}>{initialsOf(name)}</Text>
+              )}
             </Pressable>
           )}
         </View>
@@ -67,7 +74,8 @@ const styles = StyleSheet.create({
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
   tagline: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 11, marginTop: 1 },
   actions: { alignItems: "center", flexDirection: "row", gap: 4 },
-  avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: MIN_TAP, justifyContent: "center", width: MIN_TAP },
+  avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: MIN_TAP, justifyContent: "center", overflow: "hidden", width: MIN_TAP },
+  avatarImage: { height: MIN_TAP, width: MIN_TAP },
   avatarText: { color: "#FFFFFF", fontFamily: FONT.extrabold, fontSize: 15 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 28, letterSpacing: -0.5, marginTop: 14 },
 });

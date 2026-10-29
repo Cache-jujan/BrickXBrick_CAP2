@@ -25,7 +25,7 @@ function daysFromNow(n) {
 // Minimal in-memory stand-in for the subset of SQL milestoneProgress.js
 // issues. Matches on the fixed query prefixes in src/lib/milestoneProgress.js
 // — if that file's queries change shape, these matchers need updating too.
-function makeFakeDb({ milestones = [], tasks = [], projects = [] }) {
+function makeFakeDb({ milestones = [], tasks = [], projects = [], generalManagers = [] }) {
   const state = {
     milestones: milestones.map((m) => ({ ...m })),
     tasks: tasks.map((t) => ({ ...t })),
@@ -111,6 +111,16 @@ function makeFakeDb({ milestones = [], tasks = [], projects = [] }) {
         const [taskId] = params;
         const t = state.tasks.find((t) => t.taskid === taskId);
         if (t) t.schedulevariancealertsent = true;
+        return { rows: [], rowCount: 1 };
+      }
+
+      // lib/notify.js: who the General Managers are, and a parameterised notification insert.
+      if (sql.startsWith("SELECT userid FROM users WHERE role = 'General Manager'")) {
+        return { rows: generalManagers.map((userid) => ({ userid })), rowCount: generalManagers.length };
+      }
+      if (sql.startsWith("INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)") && params.length === 5) {
+        const [recipientId, type, entityType, entityId, message] = params;
+        state.notifications.push({ recipientid: recipientId, type, relatedentitytype: entityType, relatedentityid: entityId, message });
         return { rows: [], rowCount: 1 };
       }
 
@@ -217,4 +227,48 @@ test("D-08: a Completed overdue task is never alerted", async () => {
   await sweepScheduleVariance(client);
 
   assert.equal(client.state.notifications.length, 0);
+});
+
+test("the General Manager gets the same milestone alert as the PM (once each, never twice)", async () => {
+  const client = makeFakeDb({
+    generalManagers: ["gm-1", "gm-2"],
+    projects: [{ projectid: "proj-1", projectmanagerid: "pm-1", name: "Alpha" }],
+    milestones: [{ milestoneid: "m-1", projectid: "proj-1", name: "Foundation", duedate: daysFromNow(-1), status: "On Track", completedat: null }],
+    tasks: [{ taskid: "t-1", milestoneid: "m-1", completionpercentage: 0 }],
+  });
+
+  await sweepScheduleVariance(client);
+  assert.deepEqual(client.state.notifications.map((n) => n.recipientid).sort(), ["gm-1", "gm-2", "pm-1"]);
+  const messages = new Set(client.state.notifications.map((n) => n.message));
+  assert.equal(messages.size, 1, "everyone gets the same wording");
+  assert.match([...messages][0], /Foundation/);
+
+  await sweepScheduleVariance(client);
+  assert.equal(client.state.notifications.length, 3, "a second sweep alerts nobody again");
+});
+
+test("the General Manager is told about an overdue task too, and only once", async () => {
+  const client = makeFakeDb({
+    generalManagers: ["gm-1"],
+    projects: [{ projectid: "proj-1", projectmanagerid: "pm-1", name: "Alpha" }],
+    milestones: [{ milestoneid: "m-1", projectid: "proj-1", name: "Foundation", duedate: daysFromNow(30), status: "On Track", completedat: null }],
+    tasks: [{ taskid: "t-1", milestoneid: "m-1", taskname: "Pour slab", duedate: daysFromNow(-2), status: "In Progress", completionpercentage: 0, schedulevariancealertsent: false }],
+  });
+
+  await sweepScheduleVariance(client);
+  const forTask = client.state.notifications.filter((n) => n.relatedentitytype === "Task");
+  assert.deepEqual(forTask.map((n) => n.recipientid).sort(), ["gm-1", "pm-1"]);
+  await sweepScheduleVariance(client);
+  assert.equal(client.state.notifications.filter((n) => n.relatedentitytype === "Task").length, 2);
+});
+
+test("a General Manager who is also the project's PM is not told twice", async () => {
+  const client = makeFakeDb({
+    generalManagers: ["pm-1"],
+    projects: [{ projectid: "proj-1", projectmanagerid: "pm-1", name: "Alpha" }],
+    milestones: [{ milestoneid: "m-1", projectid: "proj-1", name: "Foundation", duedate: daysFromNow(-1), status: "On Track", completedat: null }],
+    tasks: [{ taskid: "t-1", milestoneid: "m-1", completionpercentage: 0 }],
+  });
+  await sweepScheduleVariance(client);
+  assert.equal(client.state.notifications.length, 1);
 });

@@ -12,6 +12,8 @@ export type MobileUser = {
   // Shown as "username.role" once a username is set.
   name: string;
   username?: string | null;
+  // Public URL of the profile picture; missing or null means the initials circle.
+  avatarUrl?: string | null;
   email: string;
   role: MobileRole;
   // false until the current Terms of Use / Privacy Notice is accepted
@@ -52,11 +54,27 @@ export function getSession() {
   return session;
 }
 
+// Screens that show the profile (the top bar) listen here, so a new photo or name appears at once
+// instead of after the next sign-in. Used with useSyncExternalStore.
+const sessionListeners = new Set<() => void>();
+
+export function subscribeSession(listener: () => void) {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
+}
+
+function notifySession() {
+  sessionListeners.forEach((listener) => listener());
+}
+
 export function setSession(nextSession: MobileSession | null) {
   session = nextSession;
   setAuthToken(nextSession?.token ?? "");
   persistSession(nextSession);
   if (nextSession) sessionExpired = false;
+  notifySession();
 }
 
 // Keeps the sign-in alive: swaps the saved refresh token for a new token in the
@@ -167,6 +185,15 @@ export function setUsername(username: string, name: string) {
   if (!session) return;
   session = { ...session, user: { ...session.user, username, name } };
   persistSession(session);
+  notifySession();
+}
+
+// Called by app/settings once the profile picture was saved or removed.
+export function setAvatarUrl(avatarUrl: string | null) {
+  if (!session) return;
+  session = { ...session, user: { ...session.user, avatarUrl } };
+  persistSession(session);
+  notifySession();
 }
 
 export function logout() {

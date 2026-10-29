@@ -23,6 +23,27 @@ async function notify(client, { recipientIds, excludeUserId, type, entityType, e
   }
 }
 
+// Ids of every active General Manager. The GM watches all projects, so this is
+// the recipient list for "the GM should know" notices.
+async function activeGeneralManagerIds(client) {
+  const { rows } = await client.query(
+    "SELECT userid FROM users WHERE role = 'General Manager' AND status = 'Active'"
+  );
+  return rows.map((r) => r.userid);
+}
+
+// One notification to every active General Manager (never the actor).
+async function notifyGeneralManagers(client, { excludeUserId, type, entityType, entityId, message }) {
+  await notify(client, {
+    recipientIds: await activeGeneralManagerIds(client),
+    excludeUserId,
+    type,
+    entityType,
+    entityId,
+    message,
+  });
+}
+
 // Notifications for a ticket STATUS change. Called from logTransition so that
 // every code path that moves a ticket (PM acknowledge/reject/resolve, Purchaser
 // resolve/reject, F8 allocation resolve) produces the right notifications with
@@ -116,4 +137,4 @@ async function notifyTicketTransition(client, { ticketId, toStatus, changedBy })
   }
 }
 
-module.exports = { notify, notifyTicketTransition };
+module.exports = { notify, notifyTicketTransition, activeGeneralManagerIds, notifyGeneralManagers };

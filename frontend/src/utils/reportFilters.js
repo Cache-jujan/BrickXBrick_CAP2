@@ -64,7 +64,18 @@ export function projectDay(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  // Four-digit year, so a year such as 0009 stays "0009" and still parses as a date.
+  return `${String(d.getFullYear()).padStart(4, "0")}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Project dates outside these years are typing mistakes (for example 0009 for
+// 2009). They are shown as saved but never used to work out a report range.
+const MIN_PLAUSIBLE_YEAR = 2000;
+const MAX_PLAUSIBLE_YEAR = 2100;
+function plausibleDay(day) {
+  if (!day) return null;
+  const year = Number(String(day).slice(0, 4));
+  return year >= MIN_PLAUSIBLE_YEAR && year <= MAX_PLAUSIBLE_YEAR ? day : null;
 }
 
 // { start, end } as YYYY-MM-DD or null. end = the day it really finished, else
@@ -87,7 +98,10 @@ const addDays = (day, n) => {
 // that is later). The range is cut to MAX_RANGE_DAYS from its start; `trimmed`
 // says when that happened so the screen can tell the user.
 export function spanOfProjects(projects, today = defaultReportRange().to) {
-  const spans = projects.map(projectSpan).filter((s) => s.start);
+  const spans = projects
+    .map(projectSpan)
+    .map((s) => ({ start: plausibleDay(s.start), end: plausibleDay(s.end) }))
+    .filter((s) => s.start);
   if (spans.length === 0) return null;
   const from = spans.map((s) => s.start).sort()[0];
   const to = spans.map((s) => s.end || (today > s.start ? today : s.start)).sort().at(-1);
@@ -100,7 +114,8 @@ const NICE = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short",
 export function niceDay(day, formatDate) {
   if (!day) return "";
   const [y, m, d] = day.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
+  const date = new Date(2000, m - 1, d);
+  date.setFullYear(y); // new Date(y, ...) turns years 0-99 into 1900-1999
   return formatDate ? formatDate(date) : NICE.format(date);
 }
 

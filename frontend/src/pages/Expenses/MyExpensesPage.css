@@ -18,10 +18,6 @@
   margin-bottom: var(--space-2);
 }
 
-.my-expenses-heading h1 {
-  font-size: var(--text-xl);
-}
-
 .my-expenses-subtitle {
   color: var(--color-ink-soft);
   margin-top: var(--space-2);

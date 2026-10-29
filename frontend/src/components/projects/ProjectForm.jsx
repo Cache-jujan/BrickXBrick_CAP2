@@ -143,6 +143,11 @@ export function ProjectForm({
     if (form.constructionStartDate && form.endDate && form.endDate < form.constructionStartDate) {
       errors.endDate = t("form.err_end_before");
     }
+    // A mistyped year such as 0009 must not be saved (it breaks the Reports page).
+    for (const field of ["startDate", "constructionStartDate", "endDate"]) {
+      const year = Number(String(form[field] || "").slice(0, 4));
+      if (form[field] && (year < 2000 || year > 2100)) errors[field] = t("form.err_date_year");
+    }
     if (!form.projectManagerId) errors.projectManagerId = t("form.err_pm");
     if (mode === "create" && siteManagerRequired && !form.siteManagerId) {
       errors.siteManagerId = t("form.err_sm_required");
@@ -297,6 +302,8 @@ export function ProjectForm({
               label={t("form.date_dev")}
               required
               type="date"
+              min="2000-01-01"
+              max="2100-12-31"
               value={form.startDate}
               error={fieldErrors.startDate}
               onChange={(e) => updateField("startDate", e.target.value)}
@@ -305,6 +312,8 @@ export function ProjectForm({
               label={t("form.date_construction")}
               required
               type="date"
+              min="2000-01-01"
+              max="2100-12-31"
               value={form.constructionStartDate}
               error={fieldErrors.constructionStartDate}
               onChange={(e) => updateField("constructionStartDate", e.target.value)}
@@ -313,6 +322,8 @@ export function ProjectForm({
               label={t("form.date_end")}
               required
               type="date"
+              min="2000-01-01"
+              max="2100-12-31"
               value={form.endDate}
               error={fieldErrors.endDate}
               onChange={(e) => updateField("endDate", e.target.value)}

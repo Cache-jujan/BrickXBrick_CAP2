@@ -25,10 +25,14 @@
 
 .open-requests-controls .field {
   min-width: 260px;
+  margin-bottom: 0;
 }
 
 .open-requests-toggle {
   display: inline-flex;
+  align-items: stretch;
+  height: 46px; /* same height as the store select next to it, so the bottoms line up */
+  box-sizing: border-box;
   padding: 3px;
   border-radius: var(--radius-md, 8px);
   background: var(--color-border, rgba(0, 0, 0, 0.1));
@@ -37,8 +41,9 @@
 .open-requests-toggle-btn {
   border: 0;
   background: transparent;
-  padding: 8px 16px;
+  padding: 0 var(--space-4);
   border-radius: calc(var(--radius-md, 8px) - 2px);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-ink-soft);
   cursor: pointer;
@@ -60,7 +65,8 @@
   border-radius: var(--radius-md, 8px);
   background: var(--color-primary, #bf4307);
   color: #fff;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: 600;
 }
 
 .open-requests-group {
@@ -82,7 +88,8 @@
 
 .open-requests-group-head h2 {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: 600;
   color: var(--color-primary-ink, #8f3705);
 }
 
@@ -93,7 +100,7 @@
   background: var(--color-surface);
   color: var(--color-primary, #bf4307);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .open-requests-list {
@@ -114,6 +121,10 @@
 .open-requests-row-main {
   display: grid;
   gap: 2px;
+}
+
+.open-requests-row-main strong {
+  font-weight: 600;
 }
 
 .open-requests-meta {

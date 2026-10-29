@@ -3,6 +3,8 @@
 // fire a ScheduleVarianceAlert notification the first time it crosses into
 // At Risk/Overdue (not on every recalc — that would spam the PM).
 
+const { notifyGeneralManagers } = require("./notify");
+
 const AT_RISK_WINDOW_DAYS = 3;
 
 function deriveStatus(dueDate, completionPercentage) {
@@ -71,15 +73,20 @@ async function recalcMilestoneProgress(client, milestoneId) {
         const project = projectResult.rows[0];
 
         if (project) {
+            const message = `Milestone "${milestone.name}" on project "${project.name}" is now ${newStatus} — due ${new Date(milestone.duedate).toDateString()}.`;
             await client.query(
                 `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
                  VALUES ($1, 'ScheduleVarianceAlert', 'Milestone', $2, $3)`,
-                [
-                    project.projectmanagerid,
-                    milestoneId,
-                    `Milestone "${milestone.name}" on project "${project.name}" is now ${newStatus} — due ${new Date(milestone.duedate).toDateString()}.`,
-                ]
+                [project.projectmanagerid, milestoneId, message]
             );
+            // The General Manager sees the same schedule warning as the PM.
+            await notifyGeneralManagers(client, {
+                excludeUserId: project.projectmanagerid,
+                type: "ScheduleVarianceAlert",
+                entityType: "Milestone",
+                entityId: milestoneId,
+                message,
+            });
         }
     }
 
@@ -113,15 +120,19 @@ async function sweepScheduleVariance(client) {
             AND t.dueDate < CURRENT_DATE`
     );
     for (const t of overdueTasks.rows) {
+        const message = `Task "${t.taskname}" on project "${t.projectname}" is overdue — due ${new Date(t.duedate).toDateString()}.`;
         await client.query(
             `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
              VALUES ($1, 'ScheduleVarianceAlert', 'Task', $2, $3)`,
-            [
-                t.projectmanagerid,
-                t.taskid,
-                `Task "${t.taskname}" on project "${t.projectname}" is overdue — due ${new Date(t.duedate).toDateString()}.`,
-            ]
+            [t.projectmanagerid, t.taskid, message]
         );
+        await notifyGeneralManagers(client, {
+            excludeUserId: t.projectmanagerid,
+            type: "ScheduleVarianceAlert",
+            entityType: "Task",
+            entityId: t.taskid,
+            message,
+        });
         await client.query(
             "UPDATE tasks SET scheduleVarianceAlertSent = TRUE WHERE taskId = $1",
             [t.taskid]

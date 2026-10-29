@@ -22,7 +22,6 @@
 .submit-expense-header h1 {
   margin: var(--space-2) 0 0;
   color: var(--color-ink);
-  font-size: var(--text-xl);
 }
 
 .submit-expense-back {

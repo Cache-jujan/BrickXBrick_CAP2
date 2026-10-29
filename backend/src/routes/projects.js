@@ -31,6 +31,7 @@ const {
   hideBudgetFrom,
 } = require("../lib/projectRules");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
+const { notifyGeneralManagers } = require("../lib/notify");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -597,6 +598,15 @@ router.patch("/:id/site-manager", requireRole("General Manager", "Project Manage
           projectId: row.projectid,
           message: `You are now the Site Manager of "${row.name}".`,
         });
+        // When the Project Manager makes the swap, the General Manager is told who the new Site Manager is.
+        if (req.user.role === "Project Manager") {
+          await notifyGeneralManagers(client, {
+            type: "ProjectAssigned",
+            entityType: "Project",
+            entityId: row.projectid,
+            message: `${req.user.name} changed the Site Manager of "${row.name}" to ${row.sitemanagername || "a new Site Manager"}.`,
+          });
+        }
       }
       return row;
     });

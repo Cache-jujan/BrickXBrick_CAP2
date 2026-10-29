@@ -1,18 +1,48 @@
-import { useState } from "react";
-import { changePassword, updateUsername } from "../../api/accountApi";
+import { useRef, useState } from "react";
+import { changePassword, removeAvatar, updateUsername, uploadAvatar } from "../../api/accountApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
+import { Avatar } from "../../components/ui/Avatar";
+import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { PasswordField } from "../../components/ui/PasswordField";
+import { PasswordChecklist } from "../../components/ui/PasswordChecklist";
+import { ShieldCheckIcon } from "../../components/ui/icons";
+import { CameraGlyph, CheckSquareGlyph, LockGlyph, MonitorGlyph, RefreshGlyph, UserGlyph } from "../../components/ui/glyphs";
+import { passwordMeetsRules } from "../../utils/passwordRules";
+import { resizeForAvatar } from "../../utils/resizeImage";
 import { useLocale } from "../../i18n/LocaleProvider";
+import "./AccountPage.css";
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
+const AVATAR_TYPES = ["image/jpeg", "image/png"];
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_PICK_MAX_BYTES = 25 * 1024 * 1024; // what may be picked; it is shrunk before it is sent
+
+// Loads a picture into the browser cache, so it appears at once when it replaces the preview.
+function preload(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const done = () => resolve();
+    img.onload = done;
+    img.onerror = done;
+    img.src = url;
+    setTimeout(done, 8000);
+  });
+}
+const TIPS = [
+  { key: "account.tip_1", Icon: LockGlyph },
+  { key: "account.tip_2", Icon: CheckSquareGlyph },
+  { key: "account.tip_3", Icon: MonitorGlyph },
+  { key: "account.tip_4", Icon: RefreshGlyph },
+];
 
 // /account — every signed-in user can set a username and change their password.
 // Others see the username as "username.role".
 export function AccountPage() {
-  const { user, markUsernameChanged } = useAuth();
+  const { user, markUsernameChanged, markAvatarChanged } = useAuth();
   const { t } = useLocale();
 
   const [username, setUsername] = useState(user?.username || "");
@@ -25,8 +55,57 @@ export function AccountPage() {
   const [passwordMsg, setPasswordMsg] = useState(null);
   const [savingPassword, setSavingPassword] = useState(false);
 
+  const fileInput = useRef(null);
+  const [avatarMsg, setAvatarMsg] = useState(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [preview, setPreview] = useState(null); // the chosen picture, shown while it uploads
+
   const roleSlug = String(user?.role || "").toLowerCase().replace(/\s+/g, "-");
   const label = `${username.trim() || "username"}.${roleSlug}`;
+  const initial = (user?.name || user?.username || "?").trim()[0]?.toUpperCase() || "?";
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const canSubmit = !!current && passwordMeetsRules(next) && next === confirm && !savingPassword;
+
+  async function pickAvatar(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so choosing the same file again still fires
+    if (!file) return;
+    if (!AVATAR_TYPES.includes(file.type)) return setAvatarMsg({ type: "error", text: t("account.photo_type") });
+    if (file.size > AVATAR_PICK_MAX_BYTES) return setAvatarMsg({ type: "error", text: t("account.photo_size") });
+    setSavingAvatar(true);
+    setAvatarMsg(null);
+    let local = null;
+    try {
+      const small = await resizeForAvatar(file);
+      if (small.size > AVATAR_MAX_BYTES) throw new Error(t("account.photo_size"));
+      local = URL.createObjectURL(small);
+      setPreview(local);
+      const url = await uploadAvatar(small);
+      await preload(url);
+      markAvatarChanged(url);
+      setAvatarMsg({ type: "success", text: t("account.photo_saved") });
+    } catch (err) {
+      setAvatarMsg({ type: "error", text: extractErrorMessage(err) });
+    } finally {
+      setPreview(null);
+      if (local) URL.revokeObjectURL(local);
+      setSavingAvatar(false);
+    }
+  }
+
+  async function dropAvatar() {
+    setSavingAvatar(true);
+    setAvatarMsg(null);
+    try {
+      await removeAvatar();
+      markAvatarChanged(null);
+      setAvatarMsg({ type: "success", text: t("account.photo_removed") });
+    } catch (err) {
+      setAvatarMsg({ type: "error", text: extractErrorMessage(err) });
+    } finally {
+      setSavingAvatar(false);
+    }
+  }
 
   async function saveUsername(e) {
     e.preventDefault();
@@ -50,7 +129,7 @@ export function AccountPage() {
 
   async function savePassword(e) {
     e.preventDefault();
-    if (next.length < 8) return setPasswordMsg({ type: "error", text: t("settings.password_short") });
+    if (!passwordMeetsRules(next)) return setPasswordMsg({ type: "error", text: t("pw.rules_not_met") });
     if (next !== confirm) return setPasswordMsg({ type: "error", text: t("settings.password_mismatch") });
     setSavingPassword(true);
     setPasswordMsg(null);
@@ -68,29 +147,104 @@ export function AccountPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)", maxWidth: 480 }}>
-      <form onSubmit={saveUsername} style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-        <h2>{t("settings.username")}</h2>
-        <Field
-          label={t("settings.username")}
-          value={username}
-          maxLength={30}
-          autoComplete="username"
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <p className="field-hint">{t("settings.username_hint", { label })}</p>
-        {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
-        <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
-      </form>
+    <div className="account">
+      <header className="account-head">
+        <h1>{t("account.title")}</h1>
+        <p>{t("account.subtitle")}</p>
+      </header>
 
-      <form onSubmit={savePassword} style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-        <h2>{t("settings.change_password")}</h2>
-        <Field label={t("settings.current_password")} type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-        <Field label={t("settings.new_password")} type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
-        <Field label={t("settings.confirm_password")} type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
-        <Button type="submit" disabled={savingPassword || !current || !next}>{t("settings.change_password")}</Button>
-      </form>
+      <div className="account-grid">
+        <div className="account-main">
+          <Card className="account-card">
+            <div className="account-card-head">
+              <span className="account-card-icon"><UserGlyph size={22} /></span>
+              <div>
+                <h2>{t("account.profile_info")}</h2>
+                <p>{t("account.profile_sub")}</p>
+              </div>
+            </div>
+
+            <div className="account-who">
+              <Avatar className="account-avatar" url={preview || user?.avatarUrl} initial={initial} />
+              <div className="account-who-text">
+                <p className="account-who-name">{user?.name}</p>
+                <p className="account-who-role">{user?.role}</p>
+              </div>
+              <div className="account-photo-actions">
+                <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
+                <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
+                  <CameraGlyph size={18} /> {savingAvatar ? t("account.photo_saving") : t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
+                </Button>
+                {user?.avatarUrl && (
+                  <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
+                    {t("account.photo_remove")}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
+
+            <form onSubmit={saveUsername}>
+              <div className="account-row">
+                <Field label={t("settings.username")} value={username} maxLength={30}
+                  autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
+                <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
+              </div>
+              <p className="account-hint">{t("settings.username_hint", { label })}</p>
+              {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
+            </form>
+
+            <div className="account-row account-row-plain">
+              <Field label={t("account.email")} value={user?.email || ""} disabled readOnly />
+            </div>
+            <p className="account-hint">{t("account.email_locked")}</p>
+          </Card>
+
+          <Card className="account-card">
+            <div className="account-card-head">
+              <span className="account-card-icon"><LockGlyph size={22} /></span>
+              <div>
+                <h2>{t("settings.change_password")}</h2>
+                <p>{t("account.password_sub")}</p>
+              </div>
+            </div>
+            <form onSubmit={savePassword}>
+              <div className="account-pw-fields">
+                <PasswordField label={t("settings.current_password")} autoComplete="current-password"
+                  value={current} onChange={(e) => setCurrent(e.target.value)} />
+                <PasswordField label={t("settings.new_password")} autoComplete="new-password"
+                  value={next} onChange={(e) => setNext(e.target.value)} />
+                <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
+                  value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                  error={mismatch ? t("pw.must_match") : undefined} />
+              </div>
+              {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
+              <div className="account-pw-foot">
+                <PasswordChecklist password={next} />
+                <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+
+        <Card className="account-card account-tips">
+          <div className="account-card-head">
+            <span className="account-card-icon"><ShieldCheckIcon size={22} /></span>
+            <div>
+              <h2>{t("account.tips_title")}</h2>
+              <p>{t("account.tips_sub")}</p>
+            </div>
+          </div>
+          <ul>
+            {TIPS.map(({ key, Icon }) => (
+              <li key={key}>
+                <span className="account-tip-icon"><Icon size={20} /></span>
+                <span>{t(key)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
     </div>
   );
 }

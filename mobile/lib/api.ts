@@ -448,6 +448,34 @@ export async function updateUsername(username: string): Promise<{ id: string; na
   return (await readJson(res, "Failed to save the username")).user;
 }
 
+// Sets the profile picture from a local image file. Resolves to its public URL.
+export async function uploadAvatar(uri: string): Promise<string> {
+  await ensureFreshToken();
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/me/avatar`, uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "photo",
+    mimeType: "image/jpeg",
+    // The ngrok header skips its browser-warning page when the backend is tunnelled during testing.
+    headers: { Authorization: `Bearer ${getAuthToken()}`, "ngrok-skip-browser-warning": "1" },
+  });
+  if (result.status === 401) handleUnauthorized();
+  let data: { error?: string; avatarUrl?: string } = {};
+  try {
+    data = JSON.parse(result.body || "{}");
+  } catch {
+    // An HTML answer means the request did not reach this API (wrong URL, a tunnel page, or a backend without this route).
+    throw new Error(`The server did not answer like the API (status ${result.status}). Check EXPO_PUBLIC_API_URL.`);
+  }
+  if (result.status < 200 || result.status >= 300) throw new Error(data.error || "Failed to save the picture");
+  return data.avatarUrl as string;
+}
+
+export async function removeAvatar(): Promise<void> {
+  const res = await apiFetch(`${API_URL}/api/me/avatar`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) await readJson(res, "Failed to remove the picture");
+}
+
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const res = await apiFetch(`${API_URL}/api/me/change-password`, {
     method: "POST",

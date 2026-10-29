@@ -35,6 +35,10 @@ const DEFAULT_SETTINGS = {
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// A year such as 0009 is a typing slip (2009? 2026?). It used to be saved and
+// then broke the Reports page, so project dates must fall inside these years.
+const MIN_PROJECT_YEAR = 2000;
+const MAX_PROJECT_YEAR = 2100;
 
 function httpError(status, message, extra) {
   const err = new Error(message);
@@ -68,6 +72,8 @@ function validateProjectDates({ startDate, constructionStartDate, endDate }) {
       errors.push({ field, message: `${label} is required` });
     } else if (!isIsoDate(value)) {
       errors.push({ field, message: `${label} must be a valid date (YYYY-MM-DD)` });
+    } else if (Number(value.slice(0, 4)) < MIN_PROJECT_YEAR || Number(value.slice(0, 4)) > MAX_PROJECT_YEAR) {
+      errors.push({ field, message: `${label} must be in the years ${MIN_PROJECT_YEAR} to ${MAX_PROJECT_YEAR}` });
     }
   }
   if (errors.length) return errors;
@@ -385,6 +391,8 @@ module.exports = {
   STATUS_TRANSITIONS,
   httpError,
   isIsoDate,
+  MIN_PROJECT_YEAR,
+  MAX_PROJECT_YEAR,
   validateProjectDates,
   normalizeMunicipality,
   parseServiceArea,

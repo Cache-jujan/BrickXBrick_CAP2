@@ -64,6 +64,11 @@ export function AuthProvider({ children }) {
     setUser((current) => (current ? { ...current, username, name } : current));
   }
 
+  // Called after the user sets or removes their profile picture (pages/Account/AccountPage.jsx).
+  function markAvatarChanged(avatarUrl) {
+    setUser((current) => (current ? { ...current, avatarUrl } : current));
+  }
+
   function logout() {
     localStorage.removeItem("bxb_token");
     setUser(null);
@@ -71,7 +76,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, status, login, logout, markTermsAccepted, markUsernameChanged }),
+    () => ({ user, status, login, logout, markTermsAccepted, markUsernameChanged, markAvatarChanged }),
     [user, status]
   );
 

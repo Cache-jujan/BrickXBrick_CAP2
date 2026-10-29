@@ -1,5 +1,17 @@
-.sidebar {
+/* Reserves the rail's width in the page; the sidebar itself may grow past it when it opens on hover. */
+.sidebar-slot {
+  position: relative;
+  z-index: 40;
+  flex-shrink: 0;
   width: var(--sidebar-width);
+  transition: width var(--duration) var(--ease);
+}
+.sidebar-slot-collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar {
+  width: 100%;
   flex-shrink: 0;
   height: 100vh;
   position: sticky;
@@ -13,7 +25,6 @@
 }
 
 .sidebar-collapsed {
-  width: var(--sidebar-width-collapsed);
   padding-left: var(--space-3);
   padding-right: var(--space-3);
 }
@@ -160,6 +171,13 @@
 
 /* Mobile: the sidebar becomes a drawer opened from the topbar. */
 @media (max-width: 900px) {
+  /* No box of its own on a phone: the drawer is fixed, and must stay above the dimmed page. */
+  .sidebar-slot,
+  .sidebar-slot-collapsed {
+    position: static;
+    z-index: auto;
+    width: 0;
+  }
   .sidebar,
   .sidebar-collapsed {
     position: fixed;
@@ -240,4 +258,63 @@
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
   font-weight: 650;
+}
+
+/* Settings sits under the role's own links, set apart by a thin line. */
+.sidebar-link-settings {
+  margin-top: var(--space-3);
+}
+.sidebar-link-settings::before {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  top: calc(var(--space-2) * -1 - 1px);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* The collapsed rail opened by pointing at it: full width, laid over the page with a shadow. */
+.sidebar-peek {
+  width: var(--sidebar-width);
+  box-shadow: 8px 0 24px -8px rgba(0, 0, 0, 0.45);
+}
+
+/* A group row (Submit expense): the arrow sits at the right end of the row. */
+.sidebar-item {
+  position: relative;
+}
+.sidebar-link-group {
+  padding-right: 40px;
+}
+.sidebar-group-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+.sidebar-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.sidebar-group-toggle:focus-visible,
+.sidebar-link:focus-visible,
+.sidebar-sublink:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+/* The app-wide link hover colour (a dark brown) is unreadable on the dark sidebar; keep these white. */
+.sidebar a.sidebar-link:not(.btn):not(.back-link):hover,
+.sidebar a.sidebar-sublink:not(.btn):not(.back-link):hover,
+.sidebar a.sidebar-link-active:not(.btn):not(.back-link):hover {
+  color: #fff;
 }
