@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCopySource, getProjectTemplate } from "../../api/projectTemplatesApi";
 import { Button } from "../ui/Button";
+import { BuildingGlyph, CheckSquareGlyph, FileGlyph, FlagGlyph, HelmetGlyph, LayersGlyph, WavesGlyph } from "../ui/glyphs";
 import "./TemplateSummary.css";
 
 const SIZE_LABEL = { small: "Small", large: "Large", custom: "Custom" };
@@ -36,6 +37,16 @@ export function summarize(detail) {
   }
   const ordered = ["Planning", "Construction"].filter((p) => phases.has(p)).map((p) => phases.get(p));
   return { milestones: milestones.length, tasks, optional, phases: ordered, handlers: [...handlers.entries()] };
+}
+
+// One icon per kind of work; anything new falls back to a neutral one.
+export function CategoryIcon({ type, size = 24 }) {
+  const name = String(type || "").toLowerCase();
+  const Icon = /drain|flood|water/.test(name) ? WavesGlyph
+    : /build|resid|commerc|house/.test(name) ? BuildingGlyph
+    : /civil|road|bridge|work/.test(name) ? HelmetGlyph
+    : LayersGlyph;
+  return <Icon size={size} />;
 }
 
 /**
@@ -86,7 +97,8 @@ export function TemplateSummaryDialog({ value, template, onClose, onUse }) {
     <div className="modal-overlay" role="presentation" onClick={onClose}>
       <div className="tsum" role="dialog" aria-modal="true" aria-labelledby="tsum-title" onClick={(e) => e.stopPropagation()}>
         <header className="tsum-head">
-          <div>
+          <span className="tsum-icon"><CategoryIcon type={value.projectType} size={26} /></span>
+          <div className="tsum-head-text">
             <h2 id="tsum-title">{value.name}</h2>
             <p>{kind}</p>
           </div>
@@ -101,9 +113,9 @@ export function TemplateSummaryDialog({ value, template, onClose, onUse }) {
           {summary && (
             <>
               <dl className="tsum-stats">
-                <div><dd>{summary.milestones}</dd><dt>milestones</dt></div>
-                <div><dd>{summary.tasks}</dd><dt>tasks</dt></div>
-                {summary.optional > 0 && <div><dd>{summary.optional}</dd><dt>optional documents</dt></div>}
+                <div><FlagGlyph size={22} /><dd>{summary.milestones}</dd><dt>milestones</dt></div>
+                <div><CheckSquareGlyph size={22} /><dd>{summary.tasks}</dd><dt>tasks</dt></div>
+                {summary.optional > 0 && <div><FileGlyph size={22} /><dd>{summary.optional}</dd><dt>optional documents</dt></div>}
                 {summary.handlers.length > 0 && (
                   <div className="tsum-who">
                     <dt>Handled by</dt>

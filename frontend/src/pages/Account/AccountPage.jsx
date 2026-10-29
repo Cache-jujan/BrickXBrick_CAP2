@@ -10,6 +10,7 @@ import { Field } from "../../components/ui/Field";
 import { PasswordField } from "../../components/ui/PasswordField";
 import { PasswordChecklist } from "../../components/ui/PasswordChecklist";
 import { ShieldCheckIcon } from "../../components/ui/icons";
+import { CameraGlyph, CheckSquareGlyph, LockGlyph, MonitorGlyph, RefreshGlyph, UserGlyph } from "../../components/ui/glyphs";
 import { passwordMeetsRules } from "../../utils/passwordRules";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./AccountPage.css";
@@ -17,7 +18,12 @@ import "./AccountPage.css";
 const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
 const AVATAR_TYPES = ["image/jpeg", "image/png"];
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
-const TIP_KEYS = ["account.tip_1", "account.tip_2", "account.tip_3", "account.tip_4"];
+const TIPS = [
+  { key: "account.tip_1", Icon: LockGlyph },
+  { key: "account.tip_2", Icon: CheckSquareGlyph },
+  { key: "account.tip_3", Icon: MonitorGlyph },
+  { key: "account.tip_4", Icon: RefreshGlyph },
+];
 
 // /account — every signed-in user can set a username and change their password.
 // Others see the username as "username.role".
@@ -123,73 +129,98 @@ export function AccountPage() {
         <p>{t("account.subtitle")}</p>
       </header>
 
-      <Card className="account-panel">
-        <section className="account-col">
-          <div className="account-who">
-            <Avatar className="account-avatar" url={user?.avatarUrl} initial={initial} />
-            <div className="account-who-text">
-              <p className="account-who-name">{user?.name}</p>
-              <p className="account-who-role">{user?.role}</p>
-            </div>
-            <div className="account-photo-actions">
-              <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
-              <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
-                {t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
-              </Button>
-              {user?.avatarUrl && (
-                <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
-                  {t("account.photo_remove")}
-                </Button>
-              )}
-            </div>
-          </div>
-          {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
-
-          <form onSubmit={saveUsername}>
-            <h2>{t("account.profile_info")}</h2>
-            <div className="account-fields">
+      <div className="account-grid">
+        <div className="account-main">
+          <Card className="account-card">
+            <div className="account-card-head">
+              <span className="account-card-icon"><UserGlyph size={22} /></span>
               <div>
+                <h2>{t("account.profile_info")}</h2>
+                <p>{t("account.profile_sub")}</p>
+              </div>
+            </div>
+
+            <div className="account-who">
+              <Avatar className="account-avatar" url={user?.avatarUrl} initial={initial} />
+              <div className="account-who-text">
+                <p className="account-who-name">{user?.name}</p>
+                <p className="account-who-role">{user?.role}</p>
+              </div>
+              <div className="account-photo-actions">
+                <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={pickAvatar} />
+                <Button type="button" variant="secondary" disabled={savingAvatar} onClick={() => fileInput.current?.click()}>
+                  <CameraGlyph size={18} /> {t(user?.avatarUrl ? "account.photo_change" : "account.photo_add")}
+                </Button>
+                {user?.avatarUrl && (
+                  <Button type="button" variant="ghost" disabled={savingAvatar} onClick={dropAvatar}>
+                    {t("account.photo_remove")}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {avatarMsg && <Banner tone={avatarMsg.type}>{avatarMsg.text}</Banner>}
+
+            <form onSubmit={saveUsername}>
+              <div className="account-row">
                 <Field label={t("settings.username")} value={username} maxLength={30}
                   autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
-                <p className="account-hint">{t("settings.username_hint", { label })}</p>
+                <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
               </div>
+              <p className="account-hint">{t("settings.username_hint", { label })}</p>
+              {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
+            </form>
+
+            <div className="account-row account-row-plain">
               <Field label={t("account.email")} value={user?.email || ""} disabled readOnly />
             </div>
-            {usernameMsg && <Banner tone={usernameMsg.type}>{usernameMsg.text}</Banner>}
-            <div className="account-actions">
-              <Button type="submit" disabled={savingUsername}>{t("settings.save")}</Button>
-            </div>
-          </form>
+            <p className="account-hint">{t("account.email_locked")}</p>
+          </Card>
 
-          <div className="account-tips">
-            <h2><ShieldCheckIcon size={16} /> {t("account.tips_title")}</h2>
-            <ul>
-              {TIP_KEYS.map((key) => <li key={key}>{t(key)}</li>)}
-            </ul>
+          <Card className="account-card">
+            <div className="account-card-head">
+              <span className="account-card-icon"><LockGlyph size={22} /></span>
+              <div>
+                <h2>{t("settings.change_password")}</h2>
+                <p>{t("account.password_sub")}</p>
+              </div>
+            </div>
+            <form onSubmit={savePassword}>
+              <div className="account-pw-fields">
+                <PasswordField label={t("settings.current_password")} autoComplete="current-password"
+                  value={current} onChange={(e) => setCurrent(e.target.value)} />
+                <PasswordField label={t("settings.new_password")} autoComplete="new-password"
+                  value={next} onChange={(e) => setNext(e.target.value)} />
+                <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
+                  value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                  error={mismatch ? t("pw.must_match") : undefined} />
+              </div>
+              {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
+              <div className="account-pw-foot">
+                <PasswordChecklist password={next} />
+                <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+
+        <Card className="account-card account-tips">
+          <div className="account-card-head">
+            <span className="account-card-icon"><ShieldCheckIcon size={22} /></span>
+            <div>
+              <h2>{t("account.tips_title")}</h2>
+              <p>{t("account.tips_sub")}</p>
+            </div>
           </div>
-        </section>
-
-        <section className="account-col">
-          <form onSubmit={savePassword}>
-            <h2>{t("settings.change_password")}</h2>
-            <p className="account-sub">{t("account.password_sub")}</p>
-            <PasswordField label={t("settings.current_password")} autoComplete="current-password"
-              value={current} onChange={(e) => setCurrent(e.target.value)} />
-            <div className="account-fields">
-              <PasswordField label={t("settings.new_password")} autoComplete="new-password"
-                value={next} onChange={(e) => setNext(e.target.value)} />
-              <PasswordField label={t("settings.confirm_password")} autoComplete="new-password"
-                value={confirm} onChange={(e) => setConfirm(e.target.value)}
-                error={mismatch ? t("pw.must_match") : undefined} />
-            </div>
-            <PasswordChecklist password={next} />
-            {passwordMsg && <Banner tone={passwordMsg.type}>{passwordMsg.text}</Banner>}
-            <div className="account-actions">
-              <Button type="submit" disabled={!canSubmit}>{t("pw.update")}</Button>
-            </div>
-          </form>
-        </section>
-      </Card>
+          <ul>
+            {TIPS.map(({ key, Icon }) => (
+              <li key={key}>
+                <span className="account-tip-icon"><Icon size={20} /></span>
+                <span>{t(key)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
     </div>
   );
 }
