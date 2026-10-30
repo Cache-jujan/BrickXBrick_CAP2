@@ -1,5 +1,4 @@
 // adminUsers.js — F1 account actions. System Administrator only.
-const crypto = require("crypto");
 const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
@@ -181,12 +180,13 @@ router.post("/:id/unlock", async (req, res) => {
 // user an email link to set their own password at /set-password:
 //   - account never confirmed (invite not used yet) -> the invite is sent again
 //   - active account                                  -> a password-recovery email
-// After the email is sent, the old password is replaced with a random one
-// nobody knows, so it stops working at once (useful when an account may be
-// compromised), and any login lockout is cleared. A hacked admin account
-// therefore can't take over other accounts: the new password is chosen from
-// the user's own Gmail, and admins can't change a user's email.
-/** Resend an invite or send recovery mail, retiring confirmed users' old passwords and clearing lockouts. */
+// The user's current password is NOT touched here. It keeps working until they
+// open the link and save a new one, so pressing the button by mistake, or an
+// email that never arrives, does not lock anyone out. Any login lockout is
+// cleared. A hacked admin account can't take over other accounts: the new
+// password is chosen from the user's own Gmail, and admins can't change a
+// user's email.
+/** Resend an invite or send recovery mail, and clear any login lockout. The current password stays valid. */
 router.post("/:id/send-password-email", async (req, res) => {
   try {
     const user = await loadUser(req.params.id);
@@ -214,12 +214,6 @@ router.post("/:id/send-password-email", async (req, res) => {
       });
       if (error) return res.status(400).json({ error: error.message });
       channel = "invite";
-    }
-
-    if (confirmed) {
-      const throwaway = crypto.randomBytes(32).toString("base64url");
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(user.supabaseuserid, { password: throwaway });
-      if (error) console.error(`Could not retire the old password for ${user.userid}:`, error.message);
     }
 
     await query(
