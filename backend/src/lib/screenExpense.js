@@ -36,7 +36,7 @@ function adjustmentReason(lines) {
 async function screenExpense(expenseID, { query } = {}) {
   // Lazy require so unit tests can pass a fake query without a database.
   const runQuery = query || require("./db").query;
-  const { checkDuplicate, checkVendor, checkTicketMismatch } =
+  const { checkDuplicate, checkVendor, describeTicketMismatch } =
     createFraudScreening({ query: runQuery });
 
   // SELECT * gives lowercase keys, which is what the checks read.
@@ -75,9 +75,9 @@ async function screenExpense(expenseID, { query } = {}) {
     await addFlag("Vendor_Validation", reason);
   }
 
-  // Layer 3: ticket vs receipt. Today it returns true/false; after the
-  // Layer 3 rewrite it returns a reason string, which is stored as-is.
-  const mismatch = await checkTicketMismatch(expense);
+  // Layer 3: ticket vs receipt. Returns which parts differ (material,
+  // quantity, store) as the reason, or false when the expense matches.
+  const mismatch = await describeTicketMismatch(expense);
   if (mismatch) {
     const reason = typeof mismatch === "string" ? mismatch : TICKET_MISMATCH_REASON;
     await addFlag("Ticket_Mismatch", reason);
