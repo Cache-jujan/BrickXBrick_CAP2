@@ -1,5 +1,20 @@
 // F9: Multi-layer expense screening
 
+// Case- and spacing-insensitive text for comparing names ("CEMENT " = "cement").
+function normalize(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+// lineitems is jsonb, but some rows hold it double-encoded (a JSON string of
+// the array), which pg hands back as a string. Read both shapes.
+function parseLineItems(lineItems) {
+  let items = lineItems;
+  if (typeof items === "string") {
+    try { items = JSON.parse(items); } catch { return []; }
+  }
+  return Array.isArray(items) ? items : [];
+}
+
 function createFraudScreening({ query } = {}) {
   const runQuery = query || require("./db").query;
 
@@ -105,15 +120,21 @@ function createFraudScreening({ query } = {}) {
   // Layer 3: Ticket/receipt mismatch validation
   //
   // T2c-L3: when the ticket is BOM-linked (tickets.bomitemid is set), material
-  // matching is BOM-aware — the expense line items are checked for a matching
-  // bomItemID instead of free-text matching. If the ticket has no bomitemid,
-  // we fall back to the original free-text substring match.
-  async function checkTicketMismatch(expense) {
+  // matching is BOM-aware: a receipt line matches when it carries the ticket's
+  // bomItemID, was matched to this ticket on the review screen (matchedTicketID),
+  // or was left unlinked but reads exactly the requested material (an OCR line
+  // "CEMENT" against a "CEMENT" request). A line linked to a different BOM item
+  // never matches by its text. If the ticket has no bomitemid, we fall back to
+  // the original free-text substring match.
+  //
+  // Returns the list of things that differ (empty when the expense matches), so
+  // the flag can say which one it was instead of "material, quantity or store".
+  async function findTicketMismatches(expense) {
     const ticketId =
       expense?.ticketid ?? expense?.ticketID;
 
     if (!ticketId) {
-      return false;
+      return [];
     }
 
     const ticketResult = await runQuery(
@@ -124,31 +145,36 @@ function createFraudScreening({ query } = {}) {
     );
 
     if (ticketResult.rowCount === 0) {
-      return false;
+      return [];
     }
 
     const ticket = ticketResult.rows[0];
 
     // Report tickets do not have structured procurement data.
     if (!ticket.materialtype) {
-      return false;
+      return [];
     }
 
-    const lineItems =
-      expense.lineitems ?? expense.lineItems;
+    const itemsArray = parseLineItems(
+      expense.lineitems ?? expense.lineItems
+    );
 
-    const itemsArray = Array.isArray(lineItems) ? lineItems : [];
-
-    let materialMismatch;
+    const problems = [];
 
     if (ticket.bomitemid) {
-      // BOM-aware path: mismatch unless at least one expense line item
-      // carries the same bomItemID as the ticket.
-      const bomMatch = itemsArray.some(
-        (item) => item?.bomItemID === ticket.bomitemid
-      );
+      const requestedName = normalize(ticket.materialtype);
+      const bomMatch = itemsArray.some((item) => {
+        if (!item) return false;
+        if (item.bomItemID === ticket.bomitemid) return true;
+        if (item.matchedTicketID != null && String(item.matchedTicketID) === String(ticketId)) return true;
+        return !item.bomItemID && normalize(item.description) === requestedName;
+      });
 
-      materialMismatch = !bomMatch;
+      if (!bomMatch) {
+        problems.push(
+          `Material: no receipt line is matched to the requested "${ticket.materialtype}"`
+        );
+      }
     } else {
       // Fallback path: ticket has no BOM link, use free-text matching.
       const items = itemsArray
@@ -161,46 +187,57 @@ function createFraudScreening({ query } = {}) {
         ${expense.vendorname || expense.vendorName || ""}
       `.toLowerCase();
 
-      materialMismatch =
-        !expenseText.includes(
-          String(ticket.materialtype).toLowerCase()
+      if (!expenseText.includes(String(ticket.materialtype).toLowerCase())) {
+        problems.push(
+          `Material: "${ticket.materialtype}" is not on the receipt`
         );
+      }
     }
 
     // More than requested is always a mismatch. Less is one too, unless the expense
     // is a portion of an allocation: a request is bought in several trips, so a
     // smaller quantity is expected there.
-    let quantityMismatch = false;
     if (ticket.quantity != null && expense.quantity != null) {
       const requested = Number(ticket.quantity);
       const bought = Number(expense.quantity);
-      if (bought > requested) {
-        quantityMismatch = true;
-      } else if (bought < requested) {
-        quantityMismatch = !(await isAllocationPortion(expense));
+      const differs =
+        bought > requested ||
+        (bought < requested && !(await isAllocationPortion(expense)));
+      if (differs) {
+        problems.push(
+          `Quantity: ${bought} on the receipt, ${requested} requested`
+        );
       }
     }
 
-    const vendorMismatch =
+    const expenseVendor = expense.vendorname || expense.vendorName || "";
+    if (
       ticket.vendorname &&
-      String(
-        expense.vendorname || expense.vendorName || ""
-      ).trim().toLowerCase() !==
-        String(ticket.vendorname)
-          .trim()
-          .toLowerCase();
+      normalize(expenseVendor) !== normalize(ticket.vendorname)
+    ) {
+      problems.push(
+        `Store: "${expenseVendor || "none"}" on the receipt, "${ticket.vendorname}" requested`
+      );
+    }
 
-    return Boolean(
-      materialMismatch ||
-      quantityMismatch ||
-      vendorMismatch
-    );
+    return problems;
+  }
+
+  async function checkTicketMismatch(expense) {
+    return (await findTicketMismatches(expense)).length > 0;
+  }
+
+  // The flag reason: which parts differ, or false when nothing does.
+  async function describeTicketMismatch(expense) {
+    const problems = await findTicketMismatches(expense);
+    return problems.length > 0 ? problems.join("; ") : false;
   }
 
   return {
     checkDuplicate,
     checkVendor,
     checkTicketMismatch,
+    describeTicketMismatch,
   };
 }
 
@@ -212,4 +249,5 @@ module.exports = {
   checkDuplicate: defaultScreening.checkDuplicate,
   checkVendor: defaultScreening.checkVendor,
   checkTicketMismatch: defaultScreening.checkTicketMismatch,
+  describeTicketMismatch: defaultScreening.describeTicketMismatch,
 };
