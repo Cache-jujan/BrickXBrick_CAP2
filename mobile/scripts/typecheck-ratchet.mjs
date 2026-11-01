@@ -14,7 +14,7 @@ const out = `${res.stdout ?? ''}${res.stderr ?? ''}`;
 
 // Line numbers drift on unrelated edits, so key on file + code + first message line.
 const current = out
-  .split('\n')
+  .split(/\r?\n/)
   .map((l) => l.match(/^(.+?)\(\d+,\d+\): error (TS\d+): (.*)$/))
   .filter(Boolean)
   .map((m) => `${m[1]} ${m[2]} ${m[3].slice(0, 120)}`)
@@ -33,7 +33,7 @@ if (update) {
 }
 
 const baseline = existsSync(baselinePath)
-  ? readFileSync(baselinePath, 'utf8').split('\n').filter(Boolean)
+  ? readFileSync(baselinePath, 'utf8').split(/\r?\n/).filter(Boolean)
   : [];
 
 const remaining = [...baseline];
