@@ -72,6 +72,9 @@ export function ProjectForm({
   busyLabel,
   cancelTo,
   budgetLocked = false,
+  // Edit only: once a project is active, the target dates of development and of
+  // construction can no longer change (the completion date still can).
+  datesLocked = false,
   // Create only: content shown under the form fields (the document checklist),
   // the project type fixed by a chosen template, and a Site Manager that must be
   // chosen because the starting structure has construction tasks.
@@ -137,7 +140,9 @@ export function ProjectForm({
     if (!form.startDate) errors.startDate = t("form.err_start");
     if (!form.constructionStartDate) errors.constructionStartDate = t("form.err_construction");
     if (!form.endDate) errors.endDate = t("form.err_end");
-    if (form.startDate && form.constructionStartDate && form.constructionStartDate < form.startDate) {
+    // A locked date can't be fixed here, so its order isn't re-checked (the server
+    // still checks it); otherwise old bad data would make the form impossible to save.
+    if (!datesLocked && form.startDate && form.constructionStartDate && form.constructionStartDate < form.startDate) {
       errors.constructionStartDate = t("form.err_construction_before");
     }
     if (form.constructionStartDate && form.endDate && form.endDate < form.constructionStartDate) {
@@ -306,30 +311,33 @@ export function ProjectForm({
               max="2100-12-31"
               value={form.startDate}
               error={fieldErrors.startDate}
+              disabled={datesLocked}
               onChange={(e) => updateField("startDate", e.target.value)}
             />
             <Field
               label={t("form.date_construction")}
               required
               type="date"
-              min="2000-01-01"
+              min={form.startDate || "2000-01-01"}
               max="2100-12-31"
               value={form.constructionStartDate}
               error={fieldErrors.constructionStartDate}
+              disabled={datesLocked || !form.startDate}
               onChange={(e) => updateField("constructionStartDate", e.target.value)}
             />
             <Field
               label={t("form.date_end")}
               required
               type="date"
-              min="2000-01-01"
+              min={form.constructionStartDate || form.startDate || "2000-01-01"}
               max="2100-12-31"
               value={form.endDate}
               error={fieldErrors.endDate}
+              disabled={!form.constructionStartDate}
               onChange={(e) => updateField("endDate", e.target.value)}
             />
           </div>
-          <p className="create-project-hint">{t("form.timeline_hint")}</p>
+          <p className="create-project-hint">{datesLocked ? t("form.dates_locked_note") : t("form.timeline_hint")}</p>
 
           </section>
 

@@ -30,6 +30,7 @@ const {
   projectListScope,
   hideBudgetFrom,
 } = require("../lib/projectRules");
+const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
 
@@ -364,6 +365,9 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
       }
 
       const fields = validateProjectBody(req.body, existing);
+      // Once the project is active the target dates of development and of
+      // construction are fixed, for everyone (the completion date can still move).
+      assertDatesUnlocked(existing, fields);
       // Client: the price given to the client is the BOM total, so once the
       // BOM is approved the budget follows it (reopen the BOM to change it).
       if (Math.abs(Number(fields.budget) - Number(existing.budget)) > 0.005) {
