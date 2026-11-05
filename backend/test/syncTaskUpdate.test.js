@@ -19,6 +19,7 @@ const U1 = "aaaaaaaa-0000-4000-8000-000000000001";
 const U2 = "aaaaaaaa-0000-4000-8000-000000000002";
 const U3 = "aaaaaaaa-0000-4000-8000-000000000003";
 const EXPENSE_UUID = "bbbbbbbb-0000-4000-8000-000000000001";
+const EXPENSE_TICKET = "55555555-5555-4555-8555-555555555555";
 const photo = (taskId = T1, name = "a.jpg") => `${BASE}/tasks/${taskId}/${name}`;
 
 const state = {};
@@ -65,7 +66,11 @@ async function run(sql, params = []) {
     state.logs.push(row);
     return { rowCount: 1, rows: [row] };
   }
-  // expenses (only used for the per-item isolation test)
+  // expenses (only used for the per-item isolation test): the request the expense is for
+  if (text.startsWith("select projectid, status, assignedto, quantity from tickets")) {
+    return { rowCount: 1, rows: [{ projectid: "44444444-4444-4444-8444-444444444444", status: "Acknowledged", assignedto: "purchaser-1", quantity: 1 }] };
+  }
+  if (text.startsWith("update tickets set status = 'resolved'")) return { rowCount: 1, rows: [] };
   if (text.startsWith("select status from projects")) return { rowCount: 1, rows: [{ status: "Active" }] };
   if (text.startsWith("insert into expenses")) return (state.expenses++, { rowCount: 1, rows: [{ expenseid: "e-1" }] });
   if (text.startsWith("insert into synced_actions")) return (state.synced.add(params[0]), { rowCount: 1, rows: [] });
@@ -74,6 +79,8 @@ async function run(sql, params = []) {
 
 stub("../src/lib/db", { query: run, withTransaction: async (fn) => fn({ query: run }) });
 stub("../src/middleware/auth", { requireAuth: (req, _res, next) => ((req.user = state.me), next()) });
+const realAvailability = require("../src/lib/ticketAvailability");
+stub("../src/lib/ticketAvailability", { ...realAvailability, isTicketFulfilled: async () => false });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/screenExpense", { screenExpense: async () => ({ flagTypes: [] }) });
 const realR2 = require("../src/lib/r2");
@@ -244,6 +251,7 @@ const expense = () =>
   item(
     EXPENSE_UUID,
     {
+      ticketID: EXPENSE_TICKET,
       projectID: "44444444-4444-4444-8444-444444444444",
       vendorName: "Cebu Builders",
       amount: 1500,
@@ -302,4 +310,14 @@ test("a missing uuid and an unknown type are rejected per item", async () => {
 test("an empty batch is still a 400", async () => {
   reset();
   assert.equal((await sync([])).status, 400);
+});
+
+test("an offline expense with no request (no ticketID) is rejected with MISSING_TICKET", async () => {
+  reset();
+  state.me = { id: "purchaser-1", role: "Purchaser" };
+  const { data } = expense();
+  const { ticketID, ...noTicket } = data;
+  const res = await sync([item(EXPENSE_UUID, noTicket, "expense")]);
+  assert.equal(codeOf(res, EXPENSE_UUID), "MISSING_TICKET");
+  assert.equal(state.expenses, 0);
 });
