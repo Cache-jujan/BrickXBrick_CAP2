@@ -9,7 +9,6 @@
 // UC-08-01 backup actors. Scope per role lives in lib/openRequests.js.
 //
 //   GET  /open-requests  the To-buy list
-//   POST /trip-cost      a cost with no request (gas, toll): split evenly over ticked projects
 //   POST /preview        run the split, write nothing
 //   POST /               run the split and save it in one transaction. The client may send
 //                        its own commonReceiptID: sending the same one again (a retry after
@@ -31,10 +30,8 @@ const {
   validateAllocationBody,
   validateAllocationSum,
   validateCloseShortReason,
-  parseMoneyCents,
   UUID_PATTERN,
 } = require("../lib/allocationValidation");
-const { REASONS, NOTE_MAX, splitTripCost } = require("../lib/tripCostPlan");
 const { planAllocation, presentPlan, submitNoteFor } = require("../lib/allocationPlan");
 const { ALLOCATION_ROLES, loadOpenRequests, buildLockQuery, ticketScope } = require("../lib/openRequests");
 
@@ -278,120 +275,6 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
       screening[expense.expenseID] = await screen(expense.expenseID);
     }
 
-    res.status(201).json({ ...saved, screening });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// The projects, among the ones asked for, that this caller may charge petty cash to.
-async function chargeableProjects(client, user, projectIds) {
-  if (user.role === "Project Manager" || user.role === "General Manager") {
-    const scope = user.role === "Project Manager" ? "AND projectmanagerid = $2" : "";
-    const params = user.role === "Project Manager" ? [projectIds, user.id] : [projectIds];
-    const result = await client.query(
-      `SELECT projectid FROM projects WHERE status = 'Active' AND projectid = ANY($1::uuid[]) ${scope}`,
-      params
-    );
-    return new Set(result.rows.map((row) => String(row.projectid).toLowerCase()));
-  }
-  const open = await loadOpenRequests(user, client);
-  return new Set(open.map((row) => String(row.projectID).toLowerCase()));
-}
-
-// POST /trip-cost — petty cash: a cost with no request to match (snacks, gas for delivery,
-// allowance, other). The route keeps its first name, "trip-cost", so existing apps keep
-// working. A note saying what the money was for is required. The caller
-// ticks the projects it served and the receipt is split evenly between them: one
-// ticketless expense per project, each approved by that project's Project Manager.
-// Who can be charged: a Purchaser or Site Manager, the projects where they have an open
-// request; a Project Manager, the Active projects they manage; a General Manager, any
-// Active project. (A Project Manager cannot approve their own expense; a GM does.)
-router.post("/trip-cost", requireRole("Purchaser", "Site Manager", "Project Manager", "General Manager"), async (req, res, next) => {
-  try {
-    const { receiptImageURL, vendorName, receiptDate, reason } = req.body ?? {};
-    const clientReceiptID = req.body?.commonReceiptID == null ? null : String(req.body.commonReceiptID).toLowerCase();
-    if (clientReceiptID && !UUID.test(clientReceiptID)) throw httpError(400, "commonReceiptID must be a UUID");
-    if (typeof receiptImageURL !== "string" || !receiptImageURL.trim()) throw httpError(400, "receiptImageURL is required");
-    if (typeof vendorName !== "string" || !vendorName.trim()) throw httpError(400, "vendorName is required");
-    if (typeof receiptDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(receiptDate) || Number.isNaN(Date.parse(receiptDate))) {
-      throw httpError(400, "receiptDate must be a valid YYYY-MM-DD date");
-    }
-    if (!REASONS.includes(reason)) throw httpError(400, `reason must be one of: ${REASONS.join(", ")}`);
-    if (!Array.isArray(req.body?.projectIds) || req.body.projectIds.length === 0) {
-      throw httpError(400, "Pick at least one project");
-    }
-    const projectIds = [...new Set(req.body.projectIds.map((id) => String(id).toLowerCase()))];
-    if (projectIds.some((id) => !UUID_PATTERN.test(id))) throw httpError(400, "projectIds must be UUIDs");
-    if (!(await receiptImageExists(receiptImageURL.trim()))) {
-      throw httpError(400, "receiptImageURL must reference a receipt uploaded via POST /api/receipts/scan");
-    }
-
-    const totalCents = parseMoneyCents(req.body.receiptTotal, "receiptTotal");
-    const bir = normalizeBirFields({ tin: req.body.tin, birPermitNumber: req.body.birPermitNumber, birNumber: req.body.birNumber });
-    const { birValidationStatus } = classifyBir(bir);
-    // The approver needs to know what the money was for, so the note is not optional.
-    const extraNote = typeof req.body.note === "string" ? req.body.note.trim().slice(0, NOTE_MAX) : "";
-    if (!extraNote) throw httpError(400, "note is required: say what this expense was for");
-    // "Petty cash:" marks the row (GET /expenses also still recognises the older "Trip cost:").
-    const submitNote = `Petty cash: ${reason}. ${extraNote}`;
-
-    const saved = await withTransaction(async (client) => {
-      if (clientReceiptID) {
-        const earlier = await loadSaved(client, clientReceiptID, req.user.id);
-        if (earlier) return earlier;
-      }
-
-      const allowed = await chargeableProjects(client, req.user, projectIds);
-      if (projectIds.some((id) => !allowed.has(id))) {
-        throw httpError(
-          400,
-          req.user.role === "Purchaser" || req.user.role === "Site Manager"
-            ? "Petty cash can only be charged to a project where you have an open request"
-            : "Petty cash can only be charged to an Active project you manage"
-        );
-      }
-
-      const commonReceiptID = clientReceiptID ?? crypto.randomUUID();
-      const expenses = [];
-      for (const portion of splitTripCost(totalCents, projectIds)) {
-        const amount = formatMoney(portion.amountCents);
-        const inserted = await client.query(
-          `INSERT INTO expenses
-             (projectid, submittedby, ticketid, vendorname, amount, receiptdate, category,
-              birvalidationstatus, receiptimageurl, birnumber, tin, birpermitnumber,
-              lineitems, quantity, submitnote)
-           VALUES ($1, $2, NULL, $3, $4, $5, 'Other', $6, $7, $8, $9, $10, $11, 1, $12)
-           RETURNING ${EXPENSE_COLUMNS}`,
-          [
-            portion.projectID,
-            req.user.id,
-            vendorName.trim(),
-            amount,
-            receiptDate,
-            birValidationStatus,
-            receiptImageURL.trim(),
-            bir.birNumber,
-            bir.tin,
-            bir.birPermitNumber,
-            JSON.stringify([{ description: `${reason} (petty cash)`, quantity: 1, amount: portion.amountCents / 100, unitPrice: portion.amountCents / 100 }]),
-            submitNote,
-          ]
-        );
-        await client.query(
-          `INSERT INTO receiptallocations (expenseid, projectid, allocatedamount, commonreceiptid)
-           VALUES ($1, $2, $3, $4)`,
-          [inserted.rows[0].expenseID, portion.projectID, amount, commonReceiptID]
-        );
-        expenses.push(inserted.rows[0]);
-      }
-      return { commonReceiptID, expenses, resolvedTicketIDs: [], stillOpenTicketIDs: [], warnings: [] };
-    });
-
-    if (saved.replayed) return res.status(200).json(saved);
-
-    const screening = {};
-    for (const expense of saved.expenses) screening[expense.expenseID] = await screen(expense.expenseID);
     res.status(201).json({ ...saved, screening });
   } catch (error) {
     next(error);
