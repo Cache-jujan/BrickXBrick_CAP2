@@ -49,9 +49,8 @@ export default function CaptureScreen() {
 
   // Which project a receipt is for is never assumed. The person picks it here once the
   // photo is taken; only when they have exactly one project is it filled in for them.
-  // Petty cash (snacks, gas, allowance...) has its own project step later, and a receipt opened from a
-  // request already has that request's project.
-  const needsProject = isSplit && draft.kind !== "trip";
+  // A receipt opened from a request already has that request's project.
+  const needsProject = isSplit;
   const [projects, setProjects] = useState<ProjectChoice[]>([]);
   const [projectsReady, setProjectsReady] = useState(false);
   // "unset" = not chosen yet, "multi" = more than one project, otherwise the project.
@@ -99,7 +98,6 @@ export default function CaptureScreen() {
       fileName: picked.name,
       fileType: picked.type,
       ...(isSplit && scanScope ? { projectIds: scanScope.projectIds, projectNames: scanScope.projectNames } : {}),
-      ...(isSplit && draft.kind === "trip" ? { kind: "trip" as const } : {}),
     };
   }
 
@@ -273,11 +271,6 @@ export default function CaptureScreen() {
             <Text style={styles.contextTitle} numberOfLines={2}>
               {t("mx.scoped_chip", { projects: draft.scope.projectNames.join(", ") })}
             </Text>
-          </View>
-        )}
-        {isSplit && draft.kind === "trip" && (
-          <View style={styles.contextChip}>
-            <Text style={styles.contextTitle} numberOfLines={1}>{t("mx.trip_chip")}</Text>
           </View>
         )}
         {!isSplit && (
