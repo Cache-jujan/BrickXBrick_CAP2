@@ -1,7 +1,6 @@
-/* Each page sets data-mode; the colours below are what make the three pages look different. */
+/* Each page sets data-mode; the colours below are what make the two pages look different. */
 .submit-expense-page[data-mode="submit"] { --mode: #bf4307; --mode-dark: #9e3505; --mode-tint: #fcebe0; }
 .submit-expense-page[data-mode="split"]  { --mode: #1d4ed8; --mode-dark: #1e3a8a; --mode-tint: #e3ecff; }
-.submit-expense-page[data-mode="petty"]  { --mode: #15803d; --mode-dark: #166534; --mode-tint: #dcf5e4; }
 /* Buttons, focus rings and chips on the page follow the page's colour. */
 .submit-expense-page[data-mode] {
   --color-brick: var(--mode);
@@ -41,7 +40,6 @@
 .mode-tab svg { width: 18px; height: 18px; }
 .mode-tab-submit svg { color: #bf4307; }
 .mode-tab-split svg { color: #1d4ed8; }
-.mode-tab-petty svg { color: #15803d; }
 .mode-tab:hover { background: var(--color-surface-muted); }
 .mode-tab-on, .mode-tab-on:hover { background: var(--mode); border-color: var(--mode); color: #fff; }
 .mode-tab-on svg { color: #fff; }
