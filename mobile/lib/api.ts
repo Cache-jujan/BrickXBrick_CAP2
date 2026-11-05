@@ -590,33 +590,6 @@ export async function submitAllocation(body: AllocationSubmission): Promise<Allo
   return readJson(res, "Failed to submit the split");
 }
 
-export type TripCostSubmission = {
-  receiptImageURL: string;
-  vendorName: string;
-  receiptDate: string;
-  receiptTotal: number;
-  // What the money was for (the buttons on the Petty cash screen).
-  reason: "Snacks" | "Gas" | "Allowance" | "Other";
-  // Required: a few words saying what the expense was for (the server rejects it empty).
-  note: string;
-  projectIds: string[];
-  tin?: string | null;
-  birPermitNumber?: string | null;
-  birNumber?: string | null;
-  commonReceiptID: string;
-};
-
-// Petty cash: a cost with no request (snacks, gas for delivery, allowance, other), shared
-// evenly between the ticked projects. The route is still called "trip-cost".
-export async function submitTripCost(body: TripCostSubmission): Promise<AllocationResult> {
-  const res = await apiFetch(`${API_URL}/api/allocations/trip-cost`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(body),
-  });
-  return readJson(res, "Failed to send the petty cash");
-}
-
 // "That's all I could buy": close a part-bought request with a reason.
 export async function closeShortRequest(ticketID: string, reason: string): Promise<void> {
   const res = await apiFetch(`${API_URL}/api/allocations/close-short/${ticketID}`, {
