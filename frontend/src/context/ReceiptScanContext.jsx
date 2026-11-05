@@ -16,7 +16,7 @@ const SCAN_ROLES = ["General Manager", "Project Manager"];
 const POLL_MS = 4000;
 const TOAST_MS = 10000;
 // Where each kind of scan is reviewed.
-export const SCAN_PAGES = { submit: "/expenses/new", split: "/expenses/split", petty: "/expenses/trip-cost" };
+export const SCAN_PAGES = { submit: "/expenses/new", split: "/expenses/split" };
 
 const ReceiptScanContext = createContext(null);
 

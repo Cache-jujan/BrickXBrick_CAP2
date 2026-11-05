@@ -12,21 +12,16 @@ const ReceiptIcon = () => (
 const SplitIcon = () => (
   <svg {...ICON_PROPS}><path d="M12 3v6" /><path d="M12 9c0 4-6 4-6 9" /><path d="M12 9c0 4 6 4 6 9" /><path d="m3 15 3 3 3-3M15 15l3 3 3-3" /></svg>
 );
-const CoinsIcon = () => (
-  <svg {...ICON_PROPS}><circle cx="12" cy="12" r="9" /><path d="M14.5 9.5c-.6-.8-1.5-1.2-2.5-1.2-1.4 0-2.5.8-2.5 1.9 0 2.6 5 1.4 5 3.9 0 1.1-1.1 1.9-2.5 1.9-1 0-2-.4-2.6-1.2M12 6.5v1.8M12 15.9v1.6" /></svg>
-);
-
 export const EXPENSE_MODES = [
   { id: "submit", to: "/expenses/new", labelKey: "nav.submit_expense", useKey: "mode.submit_use", Icon: ReceiptIcon },
   { id: "split", to: "/expenses/split", labelKey: "nav.split_receipt", useKey: "mode.split_use", Icon: SplitIcon },
-  { id: "petty", to: "/expenses/trip-cost", labelKey: "nav.trip_cost", useKey: "mode.petty_use", Icon: CoinsIcon },
 ];
 
 /**
- * Top of the Submit expense, Split receipt and Petty cash pages: a big coloured title for the
- * page you are on, and tabs to jump to the other two.
+ * Top of the Submit expense and Split receipt pages: a big coloured title for the
+ * page you are on, and a tab to jump to the other.
  *
- * @param {{ mode: "submit"|"split"|"petty", role?: string }} props
+ * @param {{ mode: "submit"|"split", role?: string }} props
  */
 export function ExpenseModeBar({ mode, role }) {
   const { t } = useLocale();

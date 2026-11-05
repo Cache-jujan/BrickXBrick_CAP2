@@ -13,7 +13,6 @@ import "./Sidebar.css";
 // Ways to submit an expense other than a single receipt for one request; listed under "Submit expense".
 const SUBMIT_EXPENSE_CHILDREN = [
   { to: "/expenses/split", label: "nav.split_receipt" },
-  { to: "/expenses/trip-cost", label: "nav.trip_cost" },
 ];
 
 // alerts: "live" reads the badge count from GET /api/blockchain/alerts (real
