@@ -21,6 +21,7 @@ import { ProjectDropdown } from "@/components/project-dropdown";
 import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
+import { RequestDetailsSheet } from "@/components/request-details-sheet";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
 import { deleteQueuedPhoto } from "@/lib/sync/task-photo";
@@ -47,6 +48,8 @@ export function ToBuy() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   // The request whose "close, that's all I could buy" reasons are showing.
   const [closingId, setClosingId] = useState<string | null>(null);
+  // The request whose details sheet is open (tap a request to open it).
+  const [detail, setDetail] = useState<OpenRequest | null>(null);
   const [view, setView] = useState<"store" | "project">("project");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // "Which project is this receipt for?" sheet, opened by Snap receipt while no project is picked.
@@ -206,6 +209,21 @@ export function ToBuy() {
     ]);
   }
 
+  // "Snap receipt for this request" in the details sheet: the receipt goes to this
+  // one request (single mode), the same way an item under "Other" works.
+  function snapForRequest(request: OpenRequest) {
+    setDetail(null);
+    reset();
+    setTicket({
+      ticketId: request.ticketID,
+      projectId: request.projectID,
+      projectName: request.projectName,
+      subject: request.subject,
+      budget: request.approvedBudget == null ? undefined : String(request.approvedBudget),
+    });
+    router.push("/expense/capture");
+  }
+
   function openOther(ticket: Ticket) {
     reset();
     setTicket({
@@ -314,10 +332,19 @@ export function ToBuy() {
               const progress = progressOf(request);
               const unit = request.materialType;
               return (
-                <View key={request.ticketID} style={styles.request}>
-                  <Text style={styles.requestTitle} numberOfLines={2}>
-                    {request.subject}
-                  </Text>
+                <Pressable
+                  key={request.ticketID}
+                  onPress={() => setDetail(request)}
+                  style={({ pressed }) => [styles.request, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityHint={t("rd.open_hint")}
+                >
+                  <View style={styles.requestHead}>
+                    <Text style={[styles.requestTitle, styles.requestTitleInRow]} numberOfLines={2}>
+                      {request.subject}
+                    </Text>
+                    <IconSymbol name="chevron.right" size={20} color={COLORS.muted} />
+                  </View>
                   <Text style={styles.requestMeta} numberOfLines={1}>
                     {t("tb.need_line", { quantity: formatQty(request.requestedQuantity), material: unit, project: request.projectName })}
                   </Text>
@@ -361,7 +388,7 @@ export function ToBuy() {
                       ) : null}
                     </>
                   ) : null}
-                </View>
+                </Pressable>
               );
             })}
 
@@ -390,6 +417,9 @@ export function ToBuy() {
 
         {empty && <StateCard kind="empty" title={t("tb.empty_title")} body={t("tb.empty_body")} />}
       </ScrollView>
+
+      {/* Site Managers see the details too; filing a receipt for one request stays the Purchaser's. */}
+      <RequestDetailsSheet request={detail} canSnap={!isSiteManager} onSnap={snapForRequest} onClose={() => setDetail(null)} />
 
       {/* Always in reach, just above the tab bar. */}
       <View style={styles.pinned}>
@@ -439,7 +469,9 @@ const styles = StyleSheet.create({
   allBannerCount: { fontSize: 13, fontFamily: FONT.bold, color: SOFT.text },
 
   request: { gap: 4, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, minHeight: MIN_TAP },
+  requestHead: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   requestTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
+  requestTitleInRow: { flex: 1 },
   requestMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
   track: { height: 6, borderRadius: 3, backgroundColor: COLORS.border, overflow: "hidden", marginTop: 4 },
   fill: { height: 6, borderRadius: 3, backgroundColor: SOFT.fill },

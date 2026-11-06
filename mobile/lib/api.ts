@@ -501,6 +501,13 @@ export type OpenRequest = {
   approvedBudget: number | null;
   remainingBudget: number | null;
   createdAt: string;
+  // For the request details sheet. Optional: a list saved on the phone before
+  // the backend sent these (or an older backend) simply leaves them out.
+  unit?: string | null;
+  neededBy?: string | null; // "YYYY-MM-DD"
+  description?: string | null;
+  requestedByName?: string | null;
+  approvedByName?: string | null;
 };
 
 export type SplitLine = { description: string; quantity: number; amount: number; bomItemID?: string | null };
