@@ -69,12 +69,21 @@ async function fakeQuery(sql, params = []) {
   return { rowCount: 0, rows: [] };
 }
 
+// Pair the INSERT's column list with its values, so tests read a value by
+// column name. Reading by position broke whenever a column was added or
+// removed (requestedBudget was removed from the insert in Nov 2026).
+function insertedRow(text, params) {
+  const columns = text.slice(text.indexOf("(") + 1, text.indexOf(")")).split(",").map((c) => c.trim());
+  return Object.fromEntries(columns.map((column, i) => [column, params[i]]));
+}
+
 const client = {
   query: async (sql, params = []) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     if (text.startsWith("insert into tickets")) {
-      state.inserted.push(params);
-      return { rowCount: 1, rows: [{ ticketid: "ticket-1", subject: params[3], status: params[14], assignedto: params[15] }] };
+      const row = insertedRow(text, params);
+      state.inserted.push(row);
+      return { rowCount: 1, rows: [{ ticketid: "ticket-1", subject: row.subject, status: row.status, assignedto: row.assignedto }] };
     }
     if (text.startsWith("update tickets")) {
       state.updated.push(params);
@@ -165,16 +174,16 @@ test("PM can assign a Material Request to the project's Site Manager: created Ac
   const res = await call("POST", "/api/tickets", materialRequest(SM_HERE));
   assert.equal(res.status, 201, JSON.stringify(res.body));
   assert.equal(state.inserted.length, 1);
-  const params = state.inserted[0];
-  assert.equal(params[14], "Acknowledged");
-  assert.equal(params[15], SM_HERE);
+  const row = state.inserted[0];
+  assert.equal(row.status, "Acknowledged");
+  assert.equal(row.assignedto, SM_HERE);
 });
 
 test("PM can still assign a Material Request to a Purchaser", async () => {
   reset();
   const res = await call("POST", "/api/tickets", materialRequest(PURCHASER));
   assert.equal(res.status, 201, JSON.stringify(res.body));
-  assert.equal(state.inserted[0][15], PURCHASER);
+  assert.equal(state.inserted[0].assignedto, PURCHASER);
 });
 
 test("PM can still assign a Work Item to a Purchaser", async () => {
@@ -195,8 +204,8 @@ test("PM can assign a Work Item to the project's Site Manager too", async () => 
   reset();
   const res = await call("POST", "/api/tickets", workItem(SM_HERE));
   assert.equal(res.status, 201, JSON.stringify(res.body));
-  assert.equal(state.inserted[0][14], "Acknowledged");
-  assert.equal(state.inserted[0][15], SM_HERE);
+  assert.equal(state.inserted[0].status, "Acknowledged");
+  assert.equal(state.inserted[0].assignedto, SM_HERE);
 });
 
 test("the assigned Site Manager can resolve the ticket", async () => {

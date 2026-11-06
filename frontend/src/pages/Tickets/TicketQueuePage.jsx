@@ -106,8 +106,9 @@ export function TicketQueuePage() {
       setTickets(rows);
       setPurchasers(availablePurchasers);
       setVendors(approvedVendors);
-      // Seed the approved-budget inputs: prefer the BOM figure (qty × unit
-      // cost) for on-BOM Material Requests, else the SM's requested budget.
+      // Seed the approved-budget inputs with the BOM figure (qty × unit cost)
+      // for on-BOM Material Requests; otherwise the PM types it. Site Managers
+      // no longer give a budget (post-consultation fix, Nov 2026).
       // Purchaser select starts empty — no silent default.
       setApprovedBudgets((current) => {
         const next = { ...current };
@@ -117,9 +118,7 @@ export function TicketQueuePage() {
               const bom = t.bomUnitCost != null && t.quantity != null
                 ? Number(t.bomUnitCost) * Number(t.quantity)
                 : null;
-              next[t.ticketid] = bom != null
-                ? String(Math.round(bom * 100) / 100)
-                : (t.requestedbudget == null ? "" : String(t.requestedbudget));
+              next[t.ticketid] = bom != null ? String(Math.round(bom * 100) / 100) : "";
             }
           }
         }
@@ -295,7 +294,6 @@ export function TicketQueuePage() {
       unit: ticket.unit || "",
       materialType: ticket.materialtype || "",
       vendorName: ticket.vendorname || "",
-      requestedBudget: ticket.requestedbudget == null ? "" : String(ticket.requestedbudget),
       notInBomReason: ticket.notinbomreason || "",
     });
     setEditing({ ticket });
@@ -324,11 +322,6 @@ export function TicketQueuePage() {
       payload.quantity = q;
       payload.vendorName = editForm.vendorName;
     }
-    if (isMR) {
-      const b = Number(editForm.requestedBudget);
-      if (!Number.isFinite(b) || b < 0) { setEditError(tr("tf.err_requested_budget")); return; }
-      payload.requestedBudget = b;
-    }
     if ((isMR && !onBom) || isWork) {
       if (!editForm.materialType.trim()) { setEditError(tr("tq.err_material")); return; }
       if (!editForm.unit.trim()) { setEditError(tr("tq.err_unit")); return; }
@@ -345,7 +338,6 @@ export function TicketQueuePage() {
     try {
       const updated = await updateTicket(t.ticketid, payload);
       setTickets((cur) => cur.map((item) => (item.ticketid === t.ticketid ? { ...item, ...updated } : item)));
-      setApprovedBudgets((cur) => ({ ...cur, [t.ticketid]: updated.requestedbudget == null ? (cur[t.ticketid] ?? "") : String(updated.requestedbudget) }));
       setEditing(null);
       setEditForm(null);
     } catch (err) {
@@ -688,9 +680,6 @@ function TicketCard(props) {
           <div><dt>{tr("bom.aria_quantity")}</dt><dd>{ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
           <div><dt>{tr("tq.pref_vendor")}</dt><dd>{ticket.vendorname || "—"}</dd></div>
           <div><dt>{tr("tq.needed_by")}</dt><dd>{ticket.neededby ? formatDate(ticket.neededby, DAY_OPTIONS) : tr("tq.not_given")}</dd></div>
-          {ticket.tickettype === "Material Request" && (
-            <div><dt>{tr("tq.sm_requested")}</dt><dd>{ticket.requestedbudget == null ? tr("tq.not_provided") : PESO.format(Number(ticket.requestedbudget))}</dd></div>
-          )}
         </dl>
       )}
 
@@ -931,9 +920,6 @@ function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendor
               <option value="">{tr("split.none")}</option>
               {vendors.map((v) => (<option key={v.vendorID} value={v.vendorName}>{v.vendorName}</option>))}
             </Field>
-          )}
-          {isMR && (
-            <Field label={tr("tq.sm_budget")} type="number" min="0" step="0.01" value={editForm.requestedBudget} onChange={upd("requestedBudget")} required />
           )}
           {isReport && <p className="modal-sub">{tr("tq.report_only")}</p>}
         </div>

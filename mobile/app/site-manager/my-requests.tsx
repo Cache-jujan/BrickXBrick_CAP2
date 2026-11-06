@@ -239,8 +239,8 @@ function RequestCard({
   } else if (ticket.materialtype) {
     metaBits.push(ticket.materialtype);
   }
+  // Only the PM's approved budget is shown; Site Managers no longer give one.
   if (ticket.approvedbudget != null) metaBits.push(t("mr.approved_amt", { amount: formatPeso(ticket.approvedbudget) }));
-  else if (ticket.requestedbudget != null) metaBits.push(t("mr.requested_amt", { amount: formatPeso(ticket.requestedbudget) }));
 
   const body = (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
