@@ -9,6 +9,7 @@ import { SearchableSelect } from "../ui/SearchableSelect";
 import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./TicketForm.css";
 
 // Sentinel value for the BOM-item select when the material isn't in the BOM.
@@ -516,16 +517,15 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
           )}
 
           {isMaterialReq && isPM && (
+            // Text box so the amount shows thousands commas; the form keeps the plain number.
             <Field
               label={t("tf.approved_budget")}
               required
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="decimal"
               placeholder="0.00"
-              value={form.approvedBudget}
+              value={formatAmountInput(form.approvedBudget)}
               error={fieldErrors.approvedBudget}
-              onChange={(e) => updateField("approvedBudget", e.target.value)}
+              onChange={(e) => updateField("approvedBudget", parseAmountInput(e.target.value))}
             />
           )}
         </div>

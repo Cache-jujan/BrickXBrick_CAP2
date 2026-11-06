@@ -33,6 +33,7 @@ import { AccountPage } from "./pages/Account/AccountPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
 import { MilestoneTimelinePreviewPage } from "./pages/Projects/MilestoneTimelinePreviewPage";
 import { LocaleProvider } from "./i18n/LocaleProvider";
+import { ToastProvider } from "./components/ui/Toast";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
@@ -58,6 +59,9 @@ function AppShell() {
 export default function App() {
   return (
     <LocaleProvider>
+      {/* Toasts sit inside LocaleProvider (they translate their close label) and
+          outside the router, so a toast survives a page change. */}
+      <ToastProvider>
       <BrowserRouter>
         <AuthProvider>
         <Routes>
@@ -255,6 +259,7 @@ export default function App() {
         </Routes>
         </AuthProvider>
       </BrowserRouter>
+      </ToastProvider>
     </LocaleProvider>
   );
 }
