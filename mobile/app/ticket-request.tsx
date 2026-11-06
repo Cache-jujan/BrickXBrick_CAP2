@@ -208,29 +208,31 @@ export default function TicketRequestScreen() {
     return bomItems.find((it) => it.bomItemId === card.bomItemID)?.unit ?? null;
   }
 
-  // Returns an error string for a card, or null if it's valid.
-  function validateCard(card: Card): string | null {
+  // Every problem on a card, in the order the fields appear on screen, so the
+  // user sees all of what's missing at once (an empty list means it's valid).
+  function validateCard(card: Card): string[] {
+    const problems: string[] = [];
     const qty = Number(card.quantity);
+    const qtyMissing = !card.quantity || !Number.isFinite(qty) || qty <= 0;
     if (card.ticketType === "Report") {
-      if (!card.reportText.trim()) return t("tr.v_describe");
-      return null;
+      if (!card.reportText.trim()) problems.push(t("tr.v_describe"));
+      return problems;
     }
-    // Material Request / Work Item share quantity.
-    if (!card.quantity || !Number.isFinite(qty) || qty <= 0) return t("tf.err_quantity");
-
     if (card.ticketType === "Work Item") {
-      if (!card.materialType.trim()) return t("tr.v_needed");
-      if (!card.unit.trim()) return t("tq.err_unit");
-      return null;
+      if (!card.materialType.trim()) problems.push(t("tr.v_needed"));
+      if (qtyMissing) problems.push(t("tf.err_quantity"));
+      if (!card.unit.trim()) problems.push(t("tq.err_unit"));
+      return problems;
     }
     // Material Request
-    if (!card.bomItemID) return t("tf.err_bom_item");
+    if (!card.bomItemID) problems.push(t("tf.err_bom_item"));
     if (card.bomItemID === NOT_IN_BOM) {
-      if (!card.materialType.trim()) return t("tr.v_material");
-      if (!card.unit.trim()) return t("tq.err_unit");
-      if (!card.notInBomReason.trim()) return t("tr.v_reason");
+      if (!card.materialType.trim()) problems.push(t("tr.v_material"));
+      if (!card.notInBomReason.trim()) problems.push(t("tr.v_reason"));
     }
-    return null;
+    if (qtyMissing) problems.push(t("tf.err_quantity"));
+    if (card.bomItemID === NOT_IN_BOM && !card.unit.trim()) problems.push(t("tq.err_unit"));
+    return problems;
   }
 
   function cap100(text: string) {
@@ -291,12 +293,14 @@ export default function TicketRequestScreen() {
   }
 
   const cardErrors = cards.map(validateCard);
-  const canSubmit = cardErrors.every((e) => e === null) && !submitting && !!project;
-  // The button stays tappable while the form is incomplete. What is missing is always
-  // listed above it; tapping the button adds the red outline on each ticket.
+  const canSubmit = cardErrors.every((list) => list.length === 0) && !submitting && !!project;
+  // The button stays tappable while the form is incomplete. Everything that is missing
+  // is listed above it; tapping the button adds the red outline on each ticket.
   const blockedReasons = [
     !project && t("tr.choose_project"),
-    ...cardErrors.map((e, i) => e && (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
+    ...cardErrors.flatMap((list, i) =>
+      list.map((e) => (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
+    ),
   ];
 
   async function handleSubmit() {
@@ -429,7 +433,7 @@ export default function TicketRequestScreen() {
         const k = (field: string) => `${card.id}:${field}`;
 
         return (
-          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index] && fieldErrorStyle]}>
+          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index].length > 0 && fieldErrorStyle]}>
             <View style={styles.ticketCardHead}>
               <Text style={styles.ticketCardTitle}>{t("tr.ticket_card", { n: index + 1 })}</Text>
               {cards.length > 1 && (
@@ -438,9 +442,9 @@ export default function TicketRequestScreen() {
                 </Pressable>
               )}
             </View>
-            {triedSubmit && cardErrors[index] ? (
-              <Text style={styles.cardError}>{cardErrors[index]}</Text>
-            ) : null}
+            {triedSubmit && cardErrors[index].length > 0
+              ? cardErrors[index].map((e) => <Text key={e} style={styles.cardError}>{e}</Text>)
+              : null}
 
             <Dropdown
               label={t("tr.type")}
@@ -572,7 +576,12 @@ export default function TicketRequestScreen() {
         </Pressable>
       )}
 
-      <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
+      {/* Own gap so the box doesn't touch "Add another ticket" (the shared box has no top margin). */}
+      {blockedReasons.some(Boolean) && (
+        <View style={styles.blockedGap}>
+          <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
+        </View>
+      )}
       <Pressable onPress={handleSubmit} disabled={submitting} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
           {submitting
@@ -713,6 +722,7 @@ const styles = StyleSheet.create({
 
   // Ticket card
   cardError: { color: "#B42318", fontSize: 13, fontWeight: "700", marginBottom: 6 },
+  blockedGap: { marginTop: 16 },
   ticketCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
   ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
