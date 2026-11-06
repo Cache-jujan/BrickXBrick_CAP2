@@ -75,7 +75,11 @@ async function getTicket(ticketId) {
 // Two creators:
 //   Site Manager    raises a request on their own assigned project. It starts
 //                   Pending; the PM acknowledges it later (assigns a Purchaser,
-//                   confirms the budget). Material Requests carry requestedBudget.
+//                   sets the budget). The Site Manager gives no budget and no
+//                   vendor: only the PM sets the budget (post-consultation fix,
+//                   Nov 2026). A budget or vendor sent by a Site Manager is
+//                   ignored, not rejected, so older app versions and offline-
+//                   queued requests still go through.
 //   Project Manager creates directly on a project they manage, to tell the
 //                   Purchaser what to buy this phase. Because the PM is the
 //                   approver, the ticket is created already Acknowledged: the PM
@@ -100,7 +104,6 @@ async function createTicketRecord(client, user, body) {
             quantity,
             unit,
             vendorName,
-            requestedBudget,
             approvedBudget,
             assignedTo,
             bomItemID,
@@ -137,8 +140,8 @@ async function createTicketRecord(client, user, body) {
         }
 
         // Shared procurement context for Material Request / Work Item.
-        // Vendor is optional: a Site Manager may not know where to buy, so the
-        // Project Manager can fill it in when acknowledging the ticket.
+        // Vendor comes from the Project Manager only (on create, or by editing a
+        // Site Manager's pending ticket). A Site Manager's vendor is ignored.
         if (isMaterialReq || isWorkItem) {
             if (quantity === undefined || quantity === null) {
                 const err = new Error("Material Request and Work Item tickets require a quantity");
@@ -172,14 +175,9 @@ async function createTicketRecord(client, user, body) {
             throw err;
         }
 
-        // Budgets differ by creator:
-        //   SM Material Request -> requestedBudget (the PM confirms it later)
-        //   PM Material Request -> approvedBudget  (the PM is approving now)
-        if (isSM && isMaterialReq && (typeof requestedBudget !== "number" || !Number.isFinite(requestedBudget) || requestedBudget < 0)) {
-            const err = new Error("Material Request tickets require a non-negative requestedBudget in PHP");
-            err.status = 400;
-            throw err;
-        }
+        // Only the PM gives a budget:
+        //   SM Material Request -> no budget; the PM sets approvedBudget when acknowledging
+        //   PM Material Request -> approvedBudget now (the PM is approving now)
         if (isPM && isMaterialReq && (typeof approvedBudget !== "number" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
             const err = new Error("A Project Manager's Material Request requires a non-negative approvedBudget in PHP");
             err.status = 400;
@@ -369,7 +367,7 @@ async function createTicketRecord(client, user, body) {
 
         // Creator-dependent columns.
         const status = isPM ? "Acknowledged" : "Pending";
-        const requestedBudgetValue = isSM && isMaterialReq ? requestedBudget : null;
+        const vendorNameValue = isPM && typeof vendorName === "string" && vendorName.trim() ? vendorName.trim() : null;
         const approvedBudgetValue = isPM && isMaterialReq ? approvedBudget : null;
         const assignedToValue = isPM ? assignedTo : null;
         const acknowledgedByValue = isPM ? user.id : null;
@@ -379,10 +377,10 @@ async function createTicketRecord(client, user, body) {
             const insertResult = await client.query(
                 `INSERT INTO tickets
                    (projectId, submittedBy, ticketType, subject, description, photoURL,
-                    materialType, quantity, unit, vendorName, requestedBudget,
+                    materialType, quantity, unit, vendorName,
                     bomItemID, notInBom, notInBomReason,
                     status, assignedTo, acknowledgedBy, approvedBudget, resubmittedFromId, neededBy, acknowledgedAt)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, ${acknowledgedAtSql})
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${acknowledgedAtSql})
                  RETURNING *`,
                 [
                     projectID,
@@ -394,8 +392,7 @@ async function createTicketRecord(client, user, body) {
                     resolvedMaterialType,
                     quantity ?? null,
                     resolvedUnit,
-                    vendorName || null,
-                    requestedBudgetValue,
+                    vendorNameValue,
                     resolvedBomItemID,
                     resolvedNotInBom,
                     resolvedNotInBomReason,
@@ -998,7 +995,9 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
         const isWorkItem = ticket.tickettype === "Work Item";
         const onBom = ticket.bomitemid != null; // on-BOM MR → material/unit locked
 
-        const { subject, description, quantity, unit, materialType, vendorName, requestedBudget, notInBomReason } = req.body;
+        // No requestedBudget: Site Managers no longer give a budget. The PM sets
+        // the budget when acknowledging (PATCH /:id/acknowledge -> approvedBudget).
+        const { subject, description, quantity, unit, materialType, vendorName, notInBomReason } = req.body;
 
         if (typeof subject !== "string" || !subject.trim()) {
             const err = new Error("subject is required");
@@ -1022,18 +1021,8 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
                 throw err;
             }
             set("quantity", q);
-            // Vendor is optional (nullable) — the SM may not know it.
+            // Vendor is optional (nullable) — only the PM sets it.
             set("vendorName", typeof vendorName === "string" && vendorName.trim() ? vendorName.trim() : null);
-        }
-
-        if (isMaterialReq) {
-            const b = Number(requestedBudget);
-            if (!Number.isFinite(b) || b < 0) {
-                const err = new Error("requestedBudget must be 0 or more");
-                err.status = 400;
-                throw err;
-            }
-            set("requestedBudget", b);
         }
 
         // Material + unit are creator-supplied only when not on the BOM.

@@ -9,6 +9,7 @@ import { SearchableSelect } from "../ui/SearchableSelect";
 import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./TicketForm.css";
 
 // Sentinel value for the BOM-item select when the material isn't in the BOM.
@@ -33,7 +34,6 @@ const EMPTY_FORM = {
   quantity: "",
   unit: "",
   vendorName: "",
-  requestedBudget: "",
   approvedBudget: "",
   assignedTo: "",
   bomItemID: "",
@@ -42,9 +42,11 @@ const EMPTY_FORM = {
 
 // The ticket create form, shared by the standalone CreateTicketPage (Site
 // Manager) and the "New ticket" modal on the PM's Ticket Queue. All the role
-// logic lives here: a Site Manager raises a request (Pending); a Project
-// Manager creates directly (straight to the Purchaser) and sets the approved
-// budget. The caller decides what happens on success / cancel.
+// logic lives here: a Site Manager raises a request (Pending) with no budget
+// and no vendor; a Project Manager creates directly (straight to the
+// Purchaser) and sets the vendor and the approved budget. Only the PM gives a
+// budget (post-consultation fix, Nov 2026). The caller decides what happens on
+// success / cancel.
 //
 // onSuccess(ticket, { isPM }) — called after the ticket is created.
 // onCancel()                  — called when the user backs out.
@@ -61,7 +63,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState("");
   const [vendors, setVendors] = useState([]);
-  const [vendorsLoading, setVendorsLoading] = useState(true);
+  // Only the PM picks a vendor, so only the PM loads the list.
+  const [vendorsLoading, setVendorsLoading] = useState(isPM);
   const [vendorsError, setVendorsError] = useState("");
   const [purchasers, setPurchasers] = useState([]);
   const [purchasersLoading, setPurchasersLoading] = useState(false);
@@ -86,14 +89,15 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   }, []);
 
   useEffect(() => {
+    if (!isPM) return undefined;
     let cancelled = false;
     listApprovedVendors()
       .then((data) => { if (!cancelled) setVendors(data); })
       .catch((err) => { if (!cancelled) setVendorsError(extractErrorMessage(err, t("errors.load_vendors"))); })
       .finally(() => { if (!cancelled) setVendorsLoading(false); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per role; a language change must not refetch
+  }, [isPM]);
 
   // A PM must say who buys at creation (the ticket is created already
   // acknowledged), so load the buyers for them: the Purchasers, plus the chosen
@@ -170,7 +174,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       if (form.quantity === "" || !Number.isFinite(Number(form.quantity)) || Number(form.quantity) <= 0) {
         errors.quantity = t("tf.err_quantity");
       }
-      if (!form.vendorName.trim()) errors.vendorName = t("tf.err_vendor");
+      if (isPM && !form.vendorName.trim()) errors.vendorName = t("tf.err_vendor");
       if (isPM && !form.assignedTo) errors.assignedTo = t("tf.err_buyer");
     }
 
@@ -193,13 +197,9 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         if (!form.materialType.trim()) errors.materialType = t("tf.err_material_type");
         if (!form.notInBomReason.trim()) errors.notInBomReason = t("tf.err_reason");
       }
-      // SM states a requested budget; the PM sets the approved budget directly.
-      if (isPM) {
-        if (form.approvedBudget === "" || !Number.isFinite(Number(form.approvedBudget)) || Number(form.approvedBudget) < 0) {
-          errors.approvedBudget = t("tf.err_approved_budget");
-        }
-      } else if (form.requestedBudget === "" || !Number.isFinite(Number(form.requestedBudget)) || Number(form.requestedBudget) < 0) {
-        errors.requestedBudget = t("tf.err_requested_budget");
+      // Only the PM gives a budget; a Site Manager's request has none.
+      if (isPM && (form.approvedBudget === "" || !Number.isFinite(Number(form.approvedBudget)) || Number(form.approvedBudget) < 0)) {
+        errors.approvedBudget = t("tf.err_approved_budget");
       }
     }
 
@@ -229,8 +229,10 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
     if (isMaterialReq || isWorkItem) {
       payload.quantity = Number(form.quantity);
-      payload.vendorName = form.vendorName.trim();
-      if (isPM) payload.assignedTo = form.assignedTo; // PM says who buys now: a Purchaser, or the project's Site Manager
+      if (isPM) {
+        payload.vendorName = form.vendorName.trim();
+        payload.assignedTo = form.assignedTo; // PM says who buys now: a Purchaser, or the project's Site Manager
+      }
       // On-BOM Material Requests derive their unit server-side from the BOM
       // item; only send a unit when the creator picked one.
       if ((isMaterialReq && notInBom) || isWorkItem) payload.unit = form.unit;
@@ -239,11 +241,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       payload.materialType = form.materialType.trim();
     }
     if (isMaterialReq) {
-      if (isPM) {
-        payload.approvedBudget = Number(form.approvedBudget);
-      } else {
-        payload.requestedBudget = Number(form.requestedBudget);
-      }
+      if (isPM) payload.approvedBudget = Number(form.approvedBudget);
       if (notInBom) {
         payload.notInBom = true;
         payload.notInBomReason = form.notInBomReason.trim();
@@ -328,7 +326,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   return (
     <form className="ticket-form" onSubmit={handleSubmit} noValidate>
       {projectsError && <Banner tone="error" title={projectsError} />}
-      {vendorsError && <Banner tone="error" title={vendorsError} />}
+      {isPM && vendorsError && <Banner tone="error" title={vendorsError} />}
       {isPM && purchasersError && <Banner tone="error" title={purchasersError} />}
 
       <SearchableSelect
@@ -475,23 +473,28 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             )}
           </div>
 
-          <SearchableSelect
-            label={t("tf.preferred_vendor")}
-            required
-            value={form.vendorName}
-            error={fieldErrors.vendorName}
-            disabled={vendorsLoading || vendors.length === 0}
-            onChange={(v) => updateField("vendorName", v)}
-            options={[
-              { value: "", label: vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors"), pinned: true },
-              ...vendors.map((vendor) => ({ value: vendor.vendorName, label: vendor.vendorName })),
-            ]}
-            placeholder={vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
-            searchPlaceholder={t("ss.search_ph")}
-            noMatchText={t("ss.no_match", { query: "{query}" })}
-          />
-          {!vendorsLoading && vendors.length === 0 && !vendorsError && (
-            <p role="status">{t("tf.no_vendors_help")}</p>
+          {/* Vendor and budget are the PM's call; a Site Manager's request has neither. */}
+          {isPM && (
+            <>
+              <SearchableSelect
+                label={t("tf.preferred_vendor")}
+                required
+                value={form.vendorName}
+                error={fieldErrors.vendorName}
+                disabled={vendorsLoading || vendors.length === 0}
+                onChange={(v) => updateField("vendorName", v)}
+                options={[
+                  { value: "", label: vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors"), pinned: true },
+                  ...vendors.map((vendor) => ({ value: vendor.vendorName, label: vendor.vendorName })),
+                ]}
+                placeholder={vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
+                searchPlaceholder={t("ss.search_ph")}
+                noMatchText={t("ss.no_match", { query: "{query}" })}
+              />
+              {!vendorsLoading && vendors.length === 0 && !vendorsError && (
+                <p role="status">{t("tf.no_vendors_help")}</p>
+              )}
+            </>
           )}
 
           {isPM && (
@@ -513,30 +516,16 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             />
           )}
 
-          {isMaterialReq && !isPM && (
-            <Field
-              label={t("tf.requested_budget")}
-              required
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={form.requestedBudget}
-              error={fieldErrors.requestedBudget}
-              onChange={(e) => updateField("requestedBudget", e.target.value)}
-            />
-          )}
           {isMaterialReq && isPM && (
+            // Text box so the amount shows thousands commas; the form keeps the plain number.
             <Field
               label={t("tf.approved_budget")}
               required
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="decimal"
               placeholder="0.00"
-              value={form.approvedBudget}
+              value={formatAmountInput(form.approvedBudget)}
               error={fieldErrors.approvedBudget}
-              onChange={(e) => updateField("approvedBudget", e.target.value)}
+              onChange={(e) => updateField("approvedBudget", parseAmountInput(e.target.value))}
             />
           )}
         </div>

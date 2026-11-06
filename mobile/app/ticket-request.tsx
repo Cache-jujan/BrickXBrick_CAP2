@@ -14,13 +14,12 @@ import type { Href } from "expo-router";
 import { COLORS } from "@/constants/expense-flow-colors";
 import {
   createTicketsBatch,
-  type ApprovedVendor,
   type BomItem,
   type Project,
   type Ticket,
   type TicketInput,
 } from "@/lib/api";
-import { loadActiveProjects, loadApprovedVendors, loadAssignedTickets, loadBomItems } from "@/lib/cached-api";
+import { loadActiveProjects, loadAssignedTickets, loadBomItems } from "@/lib/cached-api";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
@@ -47,6 +46,8 @@ const UNIT_OPTIONS = [
   "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
 ];
 
+// No vendor and no budget: only the Project Manager sets those
+// (post-consultation fix, Nov 2026).
 type Card = {
   id: string;
   ticketType: TicketType;
@@ -55,8 +56,6 @@ type Card = {
   notInBomReason: string;
   quantity: string;
   unit: string; // chosen unit (not-in-BOM / Work Item)
-  vendorName: string; // optional
-  requestedBudget: string;
   neededBy: string; // optional "YYYY-MM-DD"
   reportText: string; // Report
 };
@@ -70,8 +69,6 @@ function emptyCard(id: string): Card {
     notInBomReason: "",
     quantity: "",
     unit: "",
-    vendorName: "",
-    requestedBudget: "",
     neededBy: "",
     reportText: "",
   };
@@ -100,8 +97,6 @@ function prefilledCard(id: string, t: Ticket): Card {
     notInBomReason: t.notinbomreason || "",
     quantity: t.quantity == null ? "" : String(t.quantity),
     unit: t.unit || "",
-    vendorName: t.vendorname || "",
-    requestedBudget: t.requestedbudget == null ? "" : String(t.requestedbudget),
     neededBy: keepFutureDate(t.neededby),
     reportText: isReport ? (t.description || t.subject || "") : "",
   };
@@ -120,7 +115,6 @@ export default function TicketRequestScreen() {
   const [error, setError] = useState<string | null>(null);
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [vendors, setVendors] = useState<ApprovedVendor[]>([]);
   // The rejected ticket we're resubmitting (null in the ordinary flow).
   const [resubmitOf, setResubmitOf] = useState<Ticket | null>(null);
 
@@ -146,19 +140,16 @@ export default function TicketRequestScreen() {
     if (!session || session.user.role !== "Site Manager") return;
     // Every list comes from the server when it can be reached, otherwise from
     // the copy saved on this phone, so the form still opens offline.
-    const loads: Promise<unknown>[] = [loadActiveProjects(), loadApprovedVendors()];
+    const loads: Promise<unknown>[] = [loadActiveProjects()];
     if (resubmitId) loads.push(loadAssignedTickets("Site Manager"));
     Promise.all(loads)
       .then((results) => {
         const projectResult = results[0] as Cached<Project[]>;
-        const vendorResult = results[1] as Cached<ApprovedVendor[]>;
         const projectList = projectResult.data;
-        const vendorList = vendorResult.data;
         setProjects(projectList);
-        setVendors(vendorList);
-        noteSaved(projectResult, vendorResult);
+        noteSaved(projectResult);
         if (resubmitId) {
-          const orig = (results[2] as Cached<Ticket[]>).data.find((t) => t.ticketid === resubmitId);
+          const orig = (results[1] as Cached<Ticket[]>).data.find((t) => t.ticketid === resubmitId);
           if (!orig) {
             setError(t("tr.err_resubmit_gone"));
             return;
@@ -217,32 +208,31 @@ export default function TicketRequestScreen() {
     return bomItems.find((it) => it.bomItemId === card.bomItemID)?.unit ?? null;
   }
 
-  // Returns an error string for a card, or null if it's valid.
-  function validateCard(card: Card): string | null {
+  // Every problem on a card, in the order the fields appear on screen, so the
+  // user sees all of what's missing at once (an empty list means it's valid).
+  function validateCard(card: Card): string[] {
+    const problems: string[] = [];
     const qty = Number(card.quantity);
+    const qtyMissing = !card.quantity || !Number.isFinite(qty) || qty <= 0;
     if (card.ticketType === "Report") {
-      if (!card.reportText.trim()) return t("tr.v_describe");
-      return null;
+      if (!card.reportText.trim()) problems.push(t("tr.v_describe"));
+      return problems;
     }
-    // Material Request / Work Item share quantity.
-    if (!card.quantity || !Number.isFinite(qty) || qty <= 0) return t("tf.err_quantity");
-
     if (card.ticketType === "Work Item") {
-      if (!card.materialType.trim()) return t("tr.v_needed");
-      if (!card.unit.trim()) return t("tq.err_unit");
-      return null;
+      if (!card.materialType.trim()) problems.push(t("tr.v_needed"));
+      if (qtyMissing) problems.push(t("tf.err_quantity"));
+      if (!card.unit.trim()) problems.push(t("tq.err_unit"));
+      return problems;
     }
     // Material Request
-    if (!card.bomItemID) return t("tf.err_bom_item");
+    if (!card.bomItemID) problems.push(t("tf.err_bom_item"));
     if (card.bomItemID === NOT_IN_BOM) {
-      if (!card.materialType.trim()) return t("tr.v_material");
-      if (!card.unit.trim()) return t("tq.err_unit");
-      if (!card.notInBomReason.trim()) return t("tr.v_reason");
+      if (!card.materialType.trim()) problems.push(t("tr.v_material"));
+      if (!card.notInBomReason.trim()) problems.push(t("tr.v_reason"));
     }
-    if (card.requestedBudget === "" || !Number.isFinite(Number(card.requestedBudget)) || Number(card.requestedBudget) < 0) {
-      return t("tf.err_requested_budget");
-    }
-    return null;
+    if (qtyMissing) problems.push(t("tf.err_quantity"));
+    if (card.bomItemID === NOT_IN_BOM && !card.unit.trim()) problems.push(t("tq.err_unit"));
+    return problems;
   }
 
   function cap100(text: string) {
@@ -251,7 +241,6 @@ export default function TicketRequestScreen() {
   }
 
   function buildPayload(card: Card): TicketInput {
-    const vendorName = card.vendorName.trim() || undefined;
     const neededBy = card.neededBy || undefined;
     if (card.ticketType === "Report") {
       return {
@@ -269,7 +258,6 @@ export default function TicketRequestScreen() {
         materialType: card.materialType.trim(),
         quantity: Number(card.quantity),
         unit: card.unit,
-        vendorName,
         neededBy,
       };
     }
@@ -283,9 +271,7 @@ export default function TicketRequestScreen() {
       ticketType: "Material Request",
       subject: cap100(bomDesc),
       quantity: Number(card.quantity),
-      vendorName,
       neededBy,
-      requestedBudget: Number(card.requestedBudget),
     };
     if (notInBom) {
       base.notInBom = true;
@@ -307,12 +293,14 @@ export default function TicketRequestScreen() {
   }
 
   const cardErrors = cards.map(validateCard);
-  const canSubmit = cardErrors.every((e) => e === null) && !submitting && !!project;
-  // The button stays tappable while the form is incomplete. What is missing is always
-  // listed above it; tapping the button adds the red outline on each ticket.
+  const canSubmit = cardErrors.every((list) => list.length === 0) && !submitting && !!project;
+  // The button stays tappable while the form is incomplete. Everything that is missing
+  // is listed above it; tapping the button adds the red outline on each ticket.
   const blockedReasons = [
     !project && t("tr.choose_project"),
-    ...cardErrors.map((e, i) => e && (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
+    ...cardErrors.flatMap((list, i) =>
+      list.map((e) => (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
+    ),
   ];
 
   async function handleSubmit() {
@@ -445,7 +433,7 @@ export default function TicketRequestScreen() {
         const k = (field: string) => `${card.id}:${field}`;
 
         return (
-          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index] && fieldErrorStyle]}>
+          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index].length > 0 && fieldErrorStyle]}>
             <View style={styles.ticketCardHead}>
               <Text style={styles.ticketCardTitle}>{t("tr.ticket_card", { n: index + 1 })}</Text>
               {cards.length > 1 && (
@@ -454,9 +442,9 @@ export default function TicketRequestScreen() {
                 </Pressable>
               )}
             </View>
-            {triedSubmit && cardErrors[index] ? (
-              <Text style={styles.cardError}>{cardErrors[index]}</Text>
-            ) : null}
+            {triedSubmit && cardErrors[index].length > 0
+              ? cardErrors[index].map((e) => <Text key={e} style={styles.cardError}>{e}</Text>)
+              : null}
 
             <Dropdown
               label={t("tr.type")}
@@ -571,39 +559,11 @@ export default function TicketRequestScreen() {
             )}
 
             {!isReport && (
-              <Dropdown
-                label={t("tr.vendor_optional")}
-                placeholder={!card.vendorName}
-                value={card.vendorName || t("tr.not_sure")}
-                open={openKey === k("vendor")}
-                onToggle={() => setOpenKey(openKey === k("vendor") ? null : k("vendor"))}
-                options={[
-                  { key: "__none__", label: t("tr.not_sure"), onPress: () => { updateCard(card.id, { vendorName: "" }); setOpenKey(null); } },
-                  ...vendors.map((v) => ({
-                    key: v.vendorID,
-                    label: v.vendorName,
-                    onPress: () => { updateCard(card.id, { vendorName: v.vendorName }); setOpenKey(null); },
-                  })),
-                ]}
-              />
-            )}
-
-            {!isReport && (
               <DateField
                 label={t("tq.needed_by_opt")}
                 value={card.neededBy}
                 onChange={(v) => updateCard(card.id, { neededBy: v })}
                 hint={t("tr.date_hint")}
-              />
-            )}
-
-            {isMR && (
-              <Field
-                label={t("tr.requested_budget")}
-                value={card.requestedBudget}
-                onChangeText={(v) => updateCard(card.id, { requestedBudget: v })}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
               />
             )}
           </View>
@@ -616,7 +576,12 @@ export default function TicketRequestScreen() {
         </Pressable>
       )}
 
-      <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
+      {/* Own gap so the box doesn't touch "Add another ticket" (the shared box has no top margin). */}
+      {blockedReasons.some(Boolean) && (
+        <View style={styles.blockedGap}>
+          <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
+        </View>
+      )}
       <Pressable onPress={handleSubmit} disabled={submitting} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
           {submitting
@@ -757,6 +722,7 @@ const styles = StyleSheet.create({
 
   // Ticket card
   cardError: { color: "#B42318", fontSize: 13, fontWeight: "700", marginBottom: 6 },
+  blockedGap: { marginTop: 16 },
   ticketCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
   ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
