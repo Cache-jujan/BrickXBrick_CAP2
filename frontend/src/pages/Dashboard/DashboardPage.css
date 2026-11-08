@@ -1,5 +1,8 @@
 .dashboard {
   width: 100%;
+  /* One soft shadow for every card on this page: a hairline close in, a wide
+     faint one further out. */
+  --dash-shadow: 0 1px 2px rgba(48, 47, 40, 0.05), 0 14px 30px -20px rgba(48, 47, 40, 0.28);
 }
 
 .dashboard-loading {
@@ -30,27 +33,36 @@
 
 /* --- Welcome banner: dark, with a photo of one of JJC-R's projects --------- */
 
-/* The photo fills the right of the banner and fades into the dark left side,
-   so the greeting stays readable whatever the photo shows. */
+/* The photo sits on the right at full strength and fades into the dark left
+   side (a mask, not a dark veil over it), so the building stays bright and the
+   greeting stays readable. */
 .dash-hero {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   display: flex;
   align-items: center;
-  min-height: 168px;
-  padding: var(--space-6) var(--space-7, 40px);
+  min-height: 220px;
+  padding: var(--space-6) var(--space-7);
   margin-bottom: var(--space-5);
-  border-radius: var(--radius-lg);
-  background-color: #1f1d1a;
-  background-image:
-    linear-gradient(90deg, #1f1d1a 0%, #1f1d1a 34%, rgba(31, 29, 26, 0.82) 50%, rgba(31, 29, 26, 0.25) 78%, rgba(31, 29, 26, 0.05) 100%),
-    linear-gradient(90deg, rgba(191, 67, 7, 0) 45%, rgba(191, 67, 7, 0.16) 100%),
-    url("/images/dashboard-banner.webp");
-  background-repeat: no-repeat;
-  background-size: 100% 100%, 100% 100%, 64% auto;
-  background-position: 0 0, 0 0, right 18%;
+  border-radius: 20px;
+  background: linear-gradient(100deg, #1c1a17 0%, #24211d 60%, #2a2622 100%);
   color: #ffffff;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 18px 40px -26px rgba(28, 26, 23, 0.7);
+}
+.dash-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 62%;
+  background:
+    linear-gradient(90deg, rgba(191, 67, 7, 0) 40%, rgba(191, 67, 7, 0.18) 100%),
+    url("/images/dashboard-banner.webp") center 6% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 22%, #000 48%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 22%, #000 48%);
 }
 /* A slim orange band on the right edge, the banner's one accent. */
 .dash-hero::after {
@@ -58,11 +70,10 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 70px;
+  width: 74px;
   height: 100%;
-  background: var(--color-brick);
-  clip-path: polygon(78% 0, 100% 0, 100% 100%, 22% 100%);
-  opacity: 0.9;
+  background: linear-gradient(180deg, #e06a26 0%, var(--color-brick) 100%);
+  clip-path: polygon(80% 0, 100% 0, 100% 100%, 22% 100%);
   pointer-events: none;
 }
 
@@ -73,20 +84,22 @@
 }
 .dash-hero-accent {
   display: block;
-  width: 40px;
+  width: 44px;
   height: 4px;
   margin-bottom: var(--space-3);
   border-radius: 2px;
   background: var(--color-brick);
 }
 .dash-hero-text h1 {
-  font-weight: 700;
+  font-size: clamp(1.625rem, 2.4vw, 2.125rem);
+  font-weight: 800;
+  letter-spacing: -0.015em;
   color: #ffffff;
 }
 .dash-hero-text p {
-  margin-top: var(--space-1);
-  color: rgba(255, 255, 255, 0.82);
-  font-size: var(--text-base);
+  margin-top: var(--space-2);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 1.0625rem;
 }
 
 .dash-hero-meta {
@@ -119,9 +132,9 @@
   gap: var(--space-4);
   padding: var(--space-5);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(48, 47, 40, 0.06);
+  border-radius: 16px;
+  box-shadow: var(--dash-shadow);
   color: inherit;
   text-decoration: none;
   min-width: 0;
@@ -131,7 +144,7 @@ a.dash-kpi:hover {
   border-color: var(--color-brick-light);
 }
 
-/* Flat orange circle with a white icon. */
+/* Flat orange circle with a white icon and a pale ring around it. */
 .dash-kpi-icon {
   display: inline-flex;
   align-items: center;
@@ -140,8 +153,9 @@ a.dash-kpi:hover {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--color-brick);
+  background: linear-gradient(145deg, #d9601f 0%, var(--color-brick) 100%);
   color: #ffffff;
+  box-shadow: 0 0 0 6px var(--color-brick-tint);
 }
 
 .dash-kpi-text {
@@ -157,9 +171,10 @@ a.dash-kpi:hover {
 }
 
 .dash-kpi-value {
-  font-size: var(--text-lg);
-  line-height: 1.25;
-  font-weight: 700;
+  font-size: 1.625rem;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
@@ -196,10 +211,10 @@ a.dash-kpi:hover {
 
 .dash-panel {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  padding: var(--space-5);
+  border: 1px solid rgba(48, 47, 40, 0.06);
+  border-radius: 18px;
+  box-shadow: var(--dash-shadow);
+  padding: var(--space-5) var(--space-6) var(--space-6);
   min-width: 0;
 }
 
@@ -307,9 +322,10 @@ a.dash-kpi:hover {
   padding-top: var(--space-3);
 }
 .dash-budget-spent {
-  font-size: var(--text-xl);
+  font-size: 2rem;
   line-height: 1.1;
   font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
@@ -326,16 +342,17 @@ a.dash-kpi:hover {
 .dash-budget-track {
   flex: 1;
   display: block;
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
   background: var(--color-surface-muted);
   overflow: hidden;
 }
 .dash-budget-fill {
   display: block;
+  min-width: 12px;
   height: 100%;
-  border-radius: 5px;
-  background: var(--color-brick);
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e06a26 0%, var(--color-brick) 100%);
 }
 .dash-budget-pct {
   font-size: var(--text-sm);
@@ -474,8 +491,10 @@ a.dash-kpi:hover {
 /* --- Blockchain audit summary: a dark card, echoing the banner ------------ */
 
 .dash-audit-panel {
-  background: #1f1d1a;
-  border-color: #1f1d1a;
+  background:
+    radial-gradient(90% 60% at 100% 0%, rgba(191, 67, 7, 0.22) 0%, rgba(191, 67, 7, 0) 70%),
+    linear-gradient(180deg, #24211d 0%, #1c1a17 100%);
+  border-color: #1c1a17;
   color: #f4f1ec;
 }
 .dash-audit-panel .dash-panel-head {
@@ -630,12 +649,16 @@ a.dash-kpi:hover {
 @media (max-width: 640px) {
   /* Narrow: the photo sits behind the whole banner, under a darker veil. */
   .dash-hero {
+    min-height: 0;
     padding: var(--space-5) var(--space-4);
-    background-image:
-      linear-gradient(90deg, rgba(31, 29, 26, 0.94) 0%, rgba(31, 29, 26, 0.8) 100%),
-      url("/images/dashboard-banner.webp");
-    background-size: 100% 100%, cover;
-    background-position: 0 0, center;
+    border-radius: 16px;
+  }
+  /* Narrow: the photo sits behind the whole banner, faded so text reads. */
+  .dash-hero::before {
+    width: 100%;
+    opacity: 0.35;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
   .dash-hero::after {
     width: 36px;

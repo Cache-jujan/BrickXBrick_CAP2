@@ -18,8 +18,12 @@
   top: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-ink);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  /* Deep warm charcoal (the same as the dashboard banner), with a faint orange
+     glow low down so the rail is not a flat block. */
+  background:
+    radial-gradient(120% 45% at 0% 100%, rgba(191, 67, 7, 0.22) 0%, rgba(191, 67, 7, 0) 70%),
+    linear-gradient(180deg, #24211d 0%, #1c1a17 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
   padding: var(--space-5) var(--space-4);
   transition: width var(--duration) var(--ease);
 }
@@ -37,16 +41,16 @@
 }
 
 .sidebar-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   flex-shrink: 0;
   background: var(--color-brick);
 }
 
 .sidebar-brand-name {
-  font-size: var(--text-md);
-  font-weight: 700;
+  font-size: 1.1875rem;
+  font-weight: 800;
   letter-spacing: -0.01em;
   color: #fff;
   white-space: nowrap;
@@ -69,10 +73,10 @@
   gap: var(--space-3);
   height: 46px;
   padding: 0 var(--space-3);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   font-size: var(--text-base);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.78);
   text-decoration: none;
   transition: background-color var(--duration) var(--ease), color var(--duration) var(--ease);
 }
@@ -94,14 +98,17 @@
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.07);
   color: #fff;
 }
 
-.sidebar-link-active {
-  background: var(--color-brick);
+/* The current page: an orange pill that lifts off the rail a little. */
+.sidebar-link-active,
+.sidebar-link-active:hover {
+  background: linear-gradient(135deg, #d4581a 0%, var(--color-brick) 100%);
   color: #fff;
   font-weight: 650;
+  box-shadow: 0 10px 22px -12px rgba(191, 67, 7, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 .sidebar-link-active .sidebar-link-icon {
   opacity: 1;
@@ -113,7 +120,7 @@
   height: 20px;
   padding: 0 var(--space-2);
   border-radius: 999px;
-  background: var(--color-terracotta);
+  background: #e2552b;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -151,22 +158,52 @@
   transform: rotate(-90deg);
 }
 
+/* Who is signed in, as a small card at the bottom of the rail. */
 .sidebar-footer {
   margin-top: auto;
-  padding: var(--space-4) var(--space-3);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-
-.sidebar-footer-label {
-  font-size: var(--text-xs);
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 2px;
-}
-
-.sidebar-footer-role {
-  font-size: var(--text-sm);
-  font-weight: 600;
+.sidebar-footer-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-brick);
   color: #fff;
+  font-weight: 700;
+  overflow: hidden;
+}
+.sidebar-footer-text {
+  display: grid;
+  min-width: 0;
+}
+.sidebar-footer-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.sidebar-footer-name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-footer-role {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.65);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Mobile: the sidebar becomes a drawer opened from the topbar. */
@@ -225,9 +262,10 @@
 }
 
 .sidebar-collapsed .sidebar-footer {
-  padding-left: 0;
-  padding-right: 0;
-  text-align: center;
+  justify-content: center;
+  padding: var(--space-2);
+  background: none;
+  border-color: transparent;
 }
 
 /* Ways to submit an expense, listed under "Submit expense". */
@@ -236,7 +274,7 @@
   gap: 2px;
   margin: 2px 0 4px calc(var(--space-3) + 19px + var(--space-3));
   padding-left: var(--space-3);
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .sidebar-sublink {
@@ -245,7 +283,7 @@
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.72);
   text-decoration: none;
 }
 
@@ -270,7 +308,7 @@
   left: var(--space-3);
   right: var(--space-3);
   top: calc(var(--space-2) * -1 - 1px);
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* The collapsed rail opened by pointing at it: full width, laid over the page with a shadow. */

@@ -1,8 +1,12 @@
+/* No white strip: the bar sits on the page colour (slightly see-through, so
+   content scrolling under it is blurred), with the page name as the title. */
 .topbar {
-  height: 60px;
+  height: 72px;
   flex-shrink: 0;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(246, 244, 241, 0.86);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(48, 47, 40, 0.06);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -34,7 +38,9 @@
 
 .topbar-trail li[aria-current="page"] {
   color: var(--color-ink);
-  font-weight: 600;
+  font-size: 1.3125rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .topbar-spacer {
@@ -380,3 +386,34 @@ a.topbar-menu-item:hover {
 /* No page label for this route: show the logo and name instead of plain text. */
 .topbar-trail .topbar-brand { display: flex; align-items: center; gap: var(--space-2); }
 .topbar-trail .topbar-brand img { width: 24px; height: 24px; border-radius: 5px; background: var(--color-brick); }
+
+/* Round white buttons that float on the page colour (bell, language), and the
+   user button lights up white on hover, matching the cards below. */
+.topbar .topbar-icon-btn,
+.topbar .language-icon-btn {
+  width: 42px;
+  height: 42px;
+  background: var(--color-surface);
+  border-color: transparent;
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.06), 0 6px 16px -10px rgba(48, 47, 40, 0.35);
+}
+.topbar .topbar-icon-btn:hover,
+.topbar .language-icon-btn:hover {
+  background: var(--color-surface);
+  border-color: var(--color-brick-light);
+}
+.topbar .language-icon-btn[aria-expanded="true"] {
+  border-color: var(--color-brick);
+}
+.topbar-user-trigger:hover {
+  background: var(--color-surface);
+}
+.topbar-notif-badge {
+  background: #e2552b;
+}
+@media (max-width: 900px) {
+  .topbar-trail li[aria-current="page"] {
+    font-size: 1.0625rem;
+  }
+}

@@ -66,7 +66,7 @@ export function SpendChart({ months, budget, spent }) {
             label: t("dashboard.chart_spend"),
             data: months.map((m) => m.spend),
             backgroundColor: SPEND_COLOR,
-            borderRadius: 4,
+            borderRadius: 6,
             maxBarThickness: 48,
           },
         ],
