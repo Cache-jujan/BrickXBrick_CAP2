@@ -247,3 +247,28 @@
     animation: none;
   }
 }
+
+/* Phone: each alert becomes a small block, so nothing is cut off. */
+@media (max-width: 720px) {
+  .tamper-table thead { display: none; }
+  .tamper-table,
+  .tamper-table tbody { display: block; min-width: 0; width: 100%; }
+  .tamper-table.tamper-table > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-3);
+    row-gap: var(--space-1);
+    align-items: baseline;
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .tamper-table.tamper-table > tbody > tr:last-child { border-bottom: none; }
+  .tamper-table.tamper-table > tbody > tr > td { display: block; padding: 0; height: auto; border: none; min-width: 0; text-align: left; }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(1) { grid-column: 1 / -1; }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(2) { grid-column: 1; font-weight: 600; }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(3) { grid-column: 2; text-align: right; font-weight: 600; white-space: nowrap; }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(4) { grid-column: 1 / -1; margin-top: var(--space-1); }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(5) { grid-column: 1 / -1; color: var(--color-ink-soft); font-size: var(--text-xs); }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(6) { grid-column: 1 / -1; margin-top: var(--space-2); }
+  .tamper-table.tamper-table > tbody > tr > td:nth-child(6) .btn { width: 100%; min-height: 44px; }
+}

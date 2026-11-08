@@ -41,8 +41,8 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background: var(--color-brick-tint);
-  color: var(--color-brick-dark);
+  background: var(--color-surface);
+  color: var(--color-brick);
 }
 
 .legal-glance-card-title {

@@ -2265,7 +2265,13 @@
     "sm.proj_saved_copy": "Showing the copy saved on this phone ({when}).",
     "sm.proj_open_hint": "Open project summary",
     "sm.proj_filter": "Show only its tasks",
-    "sm.proj_filter_clear": "Showing its tasks · Clear"
+    "sm.proj_filter_clear": "Showing its tasks · Clear",
+    "admin_overview.attention_title": "Needs attention",
+    "admin_overview.attention_none": "Nothing needs attention. Every approved expense matches its blockchain record.",
+    "admin_overview.found_on": "Found {date}",
+    "admin_overview.view_all_alerts": "View all {count} alerts",
+    "admin_overview.locked_line": "{count} locked accounts need unlocking",
+    "admin_overview.manage_accounts": "Manage accounts"
   },
   "ceb": {
     "language.name": "Pinulongan",
@@ -4533,7 +4539,13 @@
     "sm.proj_saved_copy": "Gipakita ang kopya nga naka-save sa telepono ({when}).",
     "sm.proj_open_hint": "Ablihi ang summary sa proyekto",
     "sm.proj_filter": "Ipakita ra ang buluhaton niini",
-    "sm.proj_filter_clear": "Gipakita ang buluhaton niini · I-clear"
+    "sm.proj_filter_clear": "Gipakita ang buluhaton niini · I-clear",
+    "admin_overview.attention_title": "Kinahanglan atimanon",
+    "admin_overview.attention_none": "Walay kinahanglan atimanon. Ang tanang aprobadong gasto motakdo sa rekord niini sa blockchain.",
+    "admin_overview.found_on": "Nakit-an {date}",
+    "admin_overview.view_all_alerts": "Tan-awa ang tanang {count} ka alerto",
+    "admin_overview.locked_line": "{count} ka naka-lock nga account ang kinahanglan i-unlock",
+    "admin_overview.manage_accounts": "Pagdumala sa mga account"
   },
   "fil": {
     "language.name": "Wika",
@@ -6801,6 +6813,12 @@
     "sm.proj_saved_copy": "Ipinapakita ang kopyang naka-save sa telepono ({when}).",
     "sm.proj_open_hint": "Buksan ang buod ng proyekto",
     "sm.proj_filter": "Ipakita lang ang gawain nito",
-    "sm.proj_filter_clear": "Ipinapakita ang gawain nito · I-clear"
+    "sm.proj_filter_clear": "Ipinapakita ang gawain nito · I-clear",
+    "admin_overview.attention_title": "Kailangang asikasuhin",
+    "admin_overview.attention_none": "Walang kailangang asikasuhin. Tugma sa blockchain record ang bawat aprubadong gastos.",
+    "admin_overview.found_on": "Natuklasan {date}",
+    "admin_overview.view_all_alerts": "Tingnan ang lahat ng {count} alerto",
+    "admin_overview.locked_line": "{count} naka-lock na account ang kailangang i-unlock",
+    "admin_overview.manage_accounts": "Pamahalaan ang mga account"
   }
 }

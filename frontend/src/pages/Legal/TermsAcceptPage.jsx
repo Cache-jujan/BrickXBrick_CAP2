@@ -18,11 +18,11 @@ import "./TermsConsent.css";
 // so this page only comes back when TERMS_VERSION is raised.
 //
 // How agreeing works (one straight scroll, nothing to figure out):
-//   - Both documents are shown one after the other.
-//   - Right under each document is its own checkbox, so the user ticks it
-//     as they reach it.
-//   - "Agree and continue" works once every box is ticked. Pressing it early
-//     scrolls to the first box still unticked and makes it pulse.
+//   - Both documents are shown one after the other, with jump links at the top.
+//   - One checkbox sits in the bar at the bottom of the screen, always in
+//     view, and covers both documents.
+//   - "Agree and continue" works once it is ticked. Pressing it early makes
+//     the box pulse.
 
 // "3. Your account" -> { num: "3", label: "Your account" }
 function splitHeading(heading) {
@@ -30,29 +30,17 @@ function splitHeading(heading) {
   return m ? { num: m[1], label: m[2] } : { num: "", label: heading };
 }
 
-// What each checkbox says. You agree to the terms; you acknowledge the notice.
-function confirmText(doc) {
-  return doc.id === "privacy" ? (
-    <>
-      I have read and acknowledge the <strong>{doc.title}</strong>.
-    </>
-  ) : (
-    <>
-      I have read and agree to the <strong>{doc.title}</strong>.
-    </>
-  );
-}
-
 export function TermsAcceptPage() {
   const { user, logout, markTermsAccepted } = useAuth();
   const { t, formatDate } = useLocale();
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState("");
-  // { terms: true } once that document's box is ticked
-  const [agreed, setAgreed] = useState({});
-  // The id of the box to pulse after pressing "Agree" too early
-  const [pulse, setPulse] = useState("");
+  // The one box in the bottom bar covers both documents.
+  const [agreed, setAgreed] = useState(false);
+  // Pulses the box after pressing "Agree" before ticking it
+  const [pulse, setPulse] = useState(false);
   const pulseTimer = useRef(null);
+  const checkRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,23 +57,24 @@ export function TermsAcceptPage() {
   useEffect(() => () => clearTimeout(pulseTimer.current), []);
 
   const docs = data?.documents || [];
-  const doneCount = docs.filter((d) => agreed[d.id]).length;
-  const allAgreed = docs.length > 0 && doneCount === docs.length;
+  const allAgreed = docs.length > 0 && agreed;
 
-  // "Agree and continue": if a box is still unticked, take the user to it.
+  // "Agree and continue" before the box is ticked: it is right beside the
+  // button, so just draw the eye to it.
   function handleAcceptClick() {
     if (busy || !data) return;
-    const missing = docs.find((d) => !agreed[d.id]);
-    if (missing) {
-      const box = document.getElementById(`legal-confirm-${missing.id}`);
-      box?.scrollIntoView({ behavior: "smooth", block: "center" });
-      box?.querySelector("input")?.focus({ preventScroll: true });
-      setPulse(missing.id);
+    if (!agreed) {
+      checkRef.current?.querySelector("input")?.focus({ preventScroll: true });
+      setPulse(true);
       clearTimeout(pulseTimer.current);
-      pulseTimer.current = setTimeout(() => setPulse(""), 1600);
+      pulseTimer.current = setTimeout(() => setPulse(false), 1600);
       return;
     }
     handleAccept();
+  }
+
+  function jumpTo(id) {
+    document.getElementById(`legal-doc-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function handleAccept() {
@@ -97,7 +86,7 @@ export function TermsAcceptPage() {
     } catch (err) {
       if (err?.response?.status === 409) {
         // The terms changed while this page was open: show the new version.
-        setAgreed({});
+        setAgreed(false);
         load();
       }
       setError(extractErrorMessage(err, t("legal.accept_error")));
@@ -107,10 +96,6 @@ export function TermsAcceptPage() {
   }
 
   const firstName = user?.name ? user.name.split(" ")[0] : "";
-
-  let status;
-  if (allAgreed) status = "All set. You can continue.";
-  else status = `${doneCount} of ${docs.length} accepted. Tick the box under each document.`;
 
   return (
     <div className="legal-page has-consent">
@@ -136,8 +121,8 @@ export function TermsAcceptPage() {
           <p className="legal-eyebrow">{firstName ? t("legal.eyebrow_named", { name: firstName }) : t("legal.eyebrow")}</p>
           <h1>{t("legal.title")}</h1>
           <p className="legal-lede">
-            Brick x Brick holds company records and your personal data, so we need your agreement first. Scroll down
-            and tick the box under each document. You&apos;ll only be asked again if they change.
+            Brick x Brick holds company records and your personal data, so we need your agreement first. Read the
+            documents below, then agree at the bottom of the screen. You&apos;ll only be asked again if they change.
           </p>
           {data && (
             <p className="legal-meta">
@@ -146,6 +131,15 @@ export function TermsAcceptPage() {
               <span className="legal-meta-dot" aria-hidden="true">·</span>
               <span>{t("legal.read_minutes", { minutes: readingMinutes(data) })}</span>
             </p>
+          )}
+          {docs.length > 1 && (
+            <div className="legal-jump" aria-label="Jump to a document">
+              {docs.map((d) => (
+                <button key={d.id} type="button" className="legal-jump-btn" onClick={() => jumpTo(d.id)}>
+                  {d.title}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -170,9 +164,8 @@ export function TermsAcceptPage() {
             {/* Both documents, one after the other, each ending with its own box. */}
             <div className="legal-stack">
               {docs.map((doc) => {
-                const checked = Boolean(agreed[doc.id]);
                 return (
-                  <article key={doc.id} className="legal-article">
+                  <article key={doc.id} id={`legal-doc-${doc.id}`} className="legal-article">
                     <h2 className="legal-article-title">{doc.title}</h2>
 
                     {doc.sections.map((s) => {
@@ -196,26 +189,6 @@ export function TermsAcceptPage() {
                         </section>
                       );
                     })}
-
-                    <label
-                      id={`legal-confirm-${doc.id}`}
-                      className={
-                        "legal-check legal-confirm" +
-                        (checked ? " is-checked" : "") +
-                        (pulse === doc.id ? " is-pulsing" : "")
-                      }
-                    >
-                      <input
-                        type="checkbox"
-                        className="legal-check-input"
-                        checked={checked}
-                        onChange={(e) => setAgreed((current) => ({ ...current, [doc.id]: e.target.checked }))}
-                      />
-                      <span className="legal-check-box" aria-hidden="true">
-                        <CheckIcon />
-                      </span>
-                      <span className="legal-check-text">{confirmText(doc)}</span>
-                    </label>
                   </article>
                 );
               })}
@@ -232,10 +205,29 @@ export function TermsAcceptPage() {
                 <Banner tone="error" title={error} />
               </div>
             )}
-            <p className={"legal-consent-status" + (allAgreed ? " is-done" : "")} aria-live="polite">
-              {allAgreed && <CheckIcon />}
-              {status}
-            </p>
+            <label
+              ref={checkRef}
+              className={"legal-check" + (agreed ? " is-checked" : "") + (pulse ? " is-pulsing" : "")}
+            >
+              <input
+                type="checkbox"
+                className="legal-check-input"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+              />
+              <span className="legal-check-box" aria-hidden="true">
+                <CheckIcon />
+              </span>
+              <span className="legal-check-text">
+                I have read and agree to the{" "}
+                {docs.map((d, i) => (
+                  <span key={d.id}>
+                    <strong>{d.title}</strong>
+                    {i < docs.length - 2 ? ", " : i === docs.length - 2 ? " and " : "."}
+                  </span>
+                ))}
+              </span>
+            </label>
             <Button
               className={"legal-consent-btn" + (allAgreed ? "" : " is-incomplete")}
               onClick={handleAcceptClick}
