@@ -7,10 +7,10 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { BudgetChart } from "../../components/reports/BudgetChart";
+import { MonthlySpendChart } from "../../components/reports/MonthlySpendChart";
 import { BudgetStands, ProjectHero } from "../../components/reports/ProjectReport";
 import { ProjectsTable } from "../../components/reports/ProjectsTable";
 import { SpendShare } from "../../components/reports/SpendShare";
-import { VarianceChart } from "../../components/reports/VarianceChart";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import { useLocale } from "../../i18n/LocaleProvider";
@@ -39,7 +39,6 @@ export function ReportsPage() {
   // What the cards and chart on screen were generated from. Export uses THESE,
   // not whatever is currently typed in the form.
   const [generated, setGenerated] = useState(null);
-  const chartRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   // After an export: { reportId, anchorStatus: "Confirmed" | "Pending", retrying, retryMessage }
   const [exportResult, setExportResult] = useState(null);
@@ -135,14 +134,14 @@ export function ReportsPage() {
     if (problems.length > 0) problemsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [problems.length, error, fieldErrors]);
 
+  // The server recomputes the figures and draws the PDF's charts itself.
   async function exportPdf() {
-    const chartImage = chartRef.current?.getImage();
-    if (!generated || !chartImage) return;
+    if (!generated) return;
     setExporting(true);
     setExportError("");
     setExportResult(null);
     try {
-      const result = await downloadReportPdf({ ...generated, chartImage });
+      const result = await downloadReportPdf(generated);
       saveBlob(result.blob, result.filename);
       setExportResult({ reportId: result.reportId, anchorStatus: result.anchorStatus, retrying: false, retryMessage: "" });
     } catch (err) {
@@ -274,7 +273,12 @@ export function ReportsPage() {
 
           {singleProject ? (
             <>
-              <ProjectHero project={summary.projects[0]} info={projects.find((p) => p.projectid === summary.projects[0].projectId)} period={summary.period} />
+              <ProjectHero
+                project={summary.projects[0]}
+                info={projects.find((p) => p.projectid === summary.projects[0].projectId)}
+                period={summary.period}
+                watchGapPoints={summary.watchGapPoints}
+              />
               <div className="reports-grid">
                 <Card>
                   <h3 className="reports-section-title">{t("rep.budget_stands")}</h3>
@@ -283,20 +287,27 @@ export function ReportsPage() {
                 </Card>
                 <Card>
                   <h3 className="reports-section-title">{t("rep.budget_used")}</h3>
-                  <p className="reports-chart-note">{t("rep.also_pdf")}</p>
-                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                  <p className="reports-chart-note">{t("rep.budget_used_note", { max: summary.watchGapPoints })}</p>
+                  <BudgetChart projects={summary.projects} />
                 </Card>
               </div>
+              {summary.months?.length > 0 && (
+                <Card>
+                  <h3 className="reports-section-title">{t("rep.monthly_title")}</h3>
+                  <p className="reports-chart-note">{t("rep.monthly_note")}</p>
+                  <MonthlySpendChart months={summary.months} projects={summary.projects} totals={summary.totals} />
+                </Card>
+              )}
             </>
           ) : (
             <>
-              <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
+              <SummaryCards totals={summary.totals} projectCount={summary.projects.length} watchGapPoints={summary.watchGapPoints} />
 
               <div className="reports-grid">
                 <Card>
                   <h3 className="reports-section-title">{t("rep.budget_used")}</h3>
-                  <p className="reports-chart-note">{t("rep.budget_used_note")}</p>
-                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                  <p className="reports-chart-note">{t("rep.budget_used_note", { max: summary.watchGapPoints })}</p>
+                  <BudgetChart projects={summary.projects} totals={summary.totals} />
                 </Card>
                 <Card>
                   <h3 className="reports-section-title">{t("rep.spend_went")}</h3>
@@ -305,11 +316,13 @@ export function ReportsPage() {
                 </Card>
               </div>
 
-              <Card>
-                <h3 className="reports-section-title">{t("rep.variance_title")}</h3>
-                <p className="reports-chart-note">{t("rep.variance_note")}</p>
-                <VarianceChart projects={summary.projects} />
-              </Card>
+              {summary.months?.length > 0 && (
+                <Card>
+                  <h3 className="reports-section-title">{t("rep.monthly_title")}</h3>
+                  <p className="reports-chart-note">{t("rep.monthly_note")}</p>
+                  <MonthlySpendChart months={summary.months} projects={summary.projects} totals={summary.totals} />
+                </Card>
+              )}
 
               <Card>
                 <h3 className="reports-section-title">{t("rep.breakdown")}</h3>

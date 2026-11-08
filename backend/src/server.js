@@ -31,9 +31,11 @@ const allocationRoutes = require("./routes/allocations");
 
 const app = express();
 app.use(cors());
-// The report PDF route receives the chart as a base64 PNG (up to ~1.5 MB), far
-// above the 100 kb default. Raise the limit for that one path only; body-parser
-// skips a body it has already read, so the global parser below leaves it alone.
+// The report PDF route draws its own charts now, but a Reports page opened
+// before an update still sends its chart as a base64 PNG (up to ~1.5 MB), far
+// above the 100 kb default. The route ignores it; the higher limit for that one
+// path only keeps such a page from failing. body-parser skips a body it has
+// already read, so the global parser below leaves it alone.
 app.use("/api/reports/pdf", express.json({ limit: "2mb" }));
 app.use(express.json());
 

@@ -85,6 +85,9 @@
 .rt-bar-over {
   background: var(--color-danger);
 }
+.rt-bar-done {
+  background: #2f7f86; /* work done: the same teal as the chart */
+}
 .rt-bar-text {
   width: 42px;
   text-align: right;
@@ -94,6 +97,14 @@
 .rt-bar-text-over {
   color: var(--color-danger);
   font-weight: 700;
+}
+
+/* Budget used running more than the set number of points ahead of work done. */
+.report-table-watch {
+  background: var(--color-warning-bg);
+}
+.report-table-flag-watch {
+  color: var(--color-warning);
 }
 
 .report-table-variance-over {

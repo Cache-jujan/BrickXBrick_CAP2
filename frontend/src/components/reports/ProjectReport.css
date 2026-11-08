@@ -91,6 +91,13 @@
 .pr-negative dd {
   color: var(--color-danger);
 }
+.pr-watch dd,
+.pr-watch small {
+  color: var(--color-warning);
+}
+.pr-watch small {
+  font-weight: 700;
+}
 
 .pr-split {
   display: flex;
