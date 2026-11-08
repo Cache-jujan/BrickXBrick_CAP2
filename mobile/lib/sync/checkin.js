@@ -23,21 +23,25 @@ export function manilaDate(when = new Date()) {
  *   summary?: string | null, issues?: string | null, needsPmAction?: boolean,
  *   taskIds?: string[], photoCount?: number,
  * }} input
+ * @param {(key: string, values?: Record<string, string | number>) => string} [t]
+ *   Translate function from useLocale. Without it the messages are English.
  * @returns {string[]}
  */
-export function checkinProblems({ projectId, slot, siteStatus, summary, issues, needsPmAction, taskIds = [], photoCount = 0 }) {
+export function checkinProblems({ projectId, slot, siteStatus, summary, issues, needsPmAction, taskIds = [], photoCount = 0 }, t) {
+  /** @type {(key: string, english: string, values?: Record<string, string | number>) => string} */
+  const say = (key, english, values) => (t ? t(key, values) : english);
   /** @type {string[]} */
   const problems = [];
-  if (!projectId) problems.push("Choose a project.");
-  if (!SLOTS.includes(slot)) problems.push("Choose Morning, Midday or End of day.");
-  if (!SITE_STATUSES.includes(siteStatus)) problems.push("Choose how the site is going: On Track, Delayed or Blocked.");
+  if (!projectId) problems.push(say("ci.p_project", "Choose a project."));
+  if (!SLOTS.includes(slot)) problems.push(say("ci.p_slot", "Choose Morning, Midday or End of day."));
+  if (!SITE_STATUSES.includes(siteStatus)) problems.push(say("ci.p_status", "Choose how the site is going: On Track, Delayed or Blocked."));
   const text = (summary ?? "").trim();
-  if (!text) problems.push("Write a short summary of the site.");
-  else if (text.length > MAX_TEXT) problems.push(`Keep the summary under ${MAX_TEXT} characters.`);
-  if ((issues ?? "").length > MAX_TEXT) problems.push(`Keep the issues under ${MAX_TEXT} characters.`);
-  if (needsPmAction && !(issues ?? "").trim()) problems.push("Describe the issue your Project Manager needs to act on.");
-  if (taskIds.length > MAX_LINKED_TASKS) problems.push(`Link at most ${MAX_LINKED_TASKS} tasks.`);
-  if (photoCount > MAX_PHOTOS) problems.push(`Add at most ${MAX_PHOTOS} photos.`);
+  if (!text) problems.push(say("ci.p_summary", "Write a short summary of the site."));
+  else if (text.length > MAX_TEXT) problems.push(say("ci.p_summary_long", `Keep the summary under ${MAX_TEXT} characters.`, { max: MAX_TEXT }));
+  if ((issues ?? "").length > MAX_TEXT) problems.push(say("ci.p_issues_long", `Keep the issues under ${MAX_TEXT} characters.`, { max: MAX_TEXT }));
+  if (needsPmAction && !(issues ?? "").trim()) problems.push(say("ci.p_needs_issue", "Describe the issue your Project Manager needs to act on."));
+  if (taskIds.length > MAX_LINKED_TASKS) problems.push(say("ci.p_tasks_max", `Link at most ${MAX_LINKED_TASKS} tasks.`, { max: MAX_LINKED_TASKS }));
+  if (photoCount > MAX_PHOTOS) problems.push(say("ci.p_photos_max", `Add at most ${MAX_PHOTOS} photos.`, { max: MAX_PHOTOS }));
   return problems;
 }
 

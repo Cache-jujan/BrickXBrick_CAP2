@@ -2,7 +2,7 @@ import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { niceDay, projectSpan } from "../../utils/reportFilters";
 import { PESO_EXACT } from "../../utils/plainLanguage";
-import { signedPct, signedPeso, varianceWords } from "../../utils/variance";
+import { signedPct, varianceWords } from "../../utils/variance";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectReport.css";
 
@@ -12,13 +12,14 @@ const pct = (value) => (value === null || value === undefined ? "n/a" : `${value
  * The report when exactly ONE project was chosen: a headline for that project
  * (name, status, dates, how much of the budget is used), then where the budget
  * stands. Everything comes from the same /api/reports/summary figures as the
- * multi-project view; "Remaining budget" here is budget minus everything spent
- * up to the end date (the multi-project "Budget left" subtracts this period only).
+ * multi-project view; "Remaining budget" is budget minus everything spent up to
+ * the end date, the same as Net P&L there. Work done is the project's average
+ * milestone completion, next to the share of the budget used.
  *
  * project: the summary entry; info: the project row from the list (may be missing);
- * period: { from, to }.
+ * period: { from, to }; watchGapPoints: from the summary.
  */
-export function ProjectHero({ project, info, period }) {
+export function ProjectHero({ project, info, period, watchGapPoints }) {
   const { t, formatDate } = useLocale();
   const day = (value) => niceDay(value, formatDate);
   const used = project.cumulativeUtilizationPct;
@@ -31,6 +32,8 @@ export function ProjectHero({ project, info, period }) {
       : t("rep.date_open", { from: day(span.start) })
     : null;
   const ring = used === null || used === undefined ? 0 : Math.min(100, used);
+  const done = project.progressPct;
+  const watch = project.health === "watch";
 
   return (
     <Card className="pr-hero">
@@ -68,12 +71,20 @@ export function ProjectHero({ project, info, period }) {
           <div className={remaining < 0 ? "pr-negative" : ""}>
             <dt>{t("rep.remaining")}</dt>
             <dd>{PESO_EXACT.format(remaining)}</dd>
-            <small>{remaining < 0 ? t("dashboard.over_budget") : t("rep.budget_minus_spent")}</small>
+            <small>
+              {Number.isFinite(project.varianceToDate)
+                ? `${varianceWords(project.varianceToDate, t)} · ${t("rep.variance_line", { pct: signedPct(project.varianceToDatePct) })}`
+                : t("rep.budget_minus_spent")}
+            </small>
           </div>
-          <div className={project.varianceToDate > 0 ? "pr-negative" : ""}>
-            <dt>{t("rep.cost_variance")}</dt>
-            <dd>{signedPeso(project.varianceToDate)}</dd>
-            <small>{Number.isFinite(project.varianceToDate) ? t("rep.variance_formula", { words: varianceWords(project.varianceToDate, t), pct: signedPct(project.varianceToDatePct) }) : t("rep.variance_formula_plain")}</small>
+          <div className={watch ? "pr-watch" : ""}>
+            <dt>{t("rep.work_done")}</dt>
+            <dd>{done === null || done === undefined ? t("rep.no_milestones") : pct(done)}</dd>
+            <small>
+              {watch
+                ? t("rep.watch_note", { gap: (used - done).toFixed(0), max: watchGapPoints })
+                : t("rep.work_done_sub", { used: pct(used) })}
+            </small>
           </div>
           <div>
             <dt>{t("rep.spent_in_period")}</dt>

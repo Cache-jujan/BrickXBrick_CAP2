@@ -110,9 +110,7 @@ async function post(url, body) {
   }
 }
 
-// 1x1 transparent PNG.
-const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-const PDF_BODY = { projectIds: [P1], from: "2026-10-01", to: "2026-10-31", chartImage: TINY_PNG };
+const PDF_BODY = { projectIds: [P1], from: "2026-10-01", to: "2026-10-31" };
 
 const OK = `/api/reports/summary?projectIds=${P1}&from=2026-10-01&to=2026-10-31`;
 
@@ -203,22 +201,12 @@ test("PDF: Project Manager, Site Manager and Purchaser get 403", async () => {
   state.me = { id: "u1", name: "Test GM", role: "General Manager" };
 });
 
-test("PDF: bad chartImage gives 400 and saves nothing", async () => {
-  state.inserts.length = 0;
-  const cases = [
-    undefined,
-    "",
-    "data:image/jpeg;base64,/9j/4AAQ",
-    "https://example.com/chart.png",
-    "data:image/png;base64,!!!notbase64!!!",
-    "data:image/png;base64," + Buffer.from("this is not a png at all").toString("base64"),
-    "data:image/png;base64," + "A".repeat(1_500_100), // oversized
-  ];
-  for (const chartImage of cases) {
-    const res = await post("/api/reports/pdf", { ...PDF_BODY, chartImage });
-    assert.equal(res.status, 400, String(chartImage).slice(0, 40));
-  }
-  assert.equal(state.inserts.length, 0);
+test("PDF: the server draws the charts, so no chart picture is needed (an old client's one is ignored)", async () => {
+  const res = await post("/api/reports/pdf", PDF_BODY);
+  assert.equal(res.status, 200);
+  assert.equal(res.buffer.subarray(0, 5).toString("latin1"), "%PDF-");
+  const old = await post("/api/reports/pdf", { ...PDF_BODY, chartImage: "not a picture" });
+  assert.equal(old.status, 200);
 });
 
 test("PDF: filters are validated like the summary route", async () => {

@@ -28,7 +28,6 @@ import {
   MAX_PHOTOS,
   SITE_STATUSES,
   SLOTS,
-  SLOT_LABEL,
   checkinProblems,
   manilaDate,
   slotStates,
@@ -55,18 +54,31 @@ type RejectedCheckin = {
   error_message: string | null;
 };
 
-const STATE_TEXT: Record<string, string> = {
-  Submitted: "Sent",
-  Queued: "Saved on this phone",
-  Open: "Open now",
-  Upcoming: "Not open yet",
-  Missed: "Window passed",
+// Translation keys for what the server (and this phone) send as plain values.
+const STATE_KEY: Record<string, string> = {
+  Submitted: "ci.state_submitted",
+  Queued: "ci.state_queued",
+  Open: "ci.state_open",
+  Upcoming: "ci.state_upcoming",
+  Missed: "ci.state_missed",
 };
 
-const STATUS_HELP: Record<string, string> = {
-  "On Track": "Work is going as planned.",
-  Delayed: "Behind schedule, but moving.",
-  Blocked: "Work cannot continue.",
+const STATUS_KEY: Record<string, string> = {
+  "On Track": "ci.status_on_track",
+  Delayed: "ci.status_delayed",
+  Blocked: "ci.status_blocked",
+};
+
+const STATUS_HELP_KEY: Record<string, string> = {
+  "On Track": "ci.help_on_track",
+  Delayed: "ci.help_delayed",
+  Blocked: "ci.help_blocked",
+};
+
+const SLOT_KEY: Record<string, string> = {
+  Morning: "ci.slot_morning",
+  Midday: "ci.slot_midday",
+  EndOfDay: "ci.slot_end_of_day",
 };
 
 export default function SiteManagerCheckinScreen() {
@@ -126,8 +138,8 @@ export default function SiteManagerCheckinScreen() {
         if (!todayRef.current) {
           setLoadError(
             onlineRef.current
-              ? describeLoadError(err, true) ?? "Unable to load your check-ins."
-              : "You're offline, and your projects haven't been saved on this phone yet. Open the app once with a connection; after that you can write check-ins offline."
+              ? describeLoadError(err, true) ?? t("ci.err_load")
+              : t("ci.err_offline_first")
           );
         }
       } finally {
@@ -136,7 +148,7 @@ export default function SiteManagerCheckinScreen() {
       }
       readLocal();
     },
-    [readLocal]
+    [readLocal, t]
   );
 
   useFocusEffect(
@@ -168,6 +180,7 @@ export default function SiteManagerCheckinScreen() {
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
+  const slotName = (name: string) => (SLOT_KEY[name] ? t(SLOT_KEY[name]) : name);
   const problems = checkinProblems({
     projectId,
     slot,
@@ -177,14 +190,19 @@ export default function SiteManagerCheckinScreen() {
     needsPmAction,
     taskIds,
     photoCount: photos.length,
-  });
-  const blocked = [...problems, slotTaken ? `${chosen ? SLOT_LABEL[chosen.slot] : "This"} check-in is already ${chosen?.state === "Queued" ? "saved on this phone" : "sent"} for today.` : ""];
+  }, t);
+  const blocked = [
+    ...problems,
+    slotTaken && chosen
+      ? t(chosen.state === "Queued" ? "ci.slot_taken_queued" : "ci.slot_taken_sent", { slot: slotName(chosen.slot) })
+      : "",
+  ];
 
   async function addPhoto() {
     if (photos.length >= MAX_PHOTOS) return;
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Camera access needed", "Enable camera access in your phone settings to add site photos.");
+      Alert.alert(t("mx.camera_needed_title"), t("ci.camera_body"));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
@@ -224,7 +242,7 @@ export default function SiteManagerCheckinScreen() {
       });
       if (!result.queued) {
         for (const path of copied) await deleteQueuedPhoto(path);
-        setSaveError(result.message ?? "Could not save this check-in. Reconnect and try again.");
+        setSaveError(result.message ?? t("ci.err_save_queue"));
         return;
       }
       for (const path of result.replacedPhotoPaths ?? []) await deleteQueuedPhoto(path);
@@ -240,13 +258,13 @@ export default function SiteManagerCheckinScreen() {
       slotChosenRef.current = false;
       if (isOnline) {
         syncNow();
-        Alert.alert("Check-in saved", "It is being sent to your Project Manager now.", [{ text: "OK", onPress: goBack }]);
+        Alert.alert(t("ci.saved_title"), t("ci.saved_body"), [{ text: t("ci.ok"), onPress: goBack }]);
       } else {
-        Alert.alert("Saved on your phone", "It will be sent automatically when you're back online.", [{ text: "OK", onPress: goBack }]);
+        Alert.alert(t("ci.saved_phone_title"), t("ci.saved_phone_body"), [{ text: t("ci.ok"), onPress: goBack }]);
       }
     } catch (err) {
       for (const path of copied) await deleteQueuedPhoto(path);
-      setSaveError(plainError(err, "Unable to save this check-in."));
+      setSaveError(plainError(err, t("ci.err_save")));
     } finally {
       setSaving(false);
     }
@@ -261,12 +279,12 @@ export default function SiteManagerCheckinScreen() {
     readLocal();
   }
 
-  const projectName = (id: string) => today?.projects.find((p) => p.projectId === id)?.name ?? "a project";
+  const projectName = (id: string) => today?.projects.find((p) => p.projectId === id)?.name ?? t("ci.a_project");
 
   return (
     <KeyboardScreen
       background={COLORS.bgWarm}
-      header={<FlowHeader variant="bar" title="Progress check-in" fallback="/site-manager" />}
+      header={<FlowHeader variant="bar" title={t("ci.title")} fallback="/site-manager" />}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
@@ -274,51 +292,51 @@ export default function SiteManagerCheckinScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={COLORS.primary} />
-          <Text style={styles.muted}>Loading…</Text>
+          <Text style={styles.muted}>{t("common.loading")}</Text>
         </View>
       ) : loadError ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Couldn’t load check-ins</Text>
+          <Text style={styles.errorTitle}>{t("ci.couldnt_load")}</Text>
           <Text style={styles.errorBody}>{loadError}</Text>
-          <AppButton label="Try again" variant="secondary" onPress={() => load()} />
+          <AppButton label={t("common.try_again")} variant="secondary" onPress={() => load()} />
         </View>
       ) : today && today.projects.length === 0 ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>No active project</Text>
-          <Text style={styles.muted}>Check-ins are made for an Active project you run. None is active right now.</Text>
+          <Text style={styles.cardTitle}>{t("ci.no_project_title")}</Text>
+          <Text style={styles.muted}>{t("ci.no_project_body")}</Text>
         </View>
       ) : today ? (
         <>
           {savedAt && (
             <Text style={styles.savedNote}>
-              {isOnline ? "Can't reach the server" : "You're offline"} · showing projects {savedAtLabel(savedAt, new Date(), t, intlLocale)}.
+              {t(isOnline ? "ci.saved_note_server" : "ci.saved_note_offline", { when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
             </Text>
           )}
-          <Text style={styles.eyebrow}>THREE TIMES A DAY</Text>
-          <Text style={styles.title}>How is the site right now?</Text>
+          <Text style={styles.eyebrow}>{t("ci.eyebrow")}</Text>
+          <Text style={styles.title}>{t("ci.heading")}</Text>
           <Text style={styles.muted}>
-            A check-in is a report on the project. It does not change any task or progress.
+            {t("ci.intro")}
           </Text>
 
           {rejected.map((row) => (
             <View key={row.client_id} style={styles.errorCard}>
               <Text style={styles.errorTitle}>
-                {SLOT_LABEL[row.slot as CheckinSlotName] ?? row.slot} check-in not sent
+                {t("ci.not_sent", { slot: slotName(row.slot) })}
               </Text>
               <Text style={styles.errorBody}>
                 {projectName(row.project_id)} · {row.checkin_date}
                 {"\n"}
                 {describeCheckinRejection(row.error_code ?? "", row.error_message ?? "")}
               </Text>
-              <AppButton label="OK" variant="secondary" fit onPress={() => dismiss(row)} />
+              <AppButton label={t("ci.ok")} variant="secondary" fit onPress={() => dismiss(row)} />
             </View>
           ))}
 
-          <Text style={styles.label}>{today.projects.length === 1 ? "Checking in for" : "Project"}</Text>
+          <Text style={styles.label}>{t(today.projects.length === 1 ? "ci.checking_in_for_label" : "ci.project_label")}</Text>
           {today.projects.length === 1 && (
             <View style={styles.projectCard}>
               <Text style={styles.projectName}>{today.projects[0].name}</Text>
-              <Text style={styles.hint}>This is your only active project.</Text>
+              <Text style={styles.hint}>{t("ci.only_project")}</Text>
             </View>
           )}
           <View style={[styles.chipRow, today.projects.length === 1 && { display: "none" }]}>
@@ -336,13 +354,13 @@ export default function SiteManagerCheckinScreen() {
           </View>
           {today.projects.length > 1 && (
             <Text style={projectId ? styles.hint : styles.fieldError}>
-              {projectId ? `Checking in for ${project?.name ?? ""}.` : "Choose which project this check-in is for."}
+              {projectId ? t("ci.checking_in_for", { name: project?.name ?? "" }) : t("ci.choose_project")}
             </Text>
           )}
 
           {project && (
             <>
-              <Text style={styles.label}>Which check-in</Text>
+              <Text style={styles.label}>{t("ci.which")}</Text>
               <View style={styles.slotRow}>
                 {slots.map((s) => {
                   const on = slot === s.slot;
@@ -369,18 +387,18 @@ export default function SiteManagerCheckinScreen() {
                       accessibilityRole="button"
                       accessibilityState={{ selected: on }}
                     >
-                      <Text style={[styles.slotName, on && styles.chipTextOn]}>{SLOT_LABEL[s.slot]}</Text>
+                      <Text style={[styles.slotName, on && styles.chipTextOn]}>{slotName(s.slot)}</Text>
                       <Text style={[styles.slotWindow, on && styles.chipTextOn]}>{s.window}</Text>
                       <Text style={[styles.slotState, on && styles.chipTextOn, done && !on && { color: COLORS.success }]}>
-                        {STATE_TEXT[s.state] ?? s.state}
+                        {STATE_KEY[s.state] ? t(STATE_KEY[s.state]) : s.state}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
-              <Text style={styles.hint}>Times are Philippine time. A check-in outside its window is still accepted.</Text>
+              <Text style={styles.hint}>{t("ci.times_note")}</Text>
 
-              <Text style={styles.label}>Site status</Text>
+              <Text style={styles.label}>{t("ci.site_status")}</Text>
               <View style={styles.chipRow}>
                 {SITE_STATUSES.map((status) => (
                   <Pressable
@@ -390,28 +408,28 @@ export default function SiteManagerCheckinScreen() {
                     accessibilityRole="button"
                     accessibilityState={{ selected: siteStatus === status }}
                   >
-                    <Text style={[styles.chipText, siteStatus === status && styles.chipTextOn]}>{status}</Text>
+                    <Text style={[styles.chipText, siteStatus === status && styles.chipTextOn]}>{STATUS_KEY[status] ? t(STATUS_KEY[status]) : status}</Text>
                   </Pressable>
                 ))}
               </View>
-              {siteStatus && <Text style={styles.hint}>{STATUS_HELP[siteStatus]}</Text>}
+              {siteStatus && STATUS_HELP_KEY[siteStatus] && <Text style={styles.hint}>{t(STATUS_HELP_KEY[siteStatus])}</Text>}
 
-              <Text style={styles.label}>Summary</Text>
+              <Text style={styles.label}>{t("ci.summary")}</Text>
               <TextInput
                 value={summary}
                 onChangeText={setSummary}
-                placeholder="What is happening on site? Work done, crew, deliveries."
+                placeholder={t("ci.summary_ph")}
                 placeholderTextColor={COLORS.muted}
                 multiline
                 maxLength={2000}
                 style={[styles.input, styles.multiline, triedSubmit && !summary.trim() && fieldErrorStyle]}
               />
 
-              <Text style={styles.label}>Issues (optional)</Text>
+              <Text style={styles.label}>{t("ci.issues")}</Text>
               <TextInput
                 value={issues}
                 onChangeText={setIssues}
-                placeholder="Anything slowing the work down?"
+                placeholder={t("ci.issues_ph")}
                 placeholderTextColor={COLORS.muted}
                 multiline
                 maxLength={2000}
@@ -419,20 +437,20 @@ export default function SiteManagerCheckinScreen() {
               />
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.switchTitle}>Needs my Project Manager to act</Text>
-                  <Text style={styles.hint}>Your Project Manager is notified right away.</Text>
+                  <Text style={styles.switchTitle}>{t("ci.needs_pm")}</Text>
+                  <Text style={styles.hint}>{t("ci.needs_pm_hint")}</Text>
                 </View>
                 <Switch
                   value={needsPmAction}
                   onValueChange={setNeedsPmAction}
                   trackColor={{ true: COLORS.primary }}
-                  accessibilityLabel="Needs Project Manager action"
+                  accessibilityLabel={t("ci.needs_pm_aria")}
                 />
               </View>
 
               {projectTasks.length > 0 && (
                 <>
-                  <Text style={styles.label}>Tasks this is about (optional)</Text>
+                  <Text style={styles.label}>{t("ci.tasks_label")}</Text>
                   <View style={styles.chipRow}>
                     {projectTasks.map((t) => {
                       const on = taskIds.includes(t.taskid);
@@ -451,12 +469,12 @@ export default function SiteManagerCheckinScreen() {
                       );
                     })}
                   </View>
-                  <Text style={styles.hint}>Linking a task only points to it. It does not update the task.</Text>
+                  <Text style={styles.hint}>{t("ci.tasks_hint")}</Text>
                 </>
               )}
 
               <Text style={styles.label}>
-                Photos (optional, up to {MAX_PHOTOS})
+                {t("ci.photos_label", { max: MAX_PHOTOS })}
               </Text>
               <View style={styles.photoRow}>
                 {photos.map((photo, index) => (
@@ -465,15 +483,15 @@ export default function SiteManagerCheckinScreen() {
                     <Pressable
                       onPress={() => setPhotos((current) => current.filter((_, i) => i !== index))}
                       style={styles.photoRemove}
-                      accessibilityLabel="Remove photo"
+                      accessibilityLabel={t("ci.photo_remove")}
                     >
                       <Text style={styles.photoRemoveText}>×</Text>
                     </Pressable>
                   </View>
                 ))}
                 {photos.length < MAX_PHOTOS && (
-                  <Pressable onPress={addPhoto} style={[styles.photoBox, styles.photoAdd]} accessibilityLabel="Add photo">
-                    <Text style={styles.photoAddText}>＋{"\n"}Photo</Text>
+                  <Pressable onPress={addPhoto} style={[styles.photoBox, styles.photoAdd]} accessibilityLabel={t("ci.photo_add")}>
+                    <Text style={styles.photoAddText}>＋{"\n"}{t("ci.photo_add_short")}</Text>
                   </Pressable>
                 )}
               </View>
@@ -481,18 +499,18 @@ export default function SiteManagerCheckinScreen() {
               {triedSubmit && <BlockedReasons reasons={blocked} />}
               {saveError && <Text style={styles.fieldError}>{saveError}</Text>}
               <AppButton
-                label={isOnline ? "Send check-in" : "Save check-in on phone"}
+                label={isOnline ? t("ci.send") : t("ci.save_phone")}
                 variant="primary"
                 loading={saving}
                 disabled={saving}
                 onPress={handleSave}
               />
-              {!isOnline && <Text style={styles.hint}>You're offline. It will be sent automatically when you reconnect.</Text>}
+              {!isOnline && <Text style={styles.hint}>{t("ci.offline_hint")}</Text>}
             </>
           )}
 
           <Pressable onPress={() => router.replace("/site-manager")} style={styles.back} accessibilityRole="button">
-            <Text style={styles.backText}>Back to my tasks</Text>
+            <Text style={styles.backText}>{t("ci.back")}</Text>
           </Pressable>
         </>
       ) : null}

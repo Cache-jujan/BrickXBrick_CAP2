@@ -55,9 +55,31 @@
   height: 100%;
   background: var(--color-brick);
 }
-.summary-card-negative .summary-card-bar {
+/* Work done: budget used (orange) above work done (teal), same colours as the chart. */
+.summary-card-pair {
+  display: grid;
+  gap: 3px;
+  margin-top: var(--space-2);
+}
+.summary-card-pair .summary-card-bar {
+  margin-top: 0;
+}
+.summary-card-bar-used {
+  background: var(--color-brick);
+}
+.summary-card-bar-done {
+  background: #2f7f86;
+}
+
+/* Spending running ahead of the work: amber, with the reason written out. */
+.summary-card-watch {
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+.summary-card-watch .summary-card-bar {
   background: #ffffff;
 }
-.summary-card-negative .summary-card-bar-fill {
-  background: var(--color-danger);
+.summary-card-watch-text {
+  color: var(--color-warning);
+  font-weight: 700;
 }

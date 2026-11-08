@@ -32,15 +32,15 @@ function filenameFrom(contentDisposition, fallback) {
 }
 
 // POST /api/reports/pdf — General Manager only.
-// chartImage: the chart as a PNG data URL (chart.toBase64Image()). It is the
-// only thing taken from the browser; the server recomputes every figure.
+// Only the filters are sent: the server recomputes every figure and draws the
+// charts itself.
 // Returns { blob, filename, reportId, anchorStatus: "Confirmed" | "Pending" }.
 // A fetch with the Bearer header is needed because a plain link can't send it.
-export async function downloadReportPdf({ projectIds, from, to, chartImage }) {
+export async function downloadReportPdf({ projectIds, from, to }) {
   try {
     const response = await apiClient.post(
       "/api/reports/pdf",
-      { projectIds, from, to, chartImage },
+      { projectIds, from, to },
       { responseType: "blob" }
     );
     return {
