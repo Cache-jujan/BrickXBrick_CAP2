@@ -28,6 +28,7 @@ import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { useToast } from "../../components/ui/Toast";
 import "./ProjectDetailPage.css";
 
 const PESO_WHOLE = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
@@ -47,6 +48,7 @@ export function ProjectDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { t, tv, formatDate } = useLocale();
+  const toast = useToast();
   const fmtLong = (value) => (value ? formatDate(value, LONG_DATE) : t("projects.not_set"));
   const canReview = user.role === "General Manager" || user.role === "Project Manager";
   const canVerify = user.role === "General Manager"; // matches backend requireRole on /verify/:id
@@ -309,6 +311,7 @@ export function ProjectDetailPage() {
       setProject(await getProjectOverview(id));
       setMilestoneDialog(false);
       setScheduleWarning((created.warnings || [])[0] || "");
+      toast.success(t("pd.toast_milestone_added", { name: milestoneForm.name.trim() }));
     } catch (err) {
       setMilestoneError(extractErrorMessage(err, t("errors.create_milestone")));
     } finally {
@@ -345,6 +348,7 @@ export function ProjectDetailPage() {
       setProject(await getProjectOverview(id));
       setTaskDialog(null);
       setScheduleWarning((created.warnings || [])[0] || "");
+      toast.success(t("pd.toast_task_added", { name: taskForm.taskName.trim(), milestone: taskDialog.milestone.name }));
     } catch (err) {
       setTaskError(extractErrorMessage(err, t("errors.create_task")));
     } finally {
@@ -356,6 +360,7 @@ export function ProjectDetailPage() {
   // warning (if any), and reload the project so the timeline matches.
   async function handleTimelineSaved(result) {
     setTimelineDialog(false);
+    toast.success(t("pd.toast_timeline_saved"));
     const warnings = result.warnings || [];
     setScheduleWarning(
       warnings.length > 1 ? `${warnings[0]} (and ${warnings.length - 1} more)` : warnings[0] || ""
@@ -385,6 +390,7 @@ export function ProjectDetailPage() {
     try {
       await completeTask(completeDialog.task.taskid, { note: completeNote.trim() || undefined });
       setProject(await getProjectOverview(id));
+      toast.success(t("pd.toast_task_completed", { name: completeDialog.task.taskname }));
       setCompleteDialog(null);
     } catch (err) {
       setCompleteError(extractErrorMessage(err, t("errors.complete_task")));

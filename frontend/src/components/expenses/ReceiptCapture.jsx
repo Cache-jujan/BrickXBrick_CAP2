@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../ui/Button";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { RECEIPT_IMAGE_ACCEPT, receiptFileProblem } from "../../utils/receiptFile";
 import "./ReceiptCapture.css";
 
 // True on phones and tablets (touch is the main input). There the browser's own camera
@@ -86,7 +87,9 @@ function CameraModal({ onPhoto, onClose, onChoose }) {
 
 /**
  * The three ways to add a receipt: capture with the camera, choose an image, choose a PDF.
- * Calls onFile(file) with whichever the user ends up with.
+ * Calls onFile(file) with whichever the user ends up with, once it passes the receipt
+ * file rules (utils/receiptFile.js); a file that doesn't is refused here, with the
+ * reason shown under the buttons, and never uploaded.
  *
  * @param {{ onFile: (file: File) => void, disabled?: boolean, uploading?: boolean }} props
  */
@@ -96,11 +99,18 @@ export function ReceiptCapture({ onFile, disabled, uploading }) {
   const imageInput = useRef(null);
   const pdfInput = useRef(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [fileError, setFileError] = useState("");
+
+  function accept(file) {
+    const problem = receiptFileProblem(file, t);
+    setFileError(problem);
+    if (!problem) onFile(file);
+  }
 
   function picked(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) onFile(file);
+    if (file) accept(file);
   }
 
   function openCamera() {
@@ -113,7 +123,7 @@ export function ReceiptCapture({ onFile, disabled, uploading }) {
     <>
       {/* image/* (not just jpeg/png) so phones, iPhones included, open the camera instead of a chooser. */}
       <input ref={cameraInput} className="submit-expense-hidden-input" type="file" accept="image/*" capture="environment" onChange={picked} />
-      <input ref={imageInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" onChange={picked} />
+      <input ref={imageInput} className="submit-expense-hidden-input" type="file" accept={RECEIPT_IMAGE_ACCEPT} onChange={picked} />
       <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={picked} />
 
       <div className="submit-expense-upload-actions">
@@ -122,13 +132,14 @@ export function ReceiptCapture({ onFile, disabled, uploading }) {
         <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={disabled}>{t("submit.choose_pdf")}</Button>
         {uploading && <span className="submit-expense-progress" role="status">{t("scan.uploading")}</span>}
       </div>
+      {fileError && <p className="receipt-file-error" role="alert">{fileError}</p>}
 
       {/* In a portal: the receipt column is sticky (its own stacking layer), so inside it the popup
           would sit underneath the form fields next to it. On <body> it covers the whole page. */}
       {cameraOpen && createPortal(
         <CameraModal
           onClose={() => setCameraOpen(false)}
-          onPhoto={(file) => { setCameraOpen(false); onFile(file); }}
+          onPhoto={(file) => { setCameraOpen(false); accept(file); }}
           onChoose={() => { setCameraOpen(false); imageInput.current?.click(); }}
         />,
         document.body

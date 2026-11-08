@@ -297,6 +297,8 @@ export default function CaptureScreen() {
               </View>
               <Text style={styles.dropTitle}>{t("mx.drop_title")}</Text>
               <Text style={styles.dropBody}>{t("mx.drop_body")}</Text>
+              {/* What is accepted, before picking (same rule as lib/receipt-file.ts and the backend). */}
+              <Text style={styles.fileRules}>{t("mx.file_rules")}</Text>
             </>
           )}
         </View>
@@ -404,6 +406,7 @@ const styles = StyleSheet.create({
   dropIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
   dropTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, textAlign: "center" },
   dropBody: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center", lineHeight: 19 },
+  fileRules: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted, textAlign: "center", marginTop: 6 },
 
   errorBox: { marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.errorBorder, backgroundColor: COLORS.errorFill },
   errorBoxText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 18 },

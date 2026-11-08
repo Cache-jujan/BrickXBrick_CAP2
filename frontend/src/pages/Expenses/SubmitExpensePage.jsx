@@ -17,6 +17,7 @@ import { Field } from "../../components/ui/Field";
 import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
+import { isReceiptType } from "../../utils/receiptFile";
 import "./SubmitExpensePage.css";
 import { useLocale } from "../../i18n/LocaleProvider";
 
@@ -74,11 +75,9 @@ export function draftFromScan(result) {
   };
 }
 
-/** Accept a JPEG, PNG or PDF MIME type or extension for client-side receipt selection. */
+/** Accept a JPEG, PNG, WebP or PDF receipt (the one rule lives in utils/receiptFile.js). */
 export function isSupportedReceipt(file) {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  return ["image/jpeg", "image/jpg", "image/png", "application/pdf"].includes(file.type)
-    || ["jpg", "jpeg", "png", "pdf"].includes(extension);
+  return isReceiptType(file);
 }
 
 /** Render the managers' receipt capture and expense submission flow for resolved tickets. */

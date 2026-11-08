@@ -6,6 +6,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { useToast } from "../../components/ui/Toast";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProgressReviewPage.css";
 
@@ -24,6 +25,7 @@ const OTHER = "__other__";
 
 export function ProgressReviewPage() {
   const { t, formatDate } = useLocale();
+  const toast = useToast();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,6 +34,9 @@ export function ProgressReviewPage() {
   // Submissions where Flag was pressed without a reason: outlined in red.
   const [missingReasonId, setMissingReasonId] = useState(null);
   const [submittingId, setSubmittingId] = useState(null);
+  // Why the last Accept/Flag on a card didn't go through: { id, message }.
+  // Shown on that card, where the PM clicked, not in the banner at the top.
+  const [cardError, setCardError] = useState(null);
   // Deep-link from the dashboard "Needs your attention" panel: ?focus=<logId>
   // scrolls to that submission's card and highlights it briefly.
   const [searchParams] = useSearchParams();
@@ -72,20 +77,26 @@ export function ProgressReviewPage() {
     const reason = picked.choice === OTHER ? (picked.other || "").trim() : (picked.choice ? t(picked.choice) : "");
     if (decision === "Flag" && !reason) {
       setMissingReasonId(submission.logid);
-      setError(
-        picked.choice === OTHER ? t("review.err_other") : t("review.err_choose")
-      );
+      setCardError({
+        id: submission.logid,
+        message: picked.choice === OTHER ? t("review.err_other") : t("review.err_choose"),
+      });
       return;
     }
     setMissingReasonId(null);
 
     setSubmittingId(submission.logid);
-    setError("");
+    setCardError(null);
     try {
       await reviewProgressSubmission(submission.logid, decision, reason);
       setSubmissions((current) => current.filter((item) => item.logid !== submission.logid));
+      toast.success(
+        decision === "Flag"
+          ? t("review.toast_flagged", { name: submission.taskname })
+          : t("review.toast_accepted", { name: submission.taskname })
+      );
     } catch (err) {
-      setError(extractErrorMessage(err, t("errors.review_failed")));
+      setCardError({ id: submission.logid, message: extractErrorMessage(err, t("errors.review_failed")) });
     } finally {
       setSubmittingId(null);
     }
@@ -117,8 +128,11 @@ export function ProgressReviewPage() {
           {submissions.map((submission) => {
             const isSubmitting = submittingId === submission.logid;
             const picked = reasonById[submission.logid] || {};
-            const setPicked = (patch) =>
+            const setPicked = (patch) => {
+              // Choosing or typing a reason is the fix, so this card's error goes away.
+              setCardError((current) => (current?.id === submission.logid ? null : current));
               setReasonById((current) => ({ ...current, [submission.logid]: { ...picked, ...patch } }));
+            };
             return (
               <Card
                 key={submission.logid}
@@ -154,6 +168,9 @@ export function ProgressReviewPage() {
                   </div>
                 )}
 
+                {cardError?.id === submission.logid && (
+                  <p className="progress-review-card-error" role="alert">{cardError.message}</p>
+                )}
                 <div className="progress-review-actions">
                   <Button type="button" onClick={() => handleReview(submission, "Acknowledge")} disabled={isSubmitting}>
                     {isSubmitting ? t("common.saving") : t("review.acknowledge")}

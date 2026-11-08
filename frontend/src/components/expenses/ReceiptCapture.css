@@ -3,3 +3,14 @@
 .camera-video { display: block; width: 100%; max-height: 60vh; object-fit: contain; }
 .camera-note { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-5); text-align: center; color: #fff; font-size: var(--text-sm); }
 .camera-hint { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--color-ink-soft); }
+
+/* Why the picked file was refused (wrong type or over 10 MB), right under the buttons. */
+.receipt-file-error {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
