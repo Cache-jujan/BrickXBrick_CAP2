@@ -52,7 +52,6 @@
     "login.terms_link": "Terms and Conditions",
     "login.terms_required": "Please tick the Terms and Conditions box to sign in.",
     "login.signing_in": "Signing in…",
-    "login.story_title": "Construction projects, purchases and expenses in one record.",
     "login.story_body": "For General Managers, Project Managers, Site Managers and Purchasers. Approved expenses are protected against later changes.",
     "settings.title": "Settings",
     "settings.logout_title": "Log out?",
@@ -2194,7 +2193,14 @@
     "ci.p_issues_long": "Keep the issues under {max} characters.",
     "ci.p_needs_issue": "Describe the issue your Project Manager needs to act on.",
     "ci.p_tasks_max": "Link at most {max} tasks.",
-    "ci.p_photos_max": "Add at most {max} photos."
+    "ci.p_photos_max": "Add at most {max} photos.",
+    "login.welcome": "Welcome back",
+    "login.story_lead": "Construction projects, purchases and expenses in",
+    "login.story_accent": "one record.",
+    "login.feat_secure": "Secure with blockchain",
+    "login.feat_track": "Track in real time",
+    "login.feat_business": "Built for your business",
+    "notifications.unread_count": "{count} unread"
   },
   "ceb": {
     "language.name": "Pinulongan",
@@ -2249,7 +2255,6 @@
     "login.terms_link": "Mga Termino ug Kondisyon",
     "login.terms_required": "Palihug i-tick ang kahon sa Mga Termino ug Kondisyon aron maka-sign in.",
     "login.signing_in": "Naga-sign in…",
-    "login.story_title": "Usa ka rekord para sa mga proyekto, palit ug gasto sa konstruksyon.",
     "login.story_body": "Para sa General Manager, Project Manager, Site Manager ug Purchaser. Protektado ang gi-aprubahang mga gasto batok sa sunod nga pag-usab.",
     "settings.title": "Mga setting",
     "settings.logout_title": "Mogawas ka?",
@@ -4391,7 +4396,14 @@
     "ci.p_issues_long": "Ipaubos sa {max} ka karakter ang mga problema.",
     "ci.p_needs_issue": "Ihulagway ang problema nga kinahanglan aksyonan sa imong Project Manager.",
     "ci.p_tasks_max": "Hangtod {max} ra ka task ang ma-link.",
-    "ci.p_photos_max": "Hangtod {max} ra ka litrato ang madugang."
+    "ci.p_photos_max": "Hangtod {max} ra ka litrato ang madugang.",
+    "login.welcome": "Maayong pagbalik",
+    "login.story_lead": "Mga proyekto, palit ug gasto sa konstruksyon sa",
+    "login.story_accent": "usa ka rekord.",
+    "login.feat_secure": "Luwas gamit ang blockchain",
+    "login.feat_track": "Subaya sa tinuod nga oras",
+    "login.feat_business": "Angay sa imong negosyo",
+    "notifications.unread_count": "{count} wala pa mabasa"
   },
   "fil": {
     "language.name": "Wika",
@@ -4446,7 +4458,6 @@
     "login.terms_link": "Mga Tuntunin at Kundisyon",
     "login.terms_required": "Pakitik ang kahon ng Mga Tuntunin at Kundisyon para makapag-sign in.",
     "login.signing_in": "Nagsa-sign in…",
-    "login.story_title": "Mga proyektong konstruksyon, pagbili at gastos, nasa iisang record.",
     "login.story_body": "Para sa mga General Manager, Project Manager, Site Manager at Purchaser. Protektado laban sa pagbabago ang mga aprubadong gastos.",
     "settings.title": "Mga setting",
     "settings.logout_title": "Mag-log out?",
@@ -6588,6 +6599,13 @@
     "ci.p_issues_long": "Panatilihing mas mababa sa {max} na karakter ang mga problema.",
     "ci.p_needs_issue": "Ilarawan ang problemang kailangang aksyunan ng iyong Project Manager.",
     "ci.p_tasks_max": "Hanggang {max} na task lang ang maili-link.",
-    "ci.p_photos_max": "Hanggang {max} na larawan lang ang maidaragdag."
+    "ci.p_photos_max": "Hanggang {max} na larawan lang ang maidaragdag.",
+    "login.welcome": "Maligayang pagbabalik",
+    "login.story_lead": "Mga proyektong konstruksyon, pagbili at gastos sa",
+    "login.story_accent": "iisang record.",
+    "login.feat_secure": "Ligtas gamit ang blockchain",
+    "login.feat_track": "Subaybayan sa real time",
+    "login.feat_business": "Angkop sa negosyo mo",
+    "notifications.unread_count": "{count} hindi pa nababasa"
   }
 }

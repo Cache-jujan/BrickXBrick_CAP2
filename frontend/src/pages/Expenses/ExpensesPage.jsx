@@ -51,6 +51,37 @@ function submitterOf(e) {
  * Render the GM/PM expense review queue with status filters and review actions.
  * The backend scopes PM results to their projects; the client also filters them.
  */
+// Small line icons for the expanded expense row. They stay hidden until the General Manager
+// skin turns them on (see styles/gm-skin.css), so other roles keep the plain layout.
+const DETAIL_ICON_PATHS = {
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+  doc: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></>,
+  box: <><path d="m21 8-9-5-9 5 9 5 9-5Z" /><path d="M3 8v8l9 5 9-5V8M12 13v8" /></>,
+  shield: <><path d="M12 3 5 6v5c0 4.5 3 8.2 7 10 4-1.8 7-5.5 7-10V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></>,
+  note: <><path d="M5 4h14v12l-4 4H5V4Z" /><path d="M15 20v-4h4M8 9h8M8 13h4" /></>,
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />,
+  check: <path d="m5 12 5 5 9-10" />,
+  x: <path d="M6 6l12 12M18 6 6 18" />,
+};
+
+function DetailIcon({ name }) {
+  return (
+    <svg className="expenses-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {DETAIL_ICON_PATHS[name]}
+    </svg>
+  );
+}
+
+function DetailRow({ icon, label, children }) {
+  return (
+    <p className="expenses-detail-row">
+      <DetailIcon name={icon} />
+      <span className="expenses-detail-text"><strong>{label}</strong> {children}</span>
+    </p>
+  );
+}
+
 export function ExpensesPage() {
   const { user } = useAuth();
   const { t, tv, formatDate } = useLocale();
@@ -374,15 +405,15 @@ export function ExpensesPage() {
                                     </Banner>
                                   )}
                                   <div className="expenses-detail-grid">
-                                    <p><strong>{t("expenses.submitted_by")}</strong> {e.submittedbyname}</p>
-                                    {e.ticketsubject && <p><strong>{t("expenses.request")}</strong> {e.ticketsubject}</p>}
-                                    <p><strong>{t("expenses.quantity")}</strong> {e.quantity}</p>
-                                    <p><strong>{t("expenses.bir_status")}</strong> {tv("bir", e.birvalidationstatus)}</p>
-                                    <p><strong>{t("expenses.tin")}</strong> {e.tin || "—"}</p>
-                                    <p><strong>{t("expenses.bir_permit")}</strong> {e.birpermitnumber || "—"}</p>
-                                    <p><strong>{t("expenses.or_si")}</strong> {e.birnumber || "—"}</p>
+                                    <DetailRow icon="user" label={t("expenses.submitted_by")}>{e.submittedbyname}</DetailRow>
+                                    {e.ticketsubject && <DetailRow icon="doc" label={t("expenses.request")}>{e.ticketsubject}</DetailRow>}
+                                    <DetailRow icon="box" label={t("expenses.quantity")}>{e.quantity}</DetailRow>
+                                    <DetailRow icon="shield" label={t("expenses.bir_status")}>{tv("bir", e.birvalidationstatus)}</DetailRow>
+                                    <DetailRow icon="doc" label={t("expenses.tin")}>{e.tin || "—"}</DetailRow>
+                                    <DetailRow icon="doc" label={t("expenses.bir_permit")}>{e.birpermitnumber || "—"}</DetailRow>
+                                    <DetailRow icon="doc" label={t("expenses.or_si")}>{e.birnumber || "—"}</DetailRow>
                                     {e.status === "Rejected" && e.rejectionreason && (
-                                      <p><strong>{t("expenses.rejection_reason")}</strong> {e.rejectionreason}</p>
+                                      <DetailRow icon="note" label={t("expenses.rejection_reason")}>{e.rejectionreason}</DetailRow>
                                     )}
                                   </div>
                                   {items.length > 0 && (
@@ -394,15 +425,15 @@ export function ExpensesPage() {
                                   )}
                                   <div className="expenses-detail-links">
                                     {e.receiptimageurl && (
-                                      <a href={e.receiptimageurl} target="_blank" rel="noreferrer">{t("expenses.view_receipt")}</a>
+                                      <a href={e.receiptimageurl} target="_blank" rel="noreferrer"><DetailIcon name="doc" />{t("expenses.view_receipt")}</a>
                                     )}
-                                    {project && <Link to={`/projects/${project.projectid}`}>{t("expenses.open_project")}</Link>}
+                                    {project && <Link to={`/projects/${project.projectid}`}><DetailIcon name="folder" />{t("expenses.open_project")}</Link>}
                                   </div>
                                   {e.status === "Pending" && (
                                     <div className="expenses-actions">
                                       {e.submittedby === user.id ? (
                                         user.role === "General Manager" ? (
-                                          <Button onClick={() => openConfirm(e, "approve")}>{t("expenses.approve")}</Button>
+                                          <Button onClick={() => openConfirm(e, "approve")}><DetailIcon name="check" />{t("expenses.approve")}</Button>
                                         ) : (
                                         <p className="expenses-subtitle">
                                           {t("expenses.own_waiting")}
@@ -410,8 +441,8 @@ export function ExpensesPage() {
                                         )
                                       ) : (
                                         <>
-                                          <Button onClick={() => openConfirm(e, "approve")}>{t("expenses.approve")}</Button>
-                                          <Button variant="danger" onClick={() => openConfirm(e, "reject")}>{t("expenses.reject")}</Button>
+                                          <Button onClick={() => openConfirm(e, "approve")}><DetailIcon name="check" />{t("expenses.approve")}</Button>
+                                          <Button variant="danger" onClick={() => openConfirm(e, "reject")}><DetailIcon name="x" />{t("expenses.reject")}</Button>
                                         </>
                                       )}
                                     </div>

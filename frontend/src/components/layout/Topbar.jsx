@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
+import { ChevronIcon, LogoutIcon, BellIcon, UserIcon, DocIcon } from "./icons";
 import { Avatar } from "../ui/Avatar";
 import {
   listMyNotifications,
@@ -223,6 +223,13 @@ export function Topbar({ onMenuClick }) {
                   )}
                 </div>
 
+                {unreadCount > 0 && (
+                  <p className="topbar-notif-unread">
+                    <span className="topbar-notif-unread-dot" aria-hidden="true" />
+                    {t("notifications.unread_count", { count: unreadCount })}
+                  </p>
+                )}
+
                 <div className="topbar-notif-scroll">
                   {notifications.length === 0 ? (
                     <div className="topbar-notif-empty">
@@ -299,6 +306,7 @@ export function Topbar({ onMenuClick }) {
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                 >
+                  <UserIcon />
                   {t("settings.account")}
                 </Link>
                 <Link
@@ -307,6 +315,7 @@ export function Topbar({ onMenuClick }) {
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                 >
+                  <DocIcon />
                   {t("account.terms_privacy")}
                 </Link>
                 <button

@@ -537,3 +537,86 @@
 .gm-skin input[type="range"] {
   accent-color: var(--color-brick);
 }
+
+/* ---- Expenses: expanded row with icons and a clear action bar --------- */
+
+.gm-skin .expenses-ic {
+  display: inline-block;
+  flex-shrink: 0;
+}
+.gm-skin .expenses-detail td {
+  padding: var(--space-5) var(--space-6);
+}
+.gm-skin .expenses-detail-grid {
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-4);
+}
+.gm-skin .expenses-detail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+}
+.gm-skin .expenses-detail-row .expenses-ic {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 50%;
+  background: var(--color-brick-tint);
+  color: var(--color-brick-dark);
+}
+.gm-skin .expenses-detail-row strong {
+  color: var(--color-ink-soft);
+  font-weight: 600;
+}
+.gm-skin .expenses-detail-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gm-skin .expenses-detail-row {
+  align-items: flex-start;
+}
+.gm-skin .expenses-detail-text {
+  padding-top: 5px;
+}
+.gm-skin .expenses-detail-links {
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.gm-skin .expenses-detail-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 14px;
+  border: 1px solid rgba(48, 47, 40, 0.14);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--color-ink);
+  text-decoration: none;
+}
+.gm-skin .expenses-detail-links a:hover {
+  border-color: var(--color-brick);
+  color: var(--color-brick-dark);
+}
+.gm-skin .expenses-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+/* The purchaser's note reads as a quiet callout, not an alarm. */
+.gm-skin .expenses-detail .banner-warning {
+  border: 0;
+  border-left: 3px solid #e0a548;
+  border-radius: 12px;
+  background: #fdf6e8;
+}
+
+/* Search boxes get a magnifier. */
+.gm-skin input[type="search"] {
+  padding-left: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%239b806e' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+}

@@ -223,3 +223,8 @@
 .expenses-who > span:first-child { font-weight: 600; overflow-wrap: anywhere; }
 .expenses-table th, .expenses-table td { padding-left: var(--space-3); padding-right: var(--space-3); }
 .expenses-table td:nth-child(5), .expenses-when > span { white-space: nowrap; }
+
+/* Icons in the expanded row are off unless a skin turns them on. */
+.expenses-ic {
+  display: none;
+}
