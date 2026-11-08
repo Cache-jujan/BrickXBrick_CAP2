@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   listManagedTickets,
@@ -99,6 +99,8 @@ export function TicketQueuePage() {
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get("focus");
   const [highlightId, setHighlightId] = useState(null);
+  // The ticket whose summary and actions are open in a modal (a list row was clicked, or a notification linked here).
+  const [openId, setOpenId] = useState(null);
 
   async function loadTab(tab, { keepError = false } = {}) {
     setLoading(true);
@@ -172,6 +174,7 @@ export function TicketQueuePage() {
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     setHighlightId(focusId);
+    setOpenId(focusId);
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
   }, [focusId, loading, tickets, activeTab]);
@@ -440,6 +443,14 @@ export function TicketQueuePage() {
     return out;
   }, [visibleTickets, activeTab]);
 
+  const openTicket = openId ? tickets.find((t) => String(t.ticketid) === String(openId)) : null;
+  const cardProps = {
+    purchasers, assignments, setAssignments, approvedBudgets, setApprovedBudgets,
+    neededByDates, setNeededByDates, submittingId, cardErrors, onClearError: clearCardError,
+    highlightId, activeTab, onAcknowledge: handleAcknowledge, onResolve: handleResolve,
+    onReject: openReject, onEdit: openEdit, onOpen: (t) => setOpenId(t.ticketid),
+  };
+
   return (
     <div className="ticket-queue">
       <div className="ticket-queue-header">
@@ -540,48 +551,18 @@ export function TicketQueuePage() {
               <BatchBlock
                 key={block.key}
                 tickets={block.tickets}
-                purchasers={purchasers}
-                assignments={assignments}
-                setAssignments={setAssignments}
-                approvedBudgets={approvedBudgets}
-                setApprovedBudgets={setApprovedBudgets}
-                neededByDates={neededByDates}
-                setNeededByDates={setNeededByDates}
-                submittingId={submittingId}
-                cardErrors={cardErrors}
-                onClearError={clearCardError}
-                highlightId={highlightId}
-                activeTab={activeTab}
-                onAcknowledge={handleAcknowledge}
-                onResolve={handleResolve}
-                onReject={openReject}
-                onEdit={openEdit}
+                {...cardProps}
                 onAssignAll={handleAssignAll}
               />
             ) : (
-              <TicketCard
-                key={block.ticket.ticketid}
-                ticket={block.ticket}
-                purchasers={purchasers}
-                assignments={assignments}
-                setAssignments={setAssignments}
-                approvedBudgets={approvedBudgets}
-                setApprovedBudgets={setApprovedBudgets}
-                neededByDates={neededByDates}
-                setNeededByDates={setNeededByDates}
-                submittingId={submittingId}
-                cardErrors={cardErrors}
-                onClearError={clearCardError}
-                highlightId={highlightId}
-                activeTab={activeTab}
-                onAcknowledge={handleAcknowledge}
-                onResolve={handleResolve}
-                onReject={openReject}
-                onEdit={openEdit}
-              />
+              <TicketRow key={block.ticket.ticketid} ticket={block.ticket} {...cardProps} />
             )
           )}
         </div>
+      )}
+
+      {openTicket && (
+        <TicketModal ticket={openTicket} onClose={() => setOpenId(null)} cardProps={cardProps} />
       )}
 
       {reject && (
@@ -740,12 +721,72 @@ function todayInputValue() {
   return toInputDate(new Date().toISOString());
 }
 
+// ---- A compact row: enough to recognise the ticket, click it to see everything ----
+function TicketRow({ ticket, onOpen, highlightId }) {
+  const { t: tr, tv, formatDate } = useLocale();
+  const meta = TYPE_META[ticket.tickettype] || { key: "work" };
+  const isReport = ticket.tickettype === "Report";
+  const focus = String(ticket.ticketid) === String(highlightId);
+  const qty = ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "";
+  return (
+    <button
+      type="button"
+      id={`ticket-${ticket.ticketid}`}
+      className={`ticket-row ticket-row-${meta.key}` + (focus ? " ticket-row-focus" : "")}
+      onClick={() => onOpen(ticket)}
+      aria-haspopup="dialog"
+    >
+      <span className="ticket-row-main">
+        <span className="ticket-card-tags">
+          <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{tv("tickettype", ticket.tickettype)}</span>
+          <Badge status={ticket.status} />
+          {ticket.resubmittedfromid && <span className="ticket-resubmit-pill">{tr("tq.resubmission")}</span>}
+        </span>
+        <strong className="ticket-row-subject">{ticket.subject}</strong>
+        <span className="ticket-row-context">
+          {tr("tq.submitted_by", { project: ticket.projectname || ticket.projectName, name: ticket.submittedbyname || "Site Manager" })}
+        </span>
+      </span>
+      <span className="ticket-row-side">
+        {!isReport && (qty || ticket.materialtype) && (
+          <span className="ticket-row-qty">{[qty, ticket.materialtype].filter(Boolean).join(" · ")}</span>
+        )}
+        <time className="ticket-row-date" dateTime={ticket.createdat}>{formatDate(ticket.createdat, DATETIME_OPTIONS)}</time>
+      </span>
+      <span className="ticket-row-chevron" aria-hidden="true">›</span>
+    </button>
+  );
+}
+
+// ---- The ticket in a modal: the full card, with every action it already had ----
+function TicketModal({ ticket, onClose, cardProps }) {
+  const { t: tr } = useLocale();
+  const closeRef = useRef(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e) => {
+      // Escape closes this modal only when no other modal (reject, edit) is on top of it.
+      if (e.key === "Escape" && document.querySelectorAll(".modal-overlay").length === 1) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="modal-overlay" role="presentation" onClick={onClose}>
+      <div className="modal ticket-modal" role="dialog" aria-modal="true" aria-label={ticket.subject} onClick={(e) => e.stopPropagation()}>
+        <button ref={closeRef} type="button" className="modal-close ticket-modal-close" onClick={onClose} aria-label={tr("pd.close")}>×</button>
+        <TicketCard {...cardProps} ticket={ticket} inModal />
+      </div>
+    </div>
+  );
+}
+
 // ---- A single ticket card ----
 function TicketCard(props) {
   const {
     ticket, purchasers, assignments, setAssignments, approvedBudgets, setApprovedBudgets,
     neededByDates, setNeededByDates,
-    submittingId, cardErrors, onClearError, highlightId, activeTab, onAcknowledge, onResolve, onReject, onEdit, inBatch,
+    submittingId, cardErrors, onClearError, highlightId, activeTab, onAcknowledge, onResolve, onReject, onEdit, inBatch, inModal,
   } = props;
   const { t: tr, tv, formatDate } = useLocale();
   const meta = TYPE_META[ticket.tickettype] || { key: "work" };
@@ -769,6 +810,7 @@ function TicketCard(props) {
     >
       <div className="ticket-card-head">
         <div className="ticket-card-head-main">
+          {inModal && <p className="ticket-card-ref">{tr("rq.id")} #{String(ticket.ticketid).split("-")[0].toUpperCase()}</p>}
           <div className="ticket-card-tags">
             <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{tv("tickettype", ticket.tickettype)}</span>
             <Badge status={ticket.status} />
@@ -947,7 +989,7 @@ function BatchBlock(props) {
       </header>
       <div className="ticket-batch-body">
         {tickets.map((t) => (
-          <TicketCard key={t.ticketid} {...props} ticket={t} inBatch />
+          <TicketRow key={t.ticketid} {...props} ticket={t} />
         ))}
       </div>
     </section>

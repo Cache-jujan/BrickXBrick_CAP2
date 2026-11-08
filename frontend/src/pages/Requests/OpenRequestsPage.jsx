@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RequestDetailModal } from "../../components/requests/RequestDetailModal";
+import { Badge } from "../../components/ui/Badge";
 import { listOpenRequests } from "../../api/allocationsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -33,6 +35,7 @@ export function OpenRequestsPage() {
   const [view, setView] = useState("store");
   const [vendorFilter, setVendorFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
+  const [selected, setSelected] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,27 +138,43 @@ export function OpenRequestsPage() {
             {group.requests.map((request) => {
               const progress = progressOf(request);
               return (
-                <li key={request.ticketID} className="open-requests-row">
-                  <div className="open-requests-row-main">
-                    <strong>{request.subject}</strong>
-                    <span className="open-requests-meta">
-                      {t("tb.need_line", {
-                        quantity: formatNumber ? formatNumber(request.requestedQuantity) : request.requestedQuantity,
-                        material: request.materialType,
-                        project: request.projectName,
-                      })}
-                      {view === "project" && request.vendorName ? ` · ${request.vendorName}` : ""}
+                <li key={request.ticketID} className="open-requests-item">
+                  <button
+                    type="button"
+                    className="open-requests-row"
+                    onClick={() => setSelected(request)}
+                    aria-label={t("rq.view_details", { subject: request.subject })}
+                    aria-haspopup="dialog"
+                  >
+                    <span className="open-requests-row-main">
+                      <strong>{request.subject}</strong>
+                      <span className="open-requests-meta">
+                        {t("tb.need_line", {
+                          quantity: formatNumber ? formatNumber(request.requestedQuantity) : request.requestedQuantity,
+                          material: request.materialType,
+                          project: request.projectName,
+                        })}
+                        {view === "project" && request.vendorName ? ` · ${request.vendorName}` : ""}
+                      </span>
                     </span>
-                  </div>
-                  <div className="open-requests-progress">
-                    <div className="open-requests-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((progress.quantityShare ?? 0) * 100)}>
-                      <div className="open-requests-fill" style={{ width: `${Math.round((progress.quantityShare ?? 0) * 100)}%` }} />
-                    </div>
-                    <span className="open-requests-meta">
-                      {t("tb.progress_qty", { bought: progress.bought, total: progress.requested })}
-                      {progress.budget != null ? ` · ${t("open_requests.budget_left", { left: PESO.format(Number(request.remainingBudget ?? progress.budget)) })}` : ""}
+                    <span className="open-requests-progress">
+                      <span className="open-requests-progress-top">
+                        <Badge status={request.status} />
+                        <span className="open-requests-meta">
+                          {t("tb.progress_qty", { bought: progress.bought, total: progress.requested })}
+                        </span>
+                      </span>
+                      <span className="open-requests-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((progress.quantityShare ?? 0) * 100)}>
+                        <span className="open-requests-fill" style={{ width: `${Math.round((progress.quantityShare ?? 0) * 100)}%` }} />
+                      </span>
+                      {progress.budget != null && (
+                        <span className="open-requests-meta">
+                          {t("open_requests.budget_left", { left: PESO.format(Number(request.remainingBudget ?? progress.budget)) })}
+                        </span>
+                      )}
                     </span>
-                  </div>
+                    <span className="open-requests-chevron" aria-hidden="true">›</span>
+                  </button>
                 </li>
               );
             })}
@@ -163,6 +182,8 @@ export function OpenRequestsPage() {
         </Card>
       ))}
       </div>
+
+      {selected && <RequestDetailModal request={selected} role={user.role} onClose={() => setSelected(null)} />}
     </div>
   );
 }

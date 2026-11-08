@@ -51,6 +51,15 @@ function submitterOf(e) {
  * Render the GM/PM expense review queue with status filters and review actions.
  * The backend scopes PM results to their projects; the client also filters them.
  */
+// The one-line explanation shown under each status tab.
+const HINT_KEYS = {
+  All: "expenses.hint_all",
+  Pending: "expenses.hint_pending",
+  Flagged: "expenses.hint_flagged",
+  Approved: "expenses.hint_approved",
+  Rejected: "expenses.hint_rejected",
+};
+
 // Small line icons for the expanded expense row. They stay hidden until the General Manager
 // skin turns them on (see styles/gm-skin.css), so other roles keep the plain layout.
 const DETAIL_ICON_PATHS = {
@@ -243,6 +252,23 @@ export function ExpensesPage() {
     setPage(1);
   }
 
+  // One short line under the vendor: why a row needs attention, without opening it.
+  function rowNote(e, flags) {
+    if (e.status === "Rejected" && e.rejectionreason) return e.rejectionreason;
+    if (flags?.length) return flagLabel(flags[0].flagType, tv);
+    if (e.status === "Pending" && e.submitnote) return e.submitnote;
+    return "";
+  }
+
+  // Which decisions a row offers without opening it (same rules as the open row below).
+  function inlineActions(e) {
+    if (e.status !== "Pending") return null;
+    if (flagMap[e.expenseid]) return { review: true };
+    if (e.submittedby === user.id) return user.role === "General Manager" ? { approve: true } : null;
+    return { approve: true, reject: true };
+  }
+  const showActions = rows.some((e) => inlineActions(e));
+
   const rejectNeedsReason = confirm?.action === "reject" && !reason.trim();
 
   return (
@@ -308,6 +334,8 @@ export function ExpensesPage() {
             />
           </div>
 
+          {!focusId && <p className={"expenses-hint expenses-hint-" + tab.toLowerCase()}>{t(HINT_KEYS[tab])}</p>}
+
           {loading && <p className="dashboard-loading">{t("dashboard.loading_expenses")}</p>}
 
           {!loading && filtered.length === 0 && (
@@ -331,6 +359,7 @@ export function ExpensesPage() {
                         <th>{t("expenses.col_submitted")}</th>
                         <th>{t("expenses.col_submitted_by")}</th>
                         <th>{t("dashboard.status")}</th>
+                        {showActions && <th className="expenses-actions-col">{t("expenses.col_actions")}</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -345,30 +374,33 @@ export function ExpensesPage() {
                               className={"expenses-row" + (isOpen ? " expenses-row-open" : "")}
                               onClick={() => setOpenId(isOpen ? null : e.expenseid)}
                             >
-                              <td>{e.vendorname}</td>
-                              <td>{project?.name || "—"}</td>
-                              <td>
+                              <td className="expenses-vendor" data-label={t("dashboard.vendor")}>
+                                <span className="expenses-vendor-name">{e.vendorname}</span>
+                                {rowNote(e, flags) && <span className="expenses-sub">{rowNote(e, flags)}</span>}
+                              </td>
+                              <td data-label={t("nav.project")}>{project?.name || "—"}</td>
+                              <td data-label={t("dashboard.category")}>
                                 {e.istripcost ? (
                                   <Badge status="Draft">{t("expenses.trip_cost")}</Badge>
                                 ) : (
                                   tv("category", e.category)
                                 )}
                               </td>
-                              <td>{PESO.format(e.amount)}</td>
-                              <td>{formatDate(e.receiptdate)}</td>
-                              <td className="expenses-when">
+                              <td data-label={t("dashboard.amount")}>{PESO.format(e.amount)}</td>
+                              <td data-label={t("my_expenses.receipt_date")}>{formatDate(e.receiptdate)}</td>
+                              <td className="expenses-when" data-label={t("expenses.col_submitted")}>
                                 <span>{formatDate(e.submittedat)}</span>
                                 <span className="expenses-when-time">{formatDate(e.submittedat, SUBMITTED_AT)}</span>
                               </td>
-                              <td className="expenses-who">
+                              <td className="expenses-who" data-label={t("expenses.col_submitted_by")}>
                                 <span>{submitterOf(e).name}</span>
                                 {submitterOf(e).role && <span className="expenses-who-role">{submitterOf(e).role}</span>}
                               </td>
-                              <td>
+                              <td data-label={t("dashboard.status")}>
                                 <span className="expenses-badges">
                                   <Badge status={e.status} />
                                   {flags && (
-                                    <Badge status="At Risk">
+                                    <Badge status="Flagged">
                                       {flags.length === 1 ? t("expenses.flags_one") : t("expenses.flags_other", { count: flags.length })}
                                     </Badge>
                                   )}
@@ -377,10 +409,37 @@ export function ExpensesPage() {
                                   )}
                                 </span>
                               </td>
+                              {showActions && (
+                                <td className="expenses-actions-col" onClick={(ev) => ev.stopPropagation()}>
+                                  {(() => {
+                                    const a = inlineActions(e);
+                                    if (!a) return null;
+                                    return (
+                                      <span className="expenses-quick">
+                                        {a.review && (
+                                          <button type="button" className="expenses-quick-btn expenses-quick-review" onClick={() => setOpenId(e.expenseid)}>
+                                            {t("expenses.review")}
+                                          </button>
+                                        )}
+                                        {a.approve && (
+                                          <button type="button" className="expenses-quick-btn expenses-quick-approve" onClick={() => openConfirm(e, "approve")} aria-label={`${t("expenses.approve")}: ${e.vendorname}`} title={t("expenses.approve")}>
+                                            <DetailIcon name="check" />
+                                          </button>
+                                        )}
+                                        {a.reject && (
+                                          <button type="button" className="expenses-quick-btn expenses-quick-reject" onClick={() => openConfirm(e, "reject")} aria-label={`${t("expenses.reject")}: ${e.vendorname}`} title={t("expenses.reject")}>
+                                            <DetailIcon name="x" />
+                                          </button>
+                                        )}
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
+                              )}
                             </tr>
                             {isOpen && (
                               <tr className="expenses-detail">
-                                <td colSpan={8}>
+                                <td colSpan={showActions ? 9 : 8}>
                                   {flags && (
                                     <FlagReviewPanel
                                       expense={flaggedById[e.expenseid] ?? e}

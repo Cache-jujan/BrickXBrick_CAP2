@@ -487,11 +487,27 @@
   color: var(--color-brick-dark);
   padding: 3px 10px;
 }
-.gm-skin .open-requests-row {
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: var(--space-5);
-  padding: var(--space-4) 0;
+.gm-skin .open-requests-item {
   border-top: 1px solid var(--gm-line);
+}
+.gm-skin .open-requests-list > .open-requests-item:first-child {
+  border-top: 0;
+}
+.gm-skin .open-requests-item > .open-requests-row {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-3);
+  margin: 2px 0;
+  border-radius: 12px;
+}
+.gm-skin .open-requests-item > .open-requests-row:hover {
+  background: #faf6f1;
+}
+@media (max-width: 520px) {
+  .gm-skin .open-requests-item > .open-requests-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2);
+  }
 }
 .gm-skin .open-requests-row-main strong {
   font-size: var(--text-base);
@@ -619,4 +635,49 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%239b806e' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 14px center;
+}
+
+/* ---- Expenses: each status reads apart ------------------------------- */
+
+.gm-skin .expenses-hint {
+  margin-top: calc(-1 * var(--space-1));
+}
+/* A quiet colored edge on rows that still need a decision or were turned down. */
+.gm-skin .expenses-row td:first-child {
+  box-shadow: inset 3px 0 0 transparent;
+}
+.gm-skin .expenses-row:has(.badge-risk) td:first-child {
+  box-shadow: inset 3px 0 0 #e0a548;
+}
+.gm-skin .expenses-row:has(.badge-flag) td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-brick);
+}
+.gm-skin .expenses-row:has(.badge-overdue) td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-danger);
+}
+
+.gm-skin .expenses-table th,
+.gm-skin .expenses-table td {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+.gm-skin .expenses-table td:first-child,
+.gm-skin .expenses-table th:first-child {
+  padding-left: var(--space-4);
+}
+.gm-skin .expenses-table td:last-child,
+.gm-skin .expenses-table th:last-child {
+  padding-right: var(--space-4);
+}
+.gm-skin .expenses-table td:nth-child(2) {
+  min-width: 120px;
+}
+
+@media (max-width: 640px) {
+  .gm-skin .expenses-table td:nth-child(2) { min-width: 0; }
+  .gm-skin .expenses-table .expenses-row td:first-child,
+  .gm-skin .expenses-table .expenses-row td:last-child {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
 }

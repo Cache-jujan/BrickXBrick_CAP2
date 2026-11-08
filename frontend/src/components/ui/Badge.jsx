@@ -9,6 +9,7 @@ const STATUS_TONE = {
   Approved: "active",
   Completed: "neutral",
   "At Risk": "risk",
+  Flagged: "flag",
   Pending: "risk",
   Draft: "neutral",
   Overdue: "overdue",
