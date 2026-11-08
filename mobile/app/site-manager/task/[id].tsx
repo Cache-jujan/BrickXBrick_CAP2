@@ -32,6 +32,7 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { FlowHeader } from "@/components/flow-header";
+import { StatusChip } from "@/components/status-chip";
 import { KeyboardScreen } from "@/components/screen";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -322,17 +323,19 @@ export default function SiteManagerTaskDetailScreen() {
                 {t("sm.showing_task", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
               </Text>
             )}
-            <Text style={styles.eyebrow}>{t("sm.eyebrow")}</Text>
             <Text style={styles.title}>{task.taskname}</Text>
-            <View style={[styles.statusPill, task.status === "Completed" && styles.statusPillCompleted]}>
-              <Text style={[styles.statusText, task.status === "Completed" && styles.statusTextCompleted]}>
-                {tv("status", task.status)}
-              </Text>
+            <View style={styles.chipRow}>
+              <StatusChip label={tv("status", task.status)} tone={task.status === "Completed" ? "success" : "primary"} />
             </View>
 
-            <View style={styles.progressCard}>
-              <Text style={styles.cardLabel}>{t("sm.progress_label")}</Text>
-              <Text style={styles.progressValue}>{Number(task.completionpercentage || 0)}%</Text>
+            <View style={styles.progressBlock}>
+              <View style={styles.progressTop}>
+                <Text style={styles.cardLabel}>{t("sm.progress_label")}</Text>
+                <Text style={styles.progressValue}>{Number(task.completionpercentage || 0)}%</Text>
+              </View>
+              <View style={styles.track}>
+                <View style={[styles.trackFill, { width: `${Math.max(0, Math.min(100, Number(task.completionpercentage || 0)))}%` }]} />
+              </View>
               <Text style={styles.progressBody}>
                 {task.status === "Completed" ? t("sm.completed_ack") : t("sm.add_photo_note")}
               </Text>
@@ -499,16 +502,15 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.bg, flex: 1 },
   keyboardAvoider: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
-  eyebrow: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 },
-  title: { color: COLORS.heading, fontSize: 28, fontWeight: "800", lineHeight: 34 },
-  statusPill: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 20, marginTop: 14, paddingHorizontal: 11, paddingVertical: 6 },
-  statusPillCompleted: { backgroundColor: COLORS.successBg },
-  statusText: { color: COLORS.primary, fontSize: 12, fontWeight: "800" },
-  statusTextCompleted: { color: COLORS.success },
-  progressCard: { backgroundColor: "#1A1A1A", borderRadius: 18, marginTop: 28, padding: 20 },
-  cardLabel: { color: "#D8C7AA", fontSize: 12, fontWeight: "800", letterSpacing: 1.4 },
-  progressValue: { color: "#FFFFFF", fontSize: 42, fontWeight: "800", marginTop: 10 },
-  progressBody: { color: "#C9C0B3", fontSize: 13, lineHeight: 19, marginTop: 8 },
+  title: { color: COLORS.heading, fontSize: 24, fontWeight: "800", lineHeight: 30 },
+  chipRow: { flexDirection: "row", marginTop: 10 },
+  progressBlock: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 14, borderWidth: 1, marginTop: 18, padding: 16 },
+  progressTop: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between" },
+  cardLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  progressValue: { color: COLORS.heading, fontSize: 28, fontWeight: "800" },
+  track: { backgroundColor: "#EEE7DE", borderRadius: 4, height: 8, marginTop: 10, overflow: "hidden" },
+  trackFill: { backgroundColor: COLORS.primary, borderRadius: 4, height: 8 },
+  progressBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 10 },
   infoCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 14, paddingHorizontal: 16 },
   infoRow: { borderBottomColor: "#EEE7DE", borderBottomWidth: 1, paddingVertical: 15 },
   infoLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },

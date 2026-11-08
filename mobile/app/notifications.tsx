@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 8,
   },
-  rowUnread: { backgroundColor: COLORS.primaryTint, borderColor: COLORS.border },
+  rowUnread: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderLeftColor: COLORS.primary, borderLeftWidth: 3 },
   rowIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   rowBody: { flex: 1 },
   rowMessage: { color: COLORS.heading, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19 },

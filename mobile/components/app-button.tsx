@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
@@ -20,11 +21,13 @@ type Props = {
   fit?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  // Small icon after the label, e.g. an arrow on the sign-in button.
+  trailing?: ReactNode;
 };
 
 // One button for every screen: 48px tall, same radius, clear disabled and
 // loading states. A loading button ignores taps so it cannot double-submit.
-export function AppButton({ label, onPress, variant = "primary", loading, disabled, fit, style, accessibilityLabel }: Props) {
+export function AppButton({ label, onPress, variant = "primary", loading, disabled, fit, style, accessibilityLabel, trailing }: Props) {
   const look = LOOK[variant];
   const off = !!disabled || !!loading;
   return (
@@ -44,6 +47,7 @@ export function AppButton({ label, onPress, variant = "primary", loading, disabl
     >
       {loading ? <ActivityIndicator size="small" color={look.text} /> : null}
       <Text style={[styles.text, { color: look.text }]} numberOfLines={1}>{label}</Text>
+      {!loading ? trailing : null}
     </Pressable>
   );
 }

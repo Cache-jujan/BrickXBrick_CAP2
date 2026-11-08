@@ -108,8 +108,10 @@ export default function TicketRequestScreen() {
   // Optional query param: when present, this screen is in "fix & resubmit"
   // mode — one card prefilled from the rejected ticket, project locked,
   // "+ Add another" hidden, and the ticket id sent back as resubmittedFromId.
-  const { resubmitFrom } = useLocalSearchParams<{ resubmitFrom?: string }>();
+  // projectId (from the project summary) picks that project up front.
+  const { resubmitFrom, projectId } = useLocalSearchParams<{ resubmitFrom?: string; projectId?: string }>();
   const resubmitId = typeof resubmitFrom === "string" ? resubmitFrom : null;
+  const presetProjectId = typeof projectId === "string" ? projectId : null;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +168,10 @@ export default function TicketRequestScreen() {
         } else if (projectList.length === 1) {
           // Auto-route: exactly one project → skip the chooser.
           setProject(projectList[0]);
+        } else {
+          // Came from a project summary: that project is already chosen.
+          const preset = presetProjectId ? projectList.find((p) => p.projectid === presetProjectId) : null;
+          if (preset) setProject(preset);
         }
       })
       .catch((err) => setError(plainError(err, t("errors.load_options"), t)))

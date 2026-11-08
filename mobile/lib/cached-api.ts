@@ -12,6 +12,7 @@ import {
   fetchCheckinDetail,
   fetchCheckinsToday,
   fetchMyExpenses,
+  fetchMyProjects,
   fetchNotifications,
   fetchOpenRequests,
 } from "@/lib/api";
@@ -30,6 +31,7 @@ export const loadAssignedTickets = (role: "Purchaser" | "Site Manager") =>
 export const loadCheckinsToday = () => cached("checkins:today", fetchCheckinsToday);
 export const loadCheckinDetail = (checkinId: string) => cached(`checkin:${checkinId}`, () => fetchCheckinDetail(checkinId));
 export const loadActiveProjects = () => cached("projects:active", fetchActiveProjects);
+export const loadMyProjects = () => cached("projects:mine", fetchMyProjects);
 export const loadOpenRequests = () => cached("allocations:open-requests", fetchOpenRequests);
 export const loadMyExpenses = () => cached("expenses:mine", fetchMyExpenses);
 export const loadScans = () => cached("receipts:scans", fetchScans);

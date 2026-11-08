@@ -13,6 +13,8 @@ export const COLORS = {
   amberBannerFill: "#FFF4D6", amberBannerText: "#5E3A00",
   // Red: an error or a missing required value.
   errorFill: "#FDECEA", errorBorder: "#B3261E", errorText: "#A3231B",
+  // Charcoal and light orange from the web sign-in panel (dark header blocks).
+  dark: "#1C1A17", accentLight: "#F0803F",
   // Blue chip: "In progress".
   infoFill: "#E6ECF8", infoText: "#243F7A",
 };

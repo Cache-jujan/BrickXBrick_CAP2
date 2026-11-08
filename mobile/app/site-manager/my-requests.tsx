@@ -13,6 +13,7 @@ import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "e
 import { useOnNewNotifications } from "@/lib/notification-events";
 
 import { COLORS } from "@/constants/expense-flow-colors";
+import { StatusChip, type ChipTone } from "@/components/status-chip";
 import { formatPeso, formatQty } from "@/lib/money";
 import { type Project, type Ticket } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
@@ -27,11 +28,12 @@ import { useLocale } from "@/lib/i18n-context";
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
 
-const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  Pending: { bg: "#FFF0E6", fg: COLORS.primary },
-  Acknowledged: { bg: "#EAF2FF", fg: "#2563EB" },
-  Resolved: { bg: COLORS.successBg, fg: COLORS.success },
-  Rejected: { bg: "#FFF5F3", fg: "#B42318" },
+// Same colours as the web and every other status chip: waiting = amber, seen = blue, done = green, no = red.
+const STATUS_TONE: Record<string, ChipTone> = {
+  Pending: "amber",
+  Acknowledged: "info",
+  Resolved: "success",
+  Rejected: "error",
 };
 
 export default function MyRequestsScreen() {
@@ -226,7 +228,6 @@ function RequestCard({
   onExpenseCapture: () => void;
 }) {
   const { t, tv, formatDate } = useLocale();
-  const statusColors = STATUS_COLORS[ticket.status] ?? { bg: "#F1E9DD", fg: COLORS.muted };
   const isRejected = ticket.status === "Rejected";
   const isResolvedMR = ticket.status === "Resolved" && ticket.tickettype === "Material Request";
   const wasResubmitted = ticket.resubmittedbyid != null;
@@ -246,9 +247,7 @@ function RequestCard({
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={styles.cardTopRow}>
         <Text style={styles.cardType}>{tv("tickettype", ticket.tickettype)}</Text>
-        <View style={[styles.statusPill, { backgroundColor: statusColors.bg }]}>
-          <Text style={[styles.statusPillText, { color: statusColors.fg }]}>{tv("status", ticket.status)}</Text>
-        </View>
+        <StatusChip label={tv("status", ticket.status)} tone={STATUS_TONE[ticket.status] ?? "neutral"} />
       </View>
 
       <Text style={styles.cardSubject} numberOfLines={2}>{ticket.subject}</Text>
@@ -340,8 +339,6 @@ const styles = StyleSheet.create({
   cardHighlighted: { borderColor: COLORS.primary, borderWidth: 2 },
   cardTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardType: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
-  statusPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  statusPillText: { fontSize: 12, fontWeight: "800" },
   cardSubject: { color: COLORS.heading, fontSize: 15, fontWeight: "700", marginTop: 9, lineHeight: 21 },
   cardMeta: { color: COLORS.muted, fontSize: 12, fontWeight: "600", marginTop: 6 },
   cardSubMeta: { color: COLORS.muted, fontSize: 12, marginTop: 3 },
