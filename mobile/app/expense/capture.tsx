@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
 
   dropArea: { minHeight: 220, alignItems: "center", justifyContent: "center", gap: 8, padding: 20, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
   dropAreaFilled: { borderStyle: "solid", borderColor: COLORS.border, padding: 8, minHeight: 280 },
-  dropIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
+  dropIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.card },
   dropTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, textAlign: "center" },
   dropBody: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center", lineHeight: 19 },
   fileRules: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted, textAlign: "center", marginTop: 6 },

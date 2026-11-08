@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
   filterLink: { alignSelf: "flex-start", justifyContent: "center", marginTop: 6, minHeight: 32 },
   filterLinkText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
   projectCardSelected: { backgroundColor: "#FFF6EE", borderColor: COLORS.primary },
-  projectIcon: { alignItems: "center", backgroundColor: COLORS.primaryTint, borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
+  projectIcon: { alignItems: "center", backgroundColor: COLORS.card, borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
   projectIconText: { color: COLORS.primary, fontSize: 22 },
   projectBody: { flex: 1 },
   projectName: { color: COLORS.heading, flex: 1, fontSize: 16, lineHeight: 21, fontFamily: FONT.extrabold },
