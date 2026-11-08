@@ -241,7 +241,54 @@ a.dash-kpi:hover {
 
 .dash-chart {
   position: relative;
-  height: 300px;
+  height: 260px;
+}
+
+/* Financial overview: how much of the open budget is spent, as one bar. */
+.dash-budget {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.dash-budget-text {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+.dash-budget-text strong {
+  font-size: var(--text-md);
+  color: var(--color-ink);
+}
+.dash-budget-left {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.dash-budget-track {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.dash-budget-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-brick);
+}
+.dash-budget-over .dash-budget-fill {
+  background: var(--color-danger);
+}
+.dash-budget-over .dash-budget-left {
+  color: var(--color-danger);
+}
+.dash-chart-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--color-ink);
 }
 
 /* --- Tables --------------------------------------------------------------- */

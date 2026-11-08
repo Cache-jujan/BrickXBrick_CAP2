@@ -320,7 +320,7 @@ function ProjectsOverview({ role, name, userId }) {
             ) : openApprovedExpenses.length === 0 && openBudget === 0 ? (
               <p className="dash-empty">{t("dashboard.no_approved_spending")}</p>
             ) : (
-              <SpendChart months={months} />
+              <SpendChart months={months} budget={openBudget} spent={openApproved} />
             )}
             <p className="dash-footnote">
               {t("dashboard.chart_note")}
