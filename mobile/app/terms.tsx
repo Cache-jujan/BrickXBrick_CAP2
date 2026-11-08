@@ -20,7 +20,6 @@ type Review = { draft: boolean; pending: string[] };
 type LegalData = { version: string; effectiveDate: string; review?: Review; highlights?: Highlight[]; documents: LegalDoc[] };
 
 // Warm accents that match the web version of this screen.
-const TINT = COLORS.primaryTint;
 const TINT_INK = COLORS.primaryTintText;
 const PAGE_BG = COLORS.bg;
 const DANGER = COLORS.errorText;
@@ -62,18 +61,16 @@ export default function TermsScreen() {
   const [loadError, setLoadError] = useState("");
   // Set when the text on screen is the copy saved on this phone.
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  // { terms: true } once that document's box is ticked
-  const [agreed, setAgreed] = useState<Record<string, boolean>>({});
-  // The id of the box to highlight after pressing "Agree" too early
-  const [pulse, setPulse] = useState("");
+  // One box at the bottom covers both documents.
+  const [agreed, setAgreed] = useState(false);
+  // Highlights the box after pressing "Agree" before ticking it
+  const [pulse, setPulse] = useState(false);
   const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef<ScrollView>(null);
-  // Where each document's box sits, for scrolling to it: the card's y in the
-  // scroll plus the box's y inside the card (both from onLayout).
+  // Where each document's card sits, for the "jump to" links (from onLayout).
   const cardY = useRef<Record<string, number>>({});
-  const boxInCardY = useRef<Record<string, number>>({});
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -107,22 +104,23 @@ export default function TermsScreen() {
 
   const docs = data?.documents ?? [];
   const firstName = session?.user.name?.split(" ")[0];
-  const doneCount = docs.filter((d) => agreed[d.id]).length;
-  const allAgreed = docs.length > 0 && doneCount === docs.length;
+  const allAgreed = docs.length > 0 && agreed;
 
-  // "Agree and continue": if a box is still unticked, take the user to it.
+  // "Agree and continue" before the box is ticked: the box is right above the
+  // button, so just draw the eye to it.
   function handleAcceptPress() {
     if (busy || !data) return;
-    const missing = docs.find((d) => !agreed[d.id]);
-    if (missing) {
-      const y = (cardY.current[missing.id] ?? 0) + (boxInCardY.current[missing.id] ?? 0);
-      scrollRef.current?.scrollTo({ y: Math.max(0, y - 160), animated: true });
-      setPulse(missing.id);
+    if (!agreed) {
+      setPulse(true);
       if (pulseTimer.current) clearTimeout(pulseTimer.current);
-      pulseTimer.current = setTimeout(() => setPulse(""), 1600);
+      pulseTimer.current = setTimeout(() => setPulse(false), 1600);
       return;
     }
     handleAccept();
+  }
+
+  function jumpTo(id: string) {
+    scrollRef.current?.scrollTo({ y: Math.max(0, (cardY.current[id] ?? 0) - 12), animated: true });
   }
 
   async function handleAccept() {
@@ -138,7 +136,7 @@ export default function TermsScreen() {
       const body = await res.json().catch(() => ({}));
       if (res.status === 409) {
         // The terms changed while this screen was open: show the new version.
-        setAgreed({});
+        setAgreed(false);
         await load();
         throw new Error(body.error || t("legal.err_updated"));
       }
@@ -171,7 +169,7 @@ export default function TermsScreen() {
           <Text style={styles.heroTitle}>{mustAccept ? t("legal.title") : t("account.terms_privacy")}</Text>
           <Text style={styles.lede}>
             {mustAccept
-              ? "Brick x Brick holds company records and your personal data, so we need your agreement first. Scroll down and tick the box under each document. You'll only be asked again if the terms change."
+              ? "Brick x Brick holds company records and your personal data, so we need your agreement first. Read the documents below, then agree at the bottom of the screen. You'll only be asked again if the terms change."
               : "How Brick x Brick may be used, and how your personal data is handled under the Data Privacy Act (RA 10173)."}
           </Text>
           {data ? (
@@ -180,6 +178,16 @@ export default function TermsScreen() {
                 <Text style={styles.chipText}>{t("legal.version", { version: data.version })}</Text>
               </View>
               <Text style={styles.meta}>{t("legal.effective", { date: formatDate(`${data.effectiveDate}T00:00:00`, { year: "numeric", month: "long", day: "numeric" }) })}</Text>
+            </View>
+          ) : null}
+          {mustAccept && docs.length > 1 ? (
+            <View style={styles.jumpRow}>
+              {docs.map((d) => (
+                <Pressable key={d.id} onPress={() => jumpTo(d.id)} style={styles.jumpChip} accessibilityRole="button">
+                  <MaterialIcons name="arrow-downward" size={14} color={COLORS.primary} />
+                  <Text style={styles.jumpText}>{d.title}</Text>
+                </Pressable>
+              ))}
             </View>
           ) : null}
         </View>
@@ -231,7 +239,6 @@ export default function TermsScreen() {
             {/* Both documents, one after the other. While agreeing, each
                 ends with its own box. */}
             {docs.map((doc) => {
-              const checked = Boolean(agreed[doc.id]);
               return (
                 <View
                   key={doc.id}
@@ -268,25 +275,6 @@ export default function TermsScreen() {
                     );
                   })}
 
-                  {mustAccept ? (
-                    <Pressable
-                      onLayout={(e) => {
-                        boxInCardY.current[doc.id] = e.nativeEvent.layout.y;
-                      }}
-                      onPress={() => setAgreed((current) => ({ ...current, [doc.id]: !current[doc.id] }))}
-                      style={[styles.checkRow, checked && styles.checkRowOn, pulse === doc.id && styles.checkRowPulse]}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked }}
-                    >
-                      <View style={[styles.checkbox, checked && styles.checkboxOn]}>
-                        {checked ? <MaterialIcons name="check" size={16} color="#FFFFFF" /> : null}
-                      </View>
-                      <Text style={styles.checkLabel}>
-                        {doc.id === "privacy" ? "I have read and acknowledge the " : "I have read and agree to the "}
-                        <Text style={styles.bold}>{doc.title}</Text>.
-                      </Text>
-                    </Pressable>
-                  ) : null}
                 </View>
               );
             })}
@@ -298,14 +286,25 @@ export default function TermsScreen() {
         <SafeAreaView edges={["bottom"]} style={styles.acceptBar}>
           {error ? <Text style={[styles.error, styles.barError]}>{error}</Text> : null}
 
-          <View style={styles.statusRow} accessibilityLiveRegion="polite">
-            {allAgreed ? <MaterialIcons name="check-circle" size={16} color={COLORS.primary} /> : null}
-            <Text style={[styles.statusText, allAgreed && styles.statusDone]}>
-              {allAgreed
-                ? "All set. You can continue."
-                : `${doneCount} of ${docs.length} accepted. Tick the box under each document.`}
+          <Pressable
+            onPress={() => setAgreed((v) => !v)}
+            style={[styles.checkRow, agreed && styles.checkRowOn, pulse && styles.checkRowPulse]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreed }}
+          >
+            <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
+              {agreed ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
+            </View>
+            <Text style={styles.checkLabel}>
+              {"I have read and agree to the "}
+              {docs.map((d, i) => (
+                <Text key={d.id}>
+                  <Text style={styles.bold}>{d.title}</Text>
+                  {i < docs.length - 2 ? ", " : i === docs.length - 2 ? " and " : "."}
+                </Text>
+              ))}
             </Text>
-          </View>
+          </Pressable>
 
           <Pressable
             onPress={handleAcceptPress}
@@ -441,9 +440,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   barError: { textAlign: "center" },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statusText: { flex: 1, fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted },
-  statusDone: { color: COLORS.primary, fontFamily: FONT.bold },
+  jumpRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  jumpChip: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 20, borderWidth: 1, flexDirection: "row", gap: 6, minHeight: 40, paddingHorizontal: 14 },
+  jumpText: { color: COLORS.heading, fontFamily: FONT.semibold, fontSize: 13 },
   checkRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -452,12 +451,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: PAGE_BG,
-    marginTop: 20,
+    borderColor: COLORS.inputBorder,
+    backgroundColor: COLORS.card,
+    minHeight: 56,
   },
-  checkRowOn: { borderColor: COLORS.primary, backgroundColor: TINT },
-  checkRowPulse: { borderColor: COLORS.primary, borderWidth: 3, backgroundColor: TINT },
+  checkRowOn: { borderColor: COLORS.primary },
+  checkRowPulse: { borderColor: COLORS.primary, borderWidth: 3 },
   checkbox: {
     width: 26,
     height: 26,
@@ -469,7 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkLabel: { flex: 1, fontSize: 13.5, fontFamily: FONT.regular, lineHeight: 19, color: COLORS.heading },
+  checkLabel: { flex: 1, fontSize: 14, fontFamily: FONT.regular, lineHeight: 19, color: COLORS.heading },
   bold: { fontFamily: FONT.bold },
   primaryButton: {
     flexDirection: "row",

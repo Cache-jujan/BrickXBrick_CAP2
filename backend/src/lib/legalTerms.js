@@ -16,7 +16,7 @@
 // Changing the text? Raise TERMS_VERSION. Everyone is then asked to accept
 // the new version on their next sign-in, and the old acceptances stay on record.
 
-const TERMS_VERSION = "1.0";
+const TERMS_VERSION = "1.1";
 const EFFECTIVE_DATE = "2026-10-15";
 
 const COMPANY = "JJC-R Building Design and Drafting Services";
