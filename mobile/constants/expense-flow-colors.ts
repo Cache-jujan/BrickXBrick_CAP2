@@ -1,11 +1,12 @@
-// Colors and fonts shared by the Purchaser screens (and the Site Manager ones
+// Neutrals (bg, border, heading, muted, inputBorder) match the web app's tokens.css
+// so both apps read as one system. Colors and fonts shared by the Purchaser screens (and the Site Manager ones
 // that reuse them). Keep every hex value here, not in the screens.
 export const COLORS = {
   primary: "#BF4307", primaryTint: "#FFF1E6", primaryTintText: "#8F3705",
-  bg: "#F8F1E8", card: "#FFFFFF",
+  bg: "#F6F4F1", card: "#FFFFFF",
   // bgWarm is the same cream as bg (kept so older screens still compile).
-  bgWarm: "#F8F1E8", border: "#ECE6DC", inputBorder: "#C9CDD5",
-  heading: "#1B1F27", muted: "#565D6B",
+  bgWarm: "#F6F4F1", border: "#DFDAD0", inputBorder: "#C9C1B1",
+  heading: "#302F28", muted: "#6B6355",
   success: "#1B5E32", successBg: "#E3F4E8",
   // Amber: a field the scan wasn't sure about, or a notice to read.
   amberFill: "#FFF8E1", amberBorder: "#D9A400", amberText: "#7A4B00",

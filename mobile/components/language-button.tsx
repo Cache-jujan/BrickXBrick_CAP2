@@ -66,6 +66,6 @@ const styles = StyleSheet.create({
   option: { alignItems: "center", backgroundColor: COLORS.bg, borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 48, paddingHorizontal: 14 },
   optionOn: { borderColor: COLORS.primary },
   optionText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 14 },
-  badge: { backgroundColor: COLORS.border, borderRadius: 12, color: COLORS.heading, fontFamily: FONT.bold, fontSize: 11, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4 },
+  badge: { backgroundColor: COLORS.border, borderRadius: 12, color: COLORS.heading, fontFamily: FONT.bold, fontSize: 12, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4 },
   badgeOn: { backgroundColor: COLORS.primary, color: "#FFFFFF" },
 });

@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 20, paddingBottom: 36, paddingTop: 16 },
 
   group: { marginBottom: 18 },
-  groupLabel: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.extrabold, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 },
+  groupLabel: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 },
 
   row: {
     flexDirection: "row",
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1 },
   rowMessage: { color: COLORS.heading, fontSize: 13, fontFamily: FONT.regular, lineHeight: 19 },
   rowMessageUnread: { fontFamily: FONT.bold },
-  rowTime: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.regular, marginTop: 3 },
+  rowTime: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.regular, marginTop: 3 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 6 },
 
   loadMore: { minHeight: 44, justifyContent: "center", alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, paddingVertical: 12, marginTop: 4 },

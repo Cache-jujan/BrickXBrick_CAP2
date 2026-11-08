@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   wrap: { gap: 6 },
   button: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: MIN_TAP + 4, backgroundColor: COLORS.card, borderRadius: 14, borderWidth: 1, borderColor: COLORS.inputBorder, paddingHorizontal: 14, paddingVertical: 8 },
-  label: { fontSize: 11, fontFamily: FONT.semibold, color: COLORS.muted },
+  label: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
   value: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   list: { backgroundColor: COLORS.card, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: MIN_TAP, paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },

@@ -83,7 +83,7 @@
   background: var(--color-surface-muted);
 }
 
-.expenses-detail td {
+.expenses-detail > td {
   background: var(--color-bg);
   padding: var(--space-5);
   height: auto;
@@ -307,9 +307,9 @@
 /* On a phone each expense becomes a small card instead of a table that scrolls sideways. */
 @media (max-width: 640px) {
   .expenses-table,
-  .expenses-table tbody,
-  .expenses-table tr,
-  .expenses-table td {
+  .expenses-table > tbody,
+  .expenses-table > tbody > tr,
+  .expenses-table > tbody > tr > td {
     display: block;
     width: 100%;
   }
@@ -317,7 +317,8 @@
     display: none;
   }
   .expenses-table { min-width: 0; }
-  .expenses-table tr { height: auto; }
+  .expenses-table > tbody > tr,
+  .expenses-table > tbody > tr > td { height: auto; min-height: 0; }
   .expenses-table .expenses-row {
     padding: var(--space-3) 0;
     border-bottom: 1px solid var(--color-border);
@@ -360,6 +361,52 @@
   .expenses-table .expenses-row:hover td,
   .expenses-table .expenses-row-open td { background: transparent; }
   .expenses-table .expenses-row-open { background: var(--color-surface-muted); }
-  .expenses-table .expenses-detail td { padding: var(--space-4); }
+  .expenses-table .expenses-detail > td { padding: var(--space-4); }
   .expenses-table .expenses-badges { justify-content: flex-end; }
+}
+
+/* ---- Detail panel sections: a title, then a small table or grid ----------- */
+
+.exp-section {
+  margin-bottom: var(--space-4);
+}
+.exp-section-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.exp-mini-table,
+.flag-review-table {
+  width: 100%;
+  max-width: 640px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.exp-mini-table th,
+.exp-mini-table td,
+.flag-review-table th,
+.flag-review-table td {
+  padding: 8px var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+.exp-mini-table th,
+.flag-review-table th {
+  color: var(--color-ink-faint);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.exp-mini-table .exp-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.exp-mini-table tbody tr:last-child td,
+.flag-review-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.expenses-detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }

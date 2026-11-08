@@ -306,7 +306,7 @@
     "auth.save_password": "Save password",
     "auth.show_field": "Show {field}",
     "auth.hide_field": "Hide {field}",
-    "auth.account_ready": "Your account is ready. Sign in with your Gmail and new password.",
+    "auth.account_ready": "Your password is set. Sign in with your Gmail and new password. You will then review and accept the Terms of Use and Privacy Notice once.",
     "auth.password_set": "Password set. You can now sign in.",
     "errors.invalid_gmail": "Enter a valid Gmail address (name@gmail.com).",
     "errors.too_many_requests": "Too many requests. Please wait a few minutes and try again.",
@@ -2230,7 +2230,13 @@
     "expenses.hint_pending": "Waiting for a decision. Approve to save a tamper-proof copy, or reject with a reason.",
     "expenses.hint_flagged": "The checks found something worth a closer look. Open a row to see why before you decide.",
     "expenses.hint_approved": "Approved and protected against later changes.",
-    "expenses.hint_rejected": "Sent back to the submitter with the reason given."
+    "expenses.hint_rejected": "Sent back to the submitter with the reason given.",
+    "expenses.items_title": "Items on the receipt",
+    "expenses.col_item": "Item",
+    "expenses.details_title": "Receipt details",
+    "legal.draft_title": "Draft text, not yet approved",
+    "legal.draft_body": "This wording is a working draft. It still needs the following before it is final:",
+    "legal.accepted_on": "You accepted version {version} on {date}."
   },
   "ceb": {
     "language.name": "Pinulongan",
@@ -2539,7 +2545,7 @@
     "auth.save_password": "I-save ang password",
     "auth.show_field": "Ipakita ang {field}",
     "auth.hide_field": "Tagoa ang {field}",
-    "auth.account_ready": "Andam na ang imong account. Mag-sign in gamit ang imong Gmail ug bag-ong password.",
+    "auth.account_ready": "Na-set na ang imong password. Mag-sign in gamit ang imong Gmail ug bag-ong password. Dayon basahon ug dawaton nimo makausa ang Terms of Use ug Privacy Notice.",
     "auth.password_set": "Napili na ang password. Makasulod na ka.",
     "errors.invalid_gmail": "Isulod ang saktong Gmail address (name@gmail.com).",
     "errors.too_many_requests": "Daghan kaayo og hangyo. Palihog paghulat og pipila ka minuto ug sulayi pag-usab.",
@@ -4463,7 +4469,13 @@
     "expenses.hint_pending": "Naghulat og desisyon. I-aprobar aron makasave og tamper-proof nga kopya, o isalikway uban ang rason.",
     "expenses.hint_flagged": "Nakakita ang mga checks og angay tutukan. Ablihi ang laray aron makita ang rason sa dili pa mag-desisyon.",
     "expenses.hint_approved": "Aprobado ug gipanalipdan batok sa pagbag-o human niini.",
-    "expenses.hint_rejected": "Gibalik sa nagpasaka uban ang gihatag nga rason."
+    "expenses.hint_rejected": "Gibalik sa nagpasaka uban ang gihatag nga rason.",
+    "expenses.items_title": "Mga aytem sa risibo",
+    "expenses.col_item": "Aytem",
+    "expenses.details_title": "Mga detalye sa risibo",
+    "legal.draft_title": "Draft pa ang teksto, wala pa maaprobahan",
+    "legal.draft_body": "Working draft pa kining pagkasulat. Kulang pa kini sa mosunod una kini mahimong final:",
+    "legal.accepted_on": "Gidawat nimo ang bersyon {version} niadtong {date}."
   },
   "fil": {
     "language.name": "Wika",
@@ -4772,7 +4784,7 @@
     "auth.save_password": "I-save ang password",
     "auth.show_field": "Ipakita ang {field}",
     "auth.hide_field": "Itago ang {field}",
-    "auth.account_ready": "Handa na ang account mo. Mag-sign in gamit ang Gmail at bagong password mo.",
+    "auth.account_ready": "Naitakda na ang password mo. Mag-sign in gamit ang Gmail at bagong password mo. Pagkatapos, babasahin at tatanggapin mo nang isang beses ang Terms of Use at Privacy Notice.",
     "auth.password_set": "Naitakda na ang password. Puwede ka nang mag-sign in.",
     "errors.invalid_gmail": "Maglagay ng tamang Gmail address (name@gmail.com).",
     "errors.too_many_requests": "Masyadong maraming request. Pakihintay ng ilang minuto at subukan ulit.",
@@ -6696,6 +6708,12 @@
     "expenses.hint_pending": "Naghihintay ng desisyon. Aprubahan para makapag-save ng tamper-proof na kopya, o tanggihan na may dahilan.",
     "expenses.hint_flagged": "May nakita ang mga check na dapat tingnan. Buksan ang hilera para makita kung bakit bago magpasya.",
     "expenses.hint_approved": "Aprubado at protektado laban sa mga susunod na pagbabago.",
-    "expenses.hint_rejected": "Ibinalik sa nagsumite kasama ang ibinigay na dahilan."
+    "expenses.hint_rejected": "Ibinalik sa nagsumite kasama ang ibinigay na dahilan.",
+    "expenses.items_title": "Mga aytem sa resibo",
+    "expenses.col_item": "Aytem",
+    "expenses.details_title": "Mga detalye ng resibo",
+    "legal.draft_title": "Draft pa ang teksto, hindi pa aprubado",
+    "legal.draft_body": "Working draft pa ang pagkakasulat na ito. Kulang pa ito ng mga sumusunod bago maging final:",
+    "legal.accepted_on": "Tinanggap mo ang bersyon {version} noong {date}."
   }
 }

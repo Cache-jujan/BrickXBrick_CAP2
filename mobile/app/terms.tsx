@@ -16,7 +16,8 @@ import { useLocale } from "@/lib/i18n-context";
 type Section = { heading: string; paragraphs?: string[]; bullets?: string[] };
 type LegalDoc = { id: string; title: string; sections: Section[] };
 type Highlight = { id: string; icon: string; title: string; text: string };
-type LegalData = { version: string; effectiveDate: string; highlights?: Highlight[]; documents: LegalDoc[] };
+type Review = { draft: boolean; pending: string[] };
+type LegalData = { version: string; effectiveDate: string; review?: Review; highlights?: Highlight[]; documents: LegalDoc[] };
 
 // Warm accents that match the web version of this screen.
 const TINT = COLORS.primaryTint;
@@ -200,6 +201,15 @@ export default function TermsScreen() {
 
         {data ? (
           <>
+            {data.review?.draft ? (
+              <View style={styles.draftNotice} accessibilityRole="alert">
+                <Text style={styles.draftTitle}>{t("legal.draft_title")}</Text>
+                <Text style={styles.draftText}>{t("legal.draft_body")}</Text>
+                {data.review.pending.map((item) => (
+                  <Text key={item} style={styles.draftText}>{`\u2022  ${item}`}</Text>
+                ))}
+              </View>
+            ) : null}
             {data.highlights?.length ? (
               <View style={styles.glance}>
                 <Text style={styles.overline}>{t("legal.glance_upper")}</Text>
@@ -323,6 +333,17 @@ export default function TermsScreen() {
 }
 
 const styles = StyleSheet.create({
+  draftNotice: {
+    backgroundColor: COLORS.amberBannerFill,
+    borderColor: COLORS.amberBorder,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    gap: 4,
+  },
+  draftTitle: { fontFamily: FONT.bold, fontSize: 15, color: COLORS.amberBannerText },
+  draftText: { fontFamily: FONT.regular, fontSize: 14, lineHeight: 20, color: COLORS.amberBannerText },
   safeArea: { flex: 1, backgroundColor: PAGE_BG },
   content: { padding: 16, paddingBottom: 48, gap: 16 },
   loading: { marginTop: 24 },

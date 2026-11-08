@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRightIcon, HighlightIcon } from "./LegalIcons";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { Banner } from "../ui/Banner";
 import "./LegalReader.css";
 
 // Shared by the "Before you continue" screen and the public /legal page.
@@ -22,6 +23,22 @@ function splitHeading(heading) {
 }
 
 const sectionId = (docId, i) => `legal-${docId}-${i + 1}`;
+
+/** Tells readers the text is still a draft and lists what is missing (data.review from the backend). */
+export function LegalDraftNotice({ review }) {
+  const { t } = useLocale();
+  if (!review?.draft) return null;
+  return (
+    <Banner tone="warning" title={t("legal.draft_title")}>
+      <p style={{ margin: "0 0 6px" }}>{t("legal.draft_body")}</p>
+      {review.pending?.length > 0 && (
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          {review.pending.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      )}
+    </Banner>
+  );
+}
 
 /** "At a glance": short plain-language points above the full text. */
 export function LegalHighlights({ items }) {

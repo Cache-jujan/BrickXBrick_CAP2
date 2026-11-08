@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   photoBox: { width: 96, height: 96, borderRadius: 12, overflow: "hidden" },
   photoMissing: { borderWidth: 1, borderStyle: "dashed", borderColor: COLORS.inputBorder, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center", padding: 6 },
   photoMissingTitle: { color: COLORS.heading, fontFamily: FONT.bold, fontSize: 12 },
-  photoMissingText: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 11, textAlign: "center" },
+  photoMissingText: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, textAlign: "center" },
   back: { minHeight: MIN_TAP, alignItems: "center", justifyContent: "center", marginTop: 12 },
   backText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 14 },
 });

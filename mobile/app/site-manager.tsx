@@ -564,7 +564,7 @@ const DUE_TONE = StyleSheet.create({
   normal: {},
 });
 
-const CARD = { backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1 } as const;
+const CARD = { backgroundColor: "#FFFFFF", borderColor: COLORS.border, borderRadius: 16, borderWidth: 1 } as const;
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.bgWarm, flex: 1 },
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
   heroAlert: { color: "#FFFFFF", fontSize: 12, fontFamily: FONT.bold, marginTop: 8 },
 
   weekRow: { flexDirection: "row", gap: 6, marginTop: 14 },
-  weekDay: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, paddingVertical: 8 },
+  weekDay: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, paddingVertical: 8 },
   weekDayToday: { backgroundColor: COLORS.heading, borderColor: COLORS.heading },
   weekName: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
   weekNum: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold },
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
 
   filterBar: { ...CARD, flexDirection: "row", marginTop: 14, overflow: "hidden" },
   filterItem: { alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingVertical: 12 },
-  filterItemDivider: { borderLeftColor: "#ECE6DC", borderLeftWidth: 1 },
+  filterItemDivider: { borderLeftColor: COLORS.border, borderLeftWidth: 1 },
   filterItemActive: { backgroundColor: COLORS.primary, borderRadius: 14, margin: 3 },
   filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4, maxWidth: "100%", paddingHorizontal: 2 },
   filterLabel: { flexShrink: 1, color: COLORS.heading, fontSize: 11, fontFamily: FONT.bold },
@@ -635,15 +635,15 @@ const styles = StyleSheet.create({
   projectProgressRow: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 10 },
   projectTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, flex: 1, height: 7, overflow: "hidden" },
   projectFill: { borderRadius: 4, height: 7 },
-  projectCount: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
-  projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, marginTop: 6 },
-  projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  projectCount: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.semibold },
+  projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, marginTop: 6 },
+  projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 3 },
   projectChip: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 16, marginBottom: 10, maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 6 },
   projectChipText: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold },
 
   projectPill: { alignSelf: "flex-start", marginTop: 6 },
   pill: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { fontSize: 11, fontFamily: FONT.extrabold },
+  pillText: { fontSize: 12, fontFamily: FONT.extrabold },
 
   taskRow: { ...CARD, alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
   taskLead: { alignItems: "center", borderRadius: 16, borderWidth: 2.5, height: 32, justifyContent: "center", width: 32 },

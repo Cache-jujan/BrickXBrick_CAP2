@@ -232,10 +232,24 @@ const highlights = [
   },
 ];
 
+// Review status shown in the apps. While LEGAL_REVIEWED is false, both apps
+// tell readers this text is a draft and list what is still missing. Set it to
+// true (and fill DPO_CONTACT) once the adviser and the Company have approved
+// the wording, and raise TERMS_VERSION so everyone accepts the final text.
+const LEGAL_REVIEWED = false;
+
+function reviewStatus() {
+  const pending = [];
+  if (!LEGAL_REVIEWED) pending.push("Review and approval of the wording by the adviser and the Company");
+  if (DPO_CONTACT.startsWith("[")) pending.push("Name and email of the Data Protection Officer");
+  return { draft: pending.length > 0, pending };
+}
+
 function legalDocuments() {
   return {
     version: TERMS_VERSION,
     effectiveDate: EFFECTIVE_DATE,
+    review: reviewStatus(),
     highlights,
     documents: [termsOfUse, privacyNotice],
   };

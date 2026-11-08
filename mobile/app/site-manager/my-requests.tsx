@@ -307,13 +307,13 @@ function RequestCard({
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
-  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  eyebrow: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 25, fontWeight: "800", marginTop: 6, marginBottom: 12 },
 
   // flexGrow 0: a horizontal ScrollView otherwise stretches to fill the
   // screen's height, which made the filter chips huge.
   chipsScroll: { flexGrow: 0 },
-  chipsRow: { paddingHorizontal: 20, gap: 8, paddingBottom: 14, alignItems: "center" },
+  chipsRow: { paddingHorizontal: 20, gap: 8, paddingTop: 4, paddingBottom: 14, alignItems: "center" },
   chip: {
     alignItems: "center",
     justifyContent: "center",
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     backgroundColor: COLORS.card,
   },
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
@@ -332,16 +332,16 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: COLORS.card,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 16,
     padding: 15,
   },
   cardHighlighted: { borderColor: COLORS.primary, borderWidth: 2 },
   cardTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cardType: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
+  cardType: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
   statusPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  statusPillText: { fontSize: 11, fontWeight: "800" },
+  statusPillText: { fontSize: 12, fontWeight: "800" },
   cardSubject: { color: COLORS.heading, fontSize: 15, fontWeight: "700", marginTop: 9, lineHeight: 21 },
   cardMeta: { color: COLORS.muted, fontSize: 12, fontWeight: "600", marginTop: 6 },
   cardSubMeta: { color: COLORS.muted, fontSize: 12, marginTop: 3 },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 11,
   },
-  rejectionLabel: { color: "#B42318", fontSize: 10, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  rejectionLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
   rejectionReason: { color: COLORS.heading, fontSize: 13, fontWeight: "600", marginTop: 4, lineHeight: 18 },
   fixButton: {
     alignSelf: "flex-start",
@@ -389,14 +389,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
   },
-  captureButtonSecondary: { borderColor: "#E7DDCF", backgroundColor: "#F1E9DD" },
+  captureButtonSecondary: { borderColor: COLORS.border, backgroundColor: "#F1E9DD" },
   captureButtonText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
   captureButtonTextSecondary: { color: COLORS.muted },
 
   emptyCard: {
     alignItems: "center",
     backgroundColor: COLORS.card,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 16,
     gap: 10,

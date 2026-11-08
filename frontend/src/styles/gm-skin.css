@@ -273,7 +273,7 @@
   /* The open row is only a touch warmer than the rest (the older rule is !important). */
   background: #fbf3ec !important;
 }
-.gm-skin .expenses-detail td {
+.gm-skin .expenses-detail > td {
   background: #faf8f5;
   border-left: 3px solid var(--color-brick);
 }
@@ -560,7 +560,7 @@
   display: inline-block;
   flex-shrink: 0;
 }
-.gm-skin .expenses-detail td {
+.gm-skin .expenses-detail > td {
   padding: var(--space-5) var(--space-6);
 }
 .gm-skin .expenses-detail-grid {
@@ -680,4 +680,22 @@
     padding-left: var(--space-4);
     padding-right: var(--space-4);
   }
+}
+
+/* Detail tables inside an open expense read as quiet white panels. */
+.gm-skin .exp-mini-table,
+.gm-skin .flag-review-table {
+  border: 1px solid var(--gm-line);
+  border-radius: 12px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  overflow: hidden;
+}
+.gm-skin .exp-mini-table th,
+.gm-skin .flag-review-table th {
+  background: #faf8f5;
+}
+.gm-skin .exp-section-title {
+  color: var(--color-ink);
 }

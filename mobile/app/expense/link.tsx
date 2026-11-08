@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   receiptVendor: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   ticketCard: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.primary, padding: 14, marginBottom: 16 },
-  ticketBadge: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.success, marginBottom: 4 },
+  ticketBadge: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.success, marginBottom: 4 },
   ticketSubject: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   ticketMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   ticketBudget: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 6 },

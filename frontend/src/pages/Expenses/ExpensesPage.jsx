@@ -21,7 +21,8 @@ import { useLocale } from "../../i18n/LocaleProvider";
 import "./ExpensesPage.css";
 import { verifyExpense } from "../../api/blockchainApi";
 
-const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
+// Always two decimals, so amounts line up in a column and centavos on a receipt are never rounded away.
+const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STATUS_TABS = ["All", "Pending", "Flagged", "Approved", "Rejected"];
 const PAGE_SIZE = 10;
 
@@ -457,12 +458,13 @@ export function ExpensesPage() {
                                       {e.submitnote}
                                     </Banner>
                                   )}
-                                  {!flags && <SplitSiblings siblings={e.siblings} />}
                                   {e.submittedby === user.id && user.role === "General Manager" && (
                                     <Banner tone="warning" title={t("expenses.own_title")}>
                                       {t("expenses.own_body")}
                                     </Banner>
                                   )}
+                                  <section className="exp-section">
+                                  <h3 className="exp-section-title">{t("expenses.details_title")}</h3>
                                   <div className="expenses-detail-grid">
                                     <DetailRow icon="user" label={t("expenses.submitted_by")}>{e.submittedbyname}</DetailRow>
                                     {e.ticketsubject && <DetailRow icon="doc" label={t("expenses.request")}>{e.ticketsubject}</DetailRow>}
@@ -475,13 +477,23 @@ export function ExpensesPage() {
                                       <DetailRow icon="note" label={t("expenses.rejection_reason")}>{e.rejectionreason}</DetailRow>
                                     )}
                                   </div>
+                                  </section>
                                   {items.length > 0 && (
-                                    <ul className="expenses-items">
-                                      {items.map((li, i) => (
-                                        <li key={i}>{li.description} — {PESO.format(li.amount)}</li>
-                                      ))}
-                                    </ul>
+                                    <section className="exp-section">
+                                      <h3 className="exp-section-title">{t("expenses.items_title")}</h3>
+                                      <table className="exp-mini-table">
+                                        <thead>
+                                          <tr><th>{t("expenses.col_item")}</th><th className="exp-num">{t("dashboard.amount")}</th></tr>
+                                        </thead>
+                                        <tbody>
+                                          {items.map((li, i) => (
+                                            <tr key={i}><td>{li.description}</td><td className="exp-num">{PESO.format(li.amount)}</td></tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </section>
                                   )}
+                                  {!flags && <SplitSiblings siblings={e.siblings} />}
                                   <div className="expenses-detail-links">
                                     {e.receiptimageurl && (
                                       <a href={e.receiptimageurl} target="_blank" rel="noreferrer"><DetailIcon name="doc" />{t("expenses.view_receipt")}</a>

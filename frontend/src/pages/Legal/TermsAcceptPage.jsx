@@ -4,7 +4,7 @@ import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
-import { LegalHighlights, LegalSkeleton, formatEffectiveDate } from "../../components/legal/LegalReader";
+import { LegalDraftNotice, LegalHighlights, LegalSkeleton, formatEffectiveDate } from "../../components/legal/LegalReader";
 import { ArrowRightIcon, CheckIcon } from "../../components/legal/LegalIcons";
 import { LegalBrand, ReadingProgress, readingMinutes } from "./LegalChrome";
 import { useLocale } from "../../i18n/LocaleProvider";
@@ -164,6 +164,7 @@ export function TermsAcceptPage() {
 
         {data && (
           <>
+            <LegalDraftNotice review={data.review} />
             <LegalHighlights items={data.highlights} />
 
             {/* Both documents, one after the other, each ending with its own box. */}

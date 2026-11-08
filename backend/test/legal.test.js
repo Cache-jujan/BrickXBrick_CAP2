@@ -70,3 +70,10 @@ test("termsFields: other database errors are not hidden", async () => {
   };
   await assert.rejects(termsFields("u1", fake), /connection lost/);
 });
+
+test("review status: draft until the wording is approved and the DPO is named", () => {
+  const { review } = legalDocuments();
+  assert.equal(typeof review.draft, "boolean");
+  assert.ok(Array.isArray(review.pending));
+  assert.equal(review.draft, review.pending.length > 0);
+});

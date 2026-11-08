@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   sentText: { flex: 1, fontSize: 14, fontFamily: FONT.bold, color: COLORS.success },
 
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, gap: 6, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
-  requiredTag: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.errorText },
+  requiredTag: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.errorText },
   helper: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center" },
   submitButton: { minHeight: 52, backgroundColor: COLORS.primary, borderRadius: 14, justifyContent: "center", alignItems: "center" },
   submitButtonText: { color: "#FFF", fontFamily: FONT.bold, fontSize: 16 },

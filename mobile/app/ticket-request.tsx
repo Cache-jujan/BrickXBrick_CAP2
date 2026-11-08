@@ -697,22 +697,22 @@ function Field({ label, value, onChangeText, placeholder, multiline, keyboardTyp
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 20, paddingBottom: 48 },
-  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  eyebrow: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 27, fontWeight: "800", marginTop: 7 },
   subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 6 },
   errorText: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 12, borderWidth: 1, color: "#B42318", lineHeight: 19, marginTop: 14, padding: 12 },
   offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
   rejectionBanner: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 14 },
-  rejectionBannerLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
+  rejectionBannerLabel: { color: "#B42318", fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
   rejectionBannerReason: { color: COLORS.heading, fontSize: 14, fontWeight: "600", lineHeight: 20 },
   rejectionBannerHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  loadingCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, gap: 10, marginTop: 18, padding: 24 },
+  loadingCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, gap: 10, marginTop: 18, padding: 24 },
   muted: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
 
   // Project gate
-  projectChoice: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 16, paddingVertical: 18 },
+  projectChoice: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 16, paddingVertical: 18 },
   projectChoiceName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "700" },
 
   // Selected-project bar
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
   // Ticket card
   cardError: { color: "#B42318", fontSize: 13, fontWeight: "700", marginBottom: 6 },
   blockedGap: { marginTop: 16 },
-  ticketCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
+  ticketCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
   ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
   removeLink: { color: "#B42318", fontSize: 13, fontWeight: "700" },
@@ -731,17 +731,17 @@ const styles = StyleSheet.create({
   qtyRow: { flexDirection: "row", gap: 12 },
   qtyCol: { flex: 1 },
   unitCol: { width: 120 },
-  readonlyBox: { backgroundColor: "#F1E9DD", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, justifyContent: "center", minHeight: 47, paddingHorizontal: 12, marginTop: 0 },
+  readonlyBox: { backgroundColor: "#F1E9DD", borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 12, marginTop: 0 },
   readonlyText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
 
-  label: { color: COLORS.muted, fontSize: 12, fontWeight: "700", marginBottom: 7, marginTop: 12 },
+  label: { color: COLORS.heading, fontSize: 13, fontWeight: "700", marginBottom: 6, marginTop: 14 },
   dropdownWrap: { zIndex: 2 },
-  dropdownButton: { alignItems: "center", backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 47, paddingHorizontal: 12 },
+  dropdownButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: COLORS.inputBorder, borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 48, paddingHorizontal: 12 },
   dropdownDisabled: { opacity: 0.55 },
-  dropdownValue: { color: COLORS.muted, flex: 1, fontSize: 14 },
+  dropdownValue: { color: COLORS.muted, flex: 1, fontSize: 15 },
   dropdownValueSelected: { color: COLORS.heading, fontWeight: "600" },
   chevron: { color: COLORS.primary, fontSize: 19, fontWeight: "800", marginLeft: 8 },
-  dropdownMenu: { backgroundColor: "#FFFDFA", borderColor: "#D8CDBD", borderRadius: 12, borderWidth: 1, elevation: 5, marginTop: 5, maxHeight: 260, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 6 },
+  dropdownMenu: { backgroundColor: "#FFFFFF", borderColor: "#D8CDBD", borderRadius: 12, borderWidth: 1, elevation: 5, marginTop: 5, maxHeight: 260, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 6 },
   dropdownOption: { borderBottomColor: "#EFE7DC", borderBottomWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
   dropdownOptionText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
   noOptions: { color: COLORS.muted, fontSize: 13, padding: 13 },
@@ -753,10 +753,10 @@ const styles = StyleSheet.create({
   searchClearText: { color: COLORS.muted, fontSize: 22, lineHeight: 24 },
   dropdownList: { maxHeight: 210 },
   field: { marginTop: 2 },
-  input: { backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11 },
+  input: { backgroundColor: "#FFFFFF", borderColor: COLORS.inputBorder, borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 15, minHeight: 48, paddingHorizontal: 12, paddingVertical: 11 },
   multilineInput: { minHeight: 84, textAlignVertical: "top" },
 
-  sentCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 20, borderWidth: 1, gap: 8, marginTop: 18, paddingHorizontal: 24, paddingVertical: 32 },
+  sentCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 20, borderWidth: 1, gap: 8, marginTop: 18, paddingHorizontal: 24, paddingVertical: 32 },
   sentIcon: { alignItems: "center", backgroundColor: COLORS.successBg, borderRadius: 32, height: 64, justifyContent: "center", width: 64 },
   sentIconText: { color: COLORS.success, fontSize: 32, fontWeight: "800" },
   sentTitle: { color: COLORS.heading, fontSize: 21, fontWeight: "800", marginTop: 6, textAlign: "center" },
