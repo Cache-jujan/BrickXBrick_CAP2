@@ -256,20 +256,21 @@ function ProjectsOverview({ role, name, userId }) {
 
   return (
     <div className="dashboard">
+      {/* The photo is one of JJC-R's own projects (public/images/dashboard-banner.webp). */}
       <section className="dash-hero" aria-label={t("dashboard.welcome")}>
         <div className="dash-hero-text">
+          <span className="dash-hero-accent" aria-hidden="true" />
           <h1>{greetingFor(now, t)}, {firstName}</h1>
           <p>
             {role === "General Manager"
               ? t("dashboard.gm_intro")
               : t("dashboard.pm_intro")}
           </p>
+          <div className="dash-hero-meta">
+            <span className="dash-hero-date"><CalendarIcon />{today}</span>
+            {canCreate && <Link to="/projects/new" className="btn btn-primary">{t("dashboard.create_project")}</Link>}
+          </div>
         </div>
-        <div className="dash-hero-side">
-          <span className="dash-hero-date"><CalendarIcon />{today}</span>
-          {canCreate && <Link to="/projects/new" className="btn btn-primary">{t("dashboard.create_project")}</Link>}
-        </div>
-        <SkylineArt />
       </section>
 
       {dataError && <Banner tone="error" title={dataError} />}
@@ -307,7 +308,7 @@ function ProjectsOverview({ role, name, userId }) {
         <div className="dash-col">
           <section className="dash-panel">
             <header className="dash-panel-head">
-              <h2>{t("dashboard.financial_overview")}</h2>
+              <PanelTitle icon={<ChartIcon />}>{t("dashboard.financial_overview")}</PanelTitle>
               <label className="dash-range">
                 <span className="sr-only">{t("dashboard.period")}</span>
                 <select value={range} onChange={(e) => setRange(Number(e.target.value))}>
@@ -329,7 +330,7 @@ function ProjectsOverview({ role, name, userId }) {
 
           <section className="dash-panel">
             <header className="dash-panel-head">
-              <h2>{t("dashboard.recent_expenses")}</h2>
+              <PanelTitle icon={<ReceiptIcon />}>{t("dashboard.recent_expenses")}</PanelTitle>
               <Link to="/expenses" className="dash-link">{t("dashboard.view_all")}</Link>
             </header>
             {!expensesError && expensesLoading && <p className="dashboard-loading">{t("dashboard.loading_expenses")}</p>}
@@ -355,9 +356,9 @@ function ProjectsOverview({ role, name, userId }) {
                         <td className="dash-project-plain">{e.vendorname}</td>
                         <td>{projectNames[e.projectid] || t("nav.project")}</td>
                         <td>{tv("category", e.category)}</td>
-                        <td className="num">{PESO.format(e.amount)}</td>
+                        <td className="num dash-nowrap">{PESO.format(e.amount)}</td>
                         <td><Badge status={e.status} /></td>
-                        <td>{formatDate(e.receiptdate || e.submittedat)}</td>
+                        <td className="dash-nowrap">{formatDate(e.receiptdate || e.submittedat)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -370,7 +371,7 @@ function ProjectsOverview({ role, name, userId }) {
         <div className="dash-col">
           <section className="dash-panel">
             <header className="dash-panel-head">
-              <h2>{t("dashboard.project_status")}</h2>
+              <PanelTitle icon={<FolderIcon />}>{t("dashboard.project_status")}</PanelTitle>
               <Link to="/projects" className="dash-link">{t("dashboard.view_all")}</Link>
             </header>
             {!projectsError && projectsLoading && <p className="dashboard-loading">{t("dashboard.loading_projects")}</p>}
@@ -415,59 +416,13 @@ function ProjectsOverview({ role, name, userId }) {
           )}
 
           {canSeeAlerts && (
-            <section className="dash-panel">
-              <header className="dash-panel-head">
-                <h2>{t("dashboard.audit_summary")}</h2>
-                <Link to="/blockchain/alerts" className="dash-link">{t("nav.tamper_alerts")}</Link>
-              </header>
-              <div className="dash-audit">
-                <div className={"dash-audit-card" + (tamperedCount > 0 ? " dash-audit-bad" : " dash-audit-good")}>
-                  <ShieldIcon />
-                  <div>
-                    <span className="dash-audit-label">{t("dashboard.secured_records")}</span>
-                    <span className="dash-audit-value">{confirmedCount == null ? "—" : confirmedCount}</span>
-                    <span className="dash-audit-note">
-                      {tamperedCount == null
-                        ? ""
-                        : tamperedCount === 0
-                          ? t("dashboard.none_changed")
-                          : t("dashboard.n_changed", { count: tamperedCount })}
-                    </span>
-                  </div>
-                </div>
-                <div className={"dash-audit-card" + (alertCount > 0 ? " dash-audit-bad" : " dash-audit-good")}>
-                  <AlertIcon />
-                  <div>
-                    <span className="dash-audit-label">{t("dashboard.open_alerts")}</span>
-                    <span className="dash-audit-value">{alertCount == null ? "—" : alertCount}</span>
-                    <span className="dash-audit-note">
-                      {alertCount == null ? "" : alertCount > 0 ? t("dashboard.needs_review") : t("tamper.nothing")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              {pendingChainCount > 0 && (
-                <p className="dash-footnote">{pendingChainCount === 1 ? t("dashboard.chain_waiting_one") : t("dashboard.chain_waiting_other", { count: pendingChainCount })}</p>
-              )}
-
-              <h3 className="dash-subhead">{t("dashboard.recent_checks")}</h3>
-              {recentChecks.length === 0 ? (
-                <p className="dash-empty">{t("dashboard.no_checks")}</p>
-              ) : (
-                <ul className="dash-checks">
-                  {recentChecks.map((e) => (
-                    <li key={e.expenseid}>
-                      <span
-                        className={"dash-dot" + (e.blockchainstatus === "TamperDetected" ? " dash-dot-bad" : "")}
-                        aria-hidden="true"
-                      />
-                      <span className="dash-check-name">{e.vendorname} · {PESO.format(e.amount)}</span>
-                      <span className="dash-check-time">{timeAgo(e.lastintegritycheckat, t)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <AuditPanel
+              confirmedCount={confirmedCount}
+              tamperedCount={tamperedCount}
+              alertCount={alertCount}
+              pendingChainCount={pendingChainCount}
+              recentChecks={recentChecks}
+            />
           )}
         </div>
       </div>
@@ -499,25 +454,84 @@ function CalendarIcon() { return <svg {...ICON_PROPS} width="16" height="16"><re
 function ShieldIcon() { return <svg {...ICON_PROPS} width="28" height="28"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></svg>; }
 function AlertIcon() { return <svg {...ICON_PROPS} width="28" height="28"><path d="M12 4 2.5 20h19L12 4Z" /><path d="M12 10v4M12 17.2v.1" /></svg>; }
 
-// Plain decorative skyline and crane (no photo needed), tinted by CSS.
-function SkylineArt() {
+function ChartIcon() { return <svg {...ICON_PROPS} width="18" height="18"><path d="M5 20V11M12 20V5M19 20v-6" strokeWidth="2.4" /></svg>; }
+function ReceiptIcon() { return <svg {...ICON_PROPS} width="18" height="18"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" /><path d="M9 8h6M9 12h6M9 16h3" /></svg>; }
+function FolderIcon() { return <svg {...ICON_PROPS} width="18" height="18"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" /></svg>; }
+function BellIcon() { return <svg {...ICON_PROPS} width="18" height="18"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>; }
+
+// A panel heading with a small orange icon in front of it.
+function PanelTitle({ icon, children }) {
   return (
-    <svg className="dash-hero-art" viewBox="0 0 420 120" preserveAspectRatio="xMaxYMax slice" aria-hidden="true">
-      <g fill="currentColor">
-        <rect x="150" y="70" width="46" height="50" opacity=".5" />
-        <rect x="205" y="50" width="38" height="70" opacity=".7" />
-        <rect x="252" y="80" width="52" height="40" opacity=".45" />
-        <rect x="312" y="40" width="44" height="80" opacity=".6" />
-        <rect x="364" y="64" width="40" height="56" opacity=".4" />
-      </g>
-      <g stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity=".85">
-        <path d="M88 120V18" /><path d="M76 120V18" />
-        <path d="M76 36h12M76 54h12M76 72h12M76 90h12" />
-        <path d="M30 18h120" /><path d="M82 18 82 6" />
-        <path d="M82 6 44 18M82 6 138 18" />
-        <path d="M128 18v26" /><rect x="122" y="44" width="12" height="9" />
-      </g>
-    </svg>
+    <h2 className="dash-panel-title">
+      <span className="dash-panel-icon" aria-hidden="true">{icon}</span>
+      {children}
+    </h2>
+  );
+}
+
+/**
+ * Blockchain audit summary (General Manager): a dark card whose headline
+ * follows the data. "Secure" only when nothing has changed since approval AND
+ * there is no open tamper alert; any alert or changed record turns it red.
+ * While the counts are unknown (still loading, or the request failed) it says
+ * so instead of guessing.
+ */
+function AuditPanel({ confirmedCount, tamperedCount, alertCount, pendingChainCount, recentChecks }) {
+  const { t } = useLocale();
+  const unknown = confirmedCount == null || tamperedCount == null || alertCount == null;
+  const problem = !unknown && (tamperedCount > 0 || alertCount > 0);
+  const tone = unknown ? "unknown" : problem ? "bad" : "good";
+
+  return (
+    <section className="dash-panel dash-audit-panel">
+      <header className="dash-panel-head">
+        <PanelTitle icon={<ShieldIcon />}>{t("dashboard.audit_summary")}</PanelTitle>
+        <Link to="/blockchain/alerts" className="dash-link">{t("nav.tamper_alerts")}</Link>
+      </header>
+
+      <div className={`dash-audit-status dash-audit-${tone}`}>
+        <span className="dash-audit-badge" aria-hidden="true">{problem ? <AlertIcon /> : <ShieldIcon />}</span>
+        <div>
+          <strong>{t(unknown ? "dashboard.audit_unknown" : problem ? "dashboard.audit_bad" : "dashboard.audit_ok")}</strong>
+          <span>{t(unknown ? "dashboard.audit_unknown_sub" : problem ? "dashboard.audit_bad_sub" : "dashboard.audit_ok_sub")}</span>
+        </div>
+      </div>
+
+      <dl className="dash-audit-stats">
+        <div>
+          <dt>{t("dashboard.secured_records")}</dt>
+          <dd>{confirmedCount == null ? "—" : confirmedCount}</dd>
+          <span className={tamperedCount > 0 ? "dash-audit-note-bad" : undefined}>
+            {tamperedCount == null ? "" : tamperedCount === 0 ? t("dashboard.none_changed") : t("dashboard.n_changed", { count: tamperedCount })}
+          </span>
+        </div>
+        <div>
+          <dt>{t("dashboard.open_alerts")}</dt>
+          <dd>{alertCount == null ? "—" : alertCount}</dd>
+          <span className={alertCount > 0 ? "dash-audit-note-bad" : undefined}>
+            {alertCount == null ? "" : alertCount > 0 ? t("dashboard.needs_review") : t("tamper.nothing")}
+          </span>
+        </div>
+      </dl>
+      {pendingChainCount > 0 && (
+        <p className="dash-footnote">{pendingChainCount === 1 ? t("dashboard.chain_waiting_one") : t("dashboard.chain_waiting_other", { count: pendingChainCount })}</p>
+      )}
+
+      <h3 className="dash-subhead">{t("dashboard.recent_checks")}</h3>
+      {recentChecks.length === 0 ? (
+        <p className="dash-empty">{t("dashboard.no_checks")}</p>
+      ) : (
+        <ul className="dash-checks">
+          {recentChecks.map((e) => (
+            <li key={e.expenseid}>
+              <span className={"dash-dot" + (e.blockchainstatus === "TamperDetected" ? " dash-dot-bad" : "")} aria-hidden="true" />
+              <span className="dash-check-name">{e.vendorname} · {PESO.format(e.amount)}</span>
+              <span className="dash-check-time">{timeAgo(e.lastintegritycheckat, t)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -528,7 +542,7 @@ function NeedsAttentionPanel({ loading, tickets, reviews, milestones }) {
   return (
     <section className="dash-panel">
       <header className="dash-panel-head">
-        <h2>{t("dashboard.attention")}</h2>
+        <PanelTitle icon={<BellIcon />}>{t("dashboard.attention")}</PanelTitle>
       </header>
 
       {loading && <p className="dashboard-loading">{t("common.loading")}</p>}
