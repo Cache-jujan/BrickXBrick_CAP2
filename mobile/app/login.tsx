@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 
@@ -9,6 +9,7 @@ import { fieldErrorStyle } from "@/components/blocked-reasons";
 import { isNetworkError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
 import { KeyboardScreen } from "@/components/screen";
+import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { AppButton } from "@/components/app-button";
 import { BrandMark } from "@/components/brand-mark";
 import { LanguageButton } from "@/components/language-button";
@@ -20,9 +21,18 @@ const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL?.trim().replace(/\/$/, "");
 // light sheet that overlaps it with rounded corners. No photo, no illustration.
 export default function LoginScreen() {
   const { t } = useLocale();
+  const keyboardOpen = useKeyboardOpen();
+  const scrollRef = useRef<ScrollView>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // With the keyboard up, keep the fields and the Sign in button in view.
+  useEffect(() => {
+    if (!keyboardOpen) return undefined;
+    const id = setTimeout(() => (scrollRef.current as unknown as { scrollToEnd?: (o: { animated: boolean }) => void } | null)?.scrollToEnd?.({ animated: true }), 120);
+    return () => clearTimeout(id);
+  }, [keyboardOpen]);
   // Shown once when we got here because the saved sign-in expired.
   const [error, setError] = useState(() =>
     consumeSessionExpired()
@@ -86,10 +96,10 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardScreen background={COLORS.dark} topColor={COLORS.dark} contentContainerStyle={styles.content}>
-      <View style={styles.hero}>
+    <KeyboardScreen background={COLORS.dark} topColor={COLORS.dark} scrollRef={scrollRef} contentContainerStyle={styles.content}>
+      <View style={[styles.hero, keyboardOpen && styles.heroCompact]}>
         {/* A faint, oversized copy of the mark behind the headline. Decoration only. */}
-        <BrandMark size={220} white style={styles.watermark} />
+        {!keyboardOpen && <BrandMark size={220} white style={styles.watermark} />}
         <View style={styles.brandRow}>
           <View style={styles.brandLeft}>
             <BrandMark size={30} white />
@@ -99,10 +109,14 @@ export default function LoginScreen() {
           </View>
           <LanguageButton color="#FFFFFF" />
         </View>
-        <Text style={styles.headline}>
-          {t("login.story_lead")} <Text style={styles.headlineAccent}>{t("login.story_accent")}</Text>
-        </Text>
-        <View style={styles.rule} />
+        {!keyboardOpen && (
+          <>
+            <Text style={styles.headline}>
+              {t("login.story_lead")} <Text style={styles.headlineAccent}>{t("login.story_accent")}</Text>
+            </Text>
+            <View style={styles.rule} />
+          </>
+        )}
       </View>
 
       <View style={styles.sheet}>
@@ -196,6 +210,7 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1 },
 
   hero: { overflow: "hidden", paddingBottom: 52, paddingHorizontal: 24, paddingTop: 8 },
+  heroCompact: { paddingBottom: 40 },
   watermark: { opacity: 0.06, position: "absolute", right: -60, top: 30 },
   brandRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   brandLeft: { alignItems: "center", flexDirection: "row", gap: 10 },
@@ -205,7 +220,7 @@ const styles = StyleSheet.create({
   headlineAccent: { color: COLORS.accentLight },
   rule: { backgroundColor: COLORS.accentLight, borderRadius: 2, height: 4, marginTop: 18, width: 48 },
 
-  sheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, flexGrow: 1, marginTop: -28, paddingBottom: 20, paddingHorizontal: 24, paddingTop: 28 },
+  sheet: { backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, flexGrow: 1, marginTop: -28, paddingBottom: 20, paddingHorizontal: 24, paddingTop: 28 },
   title: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 28, letterSpacing: -0.6 },
   subtitle: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 15, lineHeight: 22, marginBottom: 24, marginTop: 6 },
 
