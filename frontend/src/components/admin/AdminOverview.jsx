@@ -41,7 +41,6 @@ export function AdminOverview({ overview, alerts = [] }) {
   const shown = alerts.slice(0, SHOWN_ALERTS);
   const nothingToDo = alerts.length === 0 && o.locked === 0 && o.openTamperAlerts === 0 && o.overdueBlockchain === 0;
   const roles = ROLE_ORDER.filter((r) => o.byRole?.[r]);
-  const maxRole = Math.max(1, ...roles.map((r) => o.byRole[r]));
 
   return (
     <section className="ao" aria-label={t("admin_overview.title")}>
@@ -128,13 +127,8 @@ export function AdminOverview({ overview, alerts = [] }) {
           <ul className="ao-list">
             {roles.map((r) => (
               <li key={r} className="ao-role">
-                <span className="ao-role-line">
-                  <span>{r}</span>
-                  <strong>{o.byRole[r]}</strong>
-                </span>
-                <span className="ao-bar" aria-hidden="true">
-                  <span className="ao-bar-fill" style={{ width: `${(o.byRole[r] / maxRole) * 100}%` }} />
-                </span>
+                <span>{r}</span>
+                <strong className="ao-count">{o.byRole[r]}</strong>
               </li>
             ))}
           </ul>
