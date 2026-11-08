@@ -52,10 +52,20 @@ function buildOpenRequestsQuery(user) {
            t.quantity      AS "requestedQuantity",
            t.approvedbudget AS "approvedBudget",
            t.createdat     AS "createdAt",
+           -- For the request details sheet on mobile (Purchaser taps a request).
+           -- neededBy as plain YYYY-MM-DD: a DATE read into a JS Date shifts a day
+           -- in some time zones once it is sent as JSON.
+           t.unit          AS "unit",
+           to_char(t.neededby, 'YYYY-MM-DD') AS "neededBy",
+           t.description   AS "description",
+           rq.name         AS "requestedByName",
+           ack.name        AS "approvedByName",
            t.quantity - COALESCE(SUM(e.quantity) FILTER (WHERE e.status <> 'Rejected'), 0) AS "remainingQuantity",
            t.approvedbudget - COALESCE(SUM(e.amount) FILTER (WHERE e.status <> 'Rejected'), 0) AS "remainingBudget"
       FROM tickets t
       JOIN projects p ON p.projectid = t.projectid
+      LEFT JOIN users rq  ON rq.userid  = t.submittedby
+      LEFT JOIN users ack ON ack.userid = t.acknowledgedby
       LEFT JOIN expenses e ON e.ticketid = t.ticketid
      WHERE ${scope.clause}
        AND t.tickettype = 'Material Request'
@@ -63,7 +73,7 @@ function buildOpenRequestsQuery(user) {
        AND p.status = 'Active'
        AND t.materialtype IS NOT NULL
        AND t.quantity IS NOT NULL
-     GROUP BY t.ticketid, t.status, p.name, p.budgetallowancepct
+     GROUP BY t.ticketid, t.status, p.name, p.budgetallowancepct, rq.name, ack.name
     HAVING t.quantity - COALESCE(SUM(e.quantity) FILTER (WHERE e.status <> 'Rejected'), 0) > 0
      ORDER BY t.createdat, t.ticketid`;
   return { text, params: scope.params };

@@ -213,6 +213,19 @@
 .bom-strip-off { background: var(--color-surface-muted); }
 .bom-strip-reason { font-style: italic; }
 
+/* On-BOM: tag on top, then four labeled values (BOM plan, requested before,
+   this request, after this request), like the facts row above it. */
+/* nowrap: in a wrapping column flexbox Chrome sizes the grid at one column
+   (four stacked rows) and keeps that height, leaving a tall empty box. */
+.bom-strip-grid-wrap { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--space-2); padding: var(--space-3); }
+.bom-strip-grid-wrap .bom-strip-tag { align-self: flex-start; }
+.bom-strip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2) var(--space-4); margin: 0; }
+.bom-strip-grid div { min-width: 0; }
+.bom-strip-grid dt { font-size: var(--text-xs); color: var(--color-ink-faint); margin-bottom: 2px; }
+.bom-strip-grid dd { margin: 0; font-weight: 600; color: var(--color-ink); overflow-wrap: anywhere; }
+.bom-strip-grid dd.bom-strip-ok { color: var(--color-success); font-weight: 700; }
+.bom-strip-grid dd.bom-strip-flag { color: var(--color-danger); font-weight: 700; }
+
 /* ---- Foot / action area ------------------------------------------------ */
 .ticket-card-foot {
   display: flex;
@@ -231,6 +244,25 @@
 
 .ticket-card-assign { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--space-4); }
 .ticket-card-assign .field { margin-bottom: 0; }
+.ticket-budget-cell { display: flex; flex-direction: column; gap: var(--space-1, 4px); min-width: 0; }
+.ticket-budget-cell .field-hint { margin: 0; }
+
+/* Why the last action on this card failed, shown where the PM clicked. */
+.ticket-card-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+/* Top/right/bottom only, so the colored left edge that marks the ticket type stays. */
+.ticket-card.ticket-card-has-error {
+  border-top-color: var(--color-danger);
+  border-right-color: var(--color-danger);
+  border-bottom-color: var(--color-danger);
+}
 .ticket-card-actions { display: flex; align-items: center; gap: var(--space-4); }
 .ticket-card-warning { margin: 0; font-size: var(--text-sm); color: var(--color-terracotta); }
 .ticket-reject-link {
