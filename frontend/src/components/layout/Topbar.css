@@ -417,3 +417,32 @@ a.topbar-menu-item:hover {
     font-size: 1.0625rem;
   }
 }
+
+/* A long trail (for example "Record protection / Tamper alerts") must never push the
+   bell and profile off a phone screen: the trail may shrink, and on a phone only the
+   current page is shown. */
+.topbar-trail {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  margin-right: var(--space-2);
+}
+.topbar-trail ol,
+.topbar-trail li {
+  min-width: 0;
+}
+.topbar-trail li {
+  white-space: nowrap;
+}
+.topbar-trail li[aria-current="page"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 640px) {
+  .topbar-trail li:not([aria-current="page"]):not(.topbar-brand) {
+    display: none;
+  }
+  .topbar-trail li + li::before {
+    display: none;
+  }
+}

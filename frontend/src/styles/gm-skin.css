@@ -1,0 +1,539 @@
+/*
+  General Manager skin
+  -------------------------------------------------------------
+  The look approved on the GM dashboard, carried to every other GM page:
+  white cards with one soft shadow and generous corners, tables that sit
+  inside a card, tabs as a soft switch, rounder buttons and fields, and a
+  single brand accent. It only applies where DashboardLayout puts the
+  `gm-skin` class (a General Manager on any page except the dashboard), so
+  the Project Manager and System Administrator screens keep their own look
+  and the dashboard keeps the styles it already has.
+*/
+
+.gm-skin {
+  --gm-shadow: 0 1px 2px rgba(48, 47, 40, 0.05), 0 14px 30px -20px rgba(48, 47, 40, 0.28);
+  --gm-line: rgba(48, 47, 40, 0.08);
+  --gm-track: #ece8e0;
+  --gm-card-radius: 18px;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+}
+
+/* ---- Page headings -------------------------------------------------- */
+
+.gm-skin h1 {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.gm-skin .page-header,
+.gm-skin .expenses-header,
+.gm-skin .tamper-header,
+.gm-skin .open-requests-header {
+  margin-bottom: var(--space-5);
+}
+.gm-skin .page-header-sub,
+.gm-skin .expenses-subtitle,
+.gm-skin .tamper-subtitle,
+.gm-skin .open-requests-subtitle {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  max-width: 64ch;
+}
+.gm-skin .open-requests-title h1 {
+  font-size: 1.625rem;
+}
+/* The top bar already names the page, so the small label above the
+   Notifications title is dropped. */
+.gm-skin .notifications-eyebrow {
+  display: none;
+}
+.gm-skin main h2,
+.gm-skin h2 {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.gm-skin .section-head {
+  margin: var(--space-6) 0 var(--space-3);
+}
+
+/* ---- Cards ---------------------------------------------------------- */
+
+.gm-skin .card,
+.gm-skin .projects-table-wrap,
+.gm-skin .users-table-card,
+.gm-skin .tamper-table-card,
+.gm-skin .limits-card,
+.gm-skin .pd-summary,
+.gm-skin .pd-team-grid,
+.gm-skin .pd-bom-bar,
+.gm-skin .project-timeline,
+.gm-skin .account-card,
+.gm-skin .notifications-list,
+.gm-skin .report-filters,
+.gm-skin .summary-card,
+.gm-skin .reports-placeholder,
+.gm-skin .psg-panel,
+.gm-skin .psg-lead,
+.gm-skin .pf-section,
+.gm-skin .bom-empty,
+.gm-skin .bom-totals,
+.gm-skin .bom-checks,
+.gm-skin .budget-just,
+.gm-skin .dc,
+.gm-skin .checkins-grid-card,
+.gm-skin .checkin-card,
+.gm-skin .open-requests-group,
+.gm-skin .split-portion,
+.gm-skin .xp-footer,
+.gm-skin .submit-expense-card,
+.gm-skin .pending-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--gm-line);
+  border-radius: var(--gm-card-radius);
+  box-shadow: var(--gm-shadow);
+}
+.gm-skin .projects-table-wrap,
+.gm-skin .users-table-card,
+.gm-skin .tamper-table-card,
+.gm-skin .notifications-list {
+  overflow: hidden;
+}
+/* An empty list is a quiet card, not a dashed box. */
+.gm-skin .reports-placeholder,
+.gm-skin .pending-panel {
+  border-style: solid;
+  color: var(--color-ink-soft);
+}
+.gm-skin .banner {
+  border-radius: 14px;
+}
+
+/* ---- Tabs: one soft switch everywhere ------------------------------- */
+
+.gm-skin .projects-toolbar,
+.gm-skin .expenses-toolbar {
+  border-bottom: none;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+.gm-skin .tamper-tabs,
+.gm-skin .notifications-tabs {
+  border-bottom: none;
+  margin-bottom: var(--space-4);
+}
+.gm-skin .projects-tabs,
+.gm-skin .expenses-tabs,
+.gm-skin .tamper-tabs,
+.gm-skin .notifications-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--gm-track);
+  width: fit-content;
+}
+.gm-skin .projects-tab,
+.gm-skin .expenses-tab,
+.gm-skin .tamper-tab,
+.gm-skin .notifications-tab {
+  padding: 7px 14px;
+  margin: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+.gm-skin .projects-tab:hover,
+.gm-skin .expenses-tab:hover,
+.gm-skin .tamper-tab:hover,
+.gm-skin .notifications-tab:hover {
+  color: var(--color-ink);
+}
+.gm-skin .projects-tab-active,
+.gm-skin .expenses-tab-active,
+.gm-skin .tamper-tab-active,
+.gm-skin .notifications-tab-active {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.12), 0 4px 10px -6px rgba(48, 47, 40, 0.2);
+}
+.gm-skin .expenses-tab-count {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(48, 47, 40, 0.07);
+  color: var(--color-ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+.gm-skin .expenses-tab-active .expenses-tab-count {
+  background: var(--color-brick-tint);
+  color: var(--color-brick-dark);
+}
+.gm-skin .open-requests-toggle,
+.gm-skin .checkins-tabs {
+  border-radius: 14px;
+  background: var(--gm-track);
+}
+.gm-skin .open-requests-toggle-btn {
+  border-radius: 10px;
+}
+.gm-skin .open-requests-toggle-on {
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.12), 0 4px 10px -6px rgba(48, 47, 40, 0.2);
+}
+
+/* ---- Search boxes, fields, selects ---------------------------------- */
+
+.gm-skin .projects-search,
+.gm-skin .expenses-search,
+.gm-skin .tamper-search {
+  height: 42px;
+  padding: 0 var(--space-4);
+  margin-bottom: 0;
+  border: 1px solid var(--gm-line);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--gm-shadow);
+  font-size: var(--text-sm);
+}
+.gm-skin .field-control {
+  height: 44px;
+  border-color: var(--color-border-strong);
+  border-radius: 12px;
+}
+.gm-skin textarea.field-control {
+  height: auto;
+}
+.gm-skin .field-label {
+  font-weight: 650;
+}
+
+/* ---- Buttons -------------------------------------------------------- */
+
+.gm-skin .btn {
+  border-radius: 12px;
+}
+.gm-skin .btn-primary {
+  background: var(--color-brick);
+  box-shadow: 0 6px 14px -8px rgba(191, 67, 7, 0.7);
+}
+.gm-skin .btn-primary:hover:not(:disabled) {
+  background: var(--color-brick-dark);
+}
+.gm-skin .btn-secondary,
+.gm-skin .btn-danger {
+  border-color: var(--gm-line);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.08);
+}
+.gm-skin .btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+.gm-skin .expenses-page-btn,
+.gm-skin .tamper-page-btn {
+  height: 36px;
+  border-radius: 10px;
+  border-color: var(--gm-line);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.08);
+}
+
+/* ---- Tables --------------------------------------------------------- */
+
+.gm-skin .users-table th,
+.gm-skin .tamper-table th {
+  padding: 14px var(--space-4);
+  background: #faf8f5;
+  border-bottom: 1px solid var(--gm-line);
+  color: var(--color-ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.gm-skin .users-table td,
+.gm-skin .tamper-table td {
+  border-bottom: 1px solid var(--gm-line);
+}
+.gm-skin .users-table tbody tr:not([class*="detail"]):hover td,
+.gm-skin .tamper-table tbody tr:hover td {
+  background: #fcfaf7;
+}
+.gm-skin .expenses-row:hover td,
+.gm-skin .expenses-row-open td {
+  background: #fcfaf7;
+}
+.gm-skin .expenses-row-open td {
+  box-shadow: none;
+  /* The open row is only a touch warmer than the rest (the older rule is !important). */
+  background: #fbf3ec !important;
+}
+.gm-skin .expenses-detail td {
+  background: #faf8f5;
+  border-left: 3px solid var(--color-brick);
+}
+.gm-skin .expenses-footer,
+.gm-skin .tamper-count {
+  color: var(--color-ink-soft);
+}
+
+/* ---- Modals ---------------------------------------------------------- */
+
+.gm-skin .modal-overlay {
+  background: rgba(28, 26, 23, 0.5);
+  backdrop-filter: blur(3px);
+}
+.gm-skin .modal {
+  border-radius: 20px;
+  border: 1px solid var(--gm-line);
+  box-shadow: 0 30px 60px -28px rgba(28, 26, 23, 0.55);
+}
+.gm-skin .modal-title {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+/* ---- Notifications --------------------------------------------------- */
+
+.gm-skin .notifications-group-label {
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---- Expense pages: one accent, not blue and green ------------------- */
+
+.gm-skin .submit-expense-page[data-mode="split"],
+.gm-skin .submit-expense-page[data-mode="petty"] {
+  --mode: #bf4307;
+  --mode-dark: #9e3505;
+  --mode-tint: #fcebe0;
+}
+.gm-skin .mode-tab-split svg,
+.gm-skin .mode-tab-petty svg {
+  color: #bf4307;
+}
+.gm-skin .mode-tab-on svg {
+  color: #fff;
+}
+
+/* ---- Labels and empty states ---------------------------------------- */
+
+/* Small labels read as normal text, not shouting. */
+.gm-skin .limits-label,
+.gm-skin .tamper-table th,
+.gm-skin .report-table thead th,
+.gm-skin .pd-group-title,
+.gm-skin .project-detail-milestone-band-title,
+.gm-skin .notifications-group-label {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.gm-skin .limits-label,
+.gm-skin .pd-group-title {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.gm-skin .pd-group-title {
+  margin-bottom: var(--space-3);
+  color: var(--color-ink);
+}
+.gm-skin .limits-card {
+  padding: var(--space-3) var(--space-5);
+}
+
+/* "Nothing here yet" is a quiet card with a solid edge. */
+.gm-skin .banner-empty {
+  background: var(--color-surface);
+  border: 1px solid var(--gm-line);
+  border-radius: var(--gm-card-radius);
+  box-shadow: var(--gm-shadow);
+  padding: var(--space-7) var(--space-5);
+}
+
+/* Drop zones keep a dashed edge: it says "drop a file here". */
+.gm-skin .bom-dropzone,
+.gm-skin .bom-drop {
+  border-radius: 16px;
+  background: #faf8f5;
+}
+
+/* Notifications use the full width, like every other page. */
+.gm-skin .notifications-page {
+  max-width: none;
+}
+.gm-skin .notifications-markall {
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--color-brick-tint);
+  color: var(--color-brick-dark);
+}
+.gm-skin .notifications-markall:hover {
+  text-decoration: none;
+  background: #f8dccb;
+}
+
+/* Summary and team cards on the project page. */
+.gm-skin .pd-group,
+.gm-skin .pd-person {
+  padding: var(--space-5) var(--space-6);
+}
+.gm-skin .pd-group + .pd-group,
+.gm-skin .pd-person + .pd-person {
+  border-left-color: var(--gm-line);
+}
+
+/* ---- Expense pages: header switch ------------------------------------ */
+
+.gm-skin .mode-bar {
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--gm-line);
+  border-left: 1px solid var(--gm-line);
+  border-radius: var(--gm-card-radius);
+  box-shadow: var(--gm-shadow);
+  margin-bottom: var(--space-4);
+}
+.gm-skin .mode-bar-icon {
+  border-radius: 12px;
+  background: linear-gradient(180deg, #d4561f 0%, var(--color-brick) 100%);
+}
+.gm-skin .mode-tab {
+  border-radius: 12px;
+  border-color: var(--gm-line);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.08);
+}
+.gm-skin .mode-tab-on,
+.gm-skin .mode-tab-on:hover {
+  background: var(--color-brick);
+  border-color: var(--color-brick);
+  box-shadow: 0 6px 14px -8px rgba(191, 67, 7, 0.7);
+}
+.gm-skin .xp-footer {
+  box-shadow: 0 -10px 24px -16px rgba(48, 47, 40, 0.3), var(--gm-shadow);
+}
+
+/* ---- Daily check-ins ------------------------------------------------- */
+
+.gm-skin .checkins-tabs {
+  padding: 4px;
+  gap: 2px;
+}
+.gm-skin .checkins-tabs button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.gm-skin .checkins-tabs button.is-on {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.12), 0 4px 10px -6px rgba(48, 47, 40, 0.2);
+}
+.gm-skin .checkins-count {
+  padding: var(--space-5);
+}
+.gm-skin .checkins-count-num {
+  font-size: 1.625rem;
+  letter-spacing: -0.02em;
+}
+
+/* ---- Open requests --------------------------------------------------- */
+
+.gm-skin .open-requests-page {
+  gap: var(--space-4);
+}
+.gm-skin .open-requests-controls .field-control,
+.gm-skin .open-requests-controls .btn {
+  height: 42px;
+  min-height: 42px;
+}
+.gm-skin .open-requests-toggle {
+  height: 42px;
+  padding: 4px;
+}
+.gm-skin .open-requests-total {
+  background: var(--color-brick-tint);
+  color: var(--color-brick-dark);
+}
+.gm-skin .open-requests-groups {
+  gap: var(--space-4);
+}
+.gm-skin .open-requests-group {
+  padding: var(--space-5) var(--space-6);
+  gap: 0;
+}
+.gm-skin .open-requests-group-head {
+  padding: 0 0 var(--space-3);
+  background: none;
+  border-left: none;
+  border-bottom: 1px solid var(--gm-line);
+  border-radius: 0;
+}
+.gm-skin .open-requests-group-head h2 {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+.gm-skin .open-requests-count {
+  border: none;
+  background: var(--color-brick-tint);
+  color: var(--color-brick-dark);
+  padding: 3px 10px;
+}
+.gm-skin .open-requests-row {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--gm-line);
+}
+.gm-skin .open-requests-row-main strong {
+  font-size: var(--text-base);
+  font-weight: 650;
+}
+.gm-skin .open-requests-meta {
+  font-size: var(--text-xs);
+}
+.gm-skin .open-requests-progress {
+  gap: 6px;
+}
+.gm-skin .open-requests-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gm-track);
+}
+.gm-skin .open-requests-fill {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e06a26 0%, var(--color-brick) 100%);
+}
+
+/* ---- Phones ---------------------------------------------------------- */
+
+@media (max-width: 520px) {
+  .gm-skin .open-requests-group {
+    padding: var(--space-4);
+  }
+  .gm-skin .pd-group,
+  .gm-skin .pd-person {
+    padding: var(--space-4) var(--space-5);
+  }
+  .gm-skin .mode-bar {
+    padding: var(--space-3) var(--space-4);
+  }
+  .gm-skin h1 {
+    font-size: 1.4375rem;
+  }
+}
+
+/* Checkboxes, radios and ranges use the brand colour. */
+.gm-skin input[type="checkbox"],
+.gm-skin input[type="radio"],
+.gm-skin input[type="range"] {
+  accent-color: var(--color-brick);
+}
