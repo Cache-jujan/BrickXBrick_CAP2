@@ -149,13 +149,17 @@ export default function AllocateScreen() {
 
   // Anything that needs a few words from the Purchaser before the PM sees it.
   const extras = portions.filter((p) => p.extraQuantity > 0);
-  const overspent = portions.filter((p) => p.overAllowance);
-  const needsReason = extras.length > 0 || overspent.length > 0;
+  // Strict budget: over budget (or no approved budget) cannot be submitted; finishing a request
+  // under budget needs a few words.
+  const budgetIssues = plan?.budgetIssues ?? [];
+  const blockers = budgetIssues.filter((i) => i.code !== "UNDERSPEND_NOTE_REQUIRED");
+  const underspent = budgetIssues.filter((i) => i.code === "UNDERSPEND_NOTE_REQUIRED");
+  const needsReason = extras.length > 0 || underspent.length > 0;
   const reason = [REASONS.find((r) => r.key === reasonKey)?.text, details.trim()].filter(Boolean).join(" ");
   const reasonOk = !needsReason || reason.length > 0;
 
   const missing = [...(plan?.unmatched ?? [])];
-  const canSubmit = !!plan?.ok && reasonOk && !loading && !submitting;
+  const canSubmit = !!plan?.ok && blockers.length === 0 && reasonOk && !loading && !submitting;
 
   function toggle(ticketID: string, ticked: boolean) {
     setSubmitProblems([]);
@@ -235,7 +239,9 @@ export default function AllocateScreen() {
           ? t("ck.nothing_ticked")
           : !plan.ok
             ? t("al.match_every")
-            : !reasonOk
+            : blockers.length > 0
+              ? t("bd.over_title")
+              : !reasonOk
               ? t("ck.need_reason")
               : t("al2.goes_to_pm");
 
@@ -401,6 +407,15 @@ export default function AllocateScreen() {
           </View>
         )}
 
+        {/* Over budget or no approved budget: the server refuses it, so say so before the tap. */}
+        {blockers.length > 0 && !loading && (
+          <View style={styles.errorBox}>
+            {blockers.map((issue, index) => (
+              <Text key={`budget-${index}`} style={styles.errorBoxText}>{issue.message}</Text>
+            ))}
+          </View>
+        )}
+
         {/* Only when something is out of the ordinary: say what, then ask for a few words. */}
         {needsReason && !loading && (
           <View style={[styles.notice, styles.reasonBox]}>
@@ -409,10 +424,8 @@ export default function AllocateScreen() {
                 {t("ck.extra", { qty: formatQty(p.extraQuantity), material: p.materialType, project: p.projectName })}
               </Text>
             ))}
-            {overspent.map((p) => (
-              <Text key={`over-${p.ticketID}`} style={[styles.noticeText, { color: AMBER }]}>
-                {t("ck.over_budget", { over: formatPeso(Number(p.amount) - Number(p.remainingBudget ?? 0)), project: p.projectName })}
-              </Text>
+            {underspent.map((issue, index) => (
+              <Text key={`under-${index}`} style={[styles.noticeText, { color: AMBER }]}>{issue.message}</Text>
             ))}
             <Text style={styles.reasonTitle}>{t("ck.reason_title")}</Text>
             <View style={styles.chipRow}>

@@ -375,6 +375,8 @@ export type ExpenseSubmission = {
   tin?: string | null;
   birPermitNumber?: string | null;
   lineItems: unknown[];
+  // Why the request was finished under budget (the server requires it then).
+  submitNote?: string;
 };
 
 export async function submitExpense(body: ExpenseSubmission) {
@@ -571,6 +573,9 @@ export type AllocationPlan = {
   allocated: string;
   linesTotal: string;
   warnings: { type: string; ticketID: string; amount?: string; remainingBudget?: string; overAllowance?: boolean; quantity?: number }[];
+  // Strict budget, from POST /allocations/preview: OVER_BUDGET and NO_APPROVED_BUDGET stop the
+  // submit; UNDERSPEND_NOTE_REQUIRED asks for a note.
+  budgetIssues?: { ticketID: string; code: "OVER_BUDGET" | "NO_APPROVED_BUDGET" | "UNDERSPEND_NOTE_REQUIRED"; message: string }[];
 };
 
 // lineTargets: receipt lines the Purchaser matched to a request by hand, { lineIndex: ticketID }.
