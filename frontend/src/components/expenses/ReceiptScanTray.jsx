@@ -26,13 +26,15 @@ export function ReceiptScanTray({ mode, activeScanID, onOpen }) {
         {rows.map((scan) => {
           const name = scan.context?.fileName || t("scan.this_receipt");
           const open = scan.scanID === activeScanID;
+          // The server rejected the file as not a receipt: no manual entry, just the reason.
+          const notReceipt = Boolean(scan.result && scan.result.notReceipt);
           return (
             <li key={scan.scanID} className={`scan-row scan-row-${scan.status.toLowerCase()}${open ? " scan-row-open" : ""}`}>
               <span className="scan-row-name" title={name}>{name}</span>
-              <span className="scan-row-status" role="status">
+              <span className="scan-row-status" role="status" title={notReceipt ? scan.errorMessage || undefined : undefined}>
                 {scan.status === "Scanning" && <><span className="scan-spinner" aria-hidden="true" />{t("scan.status_scanning")}</>}
                 {scan.status === "Ready" && t("scan.status_ready")}
-                {scan.status === "Failed" && t("scan.status_failed")}
+                {scan.status === "Failed" && (notReceipt ? t("scan.status_not_receipt") : t("scan.status_failed"))}
               </span>
               <span className="scan-row-actions">
                 {scan.status === "Ready" && (
@@ -40,7 +42,7 @@ export function ReceiptScanTray({ mode, activeScanID, onOpen }) {
                     {open ? t("scan.reviewing") : t("scan.review")}
                   </Button>
                 )}
-                {scan.status === "Failed" && (
+                {scan.status === "Failed" && !notReceipt && (
                   <Button type="button" variant="secondary" disabled={open} onClick={() => onOpen(scan)}>
                     {t("scan.enter_by_hand")}
                   </Button>

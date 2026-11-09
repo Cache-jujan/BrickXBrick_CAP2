@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "rea
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
-import { scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
+import { isNotReceipt, scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -110,7 +110,7 @@ export function ScannedReceipts({
                 {[scan.context?.ticket ? vendor : scan.context?.projectNames?.join(", "), scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
               </Text>
             </View>
-            <StatusPill status={scan.status} />
+            <StatusPill status={scan.status} notReceipt={isNotReceipt(scan)} />
             <Pressable onPress={() => confirmDismiss(scan)} hitSlop={10} accessibilityLabel={t("sr.remove_aria")}>
               <Text style={styles.remove}>×</Text>
             </Pressable>
@@ -121,7 +121,7 @@ export function ScannedReceipts({
   );
 }
 
-function StatusPill({ status }: { status: ReceiptScan["status"] }) {
+function StatusPill({ status, notReceipt }: { status: ReceiptScan["status"]; notReceipt: boolean }) {
   const { t } = useLocale();
   if (status === "Scanning") {
     return (
@@ -136,6 +136,15 @@ function StatusPill({ status }: { status: ReceiptScan["status"] }) {
       <View style={[styles.pill, { backgroundColor: COLORS.successBg }]}>
         <IconSymbol name="checkmark.seal.fill" size={14} color={COLORS.success} />
         <Text style={[styles.pillText, { color: COLORS.success }]}>{t("sr.review")}</Text>
+      </View>
+    );
+  }
+  // Not a receipt: there is nothing to type in, so the pill says why instead.
+  if (notReceipt) {
+    return (
+      <View style={[styles.pill, { backgroundColor: COLORS.errorFill }]}>
+        <IconSymbol name="exclamationmark.triangle.fill" size={14} color={COLORS.errorText} />
+        <Text style={[styles.pillText, { color: COLORS.errorText }]}>{t("scan.status_not_receipt")}</Text>
       </View>
     );
   }

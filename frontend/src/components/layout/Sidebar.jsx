@@ -11,10 +11,7 @@ import { Avatar } from "../ui/Avatar";
 
 import "./Sidebar.css";
 
-// Ways to submit an expense other than a single receipt for one request; listed under "Submit expense".
-const SUBMIT_EXPENSE_CHILDREN = [
-  { to: "/expenses/split", label: "nav.split_receipt" },
-];
+// Split receipt is the exception, so it is not in the sidebar: it is a link on the Submit expense page.
 
 // alerts: "live" reads the badge count from GET /api/blockchain/alerts (real
 // backend data — see FRONTEND_IMPLEMENTATION_TRACKER.md). Omit the key
@@ -25,7 +22,7 @@ const NAV_BY_ROLE = {
     { to: "/projects", label: "nav.projects", icon: FolderIcon },
     { to: "/requests", label: "nav.open_requests", icon: InboxIcon },
     { to: "/expenses", label: "nav.expenses", icon: WalletIcon, end: true },
-    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptPlusIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
+    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptPlusIcon, end: true },
     { to: "/reports", label: "nav.reports", icon: BarChartIcon },
     { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: ShieldAlertIcon, alerts: "live" },
   ],
@@ -36,7 +33,7 @@ const NAV_BY_ROLE = {
     { to: "/projects", label: "nav.projects", icon: FolderIcon },
     { to: "/requests", label: "nav.open_requests", icon: InboxIcon },
     { to: "/expenses", label: "nav.expenses", icon: WalletIcon, end: true },
-    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptPlusIcon, end: true, children: SUBMIT_EXPENSE_CHILDREN },
+    { to: "/expenses/new", label: "nav.submit_expense", icon: ReceiptPlusIcon, end: true },
   ],
   "Site Manager": [
     { to: "/dashboard/sm", label: "nav.dashboard", icon: GridIcon },

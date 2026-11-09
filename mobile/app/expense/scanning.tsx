@@ -6,7 +6,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
-import { dismissScan, fetchScan, type ReceiptScan } from "@/lib/receipt-scans";
+import { dismissScan, fetchScan, isNotReceipt, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
 import { useNetwork } from "@/lib/sync/network-context";
 import { useLocale } from "@/lib/i18n-context";
@@ -86,7 +86,7 @@ export default function ScanningScreen() {
           <Step state="done" label={t("mx.step_photo_uploaded")} />
           <Step
             state={failed ? "failed" : scan?.status === "Ready" ? "done" : "active"}
-            label={failed ? t("mx.step_failed") : t("mx.step_reading")}
+            label={failed ? (isNotReceipt(scan) ? t("scan.status_not_receipt") : t("mx.step_failed")) : t("mx.step_reading")}
             detail={scan?.status === "Scanning" ? `${elapsed}s` : undefined}
           />
           <Step state={scan?.status === "Ready" ? "done" : "waiting"} label={t("mx.step_ready")} />
@@ -115,7 +115,7 @@ export default function ScanningScreen() {
       </View>
 
       <View style={styles.footer}>
-        {(failed || slow) && scan && (
+        {(failed || slow) && scan && !isNotReceipt(scan) && (
           <Pressable style={[styles.button, styles.primary]} onPress={() => openManual(scan, { replace: true })} accessibilityRole="button">
             <Text style={styles.primaryText}>{t("mx.type_instead")}</Text>
           </Pressable>

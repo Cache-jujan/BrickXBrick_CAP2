@@ -23,7 +23,7 @@ const DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
 // Bump when PROMPT or RESPONSE_SCHEMA changes: the OCR eval caches answers
 // per model AND prompt version, so a new prompt is never scored on old answers.
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 
 // Per model attempt. A Gemini call that hangs would hold the Purchaser on
 // the "Reading receipt…" screen; past this the next model is tried, then
@@ -32,6 +32,7 @@ const TIMEOUT_MS = 25000;
 
 const PROMPT = `You are reading a Philippine purchase receipt (official receipt, sales invoice, or an informal hardware/store receipt) for construction materials.
 Return ONLY the fields in the JSON schema. Rules:
+- isReceipt: FIRST decide whether the file is really a purchase receipt, sales invoice, official receipt, or billing/charge invoice from a seller showing what was bought and what was paid. Answer false for anything else: a selfie or photo of a person, a landscape, a screenshot of an app or chat, a meme, an ID card, a contract, a letter, a form, a blank page, a drawing, a photo of construction work or materials with no printed receipt, a quotation or purchase order that is not a receipt, or a document you cannot read at all. When false, give notReceiptReason (one short sentence saying what the file is) and set every other field to null and lineItems to [].
 - Copy values exactly as printed. Never guess or invent a value; use null when a field is not printed or not legible.
 - storeName: the seller's business name as printed at the top (not the buyer, not "SOLD TO").
 - tin: the SELLER's TIN (e.g. "123-456-789-00000"), not the customer's TIN.
@@ -48,6 +49,8 @@ Return ONLY the fields in the JSON schema. Rules:
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
+    isReceipt: { type: "BOOLEAN" },
+    notReceiptReason: { type: "STRING", nullable: true },
     storeName: { type: "STRING", nullable: true },
     tin: { type: "STRING", nullable: true },
     birPermitType: { type: "STRING", nullable: true, enum: ["ATP", "PTU", "Permit"] },
@@ -73,9 +76,9 @@ const RESPONSE_SCHEMA = {
     },
     uncertainFields: { type: "ARRAY", items: { type: "STRING" } },
   },
-  required: ["storeName", "tin", "birPermitNumber", "orSiNumber", "date", "amount", "lineItems"],
+  required: ["isReceipt", "storeName", "tin", "birPermitNumber", "orSiNumber", "date", "amount", "lineItems"],
   propertyOrdering: [
-    "storeName", "tin", "birPermitType", "birPermitNumber", "orSiNumber", "date", "amount", "lineItems", "uncertainFields",
+    "isReceipt", "notReceiptReason", "storeName", "tin", "birPermitType", "birPermitNumber", "orSiNumber", "date", "amount", "lineItems", "uncertainFields",
   ],
 };
 
@@ -215,6 +218,9 @@ function geminiJsonToParsed(json) {
   const permitType = cleanString(raw.birPermitType);
 
   const parsed = {
+    // Only an explicit "false" rejects; the schema makes the model answer it every time.
+    isReceipt: raw.isReceipt !== false,
+    notReceiptReason: cleanString(raw.notReceiptReason),
     storeName: cleanString(raw.storeName),
     tin: cleanString(raw.tin),
     birPermitNumber: cleanString(raw.birPermitNumber),

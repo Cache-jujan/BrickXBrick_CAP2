@@ -99,4 +99,14 @@ async function receiptImageExists(url) {
   return r2.objectExists(key);
 }
 
-module.exports = { storeReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX, MAX_RECEIPT_BYTES };
+/** Delete a stored receipt file (one this module wrote). Never throws: it is cleanup. */
+async function deleteReceiptImage(url) {
+  try {
+    const key = r2.keyFromPublicUrl(url);
+    if (key && RECEIPT_KEY_RE.test(key)) await r2.deleteObject(key);
+  } catch (err) {
+    console.error("Could not delete a rejected upload:", err.message);
+  }
+}
+
+module.exports = { storeReceiptImage, deleteReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX, MAX_RECEIPT_BYTES };

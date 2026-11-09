@@ -622,30 +622,53 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
 
         // The receipt image, ticket link and project are NOT changed on a
         // resubmit — only the correctable fields. The receipt already exists.
-        const result = await query(
-            `UPDATE expenses
-                SET vendorname = $1, amount = $2, receiptdate = $3, category = $4,
-                    birvalidationstatus = $5, birnumber = $6, tin = $7,
-                    birpermitnumber = $8, lineitems = $9, quantity = $10,
-                    status = 'Pending', rejectionreason = NULL, approvedby = NULL
-              WHERE expenseid = $11
-              RETURNING ${EXPENSE_COLUMNS}`,
-            [
-                vendorName,
-                amount,
-                receiptDate,
-                category,
-                birValidationStatus,
-                bir.birNumber,
-                bir.tin,
-                bir.birPermitNumber,
-                JSON.stringify(storedLineItems),
-                quantity,
-                req.params.id,
-            ]
-        );
-
-        const expense = result.rows[0];
+        // One transaction: the request is locked while its budget is checked (the expense's own
+        // old amount does not count against it), and a portion of a split receipt keeps its
+        // allocation row in step with the new amount.
+        const expense = await withTransaction(async (client) => {
+            const ticketID = existing.rows[0].ticketid;
+            if (ticketID) {
+                await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+                const remainingBudgetCents = await loadRemainingBudgetCents(
+                    (sql, params) => client.query(sql, params), ticketID, req.params.id
+                );
+                // Over budget is refused; the underspend note was given when it was first submitted.
+                const issue = checkBudget({
+                    amountCents: Math.round(amount * 100),
+                    remainingBudgetCents,
+                    completesRequest: false,
+                    note: "",
+                });
+                if (issue) throw httpError(400, issue.message, { code: issue.code });
+            }
+            const result = await client.query(
+                `UPDATE expenses
+                    SET vendorname = $1, amount = $2, receiptdate = $3, category = $4,
+                        birvalidationstatus = $5, birnumber = $6, tin = $7,
+                        birpermitnumber = $8, lineitems = $9, quantity = $10,
+                        status = 'Pending', rejectionreason = NULL, approvedby = NULL
+                  WHERE expenseid = $11
+                  RETURNING ${EXPENSE_COLUMNS}`,
+                [
+                    vendorName,
+                    amount,
+                    receiptDate,
+                    category,
+                    birValidationStatus,
+                    bir.birNumber,
+                    bir.tin,
+                    bir.birPermitNumber,
+                    JSON.stringify(storedLineItems),
+                    quantity,
+                    req.params.id,
+                ]
+            );
+            await client.query(
+                "UPDATE receiptallocations SET allocatedamount = $1 WHERE expenseid = $2",
+                [amount, req.params.id]
+            );
+            return result.rows[0];
+        });
 
         // Clear only the still-open system flags before re-screening, so a
         // corrected expense doesn't keep stale "duplicate"/"unknown vendor"

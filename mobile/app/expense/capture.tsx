@@ -45,7 +45,8 @@ export default function CaptureScreen() {
   const mode: DraftMode = draft.ticket && draft.mode === "single" ? "single" : "split";
   const isSplit = mode === "split";
   // The Purchaser's receipts wait on Turn In; a Site Manager has no such tab and stays on their list.
-  const afterSnap = getSession()?.user.role === "Site Manager" ? "/" : "/turn-in";
+  const isSiteManager = getSession()?.user.role === "Site Manager";
+  const afterSnap = isSiteManager ? "/" : "/turn-in";
 
   // Which project a receipt is for is never assumed. The person picks it here once the
   // photo is taken; only when they have exactly one project is it filled in for them.
@@ -187,6 +188,8 @@ export default function CaptureScreen() {
       refreshPendingCount();
       setStatus("idle");
       Alert.alert(t("mx.saved_phone_title"), t("mx.saved_phone_body"));
+      // A Site Manager stays on this capture screen, ready for the next receipt.
+      if (isSiteManager && isSplit) return pick(null);
       reset();
       router.replace(isSplit ? afterSnap : "/");
     } catch (err) {
@@ -209,6 +212,12 @@ export default function CaptureScreen() {
       expediteNotificationChecks(); // the "receipt ready" pop-up checks often for the next minute
       setStatus("idle");
       if (isSplit) {
+        // A Site Manager stays on this capture screen, ready for the next receipt.
+        if (isSiteManager) {
+          pick(null);
+          Alert.alert(t("mx.sent_title"), t("mx.sent_body"));
+          return;
+        }
         // Snap now, review later: the receipt goes to the Turn In tray and OCR runs there.
         reset();
         router.replace(afterSnap);

@@ -4,7 +4,7 @@ import { Alert } from "react-native";
 import { router } from "expo-router";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
-import { fileFromScan, manualEntryResult, type ReceiptScan } from "@/lib/receipt-scans";
+import { fileFromScan, isNotReceipt, manualEntryResult, type ReceiptScan } from "@/lib/receipt-scans";
 
 // From the scanning screen, navigation REPLACES it: going back from review
 // must not land on a finished scan that would open review again.
@@ -47,6 +47,8 @@ export function useOpenScan() {
 
   // Failed, or the user would rather not wait: type it in against the photo.
   function openManual(scan: ReceiptScan, nav: Nav = {}) {
+    // Not a receipt: say so, never offer manual entry.
+    if (isNotReceipt(scan)) return Alert.alert("Not a receipt", scan.errorMessage ?? "This doesn't look like a receipt.");
     if (missingTicket(scan)) return;
     restore(scan, manualEntryResult(scan));
     go("/expense/review", nav);

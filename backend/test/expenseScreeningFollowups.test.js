@@ -329,3 +329,40 @@ test("POST /expenses: an expense with no ticketID is refused for every role", as
     server.close();
   }
 });
+
+// ---- resubmit: strict budget, and a split portion's allocation row ------------
+
+test("resubmit: over what is left of the request is refused, nothing is saved", async () => {
+  const server = await startServer();
+  try {
+    reset();
+    db.remaining = "100.00";
+    db.rejectedRow = { expenseid: "exp-9", status: "Rejected", submittedby: "user-1", ticketid: "ticket-1" };
+    const res = await send(server, "PATCH", "/api/expenses/exp-9/resubmit", resubmitBody());
+    assert.equal(res.status, 400, JSON.stringify(res.body));
+    assert.match(res.body.error, /over budget/i);
+    assert.equal(callsStartingWith("update expenses").length, 0);
+    assert.equal(callsStartingWith("update receiptallocations").length, 0);
+  } finally {
+    db.remaining = "500.00";
+    server.close();
+  }
+});
+
+test("resubmit: a portion of a split receipt keeps its allocation amount in step", async () => {
+  const server = await startServer();
+  try {
+    reset();
+    db.remaining = "100000.00";
+    db.rejectedRow = { expenseid: "exp-9", status: "Rejected", submittedby: "user-1", ticketid: "ticket-1" };
+    const body = resubmitBody();
+    const res = await send(server, "PATCH", "/api/expenses/exp-9/resubmit", body);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const alloc = callsStartingWith("update receiptallocations");
+    assert.equal(alloc.length, 1);
+    assert.deepEqual(alloc[0].params, [body.amount, "exp-9"]);
+  } finally {
+    db.remaining = "500.00";
+    server.close();
+  }
+});

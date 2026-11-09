@@ -13,6 +13,9 @@
 // normal Node host (Railway, a VM); on Cloud Run it needs CPU always
 // allocated, or the scan is throttled once the response is sent.
 
+const { NotAReceiptError } = require("./receiptOcr");
+const { deleteReceiptImage } = require("./receiptStorage");
+
 const STALE_AFTER_MS = 3 * 60 * 1000;
 const STALE_MESSAGE = "Reading this receipt took too long. Enter the details manually from the photo.";
 const FAILED_MESSAGE = "Couldn't read this receipt. Enter the details manually from the photo.";
@@ -106,6 +109,21 @@ function createReceiptScans({ query, buildScanDraft }) {
       );
       await announce(done.rows?.[0]?.userID, scanID, "ReceiptScanReady", READY_NOTICE);
     } catch (err) {
+      // Not a receipt: the file is deleted (so it can never be posted) and the scan ends
+      // Failed with notReceipt set, so the apps show the reason instead of manual entry.
+      if (err instanceof NotAReceiptError) {
+        await deleteReceiptImage(receiptImageURL);
+        try {
+          await query(
+            `UPDATE ReceiptScans SET status = 'Failed', errorMessage = $2, result = $3, completedAt = NOW()
+              WHERE scanID = $1 AND status = 'Scanning'`,
+            [scanID, err.message, JSON.stringify({ notReceipt: true, reason: err.reason })]
+          );
+        } catch (updateErr) {
+          console.error(`Could not mark scan ${scanID} as not a receipt:`, updateErr);
+        }
+        return;
+      }
       console.error(`Background scan ${scanID} failed:`, err);
       try {
         const failed = await query(

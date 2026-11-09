@@ -6,7 +6,7 @@
 // needs to store receipt images too, extend this file rather than writing a
 // second one.
 
-const { S3Client, PutObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const crypto = require("crypto");
 
 const REQUIRED_ENV = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY", "R2_BUCKET", "R2_PUBLIC_BASE_URL"];
@@ -119,4 +119,9 @@ async function putObject(key, buffer, contentType) {
     return publicUrlForKey(key);
 }
 
-module.exports = { uploadBuffer, putObject, publicUrlForKey, keyFromPublicUrl, objectExists, getClient };
+// deleteObject(key): remove one object. Used to drop an upload that turned out not to be a receipt.
+async function deleteObject(key) {
+    await getClient().send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }));
+}
+
+module.exports = { uploadBuffer, putObject, deleteObject, publicUrlForKey, keyFromPublicUrl, objectExists, getClient };

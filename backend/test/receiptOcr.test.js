@@ -52,3 +52,25 @@ test("no models configured -> manual entry", async () => {
   assert.equal(out.engine, null);
   assert.equal(out.ocrError, MANUAL_ENTRY_MESSAGE);
 });
+
+test("a file Gemini says is not a receipt is rejected at once: no fallback model, no manual entry", async () => {
+  const { NotAReceiptError } = require("../src/lib/receiptOcr");
+  const models = [];
+  await assert.rejects(
+    scanReceipt(Buffer.from("x"), "image/jpeg", {
+      geminiModels: () => ["main", "fallback"],
+      parseReceiptWithGemini: async (_b, _m, { model }) => {
+        models.push(model);
+        return { isReceipt: false, notReceiptReason: "A selfie of a person.", confidence: {}, lineItems: [] };
+      },
+    }),
+    (err) => err instanceof NotAReceiptError && err.status === 422 && err.code === "NOT_A_RECEIPT"
+  );
+  assert.deepEqual(models, ["main"]);
+});
+
+test("the Gemini mapper keeps isReceipt, and only an explicit false rejects", () => {
+  const { geminiJsonToParsed } = require("../src/lib/geminiReceipt");
+  assert.equal(geminiJsonToParsed({ isReceipt: false, notReceiptReason: "A meme." }).isReceipt, false);
+  assert.equal(geminiJsonToParsed({ isReceipt: true, storeName: "ACME" }).isReceipt, true);
+});

@@ -23,6 +23,9 @@ export type ScanContext = {
   projectNames?: string[];
 };
 
+// The server rejected the file because it is not a receipt: there is nothing to type in.
+export const isNotReceipt = (scan: { result?: unknown }) => Boolean((scan.result as { notReceipt?: boolean } | null)?.notReceipt);
+
 export type ScanStatus = "Scanning" | "Ready" | "Failed";
 
 export type ReceiptScan = {

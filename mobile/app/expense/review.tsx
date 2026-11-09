@@ -24,7 +24,7 @@ import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
-import { formatAmountInput, formatPesoCents, groupAmountText, toCents, toHundredths } from "@/lib/money";
+import { formatAmountInput, formatPesoCents, groupAmountLive, groupAmountText, toCents, toHundredths } from "@/lib/money";
 import { devLog } from "@/lib/sync/log";
 import {
   birStatusPreview,
@@ -81,6 +81,10 @@ export default function ReviewScreen() {
   // Materials from the Site Managers' requests, for naming line items.
   const [materials, setMaterials] = useState<RequestedMaterial[]>([]);
   const [pickingItemId, setPickingItemId] = useState<string | null>(null);
+  // What is left in the budgets of the requests this receipt can fill (centavos), for a split receipt.
+  const [splitLeftCents, setSplitLeftCents] = useState<number | null>(null);
+  // The requests this receipt is for, shown at the top of the review ("This receipt is for").
+  const [forRequests, setForRequests] = useState<{ key: string; subject: string; project: string; left: number | null }[]>([]);
 
   // One receipt for one ticket: only that ticket's material. Split receipt:
   // every open request, since the receipt can fill any of them.
@@ -91,6 +95,12 @@ export default function ReviewScreen() {
       .then(({ data: requests }) => {
         if (cancelled) return;
         const mine = ticketId ? requests.filter((r) => r.ticketID === ticketId) : requests;
+        // A split receipt can never cost more than every request it may fill has left (limited to the chosen project, if any).
+        const scopeIds = draft.scope?.projectIds ?? [];
+        const reachable = ticketId ? [] : requests.filter((r) => scopeIds.length === 0 || scopeIds.includes(r.projectID));
+        const budgeted = reachable.filter((r) => r.remainingBudget != null);
+        setForRequests((ticketId ? mine : reachable).map((r) => ({ key: r.ticketID, subject: r.subject, project: r.projectName, left: r.remainingBudget })));
+        setSplitLeftCents(budgeted.length > 0 ? budgeted.reduce((sum, r) => sum + Math.round(Number(r.remainingBudget) * 100), 0) : null);
         setMaterials(
           mine.map((r) => ({
             key: r.ticketID,
@@ -167,8 +177,12 @@ export default function ReviewScreen() {
   const linesCents = namedItems.reduce((sum, it) => sum + (toCents(it.price) ?? 0), 0);
   const totalsMatch = totalCents !== null && linesCents === totalCents;
   // The strict budget (every role): the receipt can be under what is left, never over.
-  // Only for a request chosen up front; a split receipt is checked per request on the next screen.
-  const remainingCents = !isSplit && !draft.resubmit && draft.ticket?.remaining != null ? toCents(draft.ticket.remaining) : null;
+  // A split receipt is capped by the combined budget left on the requests it can fill; the exact split is checked on the next screen.
+  const remainingCents = draft.resubmit
+    ? null
+    : !isSplit
+      ? (draft.ticket?.remaining != null ? toCents(draft.ticket.remaining) : null)
+      : splitLeftCents;
   const overCents = remainingCents !== null && totalCents !== null && totalCents > remainingCents ? totalCents - remainingCents : 0;
   const dateProblem = receiptDateProblem(receiptDate, t);
   const vendorMissing = vendorName.trim().length === 0;
@@ -276,34 +290,51 @@ export default function ReviewScreen() {
             </View>
           )}
 
-          {file && (
-            <Pressable
-              onPress={openReceiptFile}
-              style={({ pressed }) => [styles.thumbRow, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={file.type === "image" ? t("rv.file_aria_image") : t("rv.file_aria_pdf")}
-            >
-              {file.type === "image" ? (
-                <Image source={{ uri: file.uri }} style={styles.thumb} resizeMode="cover" />
-              ) : (
-                <View style={[styles.thumb, styles.thumbPdf]}><IconSymbol name="doc.fill" size={26} color={COLORS.errorText} /></View>
-              )}
-              <View style={styles.flex}>
-                <Text style={styles.thumbTitle}>{t("rv.receipt_file")}</Text>
-                <Text style={styles.thumbName} numberOfLines={1}>{file.name}{file.type === "pdf" && file.size ? ` · ${file.size}` : ""}</Text>
-                <Text style={styles.thumbHint}>{t("rv.tap_open")}</Text>
+          {(file || forRequests.length > 0 || remainingCents !== null) && (
+            <View style={styles.summary}>
+              <View style={styles.summaryTop}>
+                {file && (
+                  <Pressable
+                    onPress={openReceiptFile}
+                    style={({ pressed }) => pressed && styles.pressed}
+                    accessibilityRole="button"
+                    accessibilityLabel={file.type === "image" ? t("rv.file_aria_image") : t("rv.file_aria_pdf")}
+                  >
+                    {file.type === "image" ? (
+                      <Image source={{ uri: file.uri }} style={styles.thumb} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.thumb, styles.thumbPdf]}><IconSymbol name="doc.fill" size={26} color={COLORS.errorText} /></View>
+                    )}
+                  </Pressable>
+                )}
+                <View style={styles.flex}>
+                  {forRequests.length > 0 ? (
+                    <>
+                      <Text style={styles.summaryLabel}>{t("rv.for_title")}</Text>
+                      <Text style={styles.summaryTitle} numberOfLines={2}>{forRequests.slice(0, 2).map((r) => r.subject).join(", ")}</Text>
+                      <Text style={styles.summaryMeta} numberOfLines={1}>
+                        {forRequests[0].project}{forRequests.length > 2 ? ` · ${t("rv.for_more", { count: forRequests.length - 2 })}` : ""}
+                      </Text>
+                    </>
+                  ) : file ? (
+                    <>
+                      <Text style={styles.summaryTitle}>{t("rv.receipt_file")}</Text>
+                      <Text style={styles.summaryMeta} numberOfLines={1}>{file.name}{file.type === "pdf" && file.size ? ` · ${file.size}` : ""}</Text>
+                    </>
+                  ) : null}
+                  {file ? <Text style={styles.summaryHint}>{t("rv.tap_open")}</Text> : null}
+                </View>
               </View>
-            </Pressable>
-          )}
-
-          {remainingCents !== null ? (
-            <View style={[styles.budgetBox, overCents > 0 && styles.budgetBoxOver]}>
-              <Text style={[styles.budgetLeft, overCents > 0 && styles.budgetTextOver]}>{t("bd.left", { remaining: formatPesoCents(remainingCents) })}</Text>
-              <Text style={[styles.budgetHint, overCents > 0 && styles.budgetTextOver]}>
-                {overCents > 0 ? t("bd.over_inline", { over: formatPesoCents(overCents) }) : t("bd.under_inline")}
-              </Text>
+              {remainingCents !== null ? (
+                <View style={[styles.summaryBudget, overCents > 0 && styles.summaryBudgetOver]}>
+                  <Text style={[styles.summaryBudgetLeft, overCents > 0 && styles.budgetTextOver]}>{t("bd.left", { remaining: formatPesoCents(remainingCents) })}</Text>
+                  <Text style={[styles.summaryBudgetHint, overCents > 0 && styles.budgetTextOver]} numberOfLines={2}>
+                    {overCents > 0 ? t("bd.over_inline", { over: formatPesoCents(overCents) }) : t("bd.under_inline")}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
+          )}
 
           {hasChecks || !bir.formal ? (
             <View style={styles.banner}>
@@ -322,12 +353,7 @@ export default function ReviewScreen() {
                 )}
               </View>
             </View>
-          ) : (
-            <View style={[styles.birBadge, styles.birFormal]}>
-              <IconSymbol name="checkmark.seal.fill" size={16} color={COLORS.success} />
-              <Text style={[styles.birText, { color: COLORS.success }]}>{t("rv.formal")}</Text>
-            </View>
-          )}
+          ) : null}
 
           {conflicts.length > 0 && (
             <View style={styles.warnBox}>
@@ -344,7 +370,7 @@ export default function ReviewScreen() {
           <Section title={t("rv.section_receipt")}>
             <Field label={t("dashboard.vendor")} value={vendorName} onChangeText={edit("vendorName", setVendorName)} check={isLowConfidence("vendorName")} error={vendorMissing ? REQUIRED : null} />
             <View style={styles.pair}>
-              <Field style={styles.half} label={t("rv.total_php")} value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? REQUIRED : null} />
+              <Field style={styles.half} label={t("rv.total_php")} value={amount} onChangeText={(v) => edit("amount", setAmount)(groupAmountLive(v))} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? REQUIRED : null} />
               {Platform.OS === "web" ? (
                 // The native picker has no web build, so the web preview keeps a typed date.
                 <Field style={styles.half} label={t("dashboard.date")} value={receiptDate} onChangeText={edit("receiptDate", setReceiptDate)} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" check={isLowConfidence("receiptDate")} error={dateProblem} />
@@ -393,19 +419,21 @@ export default function ReviewScreen() {
               const named = item.name.trim().length > 0;
               const qtyBad = named && toHundredths(item.quantity) === null;
               const amountBad = named && toCents(item.price) === null;
+              const needName = namedItems.length === 0 && index === 0;
               return (
-                <View key={item.id} style={[styles.itemCard, !!item.ocr && styles.itemCardOcr]}>
-                  <View style={styles.itemTop}>
-                    <View style={styles.itemLabelRow}>
-                      <Text style={styles.itemIndex}>{t("submit.item_n", { n: index + 1 })}</Text>
-                      {namedItems.length === 0 && index === 0 && <Text style={styles.requiredTag}>{t("mx.required_tag")}</Text>}
-                      {item.ocr && <Text style={styles.checkTag}>{t("rv.check_tag")}</Text>}
-                    </View>
-                    <Pressable onPress={() => removeItem(item.id)} hitSlop={8} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={t("submit.remove_item_n", { n: index + 1 })}>
-                      <Text style={styles.removeText}>{t("common.remove")}</Text>
+                <View key={item.id} style={[styles.lineBlock, index > 0 && styles.lineBlockDivider]}>
+                  <View style={styles.lineNameRow}>
+                    <TextInput style={[styles.input, styles.flex, needName && styles.inputRequired]} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} accessibilityLabel={t("submit.item_n", { n: index + 1 })} />
+                    <Pressable onPress={() => removeItem(item.id)} hitSlop={6} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={t("submit.remove_item_n", { n: index + 1 })}>
+                      <Text style={styles.removeX}>×</Text>
                     </Pressable>
                   </View>
-                  <TextInput style={[styles.input, namedItems.length === 0 && index === 0 && styles.inputRequired]} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} />
+                  {(needName || item.ocr) && (
+                    <View style={styles.tagRow}>
+                      {needName && <Text style={styles.requiredTag}>{t("mx.required_tag")}</Text>}
+                      {item.ocr && <Text style={styles.checkTag}>{t("rv.check_tag")}</Text>}
+                    </View>
+                  )}
                   {item.scanned && simpleText(item.scanned) !== simpleText(item.name) && (
                     <Text style={styles.scannedNote}>
                       {t("rv.receipt_says", { scanned: item.scanned })}
@@ -423,13 +451,12 @@ export default function ReviewScreen() {
                         <Text style={styles.matchedChipRemove}>{t("rv.remove_match")}</Text>
                       </Pressable>
                     </View>
-                  ) : null}
-                  {materials.length > 0 && (
-                    <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
-                      <Text style={styles.pickButtonText}>{t("rv.match_material")}</Text>
-                      <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
+                  ) : materials.length > 0 ? (
+                    <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.matchLink, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
+                      <Text style={styles.matchLinkText}>{t("rv.match_material")}</Text>
+                      <IconSymbol name="chevron.right" size={16} color={COLORS.primary} />
                     </Pressable>
-                  )}
+                  ) : null}
                   <View style={styles.itemRow}>
                     <View style={styles.itemQty}>
                       <Text style={styles.miniLabel}>{t("split.col_qty")}{qtyBad ? <Text style={styles.requiredTag}> {t("mx.required_tag")}</Text> : null}</Text>
@@ -437,11 +464,11 @@ export default function ReviewScreen() {
                     </View>
                     <View style={styles.itemAmount}>
                       <Text style={styles.miniLabel}>{t("submit.unit_price")}</Text>
-                      <TextInput style={styles.input} placeholder={t("submit.calculated")} placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", v)} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
+                      <TextInput style={styles.input} placeholder={t("submit.calculated")} placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", groupAmountLive(v))} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
                     </View>
                     <View style={styles.itemAmount}>
                       <Text style={styles.miniLabel}>{t("rv.line_amount")}{amountBad ? <Text style={styles.requiredTag}> {t("mx.required_tag")}</Text> : null}</Text>
-                      <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "price", v)} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
+                      <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "price", groupAmountLive(v))} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
                     </View>
                   </View>
                 </View>
@@ -574,8 +601,25 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   flex: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 24 },
+  summary: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, marginBottom: 12, gap: 10 },
+  summaryTop: { flexDirection: "row", gap: 12, alignItems: "center" },
+  summaryLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
+  summaryTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, marginTop: 1 },
+  summaryMeta: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 1 },
+  summaryHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.primary, marginTop: 6 },
+  summaryBudget: { backgroundColor: COLORS.successBg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, gap: 1 },
+  summaryBudgetOver: { backgroundColor: COLORS.errorFill },
+  summaryBudgetLeft: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.success },
+  summaryBudgetHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.success },
+  lineBlock: { gap: 8, paddingVertical: 4 },
+  lineBlockDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.border, paddingTop: 14, marginTop: 6 },
+  lineNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  tagRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  matchLink: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 36, alignSelf: "flex-start" },
+  matchLinkText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.primary },
+  removeX: { fontSize: 24, lineHeight: 26, fontFamily: FONT.regular, color: COLORS.muted },
   thumbRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 10, marginBottom: 10 },
-  thumb: { width: 56, height: 72, borderRadius: 8, backgroundColor: COLORS.bg },
+  thumb: { width: 64, height: 84, borderRadius: 10, backgroundColor: COLORS.bg },
   thumbPdf: { alignItems: "center", justifyContent: "center" },
   thumbTitle: { fontSize: 14, fontFamily: FONT.extrabold, color: COLORS.heading },
   thumbName: { fontSize: 12, fontFamily: FONT.medium, color: COLORS.heading, marginTop: 1 },
@@ -589,7 +633,7 @@ const styles = StyleSheet.create({
   requiredTag: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.errorText },
   inputRequired: { backgroundColor: COLORS.errorFill, borderWidth: 1.5 },
   addButton: { minHeight: 44, justifyContent: "center", paddingLeft: 8 },
-  removeButton: { minHeight: 44, justifyContent: "center", paddingLeft: 12 },
+  removeButton: { minHeight: 44, minWidth: 40, alignItems: "center", justifyContent: "center" },
   totalsRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8 },
   birBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, marginBottom: 10 },
   birFormal: { backgroundColor: COLORS.successBg },
@@ -619,6 +663,10 @@ const styles = StyleSheet.create({
   errorHint: { fontSize: 12, fontFamily: FONT.regular, color: RED, marginTop: 4 },
   addLink: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.success },
   hint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 8 },
+  forBox: { backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 12, gap: 4 },
+  forTitle: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted },
+  forRow: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.heading },
+  forMore: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
   budgetBox: { backgroundColor: COLORS.successBg, borderRadius: 12, padding: 12, gap: 2 },
   budgetBoxOver: { backgroundColor: COLORS.errorFill },
   budgetLeft: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.success },
@@ -629,7 +677,7 @@ const styles = StyleSheet.create({
   matchedChipRemove: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted, textDecorationLine: "underline" },
   pickButton: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 12, paddingHorizontal: 12, backgroundColor: COLORS.card },
   pickButtonText: { fontSize: 14, fontFamily: FONT.medium, color: COLORS.muted },
-  scannedNote: { fontSize: 12, fontFamily: FONT.regular, color: AMBER, marginTop: 4 },
+  scannedNote: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
   itemLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemCardOcr: { borderColor: COLORS.amberBorder, backgroundColor: COLORS.amberFill },
   ocrBadge: { fontSize: 11, fontFamily: FONT.bold, color: AMBER, backgroundColor: AMBER_BG, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, overflow: "hidden" },
