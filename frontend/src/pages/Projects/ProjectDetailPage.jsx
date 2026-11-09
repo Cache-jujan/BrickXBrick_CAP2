@@ -3,6 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import {
   activateProject,
   cancelProject,
+  suspendProject,
+  resumeProject,
   completeProject,
   getEligibleSiteManagers,
   getProjectOverview,
@@ -77,9 +79,10 @@ export function ProjectDetailPage() {
   const [siteManagers, setSiteManagers] = useState([]);
   const [siteManagersError, setSiteManagersError] = useState("");
   const [siteManagerSaving, setSiteManagerSaving] = useState(false);
-  // GM lifecycle actions: { kind: "activate" | "cancel" | "complete" } while a dialog is open.
+  // GM lifecycle actions: { kind: "activate" | "suspend" | "resume" | "cancel" | "complete" } while a dialog is open.
   const [statusDialog, setStatusDialog] = useState(null);
   const [statusInput, setStatusInput] = useState("");
+  const [resumeDate, setResumeDate] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState("");
   // F2: the project's Bill of Materials summary (GM and owning PM).
@@ -404,6 +407,7 @@ export function ProjectDetailPage() {
   function openStatusDialog(kind) {
     setStatusError("");
     setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
+    setResumeDate("");
     setStatusDialog({ kind });
   }
 
@@ -419,6 +423,8 @@ export function ProjectDetailPage() {
     setStatusError("");
     try {
       if (statusDialog.kind === "activate") await activateProject(id);
+      if (statusDialog.kind === "suspend") await suspendProject(id, statusInput.trim(), resumeDate || undefined);
+      if (statusDialog.kind === "resume") await resumeProject(id);
       if (statusDialog.kind === "cancel") await cancelProject(id, statusInput.trim());
       if (statusDialog.kind === "complete") await completeProject(id, statusInput);
       setProject(await getProjectOverview(id));
@@ -512,13 +518,17 @@ export function ProjectDetailPage() {
               <Link to={`/projects/${project.projectid}/checkins`} className="btn btn-secondary">{t("pd.daily_checkins")}</Link>
             )}
             {isGM && !isClosed && (<>
-            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{project.status === "Active" ? t("pd.terminate_project") : t("pd.cancel_project")}</Button>
+            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{project.activatedat ? t("pd.terminate_project") : t("pd.cancel_project")}</Button>
             <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">{t("pd.edit_details")}</Link>
             {project.status === "Draft" && (
               <Button onClick={() => openStatusDialog("activate")}>{t("pd.activate")}</Button>
             )}
-            {project.status === "Active" && (
+            {project.status === "Active" && (<>
+              <Button variant="secondary" onClick={() => openStatusDialog("suspend")}>{t("pd.suspend_project")}</Button>
               <Button onClick={() => openStatusDialog("complete")}>{t("pd.mark_completed")}</Button>
+            </>)}
+            {project.status === "Suspended" && (
+              <Button onClick={() => openStatusDialog("resume")}>{t("pd.resume_project")}</Button>
             )}
             </>)}
           </div>
@@ -530,6 +540,14 @@ export function ProjectDetailPage() {
           {t("pd.draft_body")}
           {!readyToActivate &&
             ` ${t("pd.still_needed", { list: activationChecks.filter((c) => !c.done).map((c) => c.label).join(", ") })}`}
+        </Banner>
+      )}
+      {project.status === "Suspended" && (
+        <Banner tone="warning" title={t("pd.suspended_title")}>
+          {project.suspensionreason}
+          {project.suspendedat ? `. ${t("pd.suspended_since", { date: formatDate(project.suspendedat, LONG_DATE) })}` : ""}
+          {project.expectedresumedate ? ` ${t("pd.expected_resume", { date: formatDate(project.expectedresumedate, LONG_DATE) })}` : ""}
+          {` ${t("pd.suspended_note")}`}
         </Banner>
       )}
       {project.status === "Cancelled" && (
@@ -874,10 +892,38 @@ export function ProjectDetailPage() {
                 />
               </>
             )}
+            {statusDialog.kind === "suspend" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">{t("pd.suspend_title")}</h2>
+                <p className="modal-body">{t("pd.suspend_body")}</p>
+                <Field
+                  label={t("bom.reason")}
+                  required
+                  as="textarea"
+                  maxLength={500}
+                  placeholder={t("pd.suspend_reason_ph")}
+                  value={statusInput}
+                  onChange={(ev) => setStatusInput(ev.target.value)}
+                />
+                <Field
+                  label={t("pd.expected_resume_label")}
+                  type="date"
+                  min={new Date().toISOString().slice(0, 10)}
+                  value={resumeDate}
+                  onChange={(ev) => setResumeDate(ev.target.value)}
+                />
+              </>
+            )}
+            {statusDialog.kind === "resume" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">{t("pd.resume_title")}</h2>
+                <p className="modal-body">{t("pd.resume_body")}</p>
+              </>
+            )}
             {statusDialog.kind === "cancel" && (
               <>
-                <h2 id="project-status-title" className="modal-title">{project.status === "Active" ? t("pd.terminate_title") : t("pd.cancel_title")}</h2>
-                <p className="modal-body">{project.status === "Active" ? t("pd.terminate_body") : t("pd.cancel_body")}</p>
+                <h2 id="project-status-title" className="modal-title">{project.activatedat ? t("pd.terminate_title") : t("pd.cancel_title")}</h2>
+                <p className="modal-body">{project.activatedat ? t("pd.terminate_body") : t("pd.cancel_body")}</p>
                 <Field
                   label={t("bom.reason")}
                   required
@@ -896,10 +942,10 @@ export function ProjectDetailPage() {
                 onClick={handleStatusAction}
                 disabled={
                   statusBusy ||
-                  (statusDialog.kind === "activate" ? !readyToActivate : !statusInput.trim())
+                  (statusDialog.kind === "activate" ? !readyToActivate : statusDialog.kind === "resume" ? false : !statusInput.trim())
                 }
               >
-                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : project.status === "Active" ? t("pd.terminate_btn") : t("pd.cancel_btn")}
+                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : statusDialog.kind === "suspend" ? t("pd.suspend_btn") : statusDialog.kind === "resume" ? t("pd.resume_btn") : project.activatedat ? t("pd.terminate_btn") : t("pd.cancel_btn")}
               </Button>}
             </div>
           </div>

@@ -91,6 +91,16 @@ export async function cancelProject(projectId, reason) {
   return data;
 }
 
+export async function suspendProject(projectId, reason, expectedResumeDate) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/suspend`, { reason, expectedResumeDate });
+  return data;
+}
+
+export async function resumeProject(projectId) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/resume`);
+  return data;
+}
+
 export async function completeProject(projectId, actualCompletionDate) {
   const { data } = await apiClient.patch(`/api/projects/${projectId}/complete`, { actualCompletionDate });
   return data;

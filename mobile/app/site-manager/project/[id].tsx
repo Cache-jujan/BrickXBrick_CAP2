@@ -24,7 +24,7 @@ const TASKS_SHOWN = 5;
 const DUE_COLOR = { late: "#D92D20", today: "#E85D0C", soon: "#B45309", normal: COLORS.muted } as const;
 
 // Project status from the server -> chip colour. The words come from tv("status", ...).
-const STATUS_TONE: Record<string, ChipTone> = { Active: "info", Completed: "success", Cancelled: "error", Draft: "neutral" };
+const STATUS_TONE: Record<string, ChipTone> = { Active: "info", Completed: "success", Cancelled: "error", Suspended: "amber", Draft: "neutral" };
 
 // Site Manager: one assigned project in full. Everything here comes from the
 // server (GET /api/projects for this person's project, GET /api/tasks/assigned
@@ -164,6 +164,16 @@ export default function SiteManagerProjectScreen() {
           <StatusChip label={project.status === "Cancelled" && project.activatedat ? t("status.terminated") : tv("status", project.status)} tone={STATUS_TONE[project.status] ?? "neutral"} />
           {health ? <StatusChip label={health.label} tone={health.tone} /> : null}
         </View>
+        {project.status === "Suspended" ? (
+          <Text style={[styles.savedNote, { marginTop: 12, marginBottom: 0 }]}>
+            {[
+              t("pd.suspended_title") + ".",
+              project.suspensionreason ? project.suspensionreason + "." : null,
+              project.expectedresumedate ? t("pd.expected_resume", { date: String(project.expectedresumedate).slice(0, 10) }) : null,
+              t("pd.suspended_note"),
+            ].filter(Boolean).join(" ")}
+          </Text>
+        ) : null}
         {project.description ? <Text style={styles.description}>{project.description}</Text> : null}
 
         {/* Progress */}

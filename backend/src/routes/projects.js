@@ -7,6 +7,10 @@
 //              and the Bill of Materials is approved; tickets and purchases
 //              are only allowed from here
 //   Completed  the GM records the actual completion / turnover date
+//   Suspended  put on hold by the GM with a reason (and, if known, an expected
+//              resume date); no new requests, purchases or check-ins until the
+//              GM resumes it. Dates are not moved by a hold. Shown as
+//              "Terminated" if it is then cancelled.
 //   Cancelled  the project didn't push through; a reason is required
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
@@ -42,6 +46,7 @@ const PROJECT_MANAGEMENT_ROLES = ["General Manager", "Project Manager"];
 const PROJECT_COLUMNS = `projectid, createdby, name, description, clientname, status,
   startdate, constructionstartdate, enddate, actualcompletiondate,
   activatedat, cancelledat, cancellationreason,
+  suspendedat, suspensionreason, expectedresumedate,
   projecttype, municipality, province, siteaddress,
   budget, projectmanagerid, sitemanagerid,
   created_from_template_id, copied_from_project_id`;
@@ -499,13 +504,142 @@ router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => 
       assertStatusTransition(existing.status, "Cancelled");
       const result = await client.query(
         `UPDATE projects
-            SET status = 'Cancelled', cancelledAt = NOW(), cancellationReason = $2
+            SET status = 'Cancelled', cancelledAt = NOW(), cancellationReason = $2,
+                suspendedAt = NULL, suspensionReason = NULL, expectedResumeDate = NULL
           WHERE projectid = $1 RETURNING ${PROJECT_COLUMNS}`,
         [existing.projectid, reason]
       );
+      if (existing.status === "Suspended") {
+        // A hold that ends in termination: keep it in the history.
+        await client.query(
+          `INSERT INTO project_status_log (projectId, fromStatus, toStatus, reason, changedBy)
+           VALUES ($1, 'Suspended', 'Cancelled', $2, $3)`,
+          [existing.projectid, reason, req.user.id]
+        );
+      }
       return result.rows[0];
     });
     res.json(project);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// Who hears about a hold or a resume: the people working on the project and
+// the Purchasers (they buy for it), same as on activation.
+async function suspensionRecipients(client, row) {
+  const recipients = new Set([row.projectmanagerid, row.sitemanagerid]);
+  const purchasers = await client.query("SELECT userid FROM users WHERE role = 'Purchaser' AND status = 'Active'");
+  purchasers.rows.forEach((p) => recipients.add(p.userid));
+  recipients.delete(null);
+  return recipients;
+}
+
+const SUSPENSION_REASON_MAX = 500;
+
+// PATCH /:id/suspend — GM. Active -> Suspended, with a reason and an optional
+// expected resume date. Nothing else is changed: dates, tasks, requests and
+// budget stay as they are, so resuming picks up where work stopped.
+router.patch("/:id/suspend", requireRole("General Manager"), async (req, res) => {
+  try {
+    const reason = trimOrNull(typeof req.body?.reason === "string" ? req.body.reason : null);
+    if (!reason) throw httpError(400, "A reason is required to suspend a project");
+    if (reason.length > SUSPENSION_REASON_MAX) {
+      throw httpError(400, `The reason must be ${SUSPENSION_REASON_MAX} characters or fewer`);
+    }
+    const expected = req.body?.expectedResumeDate || null;
+    if (expected !== null) {
+      if (!isIsoDate(expected)) throw httpError(400, "expectedResumeDate must be a valid date (YYYY-MM-DD)");
+      if (expected < new Date().toISOString().slice(0, 10)) {
+        throw httpError(400, "The expected resume date can't be in the past");
+      }
+    }
+
+    const project = await withTransaction(async (client) => {
+      const existing = await getProjectRow(client, req.params.id, { lock: true });
+      assertStatusTransition(existing.status, "Suspended");
+      const result = await client.query(
+        `UPDATE projects
+            SET status = 'Suspended', suspendedAt = NOW(), suspensionReason = $2, expectedResumeDate = $3
+          WHERE projectid = $1 RETURNING ${PROJECT_COLUMNS}`,
+        [existing.projectid, reason, expected]
+      );
+      const row = result.rows[0];
+      await client.query(
+        `INSERT INTO project_status_log (projectId, fromStatus, toStatus, reason, expectedResumeDate, changedBy)
+         VALUES ($1, 'Active', 'Suspended', $2, $3, $4)`,
+        [row.projectid, reason, expected, req.user.id]
+      );
+      const when = expected ? ` Expected back: ${expected}.` : "";
+      for (const recipientId of await suspensionRecipients(client, row)) {
+        await notifyProject(client, {
+          recipientId,
+          type: "ProjectSuspended",
+          projectId: row.projectid,
+          message: `"${row.name}" is on hold. No new requests, purchases or check-ins until it resumes. Reason: ${reason}.${when}`,
+        });
+      }
+      return row;
+    });
+    res.json(project);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// PATCH /:id/resume — GM. Suspended -> Active. The project keeps its original
+// activation date and target dates; the hold stays in project_status_log.
+router.patch("/:id/resume", requireRole("General Manager"), async (req, res) => {
+  try {
+    const project = await withTransaction(async (client) => {
+      const existing = await getProjectRow(client, req.params.id, { lock: true });
+      if (existing.status !== "Suspended") {
+        throw httpError(409, `Only a suspended project can be resumed (this one is ${existing.status})`);
+      }
+      assertStatusTransition(existing.status, "Active");
+      const result = await client.query(
+        `UPDATE projects
+            SET status = 'Active', suspendedAt = NULL, suspensionReason = NULL, expectedResumeDate = NULL
+          WHERE projectid = $1 RETURNING ${PROJECT_COLUMNS}`,
+        [existing.projectid]
+      );
+      const row = result.rows[0];
+      await client.query(
+        `INSERT INTO project_status_log (projectId, fromStatus, toStatus, changedBy)
+         VALUES ($1, 'Suspended', 'Active', $2)`,
+        [row.projectid, req.user.id]
+      );
+      for (const recipientId of await suspensionRecipients(client, row)) {
+        await notifyProject(client, {
+          recipientId,
+          type: "ProjectResumed",
+          projectId: row.projectid,
+          message: `"${row.name}" is back on. Requests, purchases and check-ins can continue.`,
+        });
+      }
+      return row;
+    });
+    res.json(project);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// GET /:id/status-history — the holds and resumes of a project, newest first.
+router.get("/:id/status-history", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
+  try {
+    const project = await loadDetail(req.params.id);
+    if (!project) return res.status(404).json({ error: "Not found" });
+    await assertProjectAccess(project, req.user);
+    const result = await query(
+      `SELECT l.fromstatus, l.tostatus, l.reason, l.expectedresumedate, l.changedat, u.name AS changedbyname
+         FROM project_status_log l
+         LEFT JOIN users u ON u.userid = l.changedby
+        WHERE l.projectid = $1
+        ORDER BY l.changedat DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
   } catch (err) {
     sendError(res, err);
   }

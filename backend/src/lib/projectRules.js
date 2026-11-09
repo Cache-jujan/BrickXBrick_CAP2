@@ -22,8 +22,8 @@ const PROJECT_TYPES = [
   "Other",
 ];
 
-// A project in either of these states occupies its PM and SM.
-const OPEN_PROJECT_STATUSES = ["Draft", "Active"];
+// A project in any of these states occupies its PM and SM (a hold does not free them).
+const OPEN_PROJECT_STATUSES = ["Draft", "Active", "Suspended"];
 
 // Statuses whose details can no longer be edited or reassigned.
 const CLOSED_PROJECT_STATUSES = ["Completed", "Cancelled", "Archived"];
@@ -154,7 +154,10 @@ function evaluateAvailability(openProjects, maxOpenProjects) {
  */
 const STATUS_TRANSITIONS = {
   Draft: ["Active", "Cancelled"],
-  Active: ["Completed", "Cancelled"],
+  Active: ["Suspended", "Completed", "Cancelled"],
+  // On hold: it can go back to work, or be stopped for good. It can't be
+  // completed without resuming first, so the completion date means work finished.
+  Suspended: ["Active", "Cancelled"],
   Completed: ["Archived"],
   Cancelled: ["Archived"],
   Archived: [],

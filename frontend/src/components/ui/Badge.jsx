@@ -11,6 +11,7 @@ const STATUS_TONE = {
   "At Risk": "risk",
   Flagged: "flag",
   Pending: "risk",
+  Suspended: "risk",
   Draft: "neutral",
   Overdue: "overdue",
   Rejected: "overdue",

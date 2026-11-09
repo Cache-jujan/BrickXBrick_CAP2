@@ -8,7 +8,7 @@ import { AssignmentLimitsCard } from "../../components/projects/AssignmentLimits
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectsListPage.css";
 
-const STATUS_FILTERS = ["All", "Draft", "Active", "Completed", "Cancelled", "Archived"];
+const STATUS_FILTERS = ["All", "Draft", "Active", "Suspended", "Completed", "Cancelled", "Archived"];
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 

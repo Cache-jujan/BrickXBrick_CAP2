@@ -19,6 +19,7 @@ const {
     documentUrl,
 } = require("../lib/taskDocuments");
 const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview, taskReviewNotice } = require("../lib/taskProgress");
+const { assertProjectNotOnHold } = require("../lib/projectHold");
 const { notify } = require("../lib/notify");
 
 const router = express.Router();
@@ -183,6 +184,8 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
             taskId: req.params.id,
             clientSubmissionId,
             note,
+            // A project on hold takes no new progress (checked before the photo is stored).
+            beforeWrite: (task) => assertProjectNotOnHold(query, task.milestoneid),
             uploadPhoto: () =>
                 uploadBuffer(req.file.buffer, {
                     contentType: req.file.mimetype,
