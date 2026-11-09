@@ -33,8 +33,6 @@ import "./SplitReceiptPage.css";
 // Buying more than every request wants is allowed: the extra rides on the last request and
 // the PM is told. Spending past the project's allowance, or buying extra, needs a short reason.
 
-// A line starting with this makes the expense go to PM review (Receipt_Adjustment flag).
-const ADJUSTMENT_PREFIX = "Adjustment";
 const QUICK_REASONS = [
   { key: "ck.reason_price", text: "Prices went up." },
   { key: "ck.reason_delivery", text: "Delivery or gas." },
@@ -314,20 +312,6 @@ export function SplitReceiptPage() {
     }));
   }
 
-  /**
-   * The lines are SHORT of the receipt total: add an "Adjustment" line for the gap (it sends the
-   * expense to PM review). Lines that add up to MORE than the total have no fix: no discount is
-   * taken off an item, the amounts have to be corrected before the split can be submitted.
-   */
-  function applyAdjustment() {
-    const gap = toCents(draft.amount) - linesCents;
-    if (gap <= 0) return;
-    setDraft((current) => ({
-      ...current,
-      lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
-    }));
-  }
-
   // Extra quantity, or finishing a request under its budget, needs a few words for the PM.
   // Over budget (or no approved budget) is refused outright, for every role.
   const extraPortions = (plan?.portions ?? []).filter((p) => Number(p.extraQuantity) > 0);
@@ -566,16 +550,9 @@ export function SplitReceiptPage() {
             <Banner
               tone="warning"
               title={t("split.mismatch_title")}
-              action={
-                toCents(draft.amount) > linesCents ? (
-                  <Button type="button" variant="secondary" onClick={applyAdjustment}>
-                    {t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })}
-                  </Button>
-                ) : undefined
-              }
             >
               {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}{" "}
-              {toCents(draft.amount) > linesCents ? t("split.adjust_hint") : t("split.over_total_hint")}
+              {t("split.fix_totals_hint")}
             </Banner>
           )}
 

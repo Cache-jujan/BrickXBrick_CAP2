@@ -27,13 +27,11 @@ import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { formatAmountInput, formatPesoCents, groupAmountText, toCents, toHundredths } from "@/lib/money";
 import { devLog } from "@/lib/sync/log";
 import {
-  ADJUSTMENT_PREFIX,
   birStatusPreview,
   dateToIso,
   formatReceiptDate,
   isoToDate,
   receiptDateProblem,
-  reconcileFix,
   todayIso,
 } from "@/lib/receipt-checks";
 import { loadOpenRequests } from "@/lib/cached-api";
@@ -180,12 +178,6 @@ export default function ReviewScreen() {
     allLinesValid && totalCents !== null && !totalsMatch && t("rv.err_match"),
   ];
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
-  // One-tap way out when the lines are SHORT of the total (rounding, unlisted VAT). The
-  // adjustment line routes the expense to PM review. Lines over the total have no fix.
-  const fix = allLinesValid && !totalsMatch
-    ? reconcileFix(totalCents, namedItems.map((it) => ({ id: it.id, name: it.name.trim(), cents: toCents(it.price) })))
-    : null;
-
   // Any edit counts as the user checking that row, so its OCR flag goes.
   function updateItem(id: string, patch: Partial<LineItem>) { setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch, ocr: undefined } : it))); }
   /** Synchronize a line's numeric fields and clear its OCR warning after an edit. */
@@ -194,16 +186,6 @@ export default function ReviewScreen() {
   }
   function removeItem(id: string) { setItems((prev) => prev.filter((it) => it.id !== id)); }
   function addItem() { setItems((prev) => [...prev, { id: makeId(), name: "", quantity: "", price: "" }]); }
-
-  /** Reconcile a shortfall by adding an adjustment line (it routes the expense to PM review). */
-  function applyFix() {
-    if (!fix) return;
-    setItems((prev) => [...prev, { id: makeId(), name: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", price: formatAmountInput(fix.gapCents) }]);
-  }
-
-  function fixLabel() {
-    return fix ? t("rv.fix_add", { gap: formatPesoCents(fix.gapCents) }) : "";
-  }
 
   function setDate(date: Date) {
     setReceiptDate(dateToIso(date));
@@ -233,19 +215,11 @@ export default function ReviewScreen() {
     if (namedItems.length === 0) return Alert.alert(t("rv.add_one_title"), t("rv.add_one_body"));
     if (!allLinesValid) return Alert.alert(t("rv.check_lines"), t("rv.check_lines_body"));
     if (!totalsMatch) {
-      // Over the receipt total: no way to adjust it away, the amounts have to be corrected.
-      if (!fix) {
-        return Alert.alert(
-          t("rv.totals_mismatch"),
-          totalCents !== null && linesCents > totalCents
-            ? t("rv.totals_gap_over", { gap: formatPesoCents(linesCents - totalCents) })
-            : t("rv.totals_body")
-        );
-      }
+      // No adjusting it away: the amounts have to be corrected until the lines add up to the total.
+      if (totalCents === null) return Alert.alert(t("rv.totals_mismatch"), t("rv.totals_body"));
       return Alert.alert(
         t("rv.totals_mismatch"),
-        t("rv.totals_gap_short", { gap: formatPesoCents(fix.gapCents) }),
-        [{ text: t("rv.check_again"), style: "cancel" }, { text: fixLabel(), onPress: applyFix }]
+        t(linesCents > totalCents ? "rv.totals_gap_over" : "rv.totals_gap_short", { gap: formatPesoCents(Math.abs(linesCents - totalCents)) })
       );
     }
     const clean = (text: string) => Number(text.replace(/,/g, "").trim());
@@ -469,12 +443,6 @@ export default function ReviewScreen() {
               {t("rv.lines_of", { lines: formatPesoCents(linesCents), total: totalCents === null ? "—" : formatPesoCents(totalCents) })}
             </Text>
           </View>
-          {fix && (
-            <Pressable onPress={applyFix} style={({ pressed }) => [styles.fixButton, pressed && styles.pressed]} accessibilityRole="button">
-              <Text style={styles.fixButtonText}>{fixLabel()}</Text>
-              <Text style={styles.fixButtonHint}>{t("rv.fix_hint2")}</Text>
-            </Pressable>
-          )}
           <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
           <Pressable style={[styles.submitButton, !canContinue && styles.submitButtonDisabled]} onPress={handleContinue} accessibilityRole="button" accessibilityState={{ disabled: !canContinue }}>
             <Text style={styles.submitButtonText}>{t("rv.continue")}</Text>
@@ -637,9 +605,6 @@ const styles = StyleSheet.create({
   miniLabel: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 4 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   totalsLine: { fontSize: 13, fontFamily: FONT.bold, textAlign: "center" },
-  fixButton: { minHeight: 44, justifyContent: "center", borderWidth: 1, borderColor: AMBER, backgroundColor: AMBER_BG, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, alignItems: "center", marginBottom: 8 },
-  fixButtonText: { fontSize: 14, fontFamily: FONT.bold, color: AMBER },
-  fixButtonHint: { fontSize: 12, fontFamily: FONT.regular, color: AMBER, marginTop: 2 },
   pressed: { opacity: 0.85 },
   zoomBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 12 },
   zoomImage: { width: "100%", height: "88%" },
