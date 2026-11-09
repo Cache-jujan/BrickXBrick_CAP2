@@ -418,6 +418,7 @@ export function SubmitExpensePage() {
                 <strong>{selectedTicket.projectName}</strong>
                 <span>{selectedTicket.materialType || t("submit.material_request")}</span>
                 {selectedTicket.quantity != null && <span>{t("submit.requested_quantity", { quantity: selectedTicket.quantity })}</span>}
+                {leftCents !== null && <strong>{t("bd.left", { remaining: pesoText(leftCents) })}</strong>}
               </div>
             )}
             {!loadingTickets && tickets.length === 0 && !pageError && (

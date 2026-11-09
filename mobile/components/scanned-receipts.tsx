@@ -63,7 +63,9 @@ export function ScannedReceipts({
     <View style={styles.box}>
       <Text style={styles.title}>{t("mx.scanned_receipts")}</Text>
       {queued.map((row) => {
-        const title = row.context?.mode === "split" ? t("nav.split_receipt") : row.context?.ticket?.subject ?? t("mobile.receipt");
+        // Named for the request when there is one, otherwise just "Receipt": whether it
+        // is split is only known after review, so the list never says "Split receipt".
+        const title = row.context?.ticket?.subject ?? t("mobile.receipt");
         const rejected = row.sync_status === "REJECTED";
         return (
           <Pressable
@@ -91,8 +93,8 @@ export function ScannedReceipts({
         );
       })}
       {scans.map((scan) => {
-        const title = scan.context?.mode === "split" ? t("nav.split_receipt") : scan.context?.ticket?.subject ?? t("mobile.receipt");
         const vendor = scan.status === "Ready" ? scan.result?.vendorName : null;
+        const title = scan.context?.ticket?.subject ?? vendor ?? t("mobile.receipt");
         return (
           <Pressable
             key={scan.scanID}
@@ -105,7 +107,7 @@ export function ScannedReceipts({
             <View style={styles.flex}>
               <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
               <Text style={styles.rowMeta} numberOfLines={1}>
-                {[vendor, scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
+                {[scan.context?.ticket ? vendor : scan.context?.projectNames?.join(", "), scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
               </Text>
             </View>
             <StatusPill status={scan.status} />

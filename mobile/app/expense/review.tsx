@@ -166,9 +166,13 @@ export default function ReviewScreen() {
   const totalCents = toCents(amount);
   const linesCents = namedItems.reduce((sum, it) => sum + (toCents(it.price) ?? 0), 0);
   const totalsMatch = totalCents !== null && linesCents === totalCents;
+  // The strict budget (every role): the receipt can be under what is left, never over.
+  // Only for a request chosen up front; a split receipt is checked per request on the next screen.
+  const remainingCents = !isSplit && !draft.resubmit && draft.ticket?.remaining != null ? toCents(draft.ticket.remaining) : null;
+  const overCents = remainingCents !== null && totalCents !== null && totalCents > remainingCents ? totalCents - remainingCents : 0;
   const dateProblem = receiptDateProblem(receiptDate, t);
   const vendorMissing = vendorName.trim().length === 0;
-  const canContinue = allLinesValid && totalsMatch && !dateProblem && !vendorMissing;
+  const canContinue = allLinesValid && totalsMatch && !dateProblem && !vendorMissing && overCents === 0;
   // Everything still blocking Continue. Always listed above the button, next to the
   // "Required" tags on the fields themselves.
   const blockedReasons = [
@@ -178,6 +182,7 @@ export default function ReviewScreen() {
     namedItems.length > 0 && !allLinesValid && t("rv.err_lines"),
     totalCents === null && t("rv.err_total"),
     allLinesValid && totalCents !== null && !totalsMatch && t("rv.err_match"),
+    overCents > 0 && t("bd.over_inline", { over: formatPesoCents(overCents) }),
   ];
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
   const taxFlagged = isLowConfidence("tin") || isLowConfidence("birPermitNumber") || isLowConfidence("birNumber");
@@ -226,6 +231,9 @@ export default function ReviewScreen() {
         t("rv.totals_mismatch"),
         t(linesCents > totalCents ? "rv.totals_gap_over" : "rv.totals_gap_short", { gap: formatPesoCents(Math.abs(linesCents - totalCents)) })
       );
+    }
+    if (overCents > 0 && remainingCents !== null && totalCents !== null) {
+      return Alert.alert(t("bd.over_title"), t("bd.over_body", { amount: formatPesoCents(totalCents), remaining: formatPesoCents(remainingCents) }));
     }
     const clean = (text: string) => Number(text.replace(/,/g, "").trim());
     setOcrResult({
@@ -287,6 +295,15 @@ export default function ReviewScreen() {
               </View>
             </Pressable>
           )}
+
+          {remainingCents !== null ? (
+            <View style={[styles.budgetBox, overCents > 0 && styles.budgetBoxOver]}>
+              <Text style={[styles.budgetLeft, overCents > 0 && styles.budgetTextOver]}>{t("bd.left", { remaining: formatPesoCents(remainingCents) })}</Text>
+              <Text style={[styles.budgetHint, overCents > 0 && styles.budgetTextOver]}>
+                {overCents > 0 ? t("bd.over_inline", { over: formatPesoCents(overCents) }) : t("bd.under_inline")}
+              </Text>
+            </View>
+          ) : null}
 
           {hasChecks || !bir.formal ? (
             <View style={styles.banner}>
@@ -602,6 +619,11 @@ const styles = StyleSheet.create({
   errorHint: { fontSize: 12, fontFamily: FONT.regular, color: RED, marginTop: 4 },
   addLink: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.success },
   hint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 8 },
+  budgetBox: { backgroundColor: COLORS.successBg, borderRadius: 12, padding: 12, gap: 2 },
+  budgetBoxOver: { backgroundColor: COLORS.errorFill },
+  budgetLeft: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.success },
+  budgetHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.success },
+  budgetTextOver: { color: COLORS.errorText },
   matchedChip: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, backgroundColor: COLORS.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   matchedChipText: { flex: 1, fontSize: 12, fontFamily: FONT.semibold, color: COLORS.success },
   matchedChipRemove: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted, textDecorationLine: "underline" },

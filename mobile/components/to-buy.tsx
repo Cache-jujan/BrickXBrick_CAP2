@@ -51,7 +51,9 @@ export function ToBuy() {
   const [closingId, setClosingId] = useState<string | null>(null);
   // The request whose details sheet is open (tap a request to open it).
   const [detail, setDetail] = useState<OpenRequest | null>(null);
-  const [view, setView] = useState<"store" | "project">("project");
+  const [viewChoice, setView] = useState<"store" | "project">("project");
+  // Site Managers don't shop, so they only see requests grouped by project. By store is for the Purchaser.
+  const view = isSiteManager ? "project" : viewChoice;
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // "Which project is this receipt for?" sheet, opened by Snap receipt while no project is picked.
   // By store: show one store only (the store key; null = all stores).
@@ -214,6 +216,8 @@ export function ToBuy() {
       projectName: request.projectName,
       subject: request.subject,
       budget: request.approvedBudget == null ? undefined : String(request.approvedBudget),
+      // What is left of the budget: the receipt cannot go over this.
+      remaining: request.remainingBudget == null ? undefined : String(request.remainingBudget),
     });
     router.push("/expense/capture");
   }
@@ -266,8 +270,9 @@ export function ToBuy() {
 
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 
-        {(projectChoices.length > 1 || storeChoices.length > 1) && (
+        {(projectChoices.length > 1 || (!isSiteManager && storeChoices.length > 1)) && (
           <View style={styles.controls}>
+            {!isSiteManager ? (
             <View style={styles.segment}>
               {(["project", "store"] as const).map((mode) => (
                 <Pressable
@@ -283,6 +288,7 @@ export function ToBuy() {
                 </Pressable>
               ))}
             </View>
+            ) : null}
             {view === "store" && storeChoices.length > 1 ? (
               <ProjectDropdown
                 label={t("tb.filter_store")}
