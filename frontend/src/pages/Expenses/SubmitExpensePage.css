@@ -242,7 +242,7 @@
   }
 }
 
-/* ---- Shared layout for Submit expense, Split receipt and Petty cash -------------------------
+/* ---- Shared layout for Submit expense and Split receipt -------------------------
    Receipt on the left, details on the right, submit bar pinned to the bottom: on a laptop the
    whole job fits on one screen, with little or no scrolling. */
 .xp-layout {
@@ -319,7 +319,6 @@
   .xp-details .submit-expense-item-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .xp-details .submit-expense-remove-item { grid-column: 1 / -1; justify-self: end; margin-bottom: 0; }
 }
-.xp-details .trip-cost-projects { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .xp-section-next { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
 
 /* The optional tax fields, folded away. */

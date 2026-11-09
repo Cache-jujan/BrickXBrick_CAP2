@@ -284,7 +284,7 @@ export function ExpensesPage() {
               {user.role === "Project Manager" ? t("expenses.pm_subtitle") : t("expenses.gm_subtitle")}
             </p>
         </div>
-        {/* One button: Submit expense. Split receipt and Petty cash are tabs on that page. */}
+        {/* One button: Submit expense. Split receipt is a tab on that page. */}
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
           <Link to="/expenses/new" className="btn btn-primary">
             {t("nav.submit_expense")}
@@ -382,11 +382,7 @@ export function ExpensesPage() {
                               </td>
                               <td data-label={t("nav.project")}>{project?.name || "—"}</td>
                               <td data-label={t("dashboard.category")}>
-                                {e.istripcost ? (
-                                  <Badge status="Draft">{t("expenses.trip_cost")}</Badge>
-                                ) : (
-                                  tv("category", e.category)
-                                )}
+                                {tv("category", e.category)}
                               </td>
                               <td data-label={t("dashboard.amount")}>{PESO.format(e.amount)}</td>
                               <td data-label={t("my_expenses.receipt_date")}>{formatDate(e.receiptdate)}</td>
@@ -449,13 +445,8 @@ export function ExpensesPage() {
                                       showEffect={e.status === "Pending"}
                                     />
                                   )}
-                                  {e.istripcost && (
-                                    <Banner tone="info" title={t("expenses.trip_cost_title")}>
-                                      {t("expenses.trip_cost_body")}
-                                    </Banner>
-                                  )}
                                   {e.submitnote && (
-                                    <Banner tone="warning" title={e.istripcost ? t("expenses.trip_cost_reason") : t("expenses.submit_note")}>
+                                    <Banner tone="warning" title={t("expenses.submit_note")}>
                                       {e.submitnote}
                                     </Banner>
                                   )}
@@ -570,7 +561,7 @@ export function ExpensesPage() {
                 : t("expenses.confirm_reject_body")}
             </p>
             {confirm.expense.submitnote && (
-              <Banner tone="warning" title={confirm.expense.istripcost ? t("expenses.trip_cost_reason") : t("expenses.submit_note")}>
+              <Banner tone="warning" title={t("expenses.submit_note")}>
                 {confirm.expense.submitnote}
               </Banner>
             )}
