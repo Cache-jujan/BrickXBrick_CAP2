@@ -1,3 +1,4 @@
+import LIMITS from "../../utils/inputLimits";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getEligibleManagers, getEligibleSiteManagers, getProjectOptions } from "../../api/projectsApi";
@@ -209,6 +210,7 @@ export function ProjectForm({
             required
             placeholder={t("form.project_name_placeholder")}
             value={form.name}
+            maxLength={LIMITS.projectName}
             error={fieldErrors.name}
             onChange={(e) => updateField("name", e.target.value)}
           />
@@ -218,6 +220,7 @@ export function ProjectForm({
               required
               placeholder={t("form.client_name_placeholder")}
               value={form.clientName}
+              maxLength={LIMITS.clientName}
               error={fieldErrors.clientName}
               onChange={(e) => updateField("clientName", e.target.value)}
             />
@@ -242,6 +245,7 @@ export function ProjectForm({
             className="pf-description"
             placeholder={t("form.description_placeholder")}
             value={form.description}
+            maxLength={LIMITS.description}
             onChange={(e) => updateField("description", e.target.value)}
           />
 
@@ -255,6 +259,7 @@ export function ProjectForm({
               required
               placeholder={t("form.municipality_placeholder")}
               value={form.municipality}
+              maxLength={LIMITS.municipality}
               error={fieldErrors.municipality}
               onChange={(e) => updateField("municipality", e.target.value)}
             />
@@ -262,6 +267,7 @@ export function ProjectForm({
               label={t("form.province")}
               placeholder={t("form.province_placeholder")}
               value={form.province}
+              maxLength={LIMITS.province}
               onChange={(e) => updateField("province", e.target.value)}
             />
           </div>
@@ -269,6 +275,7 @@ export function ProjectForm({
             label={t("form.site_address")}
             placeholder={t("form.address_placeholder")}
             value={form.siteAddress}
+            maxLength={LIMITS.siteAddress}
             onChange={(e) => updateField("siteAddress", e.target.value)}
           />
           {outsideServiceArea && (
@@ -290,6 +297,7 @@ export function ProjectForm({
             prefix="₱"
             placeholder="0.00"
             value={formatAmountInput(form.budget)}
+            maxLength={20}
             error={fieldErrors.budget}
             disabled={budgetLocked}
             onChange={(e) => updateField("budget", parseAmountInput(e.target.value))}

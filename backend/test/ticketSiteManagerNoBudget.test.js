@@ -19,10 +19,10 @@ function stub(relative, exports) {
   require.cache[file] = { id: file, filename: file, loaded: true, exports };
 }
 
-const PROJECT = "project-alpha";
+const PROJECT = "11111111-1111-4111-8111-111111111111"; // project-alpha
 const SM = { id: "sm-alpha", role: "Site Manager", name: "Sam Site" };
 const PM = { id: "pm-1", role: "Project Manager", name: "Test PM" };
-const PURCHASER = "purchaser-1";
+const PURCHASER = "22222222-2222-4222-8222-222222222222"; // purchaser-1
 
 const users = {
   [PURCHASER]: { userid: PURCHASER, role: "Purchaser", status: "Active" },

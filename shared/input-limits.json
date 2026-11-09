@@ -1,0 +1,22 @@
+{
+  "userName": 100,
+  "email": 150,
+  "projectName": 150,
+  "clientName": 150,
+  "municipality": 100,
+  "province": 100,
+  "siteAddress": 255,
+  "taskName": 150,
+  "milestoneName": 150,
+  "ticketSubject": 100,
+  "materialType": 100,
+  "unit": 30,
+  "vendorName": 200,
+  "bomDescription": 200,
+  "description": 2000,
+  "note": 1000,
+  "reason": 500,
+  "moneyMax": 9999999999.99,
+  "quantityMax": 99999999.99,
+  "projectBudgetMax": 9999999999999.99
+}
