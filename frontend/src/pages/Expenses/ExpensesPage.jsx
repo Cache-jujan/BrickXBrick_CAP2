@@ -268,7 +268,8 @@ export function ExpensesPage() {
     if (e.submittedby === user.id) return user.role === "General Manager" ? { approve: true } : null;
     return { approve: true, reject: true };
   }
-  const showActions = rows.some((e) => inlineActions(e));
+  // Decided over every page of the list, so the Actions column does not appear and disappear while paging.
+  const showActions = filtered.some((e) => inlineActions(e));
 
   const rejectNeedsReason = confirm?.action === "reject" && !reason.trim();
 

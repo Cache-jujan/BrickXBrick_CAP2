@@ -200,7 +200,9 @@
   }
   .users-table.users-accounts > tbody > tr:last-child { border-bottom: none; }
   .users-table.users-accounts > tbody > tr > td { display: block; padding: 0; height: auto; border: none; min-width: 0; }
-  .users-table.users-accounts > tbody > tr > td:nth-child(1) { grid-column: 1; font-weight: 600; font-size: var(--text-base); }
+  .users-table.users-accounts > tbody > tr > td:nth-child(1) { grid-column: 1; font-weight: 600; font-size: var(--text-base); overflow-wrap: anywhere; }
+  /* The hidden header row no longer names the values, so each one carries its own label. */
+  .users-table.users-accounts > tbody > tr > td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; }
   .users-table.users-accounts > tbody > tr > td:nth-child(4) { grid-column: 2; grid-row: 1; }
   .users-table.users-accounts > tbody > tr > td:nth-child(2),
   .users-table.users-accounts > tbody > tr > td:nth-child(3),
