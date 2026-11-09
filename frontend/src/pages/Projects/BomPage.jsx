@@ -435,9 +435,10 @@ export function BomPage() {
         </div>
         {isGM && !projectClosed && (
           <div className="page-header-actions">
-            {(!bom || bom.status === "Draft") && (
+            {/* With no BOM yet the centered panel below already offers the import, so no second button here. */}
+            {(bom || draft) && (!bom || bom.status === "Draft") && (
               <Button variant="secondary" onClick={chooseFile} disabled={Boolean(busy)}>
-                {busy === "import" ? t("bom.importing") : bom || draft ? t("bom.replace_excel") : t("bom.import_excel")}
+                {busy === "import" ? t("bom.importing") : t("bom.replace_excel")}
               </Button>
             )}
             {editing && dirty && (

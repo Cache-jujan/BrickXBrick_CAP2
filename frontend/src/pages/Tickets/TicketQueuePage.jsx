@@ -592,7 +592,7 @@ export function TicketQueuePage() {
 
       {createOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-create-title">
-          <div className="modal modal-ticket">
+          <div className="modal modal-ticket modal-ticket-wide">
             <div className="modal-head">
               <h2 id="ticket-create-title" className="modal-title">{tr("nav.new_ticket")}</h2>
               <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} aria-label={tr("pd.close")}>×</button>

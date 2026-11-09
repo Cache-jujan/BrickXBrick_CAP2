@@ -329,6 +329,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       {isPM && vendorsError && <Banner tone="error" title={vendorsError} />}
       {isPM && purchasersError && <Banner tone="error" title={purchasersError} />}
 
+      <div className="ticket-form-cols">
+      <div className="ticket-form-main">
       <SearchableSelect
         label={t("nav.project")}
         required
@@ -374,6 +376,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         value={form.description}
         onChange={(e) => updateField("description", e.target.value)}
       />
+
+      </div>
 
       {(isMaterialReq || isWorkItem) && (
         <div className="create-ticket-procurement">
@@ -530,6 +534,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
           )}
         </div>
       )}
+      </div>
 
       {formError && <Banner tone="error" title={formError} />}
 
