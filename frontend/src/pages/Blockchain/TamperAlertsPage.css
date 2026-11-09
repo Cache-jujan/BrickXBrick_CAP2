@@ -270,5 +270,7 @@
   .tamper-table.tamper-table > tbody > tr > td:nth-child(4) { grid-column: 1 / -1; margin-top: var(--space-1); }
   .tamper-table.tamper-table > tbody > tr > td:nth-child(5) { grid-column: 1 / -1; color: var(--color-ink-soft); font-size: var(--text-xs); }
   .tamper-table.tamper-table > tbody > tr > td:nth-child(6) { grid-column: 1 / -1; margin-top: var(--space-2); }
+  /* The hidden header row no longer names the dates, so each one carries its own label. */
+  .tamper-table.tamper-table > tbody > tr > td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; }
   .tamper-table.tamper-table > tbody > tr > td:nth-child(6) .btn { width: 100%; min-height: 44px; }
 }

@@ -286,25 +286,28 @@ export default function TermsScreen() {
         <SafeAreaView edges={["bottom"]} style={styles.acceptBar}>
           {error ? <Text style={[styles.error, styles.barError]}>{error}</Text> : null}
 
-          <Pressable
-            onPress={() => setAgreed((v) => !v)}
-            style={[styles.checkRow, agreed && styles.checkRowOn, pulse && styles.checkRowPulse]}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreed }}
-          >
-            <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
-              {agreed ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
-            </View>
-            <Text style={styles.checkLabel}>
-              {"I have read and agree to the "}
-              {docs.map((d, i) => (
-                <Text key={d.id}>
-                  <Text style={styles.bold}>{d.title}</Text>
-                  {i < docs.length - 2 ? ", " : i === docs.length - 2 ? " and " : "."}
-                </Text>
-              ))}
-            </Text>
-          </Pressable>
+          {/* The box names the documents, so it only appears once they are loaded. */}
+          {docs.length > 0 ? (
+            <Pressable
+              onPress={() => setAgreed((v) => !v)}
+              style={[styles.checkRow, agreed && styles.checkRowOn, pulse && styles.checkRowPulse]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreed }}
+            >
+              <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
+                {agreed ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
+              </View>
+              <Text style={styles.checkLabel}>
+                {"I have read and agree to the "}
+                {docs.map((d, i) => (
+                  <Text key={d.id}>
+                    <Text style={styles.bold}>{d.title}</Text>
+                    {i < docs.length - 2 ? ", " : i === docs.length - 2 ? " and " : "."}
+                  </Text>
+                ))}
+              </Text>
+            </Pressable>
+          ) : null}
 
           <Pressable
             onPress={handleAcceptPress}

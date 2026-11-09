@@ -155,6 +155,8 @@ export default function SiteManagerProjectScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
       >
         {savedAt ? <Text style={styles.savedNote}>{t("sm.proj_saved_copy", { when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}</Text> : null}
+        {/* A refresh that fails keeps the project already on screen, so say so and offer a retry. */}
+        {shownError ? <StateCard kind="error" title={t("sm.proj_err_load")} body={shownError} onRetry={() => load()} /> : null}
 
         {/* Overview */}
         <Text style={styles.name}>{project.name}</Text>

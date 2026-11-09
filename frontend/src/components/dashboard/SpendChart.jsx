@@ -95,7 +95,7 @@ export function SpendChart({ months, budget, spent }) {
           },
         },
         scales: {
-          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false } },
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
           // grace leaves room above the tallest bar for its label.
           y: { beginAtZero: true, grace: "15%", ticks: { maxTicksLimit: 6, callback: (v) => compact(v) }, grid: { color: "#efece6" } },
         },

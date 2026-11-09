@@ -20,13 +20,20 @@ export function requestRef(request) {
 export function RequestDetailModal({ request, role, onClose }) {
   const { t, formatDate, formatNumber } = useLocale();
   const closeRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
 
+  // Runs once when the dialog opens: focus the close button, and give focus back to the row that opened it.
   useEffect(() => {
+    const opener = document.activeElement;
     closeRef.current?.focus();
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => { if (e.key === "Escape") onCloseRef.current(); };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener && typeof opener.focus === "function" && document.contains(opener)) opener.focus();
+    };
+  }, []);
 
   if (!request) return null;
   const progress = progressOf(request);

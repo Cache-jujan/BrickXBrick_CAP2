@@ -192,9 +192,9 @@ export function TamperAlertsPage() {
                             )}
                           </span>
                         </td>
-                        <td>{formatDate(alert.detectedat, DATETIME_OPTIONS)}</td>
+                        <td data-label={t("tamper.found")}>{formatDate(alert.detectedat, DATETIME_OPTIONS)}</td>
                         {reviewed ? (
-                          <td className="tamper-review">
+                          <td className="tamper-review" data-label={t("tamper.review_col")}>
                             <strong>{alert.resolvedbyname || t("tamper.unknown_user")}</strong>
                             {alert.resolvedbyrole ? ` (${alert.resolvedbyrole})` : ""}
                             <span className="tamper-review-date">{formatDate(alert.resolvedat, DATETIME_OPTIONS)}</span>

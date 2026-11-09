@@ -996,9 +996,21 @@ function BatchBlock(props) {
   );
 }
 
+// Escape runs the dialog's own cancel, which already ignores the key while a request is in flight.
+function useEscapeKey(handler) {
+  const ref = useRef(handler);
+  useEffect(() => { ref.current = handler; });
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") ref.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+}
+
 // ---- Reject modal ----
 function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSubmit }) {
   const { t: tr } = useLocale();
+  useEscapeKey(onCancel);
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-reject-title">
       <div className="modal modal-narrow">
@@ -1045,6 +1057,7 @@ function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSub
 
 // ---- Edit modal ----
 function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendors, onCancel, onSave }) {
+  useEscapeKey(onCancel);
   const { t: tr } = useLocale();
   const t = editing.ticket;
   const isReport = t.tickettype === "Report";

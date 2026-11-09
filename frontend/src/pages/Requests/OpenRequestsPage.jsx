@@ -35,7 +35,7 @@ export function OpenRequestsPage() {
   const [view, setView] = useState("store");
   const [vendorFilter, setVendorFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +50,9 @@ export function OpenRequestsPage() {
   }, [t]);
 
   useEffect(() => { load(); }, [load]);
+
+  // The open dialog always shows the latest copy of its request; if a refresh drops it from the list, the dialog closes.
+  const selected = selectedId ? requests.find((r) => r.ticketID === selectedId) ?? null : null;
 
   const stores = useMemo(() => vendorOptions(requests), [requests]);
   const projects = useMemo(() => groupByProject(requests), [requests]);
@@ -142,7 +145,7 @@ export function OpenRequestsPage() {
                   <button
                     type="button"
                     className="open-requests-row"
-                    onClick={() => setSelected(request)}
+                    onClick={() => setSelectedId(request.ticketID)}
                     aria-label={t("rq.view_details", { subject: request.subject })}
                     aria-haspopup="dialog"
                   >
@@ -183,7 +186,7 @@ export function OpenRequestsPage() {
       ))}
       </div>
 
-      {selected && <RequestDetailModal request={selected} role={user.role} onClose={() => setSelected(null)} />}
+      {selected && <RequestDetailModal request={selected} role={user.role} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }

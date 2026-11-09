@@ -97,6 +97,9 @@ export function AdminOverview({ overview, alerts = [] }) {
                   {t("admin_overview.locked_line", { count: o.locked })}
                 </Link>
               )}
+              {o.overdueBlockchain > 0 && (
+                <p className="ao-line ao-line-static">{t("admin_overview.overdue_line", { count: o.overdueBlockchain })}</p>
+              )}
               {shown.length > 0 && (
                 <ul className="ao-list">
                   {shown.map((a) => (

@@ -358,6 +358,8 @@
     padding-top: var(--space-2);
   }
   .expenses-table .expenses-row td.expenses-actions-col::before { content: none; }
+  /* A row with no quick action leaves no empty strip on a phone. */
+  .expenses-table .expenses-row td.expenses-actions-col:empty { display: none; }
   .expenses-table .expenses-row:hover td,
   .expenses-table .expenses-row-open td { background: transparent; }
   .expenses-table .expenses-row-open { background: var(--color-surface-muted); }
