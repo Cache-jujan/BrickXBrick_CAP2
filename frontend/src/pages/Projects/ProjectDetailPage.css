@@ -537,3 +537,8 @@
   color: var(--color-danger);
   font-weight: 700;
 }
+/* Close-out figures under a terminated project's reason. */
+.pd-term-summary { display: grid; gap: 4px; margin: 10px 0 0; }
+.pd-term-summary > div { display: flex; gap: 8px; }
+.pd-term-summary dt { font-weight: 600; }
+.pd-term-summary dd { margin: 0; }

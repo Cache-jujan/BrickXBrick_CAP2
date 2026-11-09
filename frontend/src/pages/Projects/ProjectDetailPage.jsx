@@ -147,6 +147,8 @@ export function ProjectDetailPage() {
 
   const isGM = user.role === "General Manager";
   const isClosed = Boolean(project && CLOSED_STATUSES.includes(project.status));
+  // Cancelled after it had gone Active: shown as "terminated", with a close-out summary.
+  const terminated = Boolean(project && project.status === "Cancelled" && project.termination?.terminated);
   const canManageSiteManager = Boolean(
     project && !isClosed && (
       isGM ||
@@ -498,7 +500,7 @@ export function ProjectDetailPage() {
         <div className="pd-header-text">
           <div className="pd-title-row">
             <h1>{project.name}</h1>
-            <Badge status={project.status} />
+            <Badge status={project.status}>{terminated ? t("status.terminated") : undefined}</Badge>
           </div>
           <p className="pd-meta">
             {[project.clientname, project.projecttype, project.municipality].filter(Boolean).join(" · ")}
@@ -510,7 +512,7 @@ export function ProjectDetailPage() {
               <Link to={`/projects/${project.projectid}/checkins`} className="btn btn-secondary">{t("pd.daily_checkins")}</Link>
             )}
             {isGM && !isClosed && (<>
-            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{t("pd.cancel_project")}</Button>
+            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{project.status === "Active" ? t("pd.terminate_project") : t("pd.cancel_project")}</Button>
             <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">{t("pd.edit_details")}</Link>
             {project.status === "Draft" && (
               <Button onClick={() => openStatusDialog("activate")}>{t("pd.activate")}</Button>
@@ -531,9 +533,15 @@ export function ProjectDetailPage() {
         </Banner>
       )}
       {project.status === "Cancelled" && (
-        <Banner tone="warning" title={t("pd.cancelled_title")}>
+        <Banner tone="warning" title={terminated ? t("pd.terminated_title") : t("pd.cancelled_title")}>
           {project.cancellationreason}
           {project.cancelledat ? ` (${formatDate(project.cancelledat, DATETIME_OPTIONS)})` : ""}
+          {terminated && (
+            <dl className="pd-term-summary">
+              <div><dt>{t("pd.term_spent")}</dt><dd>{PESO.format(project.termination.spent)} / {PESO.format(project.budget)}</dd></div>
+              <div><dt>{t("pd.term_open")}</dt><dd>{project.termination.openRequests}</dd></div>
+            </dl>
+          )}
         </Banner>
       )}
       {(project.warnings || []).map((w) => (
@@ -868,8 +876,8 @@ export function ProjectDetailPage() {
             )}
             {statusDialog.kind === "cancel" && (
               <>
-                <h2 id="project-status-title" className="modal-title">{t("pd.cancel_title")}</h2>
-                <p className="modal-body">{t("pd.cancel_body")}</p>
+                <h2 id="project-status-title" className="modal-title">{project.status === "Active" ? t("pd.terminate_title") : t("pd.cancel_title")}</h2>
+                <p className="modal-body">{project.status === "Active" ? t("pd.terminate_body") : t("pd.cancel_body")}</p>
                 <Field
                   label={t("bom.reason")}
                   required
@@ -891,7 +899,7 @@ export function ProjectDetailPage() {
                   (statusDialog.kind === "activate" ? !readyToActivate : !statusInput.trim())
                 }
               >
-                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : t("pd.cancel_btn")}
+                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : project.status === "Active" ? t("pd.terminate_btn") : t("pd.cancel_btn")}
               </Button>}
             </div>
           </div>

@@ -651,7 +651,31 @@ async function loadDetail(projectId) {
   if (result.rowCount === 0) return null;
   const row = result.rows[0];
   const settings = await loadProjectSettings(query);
-  return { ...row, warnings: buildProjectWarnings({ municipality: row.municipality }, settings) };
+  const detail = { ...row, warnings: buildProjectWarnings({ municipality: row.municipality }, settings) };
+  if (row.status === "Cancelled") detail.termination = await loadTerminationSummary(row);
+  return detail;
+}
+
+// A project cancelled after it went Active is shown as "terminated": work had
+// started, so the close-out figures matter. Nothing new is stored; the numbers
+// come from the expenses and requests that already exist.
+//   terminated      true when the project had been activated
+//   spent           approved purchases, in PHP
+//   openRequests    requests still Pending or Acknowledged (nobody is working on them now)
+async function loadTerminationSummary(row) {
+  const spent = await query(
+    "SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE projectid = $1 AND status = 'Approved'",
+    [row.projectid]
+  );
+  const open = await query(
+    "SELECT COUNT(*)::int AS n FROM tickets WHERE projectid = $1 AND status IN ('Pending', 'Acknowledged')",
+    [row.projectid]
+  );
+  return {
+    terminated: row.activatedat != null,
+    spent: Number(spent.rows[0].total),
+    openRequests: open.rows[0].n,
+  };
 }
 
 // SINGLE — includes computed overall progress (mean of milestone completion %)

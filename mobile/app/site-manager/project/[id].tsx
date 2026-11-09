@@ -161,7 +161,7 @@ export default function SiteManagerProjectScreen() {
         {/* Overview */}
         <Text style={styles.name}>{project.name}</Text>
         <View style={styles.chips}>
-          <StatusChip label={tv("status", project.status)} tone={STATUS_TONE[project.status] ?? "neutral"} />
+          <StatusChip label={project.status === "Cancelled" && project.activatedat ? t("status.terminated") : tv("status", project.status)} tone={STATUS_TONE[project.status] ?? "neutral"} />
           {health ? <StatusChip label={health.label} tone={health.tone} /> : null}
         </View>
         {project.description ? <Text style={styles.description}>{project.description}</Text> : null}

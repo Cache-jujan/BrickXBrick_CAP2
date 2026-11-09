@@ -64,6 +64,8 @@ export type SiteProject = {
   constructionstartdate?: string | null;
   enddate?: string | null;
   actualcompletiondate?: string | null;
+  // Set once the project went Active; a Cancelled project with it is shown as "Terminated".
+  activatedat?: string | null;
   projecttype?: string | null;
   municipality?: string | null;
   province?: string | null;
