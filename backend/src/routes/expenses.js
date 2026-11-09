@@ -11,6 +11,7 @@ const { notifyGeneralManagers } = require("../lib/notify");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { assertProjectActive } = require("../lib/projectRules");
+const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
 const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
 
@@ -204,32 +205,49 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             await assertCanReviewProject(req.user, projectID);
         }
 
-        const result = await query(
-            `INSERT INTO expenses
-               (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
-                category, birvalidationstatus, receiptimageurl, birnumber, tin,
-                birpermitnumber, lineitems, quantity)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-             RETURNING ${EXPENSE_COLUMNS}`,
-            [
-                projectID,
-                req.user.id,
-                ticketID || null,
-                vendorName,
-                amount,
-                receiptDate,
-                category,
-                birValidationStatus,
-                receiptImageURL,
-                bir.birNumber,
-                bir.tin,
-                bir.birPermitNumber,
-                JSON.stringify(storedLineItems),
-                quantity,
-            ]
-        );
+        // The Purchaser's reason for finishing under budget (shown to the PM).
+        const submitNote = typeof req.body.submitNote === "string" ? req.body.submitNote.trim().slice(0, SUBMIT_NOTE_MAX) : "";
 
-        const expense = result.rows[0];
+        // Strict budget: checked and saved in one transaction, with the request row locked, so
+        // two submissions cannot both slip under the cap.
+        const expense = await withTransaction(async (client) => {
+            await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+            const remainingBudgetCents = await loadRemainingBudgetCents((sql, params) => client.query(sql, params), ticketID);
+            const issue = checkBudget({
+                amountCents: Math.round(amount * 100),
+                remainingBudgetCents,
+                completesRequest: true, // the request is already Resolved: this expense is what finishes it
+                note: submitNote,
+            });
+            if (issue) throw httpError(400, issue.message, { code: issue.code });
+
+            const result = await client.query(
+                `INSERT INTO expenses
+                   (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
+                    category, birvalidationstatus, receiptimageurl, birnumber, tin,
+                    birpermitnumber, lineitems, quantity, submitnote)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                 RETURNING ${EXPENSE_COLUMNS}`,
+                [
+                    projectID,
+                    req.user.id,
+                    ticketID,
+                    vendorName,
+                    amount,
+                    receiptDate,
+                    category,
+                    birValidationStatus,
+                    receiptImageURL,
+                    bir.birNumber,
+                    bir.tin,
+                    bir.birPermitNumber,
+                    JSON.stringify(storedLineItems),
+                    quantity,
+                    submitNote || null,
+                ]
+            );
+            return result.rows[0];
+        });
 
         // F9 Layers 1-3. No transaction here, so the row is already visible
         // to screenExpense's queries. A screening failure is recorded as a

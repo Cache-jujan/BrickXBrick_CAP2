@@ -33,6 +33,7 @@ const {
   UUID_PATTERN,
 } = require("../lib/allocationValidation");
 const { planAllocation, presentPlan, submitNoteFor } = require("../lib/allocationPlan");
+const { budgetIssuesFor } = require("../lib/ticketBudget");
 const { ALLOCATION_ROLES, loadOpenRequests, buildLockQuery, ticketScope } = require("../lib/openRequests");
 
 const router = express.Router();
@@ -132,7 +133,9 @@ router.post("/preview", requireRole(...ALLOCATION_ROLES), async (req, res, next)
       feeTargets: input.feeTargets,
       lineTargets: input.lineTargets,
     });
-    res.json(presentPlan(plan));
+    // budgetIssues: what would stop the save (over budget, no approved budget) or ask for a
+    // note (finishing under budget), so the app can say so before the Purchaser submits.
+    res.json({ ...presentPlan(plan), budgetIssues: plan.ok ? budgetIssuesFor(plan.portions, null) : [] });
   } catch (error) {
     next(error);
   }
@@ -187,6 +190,13 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
         lineTargets: body.lineTargets,
       });
       if (!plan.ok) throw planError(plan);
+
+      // Strict budget, for every role: nothing above what is left, and a note when a request
+      // is finished with money to spare. The requests are locked above, so the numbers hold.
+      const budgetIssues = budgetIssuesFor(plan.portions, body.note);
+      if (budgetIssues.length > 0) {
+        throw httpError(400, budgetIssues.map((issue) => issue.message).join(" "), { budgetIssues });
+      }
 
       const commonReceiptID = clientReceiptID ?? crypto.randomUUID();
       const expenses = [];

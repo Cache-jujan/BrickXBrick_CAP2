@@ -109,6 +109,9 @@ let currentUser = { id: "user-1", role: "Purchaser" };
 async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
+  // The strict budget check (lib/ticketBudget.js): the request row lock, then what is left.
+  if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
+  if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: "500.00" }] };
   if (text.startsWith("select ticketid, projectid, status, assignedto")) {
     return { rowCount: 1, rows: [{ ticketid: "ticket-1", projectid: "project-1", status: "Resolved", assignedto: "user-1", submittedby: "sm-1", tickettype: "Material Request" }] };
   }
