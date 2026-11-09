@@ -314,6 +314,9 @@
 
 /* ---- Edit modal grid --------------------------------------------------- */
 .modal-ticket { max-width: 600px; max-height: calc(100vh - 2 * var(--space-5)); overflow-y: auto; }
+.modal.modal-ticket-wide { max-width: 920px; }
+.modal-ticket-wide .modal-head { margin-bottom: var(--space-4); }
+.modal-ticket-wide .modal-title { margin: 0; }
 .edit-grid { display: flex; flex-direction: column; gap: var(--space-3); }
 .edit-row { display: grid; grid-template-columns: 1fr 160px; gap: var(--space-4); }
 .edit-grid .field { margin-bottom: 0; }

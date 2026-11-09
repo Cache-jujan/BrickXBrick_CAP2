@@ -351,7 +351,6 @@ export default function SiteManagerTaskDetailScreen() {
               )}
               {task.milestonename && <InfoRow label={t("sm.milestone")} value={task.milestonename} />}
               <InfoRow label={t("mobile.due_date")} value={formatDate(task.duedate)} />
-              <InfoRow label={t("sm.task_status")} value={tv("status", task.status)} />
             </View>
 
             {flagged && (
@@ -502,15 +501,15 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.bg, flex: 1 },
   keyboardAvoider: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
-  title: { color: COLORS.heading, fontSize: 24, fontWeight: "800", lineHeight: 30 },
-  chipRow: { flexDirection: "row", marginTop: 10 },
-  progressBlock: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 14, borderWidth: 1, marginTop: 18, padding: 16 },
+  title: { color: COLORS.heading, fontSize: 28, fontWeight: "800", lineHeight: 34 },
+  chipRow: { flexDirection: "row", marginTop: 12 },
+  progressBlock: { backgroundColor: COLORS.dark, borderRadius: 18, marginTop: 22, padding: 20 },
   progressTop: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between" },
-  cardLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
-  progressValue: { color: COLORS.heading, fontSize: 28, fontWeight: "800" },
-  track: { backgroundColor: "#EEE7DE", borderRadius: 4, height: 8, marginTop: 10, overflow: "hidden" },
-  trackFill: { backgroundColor: COLORS.primary, borderRadius: 4, height: 8 },
-  progressBody: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 10 },
+  cardLabel: { color: "#E8DFD0", fontSize: 15, fontWeight: "700" },
+  progressValue: { color: "#FFFFFF", fontSize: 40, fontWeight: "800", lineHeight: 44 },
+  track: { backgroundColor: "#3A3631", borderRadius: 5, height: 10, marginTop: 14, overflow: "hidden" },
+  trackFill: { backgroundColor: COLORS.accentLight, borderRadius: 5, height: 10 },
+  progressBody: { color: "#D8D0C4", fontSize: 14, lineHeight: 21, marginTop: 14 },
   infoCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 14, paddingHorizontal: 16 },
   infoRow: { borderBottomColor: "#EEE7DE", borderBottomWidth: 1, paddingVertical: 15 },
   infoLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
