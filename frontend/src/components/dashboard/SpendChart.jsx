@@ -36,9 +36,9 @@ const barValues = {
 };
 
 /**
- * The open projects' money at a glance: one bar showing how much of their
- * budget is spent (and what is left), then approved spending per month as
- * plain bars on one scale. Hovering a month adds the running total and the
+ * The open projects' money at a glance: on the left how much of their budget
+ * is spent (and what is left), on the right approved spending per month as
+ * plain bars on one scale (stacked under each other on narrow screens). Hovering a month adds the running total and the
  * budget left at the end of that month.
  *
  * months: [{ label, spend, cumulative, remaining }] from buildMonthlySeries;
@@ -59,13 +59,14 @@ export function SpendChart({ months, budget, spent }) {
     chartRef.current = new Chart(canvasRef.current, {
       type: "bar",
       data: {
-        labels: months.map((m) => m.label),
+        // "Oct 2026" as two lines ("Oct" over "2026"), so twelve months fit without tilting.
+        labels: months.map((m) => m.label.split(" ")),
         datasets: [
           {
             label: t("dashboard.chart_spend"),
             data: months.map((m) => m.spend),
             backgroundColor: SPEND_COLOR,
-            borderRadius: 4,
+            borderRadius: 6,
             maxBarThickness: 48,
           },
         ],
@@ -82,6 +83,7 @@ export function SpendChart({ months, budget, spent }) {
           tooltip: {
             displayColors: false,
             callbacks: {
+              title: (items) => months[items[0].dataIndex].label,
               label: (item) => t("dashboard.tip_spend", { amount: PESO.format(item.parsed.y) }),
               afterLabel: (item) => {
                 const m = months[item.dataIndex];
@@ -93,7 +95,7 @@ export function SpendChart({ months, budget, spent }) {
           },
         },
         scales: {
-          x: { grid: { display: false } },
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false } },
           // grace leaves room above the tallest bar for its label.
           y: { beginAtZero: true, grace: "15%", ticks: { maxTicksLimit: 6, callback: (v) => compact(v) }, grid: { color: "#efece6" } },
         },
@@ -111,30 +113,32 @@ export function SpendChart({ months, budget, spent }) {
   const over = hasBudget && spent > budget;
 
   return (
-    <>
+    <div className="dash-overview">
       {hasBudget && (
         <div className={"dash-budget" + (over ? " dash-budget-over" : "")}>
-          <div className="dash-budget-text">
-            <span>
-              <strong>{PESO.format(spent)}</strong> {t("dashboard.budget_of", { budget: PESO.format(budget) })}
+          <strong className="dash-budget-spent">{PESO.format(spent)}</strong>
+          <span className="dash-budget-of">{t("dashboard.budget_of", { budget: PESO.format(budget) })}</span>
+          <div className="dash-budget-bar">
+            <span
+              className="dash-budget-track"
+              role="img"
+              aria-label={t("dashboard.budget_used_aria", { percent: pct.toFixed(1) })}
+            >
+              <span className="dash-budget-fill" style={{ width: `${Math.min(100, pct)}%` }} />
             </span>
-            <span className="dash-budget-left">
-              {over ? t("dashboard.budget_over", { amount: PESO.format(spent - budget) }) : t("dashboard.budget_left", { amount: PESO.format(budget - spent) })}
-            </span>
+            <span className="dash-budget-pct">{pct < 10 ? pct.toFixed(1) : Math.round(pct)}%</span>
           </div>
-          <span
-            className="dash-budget-track"
-            role="img"
-            aria-label={t("dashboard.budget_used_aria", { percent: pct.toFixed(1) })}
-          >
-            <span className="dash-budget-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+          <span className="dash-budget-left">
+            {over ? t("dashboard.budget_over", { amount: PESO.format(spent - budget) }) : t("dashboard.budget_left", { amount: PESO.format(budget - spent) })}
           </span>
         </div>
       )}
-      <p className="dash-chart-title">{t("dashboard.chart_by_month")}</p>
-      <div className="dash-chart" role="img" aria-label={t("dashboard.chart_aria")}>
-        <canvas ref={canvasRef} />
+      <div className="dash-overview-chart">
+        <p className="dash-chart-title">{t("dashboard.chart_by_month")}</p>
+        <div className="dash-chart" role="img" aria-label={t("dashboard.chart_aria")}>
+          <canvas ref={canvasRef} />
+        </div>
       </div>
-    </>
+    </div>
   );
 }

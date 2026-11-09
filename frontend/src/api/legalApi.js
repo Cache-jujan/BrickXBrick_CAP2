@@ -14,3 +14,9 @@ export async function acceptTerms(version) {
   const { data } = await apiClient.post("/api/legal/accept", { version });
   return data;
 }
+
+// GET /api/legal/status — { version, accepted, acceptedAt } for the signed-in user.
+export async function getAcceptanceStatus() {
+  const { data } = await apiClient.get("/api/legal/status");
+  return data;
+}

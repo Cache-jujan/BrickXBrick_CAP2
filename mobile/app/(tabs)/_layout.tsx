@@ -55,7 +55,7 @@ export default function TabLayout() {
             : { display: "none" },
           tabBarActiveTintColor: COLORS.primary,
           tabBarInactiveTintColor: COLORS.muted,
-          tabBarLabelStyle: { fontFamily: FONT.semibold, fontSize: 11 },
+          tabBarLabelStyle: { fontFamily: FONT.semibold, fontSize: 12 },
           tabBarItemStyle: { minHeight: 48 },
         }}
       >

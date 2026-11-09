@@ -11,23 +11,57 @@
   gap: var(--space-5);
 }
 
-/* The checkbox under each document. */
-.legal-confirm {
-  margin-top: var(--space-6);
-  scroll-margin: 120px 0 200px;
-  padding: var(--space-4);
-  border-width: 1.5px;
-  border-color: var(--color-brick-light);
-  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease),
-    box-shadow var(--duration) var(--ease);
+/* Jump links under the intro. */
+.legal-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 
-.legal-confirm .legal-check-text {
+.legal-jump-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.legal-jump-btn:hover {
+  border-color: var(--color-brick);
+  color: var(--color-brick-dark);
+}
+
+.legal-article {
+  scroll-margin-top: 88px;
+}
+
+/* The agree box in the bottom bar: white, with a clear outline. */
+.legal-consent .legal-check {
+  background: var(--color-surface);
+  border-width: 1.5px;
+  border-color: var(--color-border-strong);
+  min-height: 56px;
+}
+
+.legal-consent .legal-check.is-checked {
+  background: var(--color-surface);
+  border-color: var(--color-brick);
+}
+
+.legal-consent .legal-check-text {
   font-size: var(--text-base);
 }
 
-/* Pressed "Agree" too early: pulse the box still to tick. */
-.legal-confirm.is-pulsing {
+/* Pressed "Agree" before ticking: pulse the box. */
+.legal-consent .legal-check.is-pulsing {
   border-color: var(--color-brick);
   animation: legal-pulse 0.8s var(--ease) 2;
 }
@@ -43,30 +77,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .legal-confirm.is-pulsing {
+  .legal-consent .legal-check.is-pulsing {
     animation: none;
     box-shadow: 0 0 0 4px var(--color-brick-tint);
   }
 }
 
-/* Bottom bar: one status line and the button. */
-.legal-consent-status {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-ink-soft);
-}
-
-.legal-consent-status.is-done {
-  color: var(--color-success);
-  font-weight: 600;
-}
-
-/* Not every box is ticked yet. Still clickable, so pressing it can take the
+/* Box not ticked yet. Still clickable, so pressing it can take the
    user to the box they missed, but it looks unavailable. */
 .legal-consent-btn.is-incomplete {
   opacity: 0.55;
@@ -77,13 +94,7 @@
 }
 
 @media (max-width: 640px) {
-  .legal-confirm {
-    padding: var(--space-3);
-  }
-  .legal-confirm .legal-check-text {
+  .legal-consent .legal-check-text {
     font-size: var(--text-sm);
-  }
-  .legal-consent-status {
-    font-size: var(--text-xs);
   }
 }

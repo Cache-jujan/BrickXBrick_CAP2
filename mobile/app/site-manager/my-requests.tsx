@@ -13,6 +13,7 @@ import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "e
 import { useOnNewNotifications } from "@/lib/notification-events";
 
 import { COLORS } from "@/constants/expense-flow-colors";
+import { StatusChip, type ChipTone } from "@/components/status-chip";
 import { formatPeso, formatQty } from "@/lib/money";
 import { type Project, type Ticket } from "@/lib/api";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
@@ -27,11 +28,12 @@ import { useLocale } from "@/lib/i18n-context";
 type FilterKey = "All" | "Pending" | "Rejected" | "Acknowledged" | "Resolved";
 const FILTERS: FilterKey[] = ["All", "Pending", "Rejected", "Acknowledged", "Resolved"];
 
-const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  Pending: { bg: "#FFF0E6", fg: COLORS.primary },
-  Acknowledged: { bg: "#EAF2FF", fg: "#2563EB" },
-  Resolved: { bg: COLORS.successBg, fg: COLORS.success },
-  Rejected: { bg: "#FFF5F3", fg: "#B42318" },
+// Same colours as the web and every other status chip: waiting = amber, seen = blue, done = green, no = red.
+const STATUS_TONE: Record<string, ChipTone> = {
+  Pending: "amber",
+  Acknowledged: "info",
+  Resolved: "success",
+  Rejected: "error",
 };
 
 export default function MyRequestsScreen() {
@@ -226,7 +228,6 @@ function RequestCard({
   onExpenseCapture: () => void;
 }) {
   const { t, tv, formatDate } = useLocale();
-  const statusColors = STATUS_COLORS[ticket.status] ?? { bg: "#F1E9DD", fg: COLORS.muted };
   const isRejected = ticket.status === "Rejected";
   const isResolvedMR = ticket.status === "Resolved" && ticket.tickettype === "Material Request";
   const wasResubmitted = ticket.resubmittedbyid != null;
@@ -246,9 +247,7 @@ function RequestCard({
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={styles.cardTopRow}>
         <Text style={styles.cardType}>{tv("tickettype", ticket.tickettype)}</Text>
-        <View style={[styles.statusPill, { backgroundColor: statusColors.bg }]}>
-          <Text style={[styles.statusPillText, { color: statusColors.fg }]}>{tv("status", ticket.status)}</Text>
-        </View>
+        <StatusChip label={tv("status", ticket.status)} tone={STATUS_TONE[ticket.status] ?? "neutral"} />
       </View>
 
       <Text style={styles.cardSubject} numberOfLines={2}>{ticket.subject}</Text>
@@ -307,13 +306,13 @@ function RequestCard({
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: { paddingHorizontal: 20, paddingTop: 14 },
-  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  eyebrow: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 25, fontWeight: "800", marginTop: 6, marginBottom: 12 },
 
   // flexGrow 0: a horizontal ScrollView otherwise stretches to fill the
   // screen's height, which made the filter chips huge.
   chipsScroll: { flexGrow: 0 },
-  chipsRow: { paddingHorizontal: 20, gap: 8, paddingBottom: 14, alignItems: "center" },
+  chipsRow: { paddingHorizontal: 20, gap: 8, paddingTop: 4, paddingBottom: 14, alignItems: "center" },
   chip: {
     alignItems: "center",
     justifyContent: "center",
@@ -321,7 +320,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     backgroundColor: COLORS.card,
   },
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
@@ -332,16 +331,14 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: COLORS.card,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 16,
     padding: 15,
   },
   cardHighlighted: { borderColor: COLORS.primary, borderWidth: 2 },
   cardTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cardType: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
-  statusPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  statusPillText: { fontSize: 11, fontWeight: "800" },
+  cardType: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
   cardSubject: { color: COLORS.heading, fontSize: 15, fontWeight: "700", marginTop: 9, lineHeight: 21 },
   cardMeta: { color: COLORS.muted, fontSize: 12, fontWeight: "600", marginTop: 6 },
   cardSubMeta: { color: COLORS.muted, fontSize: 12, marginTop: 3 },
@@ -354,7 +351,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 11,
   },
-  rejectionLabel: { color: "#B42318", fontSize: 10, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  rejectionLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
   rejectionReason: { color: COLORS.heading, fontSize: 13, fontWeight: "600", marginTop: 4, lineHeight: 18 },
   fixButton: {
     alignSelf: "flex-start",
@@ -389,14 +386,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
   },
-  captureButtonSecondary: { borderColor: "#E7DDCF", backgroundColor: "#F1E9DD" },
+  captureButtonSecondary: { borderColor: COLORS.border, backgroundColor: "#F1E9DD" },
   captureButtonText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
   captureButtonTextSecondary: { color: COLORS.muted },
 
   emptyCard: {
     alignItems: "center",
     backgroundColor: COLORS.card,
-    borderColor: "#E7DDCF",
+    borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 16,
     gap: 10,

@@ -51,6 +51,35 @@ export type Project = {
   budget?: string;
 };
 
+// A project as the Site Manager sees it: the same GET /api/projects the pickers use,
+// with every status (the server only returns the projects assigned to this person
+// and leaves the budget out).
+export type SiteProject = {
+  projectid: string;
+  name: string;
+  description?: string | null;
+  clientname?: string | null;
+  status: string;
+  startdate?: string | null;
+  constructionstartdate?: string | null;
+  enddate?: string | null;
+  actualcompletiondate?: string | null;
+  projecttype?: string | null;
+  municipality?: string | null;
+  province?: string | null;
+  siteaddress?: string | null;
+  projectmanagername?: string | null;
+  // Average completion of the project's milestones, 0-100 (comes as text).
+  progress?: string | number | null;
+};
+
+export async function fetchMyProjects(): Promise<SiteProject[]> {
+  const res = await apiFetch(`${API_URL}/api/projects`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to load projects (${res.status})`);
+  return data;
+}
+
 export type ApprovedVendor = {
   vendorID: string;
   vendorName: string;

@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { LanguageToggle } from "../../i18n/LanguageToggle";
+import { AuthShell } from "../../components/auth/AuthShell";
 import "./LoginPage.css";
 
 // Feature list mirrors what the backend actually supports today — RBAC
@@ -53,104 +54,85 @@ export function LoginPage() {
   }
 
   return (
-    <div className="login-screen">
-      {/* Left — brand panel over the construction photo */}
-      <div className="login-panel">
-        <div className="login-panel-scrim" />
-        <div className="login-panel-content">
-          <div className="login-brand-row">
-            <img src="/images/logo.png" alt="" className="login-brand-logo" />
-            <span className="login-brand-name">
-              Brick <span className="login-brand-x">x</span> Brick
-            </span>
-          </div>
+    <AuthShell>
+      <h2>{t("login.welcome")}</h2>
+      <p className="auth-card-sub">{t("login.subtitle")}</p>
 
-        <div className="login-panel-copy">
-            <h1 className="login-headline">{t("login.story_title")}</h1>
-            <p className="login-panel-tagline">
-              {t("login.story_body")}
-            </p>
-          </div>
+      <form onSubmit={handleSubmit} noValidate className="login-form">
+        {successMessage && <Banner tone="info" title={successMessage} />}
 
-          <p className="login-copyright">&copy; 2026 Brick x Brick</p>
-        </div>
-      </div>
-
-      {/* Right — the sign-in form */}
-      <div className="login-form-side">
-        <div className="login-card">
-          <h2 className="login-title">{t("login.title")}</h2>
-          <p className="login-subtitle">{t("login.subtitle")}</p>
-
-          <form onSubmit={handleSubmit} noValidate className="login-form">
-            {successMessage && <Banner tone="info" title={successMessage} />}
-
-            <div className="login-field-icon-wrap">
-              <Field
-                label={t("login.email")}
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="you@gmail.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="login-field-icon"
-              />
-              <span className="login-field-prefix login-field-prefix-email">
-                <MailIcon />
-              </span>
-            </div>
-
-            <div className="login-field-icon-wrap login-password-field">
-              <Field
-                label={t("login.password")}
-                type={showPassword ? "text" : "password"}
-                required
-                autoComplete="current-password"
-                placeholder={t("login.enter_password")}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="login-field-icon"
-              />
-              <span className="login-field-prefix">
-                <LockIcon />
-              </span>
-              <button
-                type="button"
-                className="login-toggle"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={t(showPassword ? "login.hide" : "login.show")}
-                aria-pressed={showPassword}
-              >
-                <EyeIcon open={showPassword} />
-              </button>
-            </div>
-
-            <p className="login-forgot">
-              <Link to="/forgot-password">{t("login.forgot")}</Link>
-            </p>
-
-            <Button type="submit" disabled={submitting} className="login-submit">
-              {submitting ? t("login.signing_in") : t("login.title")}
-            </Button>
-
-            {error && <Banner tone="error" title={error} />}
-
-            <p className="login-legal">
-              <Link to="/legal">{t("login.terms_of_use")}</Link>
-              <span aria-hidden="true"> · </span>
-              <Link to="/legal?doc=privacy">{t("login.privacy_notice")}</Link>
-            </p>
-            <LanguageToggle variant="inline" />
-          </form>
+        <div className="login-field-icon-wrap">
+          <Field
+            label={t("login.email")}
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@gmail.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="login-field-icon"
+          />
+          <span className="login-field-prefix">
+            <MailIcon />
+          </span>
         </div>
 
-      </div>
-    </div>
+        <div className="login-field-icon-wrap login-password-field">
+          <Field
+            label={t("login.password")}
+            type={showPassword ? "text" : "password"}
+            required
+            autoComplete="current-password"
+            placeholder={t("login.enter_password")}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="login-field-icon"
+          />
+          <span className="login-field-prefix">
+            <LockIcon />
+          </span>
+          <button
+            type="button"
+            className="login-toggle"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={t(showPassword ? "login.hide" : "login.show")}
+            aria-pressed={showPassword}
+          >
+            <EyeIcon open={showPassword} />
+          </button>
+        </div>
+
+        <p className="login-forgot">
+          <Link to="/forgot-password">{t("login.forgot")}</Link>
+        </p>
+
+        <Button type="submit" disabled={submitting} className="login-submit">
+          {submitting ? t("login.signing_in") : t("login.title")}
+          {!submitting && <ArrowIcon />}
+        </Button>
+
+        {error && <Banner tone="error" title={error} />}
+
+        <p className="login-legal">
+          <Link to="/legal">{t("login.terms_of_use")}</Link>
+          <span aria-hidden="true"> · </span>
+          <Link to="/legal?doc=privacy">{t("login.privacy_notice")}</Link>
+        </p>
+        <LanguageToggle variant="inline" />
+      </form>
+    </AuthShell>
   );
 }
 
 /* --- Icons — small inline SVGs, no icon-library dependency --- */
+
+function ArrowIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function MailIcon() {
   return (

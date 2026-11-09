@@ -7,6 +7,7 @@ import {
   BarChartIcon, ShieldAlertIcon, TicketIcon, PlusSquareIcon, ClipboardCheckIcon, GearIcon,
 } from "./icons";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { Avatar } from "../ui/Avatar";
 
 import "./Sidebar.css";
 
@@ -262,9 +263,16 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
           {!collapsed && <span>{t(collapsedPref ? "nav.expand_sidebar" : "nav.collapse")}</span>}
         </button>
 
-        <div className="sidebar-footer">
-          {!collapsed && <p className="sidebar-footer-label">{t("nav.signed_in_as")}</p>}
-          <p className="sidebar-footer-role">{collapsed ? user?.role?.[0] : user?.role}</p>
+        {/* Who is signed in: their picture (or first letter), name and role. */}
+        <div className="sidebar-footer" title={collapsed ? `${user?.name ?? ""} · ${user?.role ?? ""}` : undefined}>
+          <Avatar className="sidebar-footer-avatar" url={user?.avatarUrl} initial={(user?.name || "?").trim().charAt(0).toUpperCase()} />
+          {!collapsed && (
+            <span className="sidebar-footer-text">
+              <span className="sidebar-footer-label">{t("nav.signed_in_as")}</span>
+              <span className="sidebar-footer-name">{user?.name}</span>
+              <span className="sidebar-footer-role">{user?.role}</span>
+            </span>
+          )}
         </div>
       </aside>
     </div>

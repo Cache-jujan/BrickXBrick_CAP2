@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
   },
   emptySubtext: {
-    fontSize: 11, fontFamily: FONT.regular,
+    fontSize: 12, fontFamily: FONT.regular,
     color: COLORS.muted,
     marginTop: 3,
   },
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: "#FFF",
-    fontSize: 11, fontFamily: FONT.regular,
+    fontSize: 12, fontFamily: FONT.regular,
   },
   pdfRow: {
     flexDirection: "row",
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     color: COLORS.heading,
   },
   pdfSize: {
-    fontSize: 11, fontFamily: FONT.regular,
+    fontSize: 12, fontFamily: FONT.regular,
     color: COLORS.muted,
     marginTop: 2,
   },

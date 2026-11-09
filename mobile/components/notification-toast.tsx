@@ -133,8 +133,8 @@ const styles = StyleSheet.create({
   },
   icon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   body: { flex: 1 },
-  title: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.bold },
+  title: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.bold },
   message: { color: COLORS.heading, fontSize: 14, fontFamily: FONT.semibold, lineHeight: 19, marginTop: 2 },
-  more: { color: COLORS.primary, fontSize: 11, fontFamily: FONT.bold, marginTop: 3 },
+  more: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.bold, marginTop: 3 },
   close: { color: COLORS.muted, fontSize: 22, fontFamily: FONT.regular, paddingHorizontal: 4 },
 });

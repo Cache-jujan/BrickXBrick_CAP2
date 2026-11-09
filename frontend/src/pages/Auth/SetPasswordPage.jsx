@@ -4,7 +4,7 @@ import { supabase } from "../../api/supabaseClient";
 import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
-import { Card } from "../../components/ui/Card";
+import { AuthShell } from "../../components/auth/AuthShell";
 import { EyeIcon, EyeOffIcon } from "../../components/ui/icons";
 import { PasswordChecklist } from "../../components/ui/PasswordChecklist";
 import { passwordMeetsRules } from "../../utils/passwordRules";
@@ -102,24 +102,23 @@ export function SetPasswordPage() {
   const showBroken = linkBroken || (!ready && waited);
 
   return (
-    <div className="auth-simple">
-      <Card className="auth-simple-card">
-        <h1>{isInvite ? t("auth.create_password") : t("auth.set_password")}</h1>
+    <AuthShell>
+        <h2>{isInvite ? t("auth.create_password") : t("auth.set_password")}</h2>
 
         {showBroken && (
           <>
             <Banner tone="error" title={t("auth.link_invalid_title")}>
               {t("auth.link_invalid_body")}
             </Banner>
-            <Link to="/forgot-password" className="auth-simple-back">{t("auth.forgot_title")}</Link>
+            <Link to="/forgot-password" className="auth-back">{t("auth.forgot_title")}</Link>
           </>
         )}
 
-        {!showForm && !showBroken && <p className="auth-simple-sub">{t("auth.verifying")}</p>}
+        {!showForm && !showBroken && <p className="auth-card-sub">{t("auth.verifying")}</p>}
 
         {showForm && (
           <form onSubmit={handleSubmit} noValidate>
-            <p className="auth-simple-sub">
+            <p className="auth-card-sub">
               {isInvite ? t("auth.welcome_invite") : t("auth.choose_password")}
             </p>
             <PasswordField label={t("auth.new_password")} value={password}
@@ -133,7 +132,6 @@ export function SetPasswordPage() {
             </Button>
           </form>
         )}
-      </Card>
-    </div>
+    </AuthShell>
   );
 }

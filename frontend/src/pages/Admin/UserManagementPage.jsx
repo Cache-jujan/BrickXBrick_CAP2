@@ -131,7 +131,7 @@ export function UserManagementPage() {
             </div>
           ) : (
             <div className="table-scroll">
-              <table className="users-table">
+              <table className="users-table users-accounts">
                 <thead>
                   <tr>
                     <th>{t("users.name")}</th>

@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   separator: { backgroundColor: COLORS.border, height: 1, marginLeft: 16 },
   row: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", minHeight: 56, paddingHorizontal: 16 },
   rowLabel: { color: COLORS.heading, fontFamily: FONT.semibold, fontSize: 15 },
-  badge: { backgroundColor: COLORS.border, borderRadius: 12, color: COLORS.heading, fontFamily: FONT.bold, fontSize: 11, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4 },
+  badge: { backgroundColor: COLORS.border, borderRadius: 12, color: COLORS.heading, fontFamily: FONT.bold, fontSize: 12, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4 },
   badgeOn: { backgroundColor: COLORS.primary, color: "#FFFFFF" },
   help: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12 },
 });

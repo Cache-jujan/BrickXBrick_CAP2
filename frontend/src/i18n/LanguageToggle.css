@@ -103,3 +103,19 @@
 .language-inline .language-link:hover { color: var(--color-ink); text-decoration: underline; }
 .language-inline .language-link.is-active { color: var(--color-brick); font-weight: 700; }
 .language-inline .language-link:focus-visible { outline: 2px solid var(--color-brick); outline-offset: 2px; }
+
+/* Language menu: same soft pop-up look as the top-bar menus. */
+.language-icon-menu {
+  min-width: 196px;
+  padding: var(--space-2);
+  border-color: rgba(48, 47, 40, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.06), 0 24px 48px -20px rgba(48, 47, 40, 0.38);
+}
+.language-icon-option {
+  border-radius: 10px;
+  font-weight: 600;
+}
+.language-icon-option.is-active {
+  background: var(--color-brick-tint);
+}

@@ -1,8 +1,9 @@
+import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { flagLabel } from "../../utils/plainLanguage";
 import { useLocale } from "../../i18n/LocaleProvider";
 
-const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 2 });
+const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Plain-language reason for a flag type, or "" when there is no translation for it. */
 function whyText(t, flagType) {
@@ -15,18 +16,29 @@ const num = (value) => (value == null || value === "" ? null : Number(value));
 
 /** The other projects sharing one split receipt, with their amounts. Shown for any expense that has siblings. */
 export function SplitSiblings({ siblings }) {
-  const { t, tv } = useLocale();
+  const { t } = useLocale();
   if (!siblings || siblings.length === 0) return null;
   return (
-    <section className="flag-review-block">
-      <h3 className="flag-review-title">{t("flagx.split_title")}</h3>
-      <ul className="flag-review-list">
-        {siblings.map((s) => (
-          <li key={s.expenseId}>
-            {s.projectName} — {PESO.format(s.amount)} ({tv("status", s.status)})
-          </li>
-        ))}
-      </ul>
+    <section className="exp-section">
+      <h3 className="exp-section-title">{t("flagx.split_title")}</h3>
+      <table className="exp-mini-table">
+        <thead>
+          <tr>
+            <th>{t("nav.project")}</th>
+            <th className="exp-num">{t("dashboard.amount")}</th>
+            <th>{t("dashboard.status")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {siblings.map((s) => (
+            <tr key={s.expenseId}>
+              <td>{s.projectName}</td>
+              <td className="exp-num">{PESO.format(s.amount)}</td>
+              <td><Badge status={s.status} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }

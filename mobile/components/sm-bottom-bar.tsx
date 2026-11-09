@@ -72,5 +72,5 @@ const styles = StyleSheet.create({
   itemActive: { backgroundColor: COLORS.primary, paddingHorizontal: 16 },
   label: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 13 },
   badge: { position: "absolute", top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.errorText },
-  badgeText: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 10 },
+  badgeText: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 11 },
 });

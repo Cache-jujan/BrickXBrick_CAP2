@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   groupCountPill: { backgroundColor: COLORS.card, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: SOFT.edge },
   groupCount: { fontSize: 12, fontFamily: FONT.bold, color: SOFT.text },
   // "All stores" / "All projects": a soft tinted band, slightly deeper than the group headers.
-  allBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: SOFT.fill, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
+  allBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: COLORS.primaryTint, borderWidth: 1, borderColor: SOFT.edge, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
   allBannerTitle: { flex: 1, fontSize: 17, fontFamily: FONT.extrabold, color: SOFT.text },
   allBannerCount: { fontSize: 13, fontFamily: FONT.bold, color: SOFT.text },
 

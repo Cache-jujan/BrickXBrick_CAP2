@@ -98,7 +98,7 @@
 /* Stores / projects: as many columns as fit. */
 .open-requests-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr));
   gap: var(--space-3);
   align-items: start;
 }
@@ -213,3 +213,57 @@
   .open-requests-controls .field-control { max-width: none; width: 100%; min-width: 0; }
   .open-requests-controls .field-label { display: none; }
 }
+
+
+/* Each request is one button that opens its summary. */
+.open-requests-item {
+  display: block;
+  border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
+}
+.open-requests-list > .open-requests-item:first-child { border-top: 0; }
+.open-requests-item > .open-requests-row {
+  width: 100%;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  border-top: 0;
+  padding: var(--space-3) var(--space-3);
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.open-requests-item > .open-requests-row:hover { background: var(--color-surface-muted); }
+.open-requests-item > .open-requests-row:focus-visible {
+  outline: 2px solid var(--color-brick);
+  outline-offset: -2px;
+}
+/* The name and its detail line wrap instead of being cut off with "...". */
+.open-requests-item .open-requests-row-main strong,
+.open-requests-item .open-requests-row-main .open-requests-meta {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.open-requests-item .open-requests-row-main strong { font-size: var(--text-base); }
+.open-requests-progress-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.open-requests-chevron {
+  color: var(--color-ink-faint);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+@media (max-width: 520px) {
+  .open-requests-item > .open-requests-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .open-requests-item .open-requests-progress { grid-column: 1; }
+  .open-requests-item .open-requests-chevron { grid-row: 1; grid-column: 2; }
+}
+.open-requests-item .open-requests-track,
+.open-requests-item .open-requests-fill { display: block; }

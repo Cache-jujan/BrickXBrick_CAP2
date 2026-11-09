@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   row: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", minHeight: MIN_TAP + 4 },
   brand: { alignItems: "center", flex: 1, flexDirection: "row", gap: 10 },
   brandName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 18 },
-  tagline: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 11, marginTop: 1 },
+  tagline: { color: COLORS.muted, fontFamily: FONT.regular, fontSize: 12, marginTop: 1 },
   actions: { alignItems: "center", flexDirection: "row", gap: 4 },
   avatar: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 22, height: MIN_TAP, justifyContent: "center", overflow: "hidden", width: MIN_TAP },
   avatarImage: { height: MIN_TAP, width: MIN_TAP },

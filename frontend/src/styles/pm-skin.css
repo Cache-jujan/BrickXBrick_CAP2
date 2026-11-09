@@ -1,0 +1,66 @@
+/* Project Manager additions to the shared web skin (gm-skin.css). */
+
+/* ---- Tickets: tabs and chips follow the shared soft switch ---------------- */
+
+.pm-skin .ticket-queue {
+  max-width: none;
+}
+.pm-skin .ticket-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border: 0;
+  border-radius: 14px;
+  background: #ece8e0;
+}
+.pm-skin .ticket-tab {
+  margin: 0;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 10px;
+}
+.pm-skin .ticket-tab-active {
+  background: #fff;
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgba(48, 47, 40, 0.12);
+}
+.pm-skin .ticket-queue-header h1,
+.pm-skin .ticket-queue-header h2 {
+  margin-bottom: var(--space-1);
+}
+.pm-skin .ticket-row,
+.pm-skin .ticket-batch,
+.pm-skin .ticket-queue-empty {
+  border-radius: 18px;
+  border-color: rgba(48, 47, 40, 0.08);
+  box-shadow: var(--gm-shadow, 0 1px 2px rgba(48, 47, 40, 0.06), 0 12px 28px -22px rgba(48, 47, 40, 0.3));
+}
+.pm-skin .ticket-row {
+  border-left-width: 4px;
+}
+.pm-skin .ticket-row:hover {
+  background: #faf6f1;
+}
+.pm-skin .ticket-batch {
+  background: #faf8f5;
+  padding: var(--space-4);
+}
+.pm-skin .ticket-row-material { border-left-color: var(--color-brick); }
+.pm-skin .ticket-row-work { border-left-color: var(--color-terracotta); }
+.pm-skin .ticket-row-report { border-left-color: var(--color-border-strong); }
+
+/* ---- Project Manager dashboard: long peso totals fit their card --------- */
+
+.pm-dash .dash-kpi {
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+}
+.pm-dash .dash-kpi-value {
+  font-size: clamp(1.05rem, 1.5vw, 1.5rem);
+}
+@media (max-width: 1100px) {
+  .pm-dash .dash-kpi-icon {
+    width: 44px;
+    height: 44px;
+  }
+}
