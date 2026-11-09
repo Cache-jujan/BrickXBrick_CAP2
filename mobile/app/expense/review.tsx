@@ -75,6 +75,8 @@ export default function ReviewScreen() {
   // Fields the user has edited: their low-confidence warning is dropped.
   const [edited, setEdited] = useState<Set<string>>(new Set());
   const [iosDateOpen, setIosDateOpen] = useState(false);
+  // The tax fields are folded away; the Purchaser opens them, or they open when the scan was unsure of one.
+  const [taxOpen, setTaxOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   // Materials from the Site Managers' requests, for naming line items.
   const [materials, setMaterials] = useState<RequestedMaterial[]>([]);
@@ -178,6 +180,9 @@ export default function ReviewScreen() {
     allLinesValid && totalCents !== null && !totalsMatch && t("rv.err_match"),
   ];
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
+  const taxFlagged = isLowConfidence("tin") || isLowConfidence("birPermitNumber") || isLowConfidence("birNumber");
+  const taxFilled = !!(tin.trim() || birPermitNumber.trim() || birNumber.trim());
+  const showTax = taxOpen || taxFlagged;
   // Any edit counts as the user checking that row, so its OCR flag goes.
   function updateItem(id: string, patch: Partial<LineItem>) { setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch, ocr: undefined } : it))); }
   /** Synchronize a line's numeric fields and clear its OCR warning after an edit. */
@@ -319,16 +324,8 @@ export default function ReviewScreen() {
             </View>
           )}
 
-          <Section title={t("rv.section_vendor")}>
+          <Section title={t("rv.section_receipt")}>
             <Field label={t("dashboard.vendor")} value={vendorName} onChangeText={edit("vendorName", setVendorName)} check={isLowConfidence("vendorName")} error={vendorMissing ? REQUIRED : null} />
-            <View style={styles.pair}>
-              <Field style={styles.half} label="TIN" value={tin} onChangeText={edit("tin", setTin)} keyboardType="numbers-and-punctuation" check={isLowConfidence("tin")} fromVendorList={autoFilled.includes("tin")} />
-              <Field style={styles.half} label={t("rv.bir_permit")} value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" check={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
-            </View>
-            <Field label="OR / SI number" value={birNumber} onChangeText={edit("birNumber", setBirNumber)} autoCapitalize="characters" check={isLowConfidence("birNumber")} />
-          </Section>
-
-          <Section title={t("rv.section_amount")}>
             <View style={styles.pair}>
               <Field style={styles.half} label={t("rv.total_php")} value={amount} onChangeText={edit("amount", setAmount)} onBlur={() => setAmount(groupAmountText)} keyboardType="decimal-pad" check={ocrCheck("amount") !== null} error={totalCents === null ? REQUIRED : null} />
               {Platform.OS === "web" ? (
@@ -434,6 +431,27 @@ export default function ReviewScreen() {
               );
             })}
           </Section>
+
+          <View style={styles.section}>
+            <Pressable onPress={() => setTaxOpen((open) => !open)} style={styles.taxHeader} accessibilityRole="button" accessibilityState={{ expanded: showTax }}>
+              <View style={styles.flex}>
+                <Text style={styles.sectionTitle}>
+                  {t("submit.tax_details")} <Text style={styles.taxOptional}>({t("submit.optional")})</Text>
+                </Text>
+                {taxFilled ? <Text style={styles.taxFilled}>{t("submit.tax_filled")}</Text> : null}
+              </View>
+              <IconSymbol name={showTax ? "chevron.down" : "chevron.right"} size={22} color={COLORS.muted} />
+            </Pressable>
+            {showTax && (
+              <View style={styles.taxFields}>
+              <View style={styles.pair}>
+                <Field style={styles.half} label="TIN" value={tin} onChangeText={edit("tin", setTin)} keyboardType="numbers-and-punctuation" check={isLowConfidence("tin")} fromVendorList={autoFilled.includes("tin")} />
+                <Field style={styles.half} label={t("rv.bir_permit")} value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" check={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
+              </View>
+              <Field label="OR / SI number" value={birNumber} onChangeText={edit("birNumber", setBirNumber)} autoCapitalize="characters" check={isLowConfidence("birNumber")} />
+              </View>
+            )}
+          </View>
         </ScrollView>
 
         <View style={styles.footer}>
@@ -564,6 +582,10 @@ const styles = StyleSheet.create({
   warnBox: { backgroundColor: AMBER_BG, borderRadius: 12, padding: 12, marginBottom: 10, gap: 4 },
   warnTitle: { fontSize: 13, fontFamily: FONT.extrabold, color: AMBER },
   warnLine: { fontSize: 12, fontFamily: FONT.regular, color: AMBER },
+  taxHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48 },
+  taxOptional: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 13 },
+  taxFilled: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.success, marginTop: 2 },
+  taxFields: { gap: 10, marginTop: 8 },
   section: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 14, marginBottom: 12 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   sectionTitle: { fontSize: 15, fontFamily: FONT.extrabold, color: COLORS.heading },
