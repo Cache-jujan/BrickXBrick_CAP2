@@ -19,7 +19,7 @@ const {
     documentUrl,
 } = require("../lib/taskDocuments");
 const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview, taskReviewNotice } = require("../lib/taskProgress");
-const { assertProjectNotOnHold } = require("../lib/projectHold");
+const { assertProjectNotOnHold, assertProjectNotTerminated } = require("../lib/projectHold");
 const { notify } = require("../lib/notify");
 
 const router = express.Router();
@@ -40,6 +40,7 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                     m.dueDate AS milestoneduedate,
                     p.projectId AS projectid,
                     p.name AS projectname,
+                    p.status AS projectstatus,
                     p.startDate AS projectstartdate,
                     p.endDate AS projectenddate,
                     pending.photoevidenceurl AS pendingphotoevidenceurl,
@@ -131,6 +132,7 @@ router.post("/:id/photo", requireRole("Site Manager"), upload.single("photo"), a
         assertEvidencePhoto(req.file);
 
         const task = await getTaskForUser(req.user, req.params.id);
+        await assertProjectNotTerminated(query, { milestoneId: task.milestoneid });
         if (task.status === "Completed") {
             const err = new Error("This task is already completed and cannot be resubmitted");
             err.status = 409;
@@ -185,7 +187,10 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
             clientSubmissionId,
             note,
             // A project on hold takes no new progress (checked before the photo is stored).
-            beforeWrite: (task) => assertProjectNotOnHold(query, task.milestoneid),
+            beforeWrite: async (task) => {
+                await assertProjectNotTerminated(query, { milestoneId: task.milestoneid });
+                await assertProjectNotOnHold(query, task.milestoneid);
+            },
             uploadPhoto: () =>
                 uploadBuffer(req.file.buffer, {
                     contentType: req.file.mimetype,
@@ -248,6 +253,7 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
             err.status = 403;
             throw err;
         }
+        await assertProjectNotTerminated(query, { projectId: log.projectid });
 
         // D-06: the old check-then-act (read reviewStatus, then UPDATE)
         // let concurrent Acknowledge + Flag both pass the read and both
@@ -361,6 +367,7 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
             err.status = 403;
             throw err;
         }
+        await assertProjectNotTerminated(query, { taskId: req.params.id });
         if (task.milestonephase !== "Planning") {
             const err = new Error("Only a Planning-phase task can be completed this way — Construction tasks are completed by acknowledging the Site Manager's photo submission");
             err.status = 409;

@@ -95,7 +95,8 @@ export default function SiteManagerProjectScreen() {
 
   const progress = Math.max(0, Math.min(100, Math.round(Number(project.progress ?? 0)) || 0));
   const finished = project.status === "Completed";
-  const health: { label: string; tone: ChipTone } | null = finished
+  const terminated = project.status === "Cancelled";
+  const health: { label: string; tone: ChipTone } | null = finished || terminated
     ? null
     : overdue > 0
       ? { label: t("common.at_risk"), tone: "amber" }
@@ -110,7 +111,7 @@ export default function SiteManagerProjectScreen() {
     .join(", ");
   const left = daysUntil(project.enddate);
   const scheduleText =
-    finished || left === null
+    finished || terminated || left === null
       ? null
       : left < 0
         ? t("sm.proj_days_over", { count: -left })
@@ -171,6 +172,14 @@ export default function SiteManagerProjectScreen() {
               project.suspensionreason ? project.suspensionreason + "." : null,
               project.expectedresumedate ? t("pd.expected_resume", { date: String(project.expectedresumedate).slice(0, 10) }) : null,
               t("pd.suspended_note"),
+            ].filter(Boolean).join(" ")}
+          </Text>
+        ) : null}
+        {terminated ? (
+          <Text style={[styles.savedNote, { marginTop: 12, marginBottom: 0 }]}>
+            {[
+              t("pd.terminated_title") + ".",
+              project.cancellationreason ? project.cancellationreason : null,
             ].filter(Boolean).join(" ")}
           </Text>
         ) : null}

@@ -517,7 +517,20 @@ router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => 
           [existing.projectid, reason, req.user.id]
         );
       }
-      return result.rows[0];
+      // Tell the people on the project. "Terminated" once it had been activated,
+      // "cancelled" for a Draft that never started.
+      const row = result.rows[0];
+      const started = Boolean(existing.activatedat);
+      const message = started
+        ? `"${row.name}" was terminated. It is read-only now: no new requests, purchases, progress or check-ins. Reason: ${reason}`
+        : `"${row.name}" was cancelled before it started. Reason: ${reason}`;
+      const recipients = started
+        ? await suspensionRecipients(client, row)
+        : new Set([row.projectmanagerid, row.sitemanagerid].filter(Boolean));
+      for (const recipientId of recipients) {
+        await notifyProject(client, { recipientId, type: "ProjectTerminated", projectId: row.projectid, message });
+      }
+      return row;
     });
     res.json(project);
   } catch (err) {

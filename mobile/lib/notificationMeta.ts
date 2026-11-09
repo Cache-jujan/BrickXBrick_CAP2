@@ -41,6 +41,9 @@ const META: Record<string, Meta> = {
   ReceiptScanFailed:     { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.scan_failed" },
   BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.bom_approved" },
   BOMReopened:           { icon: "arrow.triangle.2.circlepath.circle", bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.bom_reopened" },
+  ProjectSuspended:      { icon: "clock.fill",       bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.default" },
+  ProjectResumed:        { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.default" },
+  ProjectTerminated:     { icon: "xmark.circle.fill", bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.default" },
 };
 
 const DEFAULT_META: Meta = { icon: "list.clipboard.fill", bg: "#F1E9DD", fg: "#8A7F6E", fallbackKey: "notif.fallback.default" };

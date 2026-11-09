@@ -6,6 +6,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { assertLegalTransition, logTransition } = require("../lib/ticketTransitions");
 const { notify } = require("../lib/notify");
+const { assertProjectNotTerminated } = require("../lib/projectHold");
 const { VALID_TICKET_TYPES } = require("../lib/ticketRouting");
 const { parseNeededBy } = require("../lib/neededBy");
 
@@ -727,6 +728,7 @@ router.get("/submitted", async (req, res, next) => {
 router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         if (ticket.projectmanagerid !== req.user.id) {
             const err = new Error("You may only acknowledge tickets from projects assigned to you");
@@ -832,6 +834,7 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
 router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         if (ticket.tickettype === "Report") {
             if (req.user.role !== "Project Manager") {
@@ -899,6 +902,7 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site M
 router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         const reasonText = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
 
@@ -978,6 +982,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
 router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         if (ticket.projectmanagerid !== req.user.id) {
             const err = new Error("You may only edit tickets from projects you manage");

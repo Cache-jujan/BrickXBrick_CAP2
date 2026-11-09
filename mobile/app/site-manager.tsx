@@ -123,6 +123,7 @@ type ProjectSummary = {
   done: number;
   pending: number;
   atRisk: boolean;
+  status: string | null; // the project's own status (Suspended shows "On hold" instead of "On Track")
 };
 
 export default function SiteManagerHomeScreen() {
@@ -180,7 +181,19 @@ export default function SiteManagerHomeScreen() {
 
   // open: not completed. recent: completed in the last 7 days. archived: older
   // (lib/sm-dashboard.js). Counts, progress and project cards use open + recent.
-  const { open, recent, archived } = useMemo(() => splitTasks(tasks), [tasks]);
+  // A terminated project takes no work, so its tasks leave the counts and lists;
+  // it stays on the dashboard as one "Terminated" card (closedProjects below).
+  const liveTasks = useMemo(() => tasks.filter((task) => task.projectstatus !== "Cancelled"), [tasks]);
+  const closedProjects = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>();
+    tasks.forEach((task) => {
+      if (task.projectstatus !== "Cancelled") return;
+      const id = task.projectid || task.projectname || "";
+      if (id && !byId.has(id)) byId.set(id, { id, name: task.projectname || "Project" });
+    });
+    return Array.from(byId.values());
+  }, [tasks]);
+  const { open, recent, archived } = useMemo(() => splitTasks(liveTasks), [liveTasks]);
   const activeTasks = useMemo(() => [...open, ...recent], [open, recent]);
 
   const counts = useMemo(() => {
@@ -218,7 +231,7 @@ export default function SiteManagerHomeScreen() {
     const byName = new Map<string, ProjectSummary>();
     activeTasks.forEach((task) => {
       const name = task.projectname || "Other tasks";
-      if (!byName.has(name)) byName.set(name, { name, total: 0, done: 0, pending: 0, atRisk: false });
+      if (!byName.has(name)) byName.set(name, { name, total: 0, done: 0, pending: 0, atRisk: false, status: task.projectstatus ?? null });
       const project = byName.get(name)!;
       project.total += 1;
       if (isDone(task)) project.done += 1;
@@ -395,7 +408,7 @@ export default function SiteManagerHomeScreen() {
         ) : (
           <>
             {/* Your projects */}
-            {projects.length > 0 && (
+            {(projects.length > 0 || closedProjects.length > 0) && (
               <>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>{t("mobile.your_projects")}</Text>
@@ -412,7 +425,10 @@ export default function SiteManagerHomeScreen() {
                     const pct = project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
                     const info = projectInfo.get(project.name);
                     const next = info?.next ? dueLabel(info.next.date, new Date(), t) : null;
-                    const tone = finished
+                    const onHold = project.status === "Suspended";
+                    const tone = onHold
+                      ? { label: "status.suspended", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
+                      : finished
                       ? { label: "common.done_status", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
                       : project.atRisk
                       ? { label: "common.at_risk", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
@@ -440,7 +456,7 @@ export default function SiteManagerHomeScreen() {
                             <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
                           </View>
                           <View style={styles.projectPill}>
-                            <StatusChip label={t(tone.label)} tone={project.atRisk && !finished ? "amber" : "success"} />
+                            <StatusChip label={t(tone.label)} tone={onHold || (project.atRisk && !finished) ? "amber" : "success"} />
                           </View>
                           <View style={styles.projectProgressRow}>
                             <View style={styles.projectTrack}>
@@ -477,6 +493,29 @@ export default function SiteManagerHomeScreen() {
                       </Pressable>
                     );
                   })}
+                  {closedProjects.map((project) => (
+                    <Pressable
+                      key={project.id}
+                      onPress={() => router.push(`/site-manager/project/${project.id}` as Href)}
+                      style={({ pressed }) => [styles.projectCard, pressed && styles.projectCardPressed]}
+                      accessibilityRole="button"
+                      accessibilityHint={t("sm.proj_open_hint")}
+                      accessibilityLabel={`${project.name}, ${t("status.terminated")}`}
+                    >
+                      <View style={styles.projectIcon}>
+                        <Text style={styles.projectIconText}>▦</Text>
+                      </View>
+                      <View style={styles.projectBody}>
+                        <View style={styles.projectTitleRow}>
+                          <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
+                          <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
+                        </View>
+                        <View style={styles.projectPill}>
+                          <StatusChip label={t("status.terminated")} tone="error" />
+                        </View>
+                      </View>
+                    </Pressable>
+                  ))}
                 </View>
               </>
             )}
