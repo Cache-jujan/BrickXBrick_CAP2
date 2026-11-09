@@ -37,13 +37,3 @@ test("tolerates non-arrays and unreadable amounts", () => {
   assert.deepEqual(trayRows(undefined, null), []);
   assert.equal(trayRows([scan("a", { result: { vendorName: "V", amount: null } })], [])[0].amount, null);
 });
-
-test("a gas / toll receipt is tagged as a trip cost, queued or scanned", () => {
-  const rows = trayRows(
-    [{ scanID: "s1", status: "Ready", createdAt: "2026-10-20T10:00:00Z", context: { kind: "trip" }, result: { amount: 500, vendorName: "Shell" } }],
-    [{ scan_id: "q1", sync_status: "PENDING", created_at: "2026-10-20T11:00:00Z", context: { kind: "trip" } }]
-  );
-  assert.deepEqual(rows.map((r) => r.trip), [true, true]);
-  const plain = trayRows([{ scanID: "s2", status: "Ready", createdAt: "2026-10-20T10:00:00Z", context: { mode: "split" }, result: {} }], []);
-  assert.equal(plain[0].trip, false);
-});

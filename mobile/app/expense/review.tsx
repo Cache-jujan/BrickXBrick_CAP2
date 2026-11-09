@@ -256,8 +256,7 @@ export default function ReviewScreen() {
       ...result!, vendorName: vendorName.trim(), tin, birPermitNumber, birNumber, amount: clean(amount), receiptDate: receiptDate.trim(),
       lineItems: namedItems.map((it) => ({ description: it.name.trim(), amount: clean(it.price), quantity: clean(it.quantity), unitPrice: unitPriceForPayload(it), bomItemID: it.bomItemID ?? null, matchedTicketID: it.matchedTicketID ?? null })),
     });
-    // A petty cash receipt is charged to projects; every other split receipt is matched to requests.
-    router.push(draft.kind === "trip" ? "/expense/trip-cost" : isSplit ? "/expense/allocate" : "/expense/link");
+    router.push(isSplit ? "/expense/allocate" : "/expense/link");
   }
 
   const file = draft.file;
