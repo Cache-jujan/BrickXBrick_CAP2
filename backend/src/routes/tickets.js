@@ -536,7 +536,10 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
                     t.vendorName AS "vendorName",
                     t.materialType AS "materialType",
                     t.quantity,
-                    t.resolvedAt AS "resolvedAt"
+                    t.resolvedAt AS "resolvedAt",
+                    t.approvedbudget AS "approvedBudget",
+                    t.approvedbudget - COALESCE((SELECT SUM(e.amount) FROM expenses e
+                                                  WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'), 0) AS "remainingBudget"
                FROM tickets t
                JOIN projects p ON p.projectId = t.projectId
               WHERE t.status = 'Resolved'
