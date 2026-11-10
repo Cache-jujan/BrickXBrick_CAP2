@@ -16,6 +16,7 @@ import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
 import { isReceiptType } from "../../utils/receiptFile";
 import "./SubmitExpensePage.css";
@@ -418,6 +419,7 @@ export function SubmitExpensePage() {
                 <strong>{selectedTicket.projectName}</strong>
                 <span>{selectedTicket.materialType || t("submit.material_request")}</span>
                 {selectedTicket.quantity != null && <span>{t("submit.requested_quantity", { quantity: selectedTicket.quantity })}</span>}
+                {leftCents !== null && <strong>{t("bd.left", { remaining: pesoText(leftCents) })}</strong>}
               </div>
             )}
             {!loadingTickets && tickets.length === 0 && !pageError && (
@@ -435,7 +437,7 @@ export function SubmitExpensePage() {
 
             <div className={`submit-expense-fields xp-main-fields`}>
               <Field label={t("submit.vendor_name")} required missing={missing.vendor} value={draft.vendorName} onChange={(event) => setField("vendorName", event.target.value)} />
-              <Field label={t("submit.receipt_total")} required missing={missing.amount} type="number" min="0" step="0.01" value={draft.amount} onChange={(event) => setField("amount", event.target.value)} />
+              <Field label={t("submit.receipt_total")} required missing={missing.amount} inputMode="decimal" value={formatAmountInput(draft.amount)} onChange={(event) => setField("amount", parseAmountInput(event.target.value))} />
               <Field label={t("my_expenses.receipt_date")} required missing={missing.date} type="date" value={draft.receiptDate} onChange={(event) => setField("receiptDate", event.target.value)} />
               <Field as="select" label={t("submit.expense_category")} required value={draft.category} onChange={(event) => setField("category", event.target.value)}>
                 <option value="Materials">{tv("category", "Materials")}</option>
@@ -483,9 +485,9 @@ export function SubmitExpensePage() {
               {draft.lineItems.map((item, index) => (
                 <div className="submit-expense-item-row" key={`item-${index}`}>
                   <Field label={t("submit.item_n", { n: index + 1 })} required missing={gapOfLines.rows[index]?.desc} value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder={t("submit.description")} />
-                  <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
+                  <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} inputMode="decimal" value={formatAmountInput(item.amount)} onChange={(event) => updateLineItem(index, "amount", parseAmountInput(event.target.value))} />
                   <Field label={t("split.quantity_fees")} required missing={gapOfLines.rows[index]?.qty} type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
-                  <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
+                  <Field label={t("submit.unit_price")} inputMode="decimal" placeholder={t("submit.calculated")} value={formatAmountInput(item.unitPrice)} onChange={(event) => updateLineItem(index, "unitPrice", parseAmountInput(event.target.value))} />
                   <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
                 </div>
               ))}

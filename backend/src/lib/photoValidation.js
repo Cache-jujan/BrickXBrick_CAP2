@@ -15,4 +15,15 @@ function hasValidMagicBytes(buffer, mimetype) {
     return signature.every((byte, i) => buffer[i] === byte);
 }
 
-module.exports = { hasValidMagicBytes, MAGIC_BYTES };
+// Receipts may also be WebP or PDF. The bytes must match the declared type, so a renamed
+// text/HTML/zip file cannot be posted as a receipt.
+function hasValidReceiptSignature(buffer, mimetype) {
+    if (!buffer || buffer.length === 0) return false;
+    if (mimetype === "application/pdf") return buffer.subarray(0, 1024).includes("%PDF-");
+    if (mimetype === "image/webp") {
+        return buffer.length >= 12 && buffer.toString("latin1", 0, 4) === "RIFF" && buffer.toString("latin1", 8, 12) === "WEBP";
+    }
+    return hasValidMagicBytes(buffer, mimetype);
+}
+
+module.exports = { hasValidMagicBytes, hasValidReceiptSignature, MAGIC_BYTES };

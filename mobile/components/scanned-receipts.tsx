@@ -1,9 +1,10 @@
 import React from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AttentionDot } from "@/components/attention-dot";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
-import { scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
+import { isNotReceipt, scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
 import { useOpenScan } from "@/lib/use-open-scan";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -63,7 +64,9 @@ export function ScannedReceipts({
     <View style={styles.box}>
       <Text style={styles.title}>{t("mx.scanned_receipts")}</Text>
       {queued.map((row) => {
-        const title = row.context?.mode === "split" ? t("nav.split_receipt") : row.context?.ticket?.subject ?? t("mobile.receipt");
+        // Named for the request when there is one, otherwise just "Receipt": whether it
+        // is split is only known after review, so the list never says "Split receipt".
+        const title = row.context?.ticket?.subject ?? t("mobile.receipt");
         const rejected = row.sync_status === "REJECTED";
         return (
           <Pressable
@@ -73,7 +76,10 @@ export function ScannedReceipts({
             accessibilityHint={t("sr.long_press")}
           >
             <View style={styles.flex}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+              <View style={styles.titleRow}>
+                {rejected ? <AttentionDot /> : null}
+                <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{title}</Text>
+              </View>
               <Text style={[styles.rowMeta, rejected && { color: RED }]} numberOfLines={2}>
                 {rejected
                   ? t("sr.upload_failed", { reason: row.error_message ?? t("sr.server_refused") })
@@ -91,8 +97,8 @@ export function ScannedReceipts({
         );
       })}
       {scans.map((scan) => {
-        const title = scan.context?.mode === "split" ? t("nav.split_receipt") : scan.context?.ticket?.subject ?? t("mobile.receipt");
         const vendor = scan.status === "Ready" ? scan.result?.vendorName : null;
+        const title = scan.context?.ticket?.subject ?? vendor ?? t("mobile.receipt");
         return (
           <Pressable
             key={scan.scanID}
@@ -103,12 +109,15 @@ export function ScannedReceipts({
             accessibilityHint={t("sr.long_press")}
           >
             <View style={styles.flex}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+              <View style={styles.titleRow}>
+                {scan.status !== "Scanning" ? <AttentionDot /> : null}
+                <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{title}</Text>
+              </View>
               <Text style={styles.rowMeta} numberOfLines={1}>
-                {[vendor, scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
+                {[scan.context?.ticket ? vendor : scan.context?.projectNames?.join(", "), scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
               </Text>
             </View>
-            <StatusPill status={scan.status} />
+            <StatusPill status={scan.status} notReceipt={isNotReceipt(scan)} />
             <Pressable onPress={() => confirmDismiss(scan)} hitSlop={10} accessibilityLabel={t("sr.remove_aria")}>
               <Text style={styles.remove}>×</Text>
             </Pressable>
@@ -119,7 +128,7 @@ export function ScannedReceipts({
   );
 }
 
-function StatusPill({ status }: { status: ReceiptScan["status"] }) {
+function StatusPill({ status, notReceipt }: { status: ReceiptScan["status"]; notReceipt: boolean }) {
   const { t } = useLocale();
   if (status === "Scanning") {
     return (
@@ -137,6 +146,15 @@ function StatusPill({ status }: { status: ReceiptScan["status"] }) {
       </View>
     );
   }
+  // Not a receipt: there is nothing to type in, so the pill says why instead.
+  if (notReceipt) {
+    return (
+      <View style={[styles.pill, { backgroundColor: COLORS.errorFill }]}>
+        <IconSymbol name="exclamationmark.triangle.fill" size={14} color={COLORS.errorText} />
+        <Text style={[styles.pillText, { color: COLORS.errorText }]}>{t("scan.status_not_receipt")}</Text>
+      </View>
+    );
+  }
   return (
     <View style={[styles.pill, { backgroundColor: AMBER_BG }]}>
       <IconSymbol name="exclamationmark.triangle.fill" size={14} color={AMBER} />
@@ -151,6 +169,7 @@ const styles = StyleSheet.create({
   row: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
   pressed: { opacity: 0.7 },
   flex: { flex: 1 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   rowTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
   rowMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   pill: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },

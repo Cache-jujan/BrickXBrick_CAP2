@@ -4,18 +4,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { StateCard } from "@/components/state-card";
+import { AttentionDot } from "@/components/attention-dot";
 import { StatusChip, type ChipTone } from "@/components/status-chip";
 import { useLocale } from "@/lib/i18n-context";
 import { formatPeso } from "@/lib/money";
 import { scanTimeLabel } from "@/lib/receipt-scans";
-import { trayRows, traySummary } from "@/lib/turn-in";
+import { needsAttention, trayRows, traySummary } from "@/lib/turn-in";
 import { setTurnInBadge } from "@/lib/turnin-badge";
 import { useOpenScan } from "@/lib/use-open-scan";
 import { useScanTray } from "@/lib/use-scan-tray";
 import type { QueuedScan } from "@/components/scanned-receipts";
 import type { ReceiptScan } from "@/lib/receipt-scans";
 
-type TrayState = "waiting" | "upload_failed" | "reading" | "failed" | "review";
+type TrayState = "waiting" | "upload_failed" | "reading" | "failed" | "not_receipt" | "review";
 type TrayRow = {
   key: string;
   kind: "scan" | "queued";
@@ -32,6 +33,7 @@ const CHIP: Record<TrayState, { labelKey: string; tone: ChipTone }> = {
   upload_failed: { labelKey: "sr.not_uploaded", tone: "error" },
   reading: { labelKey: "sr.reading", tone: "info" },
   failed: { labelKey: "ti.type_in", tone: "amber" },
+  not_receipt: { labelKey: "scan.status_not_receipt", tone: "error" },
   review: { labelKey: "ti.needs_review", tone: "primary" },
 };
 
@@ -52,7 +54,7 @@ export default function TurnInScreen() {
   function open(row: TrayRow) {
     if (row.scan) {
       if (row.state === "review") openReady(row.scan);
-      else if (row.state === "failed") openManual(row.scan);
+      else if (row.state === "failed" || row.state === "not_receipt") openManual(row.scan);
       else openScanning(row.scan);
     } else if (row.state === "upload_failed") {
       confirmRemove(row);
@@ -91,6 +93,7 @@ export default function TurnInScreen() {
         renderItem={({ item: row }) => {
           const chip = CHIP[row.state];
           const rejected = row.state === "upload_failed";
+          const notReceipt = row.state === "not_receipt";
           return (
           <View style={styles.card}>
             <Pressable
@@ -99,11 +102,16 @@ export default function TurnInScreen() {
               accessibilityRole="button"
             >
               <View style={styles.rowMain}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{row.vendor ?? t("mobile.receipt")}</Text>
-                <Text style={[styles.rowMeta, rejected && { color: COLORS.errorText }]} numberOfLines={2}>
+                <View style={styles.titleRow}>
+                  {needsAttention(row.state) ? <AttentionDot /> : null}
+                  <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{row.vendor ?? t("mobile.receipt")}</Text>
+                </View>
+                <Text style={[styles.rowMeta, (rejected || notReceipt) && { color: COLORS.errorText }]} numberOfLines={2}>
                   {rejected
                     ? t("sr.upload_failed", { reason: row.queued?.error_message ?? t("sr.server_refused") })
-                    : scanTimeLabel(row.createdAt, t, intlLocale)}
+                    : notReceipt
+                      ? row.scan?.errorMessage ?? t("scan.status_not_receipt")
+                      : scanTimeLabel(row.createdAt, t, intlLocale)}
                 </Text>
                 <View style={styles.chipRow}>
                   {row.state === "reading" ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
@@ -136,6 +144,8 @@ const styles = StyleSheet.create({
   removeBtn: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "flex-end", paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: COLORS.border },
   removeText: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.errorText },
   rowMain: { flex: 1, gap: 2 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  flex: { flex: 1 },
   rowTitle: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading },
   rowMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
   chipRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },

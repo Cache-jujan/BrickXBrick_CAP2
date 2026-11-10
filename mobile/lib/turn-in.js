@@ -7,6 +7,7 @@
 //   upload_failed the server refused the upload
 //   reading       the server is reading the photo
 //   failed        the server could not read it; type it in against the photo
+//   not_receipt   the file is not a receipt; nothing to type in
 //   review        read and ready for the Purchaser to check
 
 export function trayRows(scans, queued) {
@@ -29,7 +30,7 @@ export function trayRows(scans, queued) {
     rows.push({
       key: `s:${scan.scanID}`,
       kind: "scan",
-      state: scan.status === "Scanning" ? "reading" : scan.status === "Failed" ? "failed" : "review",
+      state: scan.status === "Scanning" ? "reading" : scan.status === "Failed" ? (scan.result?.notReceipt ? "not_receipt" : "failed") : "review",
       vendor: scan.status === "Ready" ? scan.result?.vendorName ?? null : null,
       amount: scan.status === "Ready" && Number.isFinite(amount) ? amount : null,
       createdAt: scan.createdAt,
@@ -45,3 +46,6 @@ export function trayRows(scans, queued) {
 export function traySummary(rows) {
   return { count: rows.length, total: rows.reduce((sum, row) => sum + (row.amount ?? 0), 0) };
 }
+
+/** States where the Purchaser has to do something: open the row, fix it or remove it. */
+export const needsAttention = (state) => state !== "waiting" && state !== "reading";

@@ -18,11 +18,12 @@ import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { ProjectDropdown } from "@/components/project-dropdown";
+import { FilterButton } from "@/components/filter-button";
 import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
 import { RequestDetailsSheet } from "@/components/request-details-sheet";
+import { SnapRequestSheet } from "@/components/snap-request-sheet";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
 import { deleteQueuedPhoto } from "@/lib/sync/task-photo";
@@ -51,7 +52,11 @@ export function ToBuy() {
   const [closingId, setClosingId] = useState<string | null>(null);
   // The request whose details sheet is open (tap a request to open it).
   const [detail, setDetail] = useState<OpenRequest | null>(null);
-  const [view, setView] = useState<"store" | "project">("project");
+  // "Which request is this receipt for?" sheet, opened by the Snap receipt button.
+  const [snapPickerOpen, setSnapPickerOpen] = useState(false);
+  const [viewChoice, setView] = useState<"store" | "project">("project");
+  // Site Managers don't shop, so they only see requests grouped by project. By store is for the Purchaser.
+  const view = isSiteManager ? "project" : viewChoice;
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // "Which project is this receipt for?" sheet, opened by Snap receipt while no project is picked.
   // By store: show one store only (the store key; null = all stores).
@@ -181,6 +186,14 @@ export function ToBuy() {
     router.push("/expense/capture");
   }
 
+  // One receipt for one request is the normal case, so the Purchaser says which request first.
+  // With a single open request there is nothing to choose; Site Managers keep snap-now.
+  function startSnap() {
+    if (isSiteManager || requests.length === 0) return snapReceipt();
+    if (requests.length === 1) return snapForRequest(requests[0]);
+    setSnapPickerOpen(true);
+  }
+
   // The money or the stock ran out: close what is left, with a reason the PM can read.
   // The reason is saved in English because the Project Manager reads it.
   function closeShort(request: OpenRequest, reason: string) {
@@ -214,6 +227,8 @@ export function ToBuy() {
       projectName: request.projectName,
       subject: request.subject,
       budget: request.approvedBudget == null ? undefined : String(request.approvedBudget),
+      // What is left of the budget: the receipt cannot go over this.
+      remaining: request.remainingBudget == null ? undefined : String(request.remainingBudget),
     });
     router.push("/expense/capture");
   }
@@ -240,8 +255,28 @@ export function ToBuy() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { load(); loadScans(); }} />}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>{t("tb.title")}</Text>
-          <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{t("tb.title")}</Text>
+            <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
+          </View>
+          {view === "store" && storeChoices.length > 1 ? (
+            <FilterButton
+              label={t("tb.filter_store")}
+              allLabel={t("tb.all_stores")}
+              options={storeChoices.map((s) => ({ id: s.key, label: s.vendorName ?? "" }))}
+              value={activeVendor}
+              onChange={setVendorFilter}
+            />
+          ) : null}
+          {view === "project" && projectChoices.length > 1 ? (
+            <FilterButton
+              label={t("tb.filter_project")}
+              allLabel={t("tb.all_projects")}
+              options={projectChoices.map((p) => ({ id: p.projectId, label: p.projectName }))}
+              value={activeFilter}
+              onChange={setProjectFilter}
+            />
+          ) : null}
         </View>
 
         {(!isOnline || savedAt) && (
@@ -266,8 +301,9 @@ export function ToBuy() {
 
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 
-        {(projectChoices.length > 1 || storeChoices.length > 1) && (
+        {!isSiteManager && storeChoices.length > 1 && (
           <View style={styles.controls}>
+            {!isSiteManager ? (
             <View style={styles.segment}>
               {(["project", "store"] as const).map((mode) => (
                 <Pressable
@@ -283,23 +319,6 @@ export function ToBuy() {
                 </Pressable>
               ))}
             </View>
-            {view === "store" && storeChoices.length > 1 ? (
-              <ProjectDropdown
-                label={t("tb.filter_store")}
-                allLabel={t("tb.all_stores")}
-                options={storeChoices.map((s) => ({ id: s.key, label: s.vendorName ?? "" }))}
-                value={activeVendor}
-                onChange={setVendorFilter}
-              />
-            ) : null}
-            {view === "project" && projectChoices.length > 1 ? (
-              <ProjectDropdown
-                label={t("tb.filter_project")}
-                allLabel={t("tb.all_projects")}
-                options={projectChoices.map((p) => ({ id: p.projectId, label: p.projectName }))}
-                value={activeFilter}
-                onChange={setProjectFilter}
-              />
             ) : null}
           </View>
         )}
@@ -416,10 +435,18 @@ export function ToBuy() {
       {/* Site Managers see the details too; filing a receipt for one request stays the Purchaser's. */}
       <RequestDetailsSheet request={detail} canSnap={!isSiteManager} onSnap={snapForRequest} onClose={() => setDetail(null)} />
 
+      <SnapRequestSheet
+        visible={snapPickerOpen}
+        requests={requests}
+        onPick={(request) => { setSnapPickerOpen(false); snapForRequest(request); }}
+        onSeveral={() => { setSnapPickerOpen(false); snapReceipt(); }}
+        onClose={() => setSnapPickerOpen(false)}
+      />
+
       {/* Always in reach, just above the tab bar. */}
       <View style={styles.pinned}>
         <View style={styles.pinnedRow}>
-          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={snapReceipt} /></View>
+          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={startSnap} /></View>
         </View>
       </View>
     </SafeAreaView>
@@ -433,7 +460,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 16, gap: 14, paddingBottom: 32 },
 
-  header: { paddingTop: 0, paddingBottom: 2 },
+  header: { paddingTop: 0, paddingBottom: 2, flexDirection: "row", alignItems: "center", gap: 12 },
+  headerText: { flex: 1 },
   title: { fontSize: 26, fontFamily: FONT.extrabold, color: COLORS.heading },
   subtitle: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
 

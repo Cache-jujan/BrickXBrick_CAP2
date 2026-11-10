@@ -16,9 +16,11 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { query } = require("../lib/db");
 const rateLimit = require("express-rate-limit");
-const { storeReceiptImage, isAllowedMime, MAX_RECEIPT_BYTES } = require("../lib/receiptStorage");
+const { storeReceiptImage, deleteReceiptImage, isAllowedMime, MAX_RECEIPT_BYTES } = require("../lib/receiptStorage");
 const { preparePdfForOcr } = require("../lib/pdfReceipt");
+const { hasValidReceiptSignature } = require("../lib/photoValidation");
 const { buildScanDraft } = require("../lib/scanDraft");
+const { NotAReceiptError } = require("../lib/receiptOcr");
 const { createReceiptScans, parseContext } = require("../lib/receiptScans");
 
 const router = express.Router();
@@ -88,6 +90,12 @@ function requireFile(req) {
     err.status = 400;
     throw err;
   }
+  // The declared type is only a claim: the file's own bytes must be a JPEG, PNG, WebP or PDF.
+  if (!hasValidReceiptSignature(req.file.buffer, req.file.mimetype)) {
+    const err = new Error("That file isn't a real JPEG, PNG, WebP photo or PDF. Upload a photo or PDF of the receipt.");
+    err.status = 400;
+    throw err;
+  }
 }
 
 function notFound() {
@@ -105,7 +113,14 @@ router.post("/scan", requireRole(...SCAN_ROLES), scanLimiter, receiptUpload, asy
     // fall back to manual entry against a real receiptImageURL rather than
     // re-uploading.
     const receiptImageURL = await storeReceiptImage(req.file.buffer, req.file.mimetype);
-    const draft = await buildScanDraft(ocrBytes, req.file.mimetype, receiptImageURL);
+    let draft;
+    try {
+      draft = await buildScanDraft(ocrBytes, req.file.mimetype, receiptImageURL);
+    } catch (err) {
+      // Not a receipt: remove the upload so it can't be posted, and say why.
+      if (err instanceof NotAReceiptError) await deleteReceiptImage(receiptImageURL);
+      throw err;
+    }
     // Saved so F9 can tell what the submitter changed. Without it
     // the expense is flagged Manual_Entry, so a failure here is logged, not fatal.
     try {

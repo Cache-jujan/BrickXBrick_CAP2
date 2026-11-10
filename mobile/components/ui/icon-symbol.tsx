@@ -18,6 +18,7 @@ type IconMapping = Partial<
 
 const MAPPING = {
   "house.fill": "home",
+  "line.3.horizontal.decrease": "filter-list",
   "camera.fill": "photo-camera",
   "photo.on.rectangle": "photo-library",
   "doc.fill": "picture-as-pdf",

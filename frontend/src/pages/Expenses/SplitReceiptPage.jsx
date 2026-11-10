@@ -18,6 +18,7 @@ import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { RequestPickerModal } from "../../components/expenses/RequestPickerModal";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { EMPTY_DRAFT, draftFromScan, isSupportedReceipt } from "./SubmitExpensePage";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import { editLine } from "../../utils/lineItemMath";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./SubmitExpensePage.css";
@@ -33,8 +34,6 @@ import "./SplitReceiptPage.css";
 // Buying more than every request wants is allowed: the extra rides on the last request and
 // the PM is told. Spending past the project's allowance, or buying extra, needs a short reason.
 
-// A line starting with this makes the expense go to PM review (Receipt_Adjustment flag).
-const ADJUSTMENT_PREFIX = "Adjustment";
 const QUICK_REASONS = [
   { key: "ck.reason_price", text: "Prices went up." },
   { key: "ck.reason_delivery", text: "Delivery or gas." },
@@ -314,20 +313,6 @@ export function SplitReceiptPage() {
     }));
   }
 
-  /**
-   * The lines are SHORT of the receipt total: add an "Adjustment" line for the gap (it sends the
-   * expense to PM review). Lines that add up to MORE than the total have no fix: no discount is
-   * taken off an item, the amounts have to be corrected before the split can be submitted.
-   */
-  function applyAdjustment() {
-    const gap = toCents(draft.amount) - linesCents;
-    if (gap <= 0) return;
-    setDraft((current) => ({
-      ...current,
-      lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
-    }));
-  }
-
   // Extra quantity, or finishing a request under its budget, needs a few words for the PM.
   // Over budget (or no approved budget) is refused outright, for every role.
   const extraPortions = (plan?.portions ?? []).filter((p) => Number(p.extraQuantity) > 0);
@@ -497,7 +482,7 @@ export function SplitReceiptPage() {
 
           <div className={`submit-expense-fields xp-main-fields`}>
             <Field label={t("submit.vendor_name")} required missing={missing.vendor} value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
-            <Field label={t("submit.receipt_total")} required missing={missing.amount} type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setField("amount", e.target.value)} />
+            <Field label={t("submit.receipt_total")} required missing={missing.amount} inputMode="decimal" value={formatAmountInput(draft.amount)} onChange={(e) => setField("amount", parseAmountInput(e.target.value))} />
             <Field label={t("my_expenses.receipt_date")} required missing={missing.date} type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
             <Field as="select" label={t("submit.expense_category")} required value={draft.category} onChange={(e) => setField("category", e.target.value)}>
               <option value="Materials">{tv("category", "Materials")}</option>
@@ -524,9 +509,9 @@ export function SplitReceiptPage() {
               <div className="split-line-block" key={`item-${index}`}>
               <div className="submit-expense-item-row">
                 <Field label={t("submit.item_n", { n: index + 1 })} required missing={gapOfLines.rows[index]?.desc} value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder={t("submit.description")} />
-                <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} type="number" min="0" step="0.01" value={item.amount} onChange={(e) => updateLineItem(index, "amount", e.target.value)} />
+                <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} inputMode="decimal" value={formatAmountInput(item.amount)} onChange={(e) => updateLineItem(index, "amount", parseAmountInput(e.target.value))} />
                 <Field label={t("split.quantity_fees")} required missing={gapOfLines.rows[index]?.qty} type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
-                <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(e) => updateLineItem(index, "unitPrice", e.target.value)} />
+                <Field label={t("submit.unit_price")} inputMode="decimal" placeholder={t("submit.calculated")} value={formatAmountInput(item.unitPrice)} onChange={(e) => updateLineItem(index, "unitPrice", parseAmountInput(e.target.value))} />
                 <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
               </div>
               {item.description.trim() && openRequests.length > 0 && (
@@ -566,16 +551,9 @@ export function SplitReceiptPage() {
             <Banner
               tone="warning"
               title={t("split.mismatch_title")}
-              action={
-                toCents(draft.amount) > linesCents ? (
-                  <Button type="button" variant="secondary" onClick={applyAdjustment}>
-                    {t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })}
-                  </Button>
-                ) : undefined
-              }
             >
               {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}{" "}
-              {toCents(draft.amount) > linesCents ? t("split.adjust_hint") : t("split.over_total_hint")}
+              {t("split.fix_totals_hint")}
             </Banner>
           )}
 
