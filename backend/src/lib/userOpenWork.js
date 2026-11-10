@@ -6,7 +6,7 @@
 // stuck (nobody else can act on it, and they no longer can). The admin is told
 // what to reassign first. Past records are never touched: they point to the
 // person's ID, so history stays correct either way.
-const OPEN_PROJECT_STATUSES = ["Draft", "Active"];
+const OPEN_PROJECT_STATUSES = ["Draft", "Active", "Suspended"];
 const OPEN_TICKET_STATUSES = ["Pending", "Acknowledged"];
 const NAMES_SHOWN = 3;
 

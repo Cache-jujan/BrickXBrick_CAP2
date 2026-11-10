@@ -64,6 +64,12 @@ export type SiteProject = {
   constructionstartdate?: string | null;
   enddate?: string | null;
   actualcompletiondate?: string | null;
+  // Set once the project went Active; a Cancelled project with it is shown as "Terminated".
+  activatedat?: string | null;
+  // Set while the project is on hold (Suspended).
+  suspensionreason?: string | null;
+  cancellationreason?: string | null;
+  expectedresumedate?: string | null;
   projecttype?: string | null;
   municipality?: string | null;
   province?: string | null;
@@ -104,6 +110,8 @@ export type AssignedTask = {
   latestreviewreason?: string | null;
   // Dashboard: project dates, the milestone deadline, and when it was completed.
   projectid?: string;
+  // Draft, Active, Suspended, Completed, Cancelled (shown as terminated) or Archived.
+  projectstatus?: string | null;
   projectstartdate?: string | null;
   projectenddate?: string | null;
   milestoneduedate?: string | null;

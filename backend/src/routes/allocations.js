@@ -17,6 +17,7 @@
 const crypto = require("crypto");
 const express = require("express");
 const { withTransaction } = require("../lib/db");
+const { assertProjectNotTerminated } = require("../lib/projectHold");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { receiptImageExists } = require("../lib/receiptStorage");
@@ -305,7 +306,7 @@ router.post("/close-short/:ticketId", requireRole(...ALLOCATION_ROLES), async (r
     await withTransaction(async (client) => {
       const scope = ticketScope(req.user);
       const found = await client.query(
-        `SELECT t.ticketid
+        `SELECT t.ticketid, t.projectid
            FROM tickets t
            JOIN projects p ON p.projectid = t.projectid
           WHERE ${scope.clause}
@@ -316,6 +317,7 @@ router.post("/close-short/:ticketId", requireRole(...ALLOCATION_ROLES), async (r
         [...scope.params, ticketId]
       );
       if (found.rowCount === 0) throw httpError(404, "That request is not open, or it is not yours");
+      await assertProjectNotTerminated((sql, params) => client.query(sql, params), { projectId: found.rows[0].projectid });
 
       assertLegalTransition("Acknowledged", "Resolved");
       await client.query(

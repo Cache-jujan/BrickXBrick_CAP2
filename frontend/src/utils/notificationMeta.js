@@ -37,6 +37,9 @@ export const NOTIFICATION_META = {
   ReceiptScanReady:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.scan_ready" },
   ReceiptScanFailed:   { Icon: ReceiptXGlyph,    bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.scan_failed" },
   BOMReopened:         { Icon: RefreshGlyph,     bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.bom_reopened" },
+  ProjectSuspended:    { Icon: ClockAlertGlyph,  bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.default" },
+  ProjectResumed:      { Icon: RocketGlyph,      bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.default" },
+  ProjectTerminated:   { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.default" },
 };
 
 // Types whose wording the app writes itself, in the user's language, instead of showing the

@@ -22,8 +22,8 @@ const PROJECT_TYPES = [
   "Other",
 ];
 
-// A project in either of these states occupies its PM and SM.
-const OPEN_PROJECT_STATUSES = ["Draft", "Active"];
+// A project in any of these states occupies its PM and SM (a hold does not free them).
+const OPEN_PROJECT_STATUSES = ["Draft", "Active", "Suspended"];
 
 // Statuses whose details can no longer be edited or reassigned.
 const CLOSED_PROJECT_STATUSES = ["Completed", "Cancelled", "Archived"];
@@ -154,7 +154,10 @@ function evaluateAvailability(openProjects, maxOpenProjects) {
  */
 const STATUS_TRANSITIONS = {
   Draft: ["Active", "Cancelled"],
-  Active: ["Completed", "Cancelled"],
+  Active: ["Suspended", "Completed", "Cancelled"],
+  // On hold: it can go back to work, or be stopped for good. It can't be
+  // completed without resuming first, so the completion date means work finished.
+  Suspended: ["Active", "Cancelled"],
   Completed: ["Archived"],
   Cancelled: ["Archived"],
   Archived: [],
@@ -351,10 +354,12 @@ async function assertProjectActive(runQuery, projectId, action = "This action") 
   if (result.rowCount === 0) throw httpError(404, `Project ${projectId} not found`);
   const { status } = result.rows[0];
   if (status !== "Active") {
-    throw httpError(
-      409,
-      `${action} isn't allowed yet: purchases start after the client agrees to the BOM and the project is activated (this project is ${status}).`
-    );
+    const why =
+      status === "Cancelled" ? "this project was terminated"
+      : status === "Suspended" ? "this project is on hold"
+      : status === "Draft" ? "purchases start after the client agrees to the BOM and the project is activated (this project is Draft)"
+      : `this project is ${status}`;
+    throw httpError(409, `${action} isn't allowed: ${why}.`);
   }
 }
 

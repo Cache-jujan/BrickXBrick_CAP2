@@ -12,6 +12,7 @@ const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { assertProjectActive } = require("../lib/projectRules");
 const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
+const { assertProjectNotTerminated } = require("../lib/projectHold");
 const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
 const { LIMITS, text, amount: cleanAmount } = require("../lib/inputRules");
@@ -447,6 +448,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
         }
         const expense = result.rows[0];
         await assertCanReviewProject(req.user, expense.projectid);
+        await assertProjectNotTerminated(query, { projectId: expense.projectid });
 
         if (expense.status !== "Pending") {
             throw httpError(409, `Only a Pending expense can be approved (this one is ${expense.status})`);
@@ -534,6 +536,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
         }
         const expense = existing.rows[0];
         await assertCanReviewProject(req.user, expense.projectid);
+        await assertProjectNotTerminated(query, { projectId: expense.projectid });
 
         if (expense.status !== "Pending") {
             throw httpError(409, `Only a Pending expense can be rejected (this one is ${expense.status})`);
@@ -590,6 +593,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
         if (existing.rowCount === 0) {
             throw httpError(404, "Expense not found");
         }
+        await assertProjectNotTerminated(query, { projectId: existing.rows[0].projectid });
         if (existing.rows[0].status !== "Rejected") {
             throw httpError(409, "Only a Rejected expense can be resubmitted");
         }
