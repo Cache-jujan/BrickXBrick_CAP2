@@ -25,6 +25,13 @@ class NotAReceiptError extends Error {
   }
 }
 
+// A photo of something else sometimes slips through as isReceipt:true with every field empty.
+// A real receipt has at least a store, a number, a total or an item on it.
+function isNothingReadable(parsed) {
+  return !parsed.storeName && !parsed.orSiNumber && !parsed.tin && !parsed.amount
+    && !(Array.isArray(parsed.lineItems) && parsed.lineItems.length > 0);
+}
+
 const MANUAL_ENTRY_MESSAGE = "OCR is unavailable — please enter the receipt details manually.";
 
 /**
@@ -45,8 +52,8 @@ async function scanReceipt(buffer, mimeType, deps = {}) {
     try {
       const parsed = await parseReceiptWithGemini(buffer, mimeType, { model });
       // A definite "not a receipt" is final: no fallback model, no manual entry.
-      if (parsed && parsed.isReceipt === false) {
-        console.log(`Gemini (${model}) says this file is not a receipt: ${parsed.notReceiptReason || "no reason"}`);
+      if (parsed && (parsed.isReceipt === false || isNothingReadable(parsed))) {
+        console.log(`Gemini (${model}) says this file is not a receipt: ${parsed.notReceiptReason || "nothing readable on it"}`);
         throw new NotAReceiptError(parsed.notReceiptReason);
       }
       console.log(`Gemini OCR (${model}) answered in ${Date.now() - started} ms`);

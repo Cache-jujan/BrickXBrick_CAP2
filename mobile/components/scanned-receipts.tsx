@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AttentionDot } from "@/components/attention-dot";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { isNotReceipt, scanTimeLabel, type ReceiptScan } from "@/lib/receipt-scans";
@@ -75,7 +76,10 @@ export function ScannedReceipts({
             accessibilityHint={t("sr.long_press")}
           >
             <View style={styles.flex}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+              <View style={styles.titleRow}>
+                {rejected ? <AttentionDot /> : null}
+                <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{title}</Text>
+              </View>
               <Text style={[styles.rowMeta, rejected && { color: RED }]} numberOfLines={2}>
                 {rejected
                   ? t("sr.upload_failed", { reason: row.error_message ?? t("sr.server_refused") })
@@ -105,7 +109,10 @@ export function ScannedReceipts({
             accessibilityHint={t("sr.long_press")}
           >
             <View style={styles.flex}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+              <View style={styles.titleRow}>
+                {scan.status !== "Scanning" ? <AttentionDot /> : null}
+                <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{title}</Text>
+              </View>
               <Text style={styles.rowMeta} numberOfLines={1}>
                 {[scan.context?.ticket ? vendor : scan.context?.projectNames?.join(", "), scanTimeLabel(scan.createdAt, t, intlLocale)].filter(Boolean).join(" · ")}
               </Text>
@@ -162,6 +169,7 @@ const styles = StyleSheet.create({
   row: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
   pressed: { opacity: 0.7 },
   flex: { flex: 1 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   rowTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
   rowMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   pill: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },

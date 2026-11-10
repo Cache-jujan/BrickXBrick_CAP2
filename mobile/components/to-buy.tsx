@@ -18,7 +18,7 @@ import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { ProjectDropdown } from "@/components/project-dropdown";
+import { FilterButton } from "@/components/filter-button";
 import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
@@ -255,8 +255,28 @@ export function ToBuy() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { load(); loadScans(); }} />}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>{t("tb.title")}</Text>
-          <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{t("tb.title")}</Text>
+            <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
+          </View>
+          {view === "store" && storeChoices.length > 1 ? (
+            <FilterButton
+              label={t("tb.filter_store")}
+              allLabel={t("tb.all_stores")}
+              options={storeChoices.map((s) => ({ id: s.key, label: s.vendorName ?? "" }))}
+              value={activeVendor}
+              onChange={setVendorFilter}
+            />
+          ) : null}
+          {view === "project" && projectChoices.length > 1 ? (
+            <FilterButton
+              label={t("tb.filter_project")}
+              allLabel={t("tb.all_projects")}
+              options={projectChoices.map((p) => ({ id: p.projectId, label: p.projectName }))}
+              value={activeFilter}
+              onChange={setProjectFilter}
+            />
+          ) : null}
         </View>
 
         {(!isOnline || savedAt) && (
@@ -281,7 +301,7 @@ export function ToBuy() {
 
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 
-        {(projectChoices.length > 1 || (!isSiteManager && storeChoices.length > 1)) && (
+        {!isSiteManager && storeChoices.length > 1 && (
           <View style={styles.controls}>
             {!isSiteManager ? (
             <View style={styles.segment}>
@@ -299,24 +319,6 @@ export function ToBuy() {
                 </Pressable>
               ))}
             </View>
-            ) : null}
-            {view === "store" && storeChoices.length > 1 ? (
-              <ProjectDropdown
-                label={t("tb.filter_store")}
-                allLabel={t("tb.all_stores")}
-                options={storeChoices.map((s) => ({ id: s.key, label: s.vendorName ?? "" }))}
-                value={activeVendor}
-                onChange={setVendorFilter}
-              />
-            ) : null}
-            {view === "project" && projectChoices.length > 1 ? (
-              <ProjectDropdown
-                label={t("tb.filter_project")}
-                allLabel={t("tb.all_projects")}
-                options={projectChoices.map((p) => ({ id: p.projectId, label: p.projectName }))}
-                value={activeFilter}
-                onChange={setProjectFilter}
-              />
             ) : null}
           </View>
         )}
@@ -458,7 +460,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 16, gap: 14, paddingBottom: 32 },
 
-  header: { paddingTop: 0, paddingBottom: 2 },
+  header: { paddingTop: 0, paddingBottom: 2, flexDirection: "row", alignItems: "center", gap: 12 },
+  headerText: { flex: 1 },
   title: { fontSize: 26, fontFamily: FONT.extrabold, color: COLORS.heading },
   subtitle: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
 

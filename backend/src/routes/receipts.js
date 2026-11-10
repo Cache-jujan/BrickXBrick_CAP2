@@ -18,6 +18,7 @@ const { query } = require("../lib/db");
 const rateLimit = require("express-rate-limit");
 const { storeReceiptImage, deleteReceiptImage, isAllowedMime, MAX_RECEIPT_BYTES } = require("../lib/receiptStorage");
 const { preparePdfForOcr } = require("../lib/pdfReceipt");
+const { hasValidReceiptSignature } = require("../lib/photoValidation");
 const { buildScanDraft } = require("../lib/scanDraft");
 const { NotAReceiptError } = require("../lib/receiptOcr");
 const { createReceiptScans, parseContext } = require("../lib/receiptScans");
@@ -86,6 +87,12 @@ async function bytesForOcr(file) {
 function requireFile(req) {
   if (!req.file) {
     const err = new Error("No file uploaded — send one file under the form field name 'file'");
+    err.status = 400;
+    throw err;
+  }
+  // The declared type is only a claim: the file's own bytes must be a JPEG, PNG, WebP or PDF.
+  if (!hasValidReceiptSignature(req.file.buffer, req.file.mimetype)) {
+    const err = new Error("That file isn't a real JPEG, PNG, WebP photo or PDF. Upload a photo or PDF of the receipt.");
     err.status = 400;
     throw err;
   }

@@ -69,6 +69,19 @@ test("a file Gemini says is not a receipt is rejected at once: no fallback model
   assert.deepEqual(models, ["main"]);
 });
 
+test("a file Gemini calls a receipt but with nothing readable on it is rejected too", async () => {
+  const { NotAReceiptError } = require("../src/lib/receiptOcr");
+  await assert.rejects(
+    scanReceipt(Buffer.from("x"), "image/jpeg", {
+      geminiModels: () => ["main"],
+      parseReceiptWithGemini: async () => ({
+        isReceipt: true, storeName: null, orSiNumber: null, tin: null, amount: null, lineItems: [], confidence: {},
+      }),
+    }),
+    (err) => err instanceof NotAReceiptError
+  );
+});
+
 test("the Gemini mapper keeps isReceipt, and only an explicit false rejects", () => {
   const { geminiJsonToParsed } = require("../src/lib/geminiReceipt");
   assert.equal(geminiJsonToParsed({ isReceipt: false, notReceiptReason: "A meme." }).isReceipt, false);

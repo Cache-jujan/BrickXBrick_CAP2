@@ -6,6 +6,11 @@ import { trayRows, traySummary } from "../../turn-in.js";
 const scan = (id, over = {}) => ({ scanID: id, status: "Ready", createdAt: "2026-10-24T09:00:00Z", result: { vendorName: "Padeena", amount: "6100.50" }, ...over });
 const queued = (id, over = {}) => ({ scan_id: id, sync_status: "PENDING", created_at: "2026-10-24T10:00:00Z", ...over });
 
+test("a file that is not a receipt gets its own tray state", () => {
+  const [row] = trayRows([scan("n", { status: "Failed", result: { notReceipt: true } })], []);
+  assert.equal(row.state, "not_receipt");
+});
+
 test("each receipt gets one state", () => {
   const rows = trayRows(
     [scan("a"), scan("b", { status: "Scanning", result: null }), scan("c", { status: "Failed", result: null })],
