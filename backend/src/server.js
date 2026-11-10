@@ -95,7 +95,12 @@ app.use((err, req, res, next) => {
     console.error("Unhandled DB error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
-  res.status(err.status || 500).json({ error: err.message, details: err.details });
+  if (!err.status) {
+    // An error with no status is a bug on our side: log it, don't echo it.
+    console.error("Unhandled error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.status(err.status).json({ error: err.message, details: err.details });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -13,6 +13,7 @@ const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, co
 const { assertProjectActive } = require("../lib/projectRules");
 const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
+const { LIMITS, text, amount: cleanAmount } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -23,6 +24,19 @@ const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 
 // Roles that may read any expense. Everyone else is scoped to their own.
 const EXPENSE_READ_ALL_ROLES = ["General Manager", "Project Manager", "System Administrator"];
+
+// Vendor name and amount, checked the same way on submit and resubmit.
+// Zero stays allowed (a fully discounted receipt); negatives, NaN, strings
+// that aren't numbers and amounts beyond the column are a 400 naming the field.
+function cleanExpenseFields({ vendorName, amount }) {
+    if (typeof amount !== "number" && typeof amount !== "string") {
+        throw httpError(400, "amount must be a non-negative number");
+    }
+    return {
+        vendorName: text(vendorName, { field: "vendorName", label: "Vendor name", max: LIMITS.vendorName, required: true }),
+        amount: cleanAmount(amount, { field: "amount", label: "Amount", allowZero: true }),
+    };
+}
 
 function httpError(status, message) {
     const err = new Error(message);
@@ -93,7 +107,7 @@ async function screenOrFlag(expenseID) {
  */
 router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Project Manager"), async (req, res, next) => {
     try {
-        const {
+        let {
             ticketID,
             projectID: bodyProjectID,
             vendorName,
@@ -105,7 +119,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             tin,
             birPermitNumber,
             lineItems,
-        } = req.body;
+        } = req.body || {};
 
         // NOTE: birValidationStatus is deliberately NOT read from the body.
         // It decides what lands in the BIR tax-deductible report (F11), so a
@@ -114,9 +128,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
             throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
-        if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
-            throw httpError(400, "amount must be a non-negative number");
-        }
+        ({ vendorName, amount } = cleanExpenseFields({ vendorName, amount }));
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
@@ -505,10 +517,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
  */
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
-        const { reason } = req.body;
-        if (!reason || typeof reason !== "string" || !reason.trim()) {
-            throw httpError(400, "reason is required");
-        }
+        const reason = text(req.body?.reason, { field: "reason", label: "Reason", max: LIMITS.reason, required: true, multiline: true });
 
         const existing = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (existing.rowCount === 0) {
@@ -576,7 +585,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             throw httpError(409, "Only a Rejected expense can be resubmitted");
         }
 
-        const {
+        let {
             vendorName,
             amount,
             receiptDate,
@@ -585,16 +594,14 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             tin,
             birPermitNumber,
             lineItems,
-        } = req.body;
+        } = req.body || {};
 
         // Same validation as a new submission. birValidationStatus and
         // quantity are derived server-side, never taken from the client.
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
             throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
-        if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
-            throw httpError(400, "amount must be a non-negative number");
-        }
+        ({ vendorName, amount } = cleanExpenseFields({ vendorName, amount }));
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }

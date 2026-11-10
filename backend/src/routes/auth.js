@@ -104,7 +104,8 @@ router.post("/login", async (req, res) => {
       redirectPath: ROLE_DASHBOARDS[user.role] || "/dashboard", // sub-point 8
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Request failed:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
   }
 });
 

@@ -25,6 +25,7 @@ import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { DateField } from "@/components/date-field";
+import INPUT_LIMITS from "../../shared/input-limits.json";
 import { parseNeededBy, toDateText } from "@/lib/needed-by";
 import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
@@ -471,6 +472,7 @@ export default function TicketRequestScreen() {
                 onChangeText={(v) => updateCard(card.id, { reportText: v })}
                 placeholder={t("tr.issue_ph")}
                 multiline
+                maxLength={INPUT_LIMITS.description}
               />
             )}
 
@@ -516,6 +518,7 @@ export default function TicketRequestScreen() {
                 value={card.materialType}
                 onChangeText={(v) => updateCard(card.id, { materialType: v })}
                 placeholder={isWork ? t("tf.material_type_ph_cement") : t("tf.material_type_ph_light")}
+                maxLength={INPUT_LIMITS.materialType}
               />
             )}
 
@@ -526,6 +529,7 @@ export default function TicketRequestScreen() {
                 onChangeText={(v) => updateCard(card.id, { notInBomReason: v })}
                 placeholder={t("tf.not_in_bom_reason_ph")}
                 multiline
+                maxLength={INPUT_LIMITS.reason}
               />
             )}
 
@@ -538,6 +542,7 @@ export default function TicketRequestScreen() {
                     onChangeText={(v) => updateCard(card.id, { quantity: v })}
                     placeholder="0"
                     keyboardType="decimal-pad"
+                    maxLength={12}
                   />
                 </View>
                 <View style={styles.unitCol}>
@@ -693,11 +698,11 @@ function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = f
   );
 }
 
-function Field({ label, value, onChangeText, placeholder, multiline, keyboardType }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean; keyboardType?: "default" | "decimal-pad" }) {
+function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, maxLength }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean; keyboardType?: "default" | "decimal-pad"; maxLength?: number }) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#A79E8C" multiline={multiline} keyboardType={keyboardType} style={[styles.input, multiline && styles.multilineInput]} />
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#A79E8C" multiline={multiline} keyboardType={keyboardType} maxLength={maxLength} style={[styles.input, multiline && styles.multilineInput]} />
     </View>
   );
 }
