@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
+import { remainingBudgetText } from "@/lib/budget-check";
 import type { Ticket } from "@/lib/api";
 import { loadActiveProjects, loadAssignedTickets } from "@/lib/cached-api";
 import { StateCard } from "@/components/state-card";
@@ -59,6 +60,7 @@ export function ExpenseActions() {
       projectName,
       subject: ticket.subject,
       budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
+      remaining: remainingBudgetText(ticket),
     });
     router.push("/expense/capture");
   }

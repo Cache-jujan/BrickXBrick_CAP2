@@ -3,6 +3,7 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 
+import { remainingBudgetText } from "@/lib/budget-check";
 import { closeShortRequest, type OpenRequest, type Project, type Ticket } from "@/lib/api";
 import { loadActiveProjects, loadAssignedTickets, loadOpenRequests, loadScans as loadScansCached } from "@/lib/cached-api";
 import { filterByVendor, groupByVendor, otherRequests, progressOf, vendorOptions } from "@/lib/to-buy";
@@ -225,6 +226,7 @@ export function ToBuy() {
       projectName: projectNameOf(ticket),
       subject: ticket.subject,
       budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
+      remaining: remainingBudgetText(ticket),
     });
     router.push("/expense/capture");
   }

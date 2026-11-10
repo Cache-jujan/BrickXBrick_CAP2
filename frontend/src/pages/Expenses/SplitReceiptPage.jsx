@@ -347,14 +347,17 @@ export function SplitReceiptPage() {
     });
   }
 
-  // Extra quantity or spending past the allowance needs a few words for the PM.
+  // Extra quantity, or finishing a request under its budget, needs a few words for the PM.
+  // Over budget (or no approved budget) is refused outright, for every role.
   const extraPortions = (plan?.portions ?? []).filter((p) => Number(p.extraQuantity) > 0);
-  const overAllowancePortions = (plan?.portions ?? []).filter((p) => p.overAllowance);
-  const needsReason = extraPortions.length > 0 || overAllowancePortions.length > 0;
+  const budgetIssues = plan?.budgetIssues ?? [];
+  const budgetBlockers = budgetIssues.filter((issue) => issue.code !== "UNDERSPEND_NOTE_REQUIRED");
+  const underspentIssues = budgetIssues.filter((issue) => issue.code === "UNDERSPEND_NOTE_REQUIRED");
+  const needsReason = extraPortions.length > 0 || underspentIssues.length > 0;
   const reasonOk = !needsReason || note.trim().length > 0;
 
   const canSubmit = Boolean(
-    plan?.ok && draft.category && readyToPreview && reasonOk && !previewing && !uploading && !submitting && !result
+    plan?.ok && budgetBlockers.length === 0 && draft.category && readyToPreview && reasonOk && !previewing && !uploading && !submitting && !result
   );
 
   /** Submit a valid split once, displaying saved results or refreshing stale request capacity. */
@@ -659,9 +662,22 @@ export function SplitReceiptPage() {
                 </ul>
               </Banner>
             )}
-            {plan?.warnings?.some((w) => w.type === "OVER_BUDGET") && (
-              <Banner tone="warning" title={t("dashboard.over_budget")}>
-                {overAllowancePortions.length > 0 ? t("split.over_allowance_body") : t("split.over_budget_body")}
+            {budgetBlockers.length > 0 && (
+              <Banner tone="error" title={t("bd.over_title")}>
+                <ul className="split-problems">
+                  {budgetBlockers.map((issue, index) => (
+                    <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
+            {underspentIssues.length > 0 && (
+              <Banner tone="warning" title={t("bd.note_title")}>
+                <ul className="split-problems">
+                  {underspentIssues.map((issue, index) => (
+                    <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
+                  ))}
+                </ul>
               </Banner>
             )}
             {needsReason && (
@@ -778,7 +794,7 @@ export function SplitReceiptPage() {
             )}
 
             <div className="submit-expense-footer">
-              <SubmitBlockers gaps={[needsReason && !reasonOk && t("gap.split_reason")].filter(Boolean)} note={t("split.footer_note")} />
+              <SubmitBlockers gaps={[budgetBlockers.length > 0 && t("bd.over_title"), needsReason && !reasonOk && t("gap.split_reason")].filter(Boolean)} note={t("split.footer_note")} />
               <Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
                 {submitting ? t("common.submitting") : t("split.submit_for_approval")}
               </Button>
