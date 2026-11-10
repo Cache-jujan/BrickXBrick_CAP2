@@ -14,11 +14,14 @@ function stub(relative, exports) {
 const TICKET = "33333333-3333-4333-8333-333333333333";
 const PROJECT = "44444444-4444-4444-8444-444444444444";
 const UUID = "55555555-5555-4555-8555-555555555555";
-const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0 };
+const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "1500.00" };
 
 function makeRun() {
   return async (sql) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
+    // The strict budget check (lib/ticketBudget.js): the request lock, then what is left.
+    if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
+    if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: state.remaining }] };
     if (text.startsWith("select action_uuid")) return { rowCount: 0, rows: [] };
     if (text.startsWith("select count(*)::int as count")) {
       return { rowCount: 1, rows: [{ count: state.spentCount, quantity: state.spentCount ? 5 : 0 }] };
@@ -131,4 +134,33 @@ test("a Rejected or Pending ticket rejects the queued expense", async () => {
     assert.equal(res.body.rejected[0].code, "TICKET_NOT_OPEN");
     assert.equal(state.expenses, 0);
   }
+});
+
+test("a queued expense above the request's remaining budget is rejected with OVER_BUDGET", async () => {
+  Object.assign(state, { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "1499.99" });
+  const res = await sync([expenseItem()]);
+  state.remaining = "1500.00";
+  assert.equal(res.body.syncedIds.length, 0);
+  assert.equal(res.body.rejected[0].code, "OVER_BUDGET");
+  assert.equal(state.expenses, 0);
+  assert.equal(state.ticketStatus, "Acknowledged"); // the ticket is not left Resolved
+});
+
+test("a queued expense on a request with no approved budget is rejected", async () => {
+  Object.assign(state, { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: null });
+  const res = await sync([expenseItem()]);
+  state.remaining = "1500.00";
+  assert.equal(res.body.rejected[0].code, "NO_APPROVED_BUDGET");
+  assert.equal(state.expenses, 0);
+});
+
+test("a queued expense that finishes under budget needs its note", async () => {
+  Object.assign(state, { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "2000.00" });
+  const refused = await sync([expenseItem()]);
+  assert.equal(refused.body.rejected[0].code, "UNDERSPEND_NOTE_REQUIRED");
+  const item = expenseItem();
+  item.data.submitNote = "Supplier gave a discount";
+  const saved = await sync([item]);
+  state.remaining = "1500.00";
+  assert.deepEqual(saved.body.syncedIds, [UUID]);
 });

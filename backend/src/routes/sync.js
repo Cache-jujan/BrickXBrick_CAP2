@@ -26,6 +26,7 @@ const {
   computeQuantityFromLineItems,
 } = require("../lib/receiptFields");
 const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
+const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
 const { screenExpense } = require("../lib/screenExpense");
 const { submitTaskProgress, taskPhotoExists, TaskProgressError } = require("../lib/taskProgress");
 const { submitCheckin, checkinPhotoExists, CheckinError } = require("../lib/dailyCheckin");
@@ -70,6 +71,7 @@ async function syncExpense(user, uuid, data) {
     tin,
     birPermitNumber,
     lineItems,
+    submitNote: bodySubmitNote,
   } = data || {};
 
   if (!vendorName || amount === undefined || amount === null || !receiptDate) {
@@ -139,8 +141,9 @@ async function syncExpense(user, uuid, data) {
     resolveTicketInTransaction = ticket.status !== "Resolved";
     projectID = ticket.projectid;
   }
-  if (!projectID) {
-    throw new SyncReject("MISSING_PROJECT", "projectID is required when no ticketID is provided");
+  if (!ticketID) {
+    // Every expense belongs to a requested material: no request, no purchase.
+    throw new SyncReject("MISSING_TICKET", "ticketID is required: an expense must be for a requested material");
   }
   const projectStatus = await query("SELECT status FROM projects WHERE projectid = $1", [projectID]);
   if (projectStatus.rowCount === 0) {
@@ -154,7 +157,19 @@ async function syncExpense(user, uuid, data) {
   // Insert the expense and record the idempotency key in ONE transaction, so a
   // crash can't leave an expense without its synced_actions marker (or vice
   // versa). Screening runs AFTER commit (it reads through the pool).
+  const submitNote = typeof bodySubmitNote === "string" ? bodySubmitNote.trim().slice(0, SUBMIT_NOTE_MAX) : "";
   const expenseID = await withTransaction(async (client) => {
+    // Strict budget, the same rule as POST /expenses: lock the request, then check what is left.
+    await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+    const remainingBudgetCents = await loadRemainingBudgetCents((sql, params) => client.query(sql, params), ticketID);
+    const issue = checkBudget({
+      amountCents: Math.round(amount * 100),
+      remainingBudgetCents,
+      completesRequest: true, // this expense is what finishes the request
+      note: submitNote,
+    });
+    if (issue) throw new SyncReject(issue.code, issue.message);
+
     if (resolveTicketInTransaction) {
       await client.query(
         "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
@@ -165,13 +180,13 @@ async function syncExpense(user, uuid, data) {
       `INSERT INTO expenses
          (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
           category, birvalidationstatus, receiptimageurl, birnumber, tin,
-          birpermitnumber, lineitems, quantity)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          birpermitnumber, lineitems, quantity, submitnote)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING expenseid`,
       [
         projectID, user.id, ticketID || null, vendorName, amount, receiptDate,
         category, birValidationStatus, receiptImageURL, bir.birNumber, bir.tin,
-        bir.birPermitNumber, JSON.stringify(storedLineItems), quantity,
+        bir.birPermitNumber, JSON.stringify(storedLineItems), quantity, submitNote || null,
       ]
     );
     const newId = result.rows[0].expenseid;

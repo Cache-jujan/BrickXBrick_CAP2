@@ -1,4 +1,4 @@
-export type SelectedTicket = { ticketId: string; projectId: string; projectName: string; subject: string; budget?: string };
+export type SelectedTicket = { ticketId: string; projectId: string; projectName: string; subject: string; budget?: string; remaining?: string };
 // ocr: how sure the scan was about a row it filled in; cleared once the user edits the row.
 // scanned: the name the scan read, kept so a renamed row can show the receipt's own text. Never sent.
 // price is the line amount. unitPrice is typed or derived (amount / quantity); unitEntered marks one the user typed.

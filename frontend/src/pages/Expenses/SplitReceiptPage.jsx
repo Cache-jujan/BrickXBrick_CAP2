@@ -315,46 +315,30 @@ export function SplitReceiptPage() {
   }
 
   /**
-   * The lines and the receipt total differ: add an "Adjustment" line for the gap, or take an
-   * overage off the biggest line as a discount and note it. Either one sends the expense to PM review.
+   * The lines are SHORT of the receipt total: add an "Adjustment" line for the gap (it sends the
+   * expense to PM review). Lines that add up to MORE than the total have no fix: no discount is
+   * taken off an item, the amounts have to be corrected before the split can be submitted.
    */
   function applyAdjustment() {
     const gap = toCents(draft.amount) - linesCents;
-    if (gap === 0) return;
-    setDraft((current) => {
-      if (gap > 0) {
-        return {
-          ...current,
-          lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
-        };
-      }
-      const over = -gap;
-      let biggest = -1;
-      current.lineItems.forEach((item, i) => {
-        if (Number(item.quantity) > 0 && (biggest < 0 || toCents(item.amount) > toCents(current.lineItems[biggest].amount))) biggest = i;
-      });
-      if (biggest < 0) return current;
-      const lineItems = current.lineItems.map((item, i) =>
-        i === biggest ? editLine(item, "amount", ((toCents(item.amount) - over) / 100).toFixed(2)) : item
-      );
-      lineItems.push({
-        description: `${ADJUSTMENT_PREFIX}: ${peso(over / 100)} discount taken off ${current.lineItems[biggest].description}`,
-        quantity: "0",
-        amount: "0.00",
-        unitPrice: "",
-      });
-      return { ...current, lineItems };
-    });
+    if (gap <= 0) return;
+    setDraft((current) => ({
+      ...current,
+      lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
+    }));
   }
 
-  // Extra quantity or spending past the allowance needs a few words for the PM.
+  // Extra quantity, or finishing a request under its budget, needs a few words for the PM.
+  // Over budget (or no approved budget) is refused outright, for every role.
   const extraPortions = (plan?.portions ?? []).filter((p) => Number(p.extraQuantity) > 0);
-  const overAllowancePortions = (plan?.portions ?? []).filter((p) => p.overAllowance);
-  const needsReason = extraPortions.length > 0 || overAllowancePortions.length > 0;
+  const budgetIssues = plan?.budgetIssues ?? [];
+  const budgetBlockers = budgetIssues.filter((issue) => issue.code !== "UNDERSPEND_NOTE_REQUIRED");
+  const underspentIssues = budgetIssues.filter((issue) => issue.code === "UNDERSPEND_NOTE_REQUIRED");
+  const needsReason = extraPortions.length > 0 || underspentIssues.length > 0;
   const reasonOk = !needsReason || note.trim().length > 0;
 
   const canSubmit = Boolean(
-    plan?.ok && draft.category && readyToPreview && reasonOk && !previewing && !uploading && !submitting && !result
+    plan?.ok && budgetBlockers.length === 0 && draft.category && readyToPreview && reasonOk && !previewing && !uploading && !submitting && !result
   );
 
   /** Submit a valid split once, displaying saved results or refreshing stale request capacity. */
@@ -583,14 +567,15 @@ export function SplitReceiptPage() {
               tone="warning"
               title={t("split.mismatch_title")}
               action={
-                <Button type="button" variant="secondary" onClick={applyAdjustment}>
-                  {toCents(draft.amount) > linesCents
-                    ? t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })
-                    : t("rv.fix_discount_web", { gap: peso((linesCents - toCents(draft.amount)) / 100) })}
-                </Button>
+                toCents(draft.amount) > linesCents ? (
+                  <Button type="button" variant="secondary" onClick={applyAdjustment}>
+                    {t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })}
+                  </Button>
+                ) : undefined
               }
             >
-              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })} {t("split.adjust_hint")}
+              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}{" "}
+              {toCents(draft.amount) > linesCents ? t("split.adjust_hint") : t("split.over_total_hint")}
             </Banner>
           )}
 
@@ -659,9 +644,22 @@ export function SplitReceiptPage() {
                 </ul>
               </Banner>
             )}
-            {plan?.warnings?.some((w) => w.type === "OVER_BUDGET") && (
-              <Banner tone="warning" title={t("dashboard.over_budget")}>
-                {overAllowancePortions.length > 0 ? t("split.over_allowance_body") : t("split.over_budget_body")}
+            {budgetBlockers.length > 0 && (
+              <Banner tone="error" title={t("bd.over_title")}>
+                <ul className="split-problems">
+                  {budgetBlockers.map((issue, index) => (
+                    <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
+            {underspentIssues.length > 0 && (
+              <Banner tone="warning" title={t("bd.note_title")}>
+                <ul className="split-problems">
+                  {underspentIssues.map((issue, index) => (
+                    <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
+                  ))}
+                </ul>
               </Banner>
             )}
             {needsReason && (
@@ -778,7 +776,7 @@ export function SplitReceiptPage() {
             )}
 
             <div className="submit-expense-footer">
-              <SubmitBlockers gaps={[needsReason && !reasonOk && t("gap.split_reason")].filter(Boolean)} note={t("split.footer_note")} />
+              <SubmitBlockers gaps={[budgetBlockers.length > 0 && t("bd.over_title"), needsReason && !reasonOk && t("gap.split_reason")].filter(Boolean)} note={t("split.footer_note")} />
               <Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
                 {submitting ? t("common.submitting") : t("split.submit_for_approval")}
               </Button>

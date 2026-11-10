@@ -6,6 +6,7 @@ const { requireRole } = require("../middleware/requireRole");
 const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 const { dateWindowWarning } = require("../lib/scheduleWindows");
 const { isUUID } = require("../lib/uuid");
+const { LIMITS, text } = require("../lib/inputRules");
 const { parseTimelineChanges, applyTimelineChanges, loadTimelineLocks } = require("../lib/timelineEdit");
 
 const MILESTONE_PHASES = ["Planning", "Construction"];
@@ -94,7 +95,7 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
         const { projectID, dueDate } = req.body;
         // D-12: the web UI trims before posting, but the API accepted a
         // whitespace-only name directly (e.g. "   ") — trim server-side too.
-        const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+        const name = text(req.body.name, { field: "name", label: "Milestone name", max: LIMITS.milestoneName }) || "";
         // #5: a milestone's phase decides how its tasks will later be owned
         // (Planning → Handled by GM/PM, no Site Manager; Construction →
         // assigned to the project's Site Manager, existing behavior).
@@ -247,7 +248,8 @@ const TASK_HANDLERS = ["GM", "PM"];
 // assignedTo stays NULL, and only a PM can later mark it done.
 router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next) => {
     try {
-        const { taskName, dueDate, handledBy } = req.body;
+        const { dueDate, handledBy } = req.body;
+        const taskName = text(req.body.taskName, { field: "taskName", label: "Task name", max: LIMITS.taskName });
 
         if (!taskName || !dueDate) {
             const err = new Error("taskName and dueDate are required");

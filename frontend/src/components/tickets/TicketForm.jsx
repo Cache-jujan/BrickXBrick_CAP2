@@ -1,3 +1,4 @@
+import LIMITS from "../../utils/inputLimits";
 import { useEffect, useState } from "react";
 import { createTicket, listApprovedVendors, listPurchasers } from "../../api/ticketsApi";
 import { listProjects } from "../../api/projectsApi";
@@ -365,6 +366,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         required
         placeholder={t("tf.subject_ph")}
         value={form.subject}
+        maxLength={LIMITS.ticketSubject}
         error={fieldErrors.subject}
         onChange={(e) => updateField("subject", e.target.value)}
       />
@@ -374,6 +376,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         as="textarea"
         placeholder={t("tf.description_ph")}
         value={form.description}
+        maxLength={LIMITS.description}
         onChange={(e) => updateField("description", e.target.value)}
       />
 
@@ -412,6 +415,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
                     required
                     placeholder={t("tf.material_type_ph_light")}
                     value={form.materialType}
+                    maxLength={LIMITS.materialType}
                     error={fieldErrors.materialType}
                     onChange={(e) => updateField("materialType", e.target.value)}
                   />
@@ -421,6 +425,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
                     required
                     placeholder={t("tf.not_in_bom_reason_ph")}
                     value={form.notInBomReason}
+                    maxLength={LIMITS.reason}
                     error={fieldErrors.notInBomReason}
                     onChange={(e) => updateField("notInBomReason", e.target.value)}
                   />
@@ -435,6 +440,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               required
               placeholder={t("tf.material_type_ph_cement")}
               value={form.materialType}
+                    maxLength={LIMITS.materialType}
               error={fieldErrors.materialType}
               onChange={(e) => updateField("materialType", e.target.value)}
             />
@@ -447,6 +453,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               type="number"
               min="0.01"
               step="0.01"
+              max={LIMITS.quantityMax}
               placeholder="0"
               value={form.quantity}
               error={fieldErrors.quantity}
@@ -528,6 +535,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               inputMode="decimal"
               placeholder="0.00"
               value={formatAmountInput(form.approvedBudget)}
+              maxLength={16}
               error={fieldErrors.approvedBudget}
               onChange={(e) => updateField("approvedBudget", parseAmountInput(e.target.value))}
             />

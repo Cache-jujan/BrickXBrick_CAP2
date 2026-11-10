@@ -9,6 +9,7 @@ const { recalcMilestoneProgress } = require("../lib/milestoneProgress");
 const { uploadBuffer, putObject } = require("../lib/r2");
 const { hasValidMagicBytes } = require("../lib/photoValidation");
 const { isUUID } = require("../lib/uuid");
+const { LIMITS, text } = require("../lib/inputRules");
 const {
     MAX_DOCUMENT_BYTES,
     MAX_DOCUMENTS_PER_TASK,
@@ -169,7 +170,8 @@ router.post("/:id/photo", requireRole("Site Manager"), upload.single("photo"), a
 //   photo               file, required — JPEG/PNG, <=10MB
 router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo"), async (req, res, next) => {
     try {
-        const { clientSubmissionId, note } = req.body;
+        const { clientSubmissionId } = req.body;
+        const note = text(req.body.note, { field: "note", label: "Note", max: LIMITS.note, multiline: true });
 
         if (!clientSubmissionId) {
             const err = new Error("clientSubmissionId is required (idempotency key for offline replay)");
@@ -233,7 +235,8 @@ router.get("/progress-log", requireRole("Project Manager"), async (req, res, nex
 //           "Flag" (requires reason) -> task untouched, SM must resubmit.
 router.patch("/progress-log/:logId/review", requireRole("Project Manager"), async (req, res, next) => {
     try {
-        const { decision, reason } = req.body;
+        const { decision } = req.body;
+        const reason = text(req.body.reason, { field: "reason", label: "Reason", max: LIMITS.reason, multiline: true });
 
         if (decision !== "Acknowledge" && decision !== "Flag") {
             const err = new Error('decision must be "Acknowledge" or "Flag"');
@@ -358,7 +361,7 @@ async function getTaskForCompletion(taskId) {
 // Acknowledge/Flag review above; this route refuses them.
 router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, next) => {
     try {
-        const { note } = req.body;
+        const note = text(req.body.note, { field: "note", label: "Note", max: LIMITS.note, multiline: true });
 
         const task = await getTaskForCompletion(req.params.id);
 

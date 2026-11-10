@@ -16,6 +16,7 @@ import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { formatPeso } from "@/lib/money";
+import { budgetIssue } from "@/lib/budget-check";
 import { KeyboardAvoider } from "@/components/keyboard-avoider";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -59,6 +60,20 @@ export default function LinkScreen() {
       return Alert.alert(t("mx.no_items_title"), t("mx.no_items_body"));
     }
 
+    // The strict budget, checked here so a refused amount never leaves the request Resolved.
+    // The server checks again and has the last word. (A resubmit is checked by the server.)
+    if (ticket && !draft.resubmit) {
+      const problem = budgetIssue({ amount: amountNum, remaining: ticket.remaining, note: notes });
+      if (problem?.code === "none") return Alert.alert(t("bd.none_title"), t("bd.none_body"));
+      if (problem?.code === "over") {
+        return Alert.alert(t("bd.over_title"), t("bd.over_body", { amount: formatPeso(amountNum), remaining: formatPeso(problem.remaining) }));
+      }
+      if (problem?.code === "note") {
+        setTriedSubmit(true);
+        return Alert.alert(t("bd.note_title"), t("bd.note_body", { unspent: formatPeso((problem.remaining ?? 0) - amountNum) }));
+      }
+    }
+
     // Resubmitting a Rejected expense needs the server (it edits the existing row),
     // so it can't be queued offline.
     if (!isOnline && draft.resubmit) {
@@ -87,6 +102,7 @@ export default function LinkScreen() {
           tin: ocrResult.tin,
           birPermitNumber: ocrResult.birPermitNumber,
           lineItems,
+          ...(notes.trim() ? { submitNote: notes.trim() } : {}),
         });
         if (!queued) {
           throw new Error(t("mx.offline_save_failed"));
@@ -144,6 +160,7 @@ export default function LinkScreen() {
         tin: ocrResult.tin,
         birPermitNumber: ocrResult.birPermitNumber,
         lineItems,
+        ...(notes.trim() ? { submitNote: notes.trim() } : {}),
       });
 
       // Submitted: take it off "Scanned receipts" so it can't be sent twice.
@@ -167,6 +184,10 @@ export default function LinkScreen() {
   };
 
   const itemCount = (ocrResult.lineItems ?? []).length;
+  // The note turns required (red) when the request would be finished under budget.
+  const noteRequired =
+    !!ticket && !draft.resubmit &&
+    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes })?.code === "note";
 
   const submitLabel = !category
     ? t("mx.pick_category")
@@ -206,8 +227,10 @@ export default function LinkScreen() {
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>{t("mx.notes_optional")}</Text>
-          <TextInput style={styles.notesInput} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder={t("mx.notes_ph")} placeholderTextColor={COLORS.muted} />
+          <Text style={[styles.fieldLabel, noteRequired && triedSubmit && styles.fieldLabelError]}>
+            {noteRequired ? t("bd.notes_required") : t("mx.notes_optional")}
+          </Text>
+          <TextInput style={[styles.notesInput, noteRequired && triedSubmit && fieldErrorStyle]} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder={t("mx.notes_ph")} placeholderTextColor={COLORS.muted} />
         </ScrollView>
 
         <View style={styles.footer}>

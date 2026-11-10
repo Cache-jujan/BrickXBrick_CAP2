@@ -21,7 +21,7 @@ function stub(relative, exports) {
   require.cache[file] = { id: file, filename: file, loaded: true, exports };
 }
 
-const db = { calls: [], rejectedRow: null, failFlagInsert: false };
+const db = { calls: [], rejectedRow: null, failFlagInsert: false, remaining: "500.00" };
 const screened = [];
 let screenImpl = async () => ({ flagTypes: [] });
 let currentUser = { id: "user-1", role: "Purchaser" };
@@ -34,6 +34,9 @@ function norm(sql) {
 async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = norm(sql);
+  // The strict budget check (lib/ticketBudget.js): the request row lock, then what is left.
+  if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
+  if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: db.remaining }] };
   if (text.startsWith("select ticketid, projectid, status, assignedto")) {
     return { rowCount: 1, rows: [{ ticketid: "ticket-1", projectid: "project-1", status: "Resolved", assignedto: "user-1", submittedby: "user-1", tickettype: "Material Request" }] };
   }
@@ -116,6 +119,7 @@ function reset({ user = { id: "user-1", role: "Purchaser" } } = {}) {
   db.calls.length = 0;
   db.rejectedRow = null;
   db.failFlagInsert = false;
+  db.remaining = "500.00";
   screened.length = 0;
   screenImpl = async () => ({ flagTypes: [] });
   currentUser = user;
@@ -257,6 +261,70 @@ test("resubmit: an expense that is not Rejected cannot be resubmitted (409)", as
     db.rejectedRow = { expenseid: "exp-9", status: "Approved", submittedby: "user-1" };
     const res = await send(server, "PATCH", "/api/expenses/exp-9/resubmit", resubmitBody());
     assert.equal(res.status, 409);
+  } finally {
+    server.close();
+  }
+});
+// ---- strict budget (lib/ticketBudget.js) ---------------------------------------
+
+test("POST /expenses: more than the remaining budget is refused with OVER_BUDGET and nothing is saved", async () => {
+  const server = await startServer();
+  try {
+    reset();
+    db.remaining = "499.99";
+    const res = await send(server, "POST", "/api/expenses", submission());
+    assert.equal(res.status, 400, JSON.stringify(res.body));
+    assert.match(res.body.error, /Over budget/);
+    assert.equal(callsStartingWith("insert into expenses").length, 0);
+  } finally {
+    server.close();
+  }
+});
+
+test("POST /expenses: a request with no approved budget is refused", async () => {
+  const server = await startServer();
+  try {
+    reset();
+    db.remaining = null;
+    const res = await send(server, "POST", "/api/expenses", submission());
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /no approved budget/);
+    assert.equal(callsStartingWith("insert into expenses").length, 0);
+  } finally {
+    server.close();
+  }
+});
+
+test("POST /expenses: finishing below the remaining budget needs a note, and the note is saved for the PM", async () => {
+  const server = await startServer();
+  try {
+    reset();
+    db.remaining = "800.00";
+    const refused = await send(server, "POST", "/api/expenses", submission());
+    assert.equal(refused.status, 400);
+    assert.match(refused.body.error, /Add a note/);
+    assert.equal(callsStartingWith("insert into expenses").length, 0);
+
+    const saved = await send(server, "POST", "/api/expenses", submission({ submitNote: "  Supplier gave a discount  " }));
+    assert.equal(saved.status, 201, JSON.stringify(saved.body));
+    const insert = callsStartingWith("insert into expenses")[0];
+    assert.equal(insert.params[insert.params.length - 1], "Supplier gave a discount");
+  } finally {
+    server.close();
+  }
+});
+
+test("POST /expenses: an expense with no ticketID is refused for every role", async () => {
+  const server = await startServer();
+  try {
+    for (const role of ["Purchaser", "Site Manager", "Project Manager", "General Manager"]) {
+      reset({ user: { id: "user-1", role } });
+      const body = submission();
+      delete body.ticketID;
+      const res = await send(server, "POST", "/api/expenses", body);
+      assert.equal(res.status, 400, role);
+      assert.match(res.body.error, /ticketID is required/, role);
+    }
   } finally {
     server.close();
   }

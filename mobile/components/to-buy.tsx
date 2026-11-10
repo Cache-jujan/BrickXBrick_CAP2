@@ -3,6 +3,7 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 
+import { remainingBudgetText } from "@/lib/budget-check";
 import { closeShortRequest, type OpenRequest, type Project, type Ticket } from "@/lib/api";
 import { loadActiveProjects, loadAssignedTickets, loadOpenRequests, loadScans as loadScansCached } from "@/lib/cached-api";
 import { filterByVendor, groupByVendor, otherRequests, progressOf, vendorOptions } from "@/lib/to-buy";
@@ -180,13 +181,6 @@ export function ToBuy() {
     router.push("/expense/capture");
   }
 
-  // Petty cash (snacks, gas for delivery, allowance...) has no request: the photo goes to Turn In tagged as petty cash.
-  function snapGas() {
-    reset();
-    startSplit({ kind: "trip" });
-    router.push("/expense/capture");
-  }
-
   // The money or the stock ran out: close what is left, with a reason the PM can read.
   // The reason is saved in English because the Project Manager reads it.
   function closeShort(request: OpenRequest, reason: string) {
@@ -232,6 +226,7 @@ export function ToBuy() {
       projectName: projectNameOf(ticket),
       subject: ticket.subject,
       budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
+      remaining: remainingBudgetText(ticket),
     });
     router.push("/expense/capture");
   }
@@ -425,7 +420,6 @@ export function ToBuy() {
       <View style={styles.pinned}>
         <View style={styles.pinnedRow}>
           <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={snapReceipt} /></View>
-          <View style={styles.pinnedSide}><AppButton label={t("tb.gas_button")} variant="secondary" onPress={snapGas} /></View>
         </View>
       </View>
     </SafeAreaView>
@@ -448,7 +442,6 @@ const styles = StyleSheet.create({
   controls: { gap: 10 },
   pinnedRow: { flexDirection: "row", gap: 10 },
   pinnedMain: { flex: 3 },
-  pinnedSide: { flex: 2 },
   pinned: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
   // Two real buttons, so it reads as something to tap; the open one takes the action color.
   segment: { flexDirection: "row", gap: 8 },

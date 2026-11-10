@@ -9,6 +9,7 @@ const { notify } = require("../lib/notify");
 const { assertProjectNotTerminated } = require("../lib/projectHold");
 const { VALID_TICKET_TYPES } = require("../lib/ticketRouting");
 const { parseNeededBy } = require("../lib/neededBy");
+const { LIMITS, text, amount, quantity: cleanQuantity, uuid, collect } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -95,7 +96,7 @@ async function getTicket(ticketId) {
 // (insert + status transitions) uses `client` so a batch of these is atomic.
 // Throws (err.status) on bad input. Reused by POST / and POST /batch.
 async function createTicketRecord(client, user, body) {
-        const {
+        let {
             projectID,
             ticketType,
             subject,
@@ -112,7 +113,7 @@ async function createTicketRecord(client, user, body) {
             notInBomReason,
             resubmittedFromId,
             neededBy,
-        } = body;
+        } = body || {};
 
         const isPM = user.role === "Project Manager";
         const isSM = user.role === "Site Manager";
@@ -127,6 +128,33 @@ async function createTicketRecord(client, user, body) {
             const err = new Error(`ticketType must be one of: ${VALID_TICKET_TYPES.join(", ")}`);
             err.status = 400;
             throw err;
+        }
+
+        // Typed values: right type, trimmed, within the column sizes. A wrong value is
+        // a 400 that names the field, never a database error.
+        {
+            const { errors, values } = collect([
+                () => uuid(projectID, { field: "projectID", label: "Project" }),
+                () => text(subject, { field: "subject", label: "Subject", max: LIMITS.ticketSubject, required: true }),
+                () => text(description, { field: "description", label: "Description", max: LIMITS.description, multiline: true }),
+                () => text(materialType, { field: "materialType", label: "Material", max: LIMITS.materialType }),
+                () => text(unit, { field: "unit", label: "Unit", max: LIMITS.unit }),
+                () => text(vendorName, { field: "vendorName", label: "Vendor", max: LIMITS.vendorName }),
+                () => text(notInBomReason, { field: "notInBomReason", label: "Reason", max: LIMITS.reason, multiline: true }),
+                () => text(photoURL, { field: "photoURL", label: "Photo link", max: 2048 }),
+                () => uuid(bomItemID, { field: "bomItemID", label: "BOM item", required: false }),
+                () => uuid(assignedTo, { field: "assignedTo", label: "Assignee", required: false }),
+                () => uuid(resubmittedFromId, { field: "resubmittedFromId", label: "Original request", required: false }),
+            ]);
+            if (errors.length) {
+                const err = new Error(errors[0].message);
+                err.status = 400;
+                err.details = { fieldErrors: errors };
+                err.fieldErrors = errors;
+                throw err;
+            }
+            [projectID, subject, description, materialType, unit, vendorName, notInBomReason, photoURL,
+                bomItemID, assignedTo, resubmittedFromId] = values.slice(0, 11);
         }
 
         const isMaterialReq = ticketType === "Material Request";
@@ -149,11 +177,7 @@ async function createTicketRecord(client, user, body) {
                 err.status = 400;
                 throw err;
             }
-            if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0) {
-                const err = new Error("quantity must be a positive number");
-                err.status = 400;
-                throw err;
-            }
+            quantity = cleanQuantity(quantity); // a number above 0, within the column's range
         }
 
         // Optional date the material is needed by. Reports have no due date.
@@ -169,7 +193,7 @@ async function createTicketRecord(client, user, body) {
         // Unit of measure. A Work Item and a Not-in-BOM Material Request need an
         // explicit unit from the creator; an on-BOM Material Request derives it
         // from the BOM item below, so it's not required in the request body.
-        const unitText = typeof unit === "string" ? unit.trim() : "";
+        const unitText = unit || "";
         if (isWorkItem && !unitText) {
             const err = new Error("Work Item tickets require a unit (e.g. pcs, kg, m)");
             err.status = 400;
@@ -179,10 +203,13 @@ async function createTicketRecord(client, user, body) {
         // Only the PM gives a budget:
         //   SM Material Request -> no budget; the PM sets approvedBudget when acknowledging
         //   PM Material Request -> approvedBudget now (the PM is approving now)
-        if (isPM && isMaterialReq && (typeof approvedBudget !== "number" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
-            const err = new Error("A Project Manager's Material Request requires a non-negative approvedBudget in PHP");
-            err.status = 400;
-            throw err;
+        if (isPM && isMaterialReq) {
+            if (typeof approvedBudget !== "number" && typeof approvedBudget !== "string") {
+                const err = new Error("A Project Manager's Material Request requires a non-negative approvedBudget in PHP");
+                err.status = 400;
+                throw err;
+            }
+            approvedBudget = amount(approvedBudget, { field: "approvedBudget", label: "Approved budget", allowZero: true });
         }
 
         // A PM-created ticket is born Acknowledged, so it needs its buyer now.
@@ -537,7 +564,10 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
                     t.vendorName AS "vendorName",
                     t.materialType AS "materialType",
                     t.quantity,
-                    t.resolvedAt AS "resolvedAt"
+                    t.resolvedAt AS "resolvedAt",
+                    t.approvedbudget AS "approvedBudget",
+                    t.approvedbudget - COALESCE((SELECT SUM(e.amount) FROM expenses e
+                                                  WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'), 0) AS "remainingBudget"
                FROM tickets t
                JOIN projects p ON p.projectId = t.projectId
               WHERE t.status = 'Resolved'
@@ -1004,55 +1034,28 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
         // the budget when acknowledging (PATCH /:id/acknowledge -> approvedBudget).
         const { subject, description, quantity, unit, materialType, vendorName, notInBomReason } = req.body;
 
-        if (typeof subject !== "string" || !subject.trim()) {
-            const err = new Error("subject is required");
-            err.status = 400;
-            throw err;
-        }
-
         let p = 0;
         const sets = [];
         const vals = [];
         const set = (col, val) => { p += 1; sets.push(`${col} = $${p}`); vals.push(val); };
 
-        set("subject", subject.trim().slice(0, 100));
-        set("description", typeof description === "string" && description.trim() ? description.trim() : null);
+        set("subject", text(subject, { field: "subject", label: "Subject", max: LIMITS.ticketSubject, required: true }));
+        set("description", text(description, { field: "description", label: "Description", max: LIMITS.description, multiline: true }));
 
         if (isMaterialReq || isWorkItem) {
-            const q = Number(quantity);
-            if (!Number.isFinite(q) || q <= 0) {
-                const err = new Error("quantity must be a positive number");
-                err.status = 400;
-                throw err;
-            }
-            set("quantity", q);
+            set("quantity", cleanQuantity(quantity));
             // Vendor is optional (nullable) — only the PM sets it.
-            set("vendorName", typeof vendorName === "string" && vendorName.trim() ? vendorName.trim() : null);
+            set("vendorName", text(vendorName, { field: "vendorName", label: "Vendor", max: LIMITS.vendorName }));
         }
 
         // Material + unit are creator-supplied only when not on the BOM.
         if ((isMaterialReq && !onBom) || isWorkItem) {
-            if (typeof materialType !== "string" || !materialType.trim()) {
-                const err = new Error("materialType is required");
-                err.status = 400;
-                throw err;
-            }
-            if (typeof unit !== "string" || !unit.trim()) {
-                const err = new Error("unit is required");
-                err.status = 400;
-                throw err;
-            }
-            set("materialType", materialType.trim());
-            set("unit", unit.trim().slice(0, 30));
+            set("materialType", text(materialType, { field: "materialType", label: "Material", max: LIMITS.materialType, required: true }));
+            set("unit", text(unit, { field: "unit", label: "Unit", max: LIMITS.unit, required: true }));
         }
 
         if (isMaterialReq && !onBom) {
-            if (typeof notInBomReason !== "string" || !notInBomReason.trim()) {
-                const err = new Error("a reason is required for a not-in-BOM Material Request");
-                err.status = 400;
-                throw err;
-            }
-            set("notInBomReason", notInBomReason.trim());
+            set("notInBomReason", text(notInBomReason, { field: "notInBomReason", label: "Reason", max: LIMITS.reason, required: true, multiline: true }));
         }
 
         // isReport falls through with just subject + description updated.

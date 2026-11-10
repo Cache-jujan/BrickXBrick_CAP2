@@ -19,11 +19,11 @@ function stub(relative, exports) {
 }
 
 const PM = { id: "pm-1", role: "Project Manager", name: "Test PM" };
-const PROJECT = "project-alpha";
-const SM_HERE = "sm-alpha"; // the Site Manager of project-alpha
-const SM_ELSEWHERE = "sm-beta"; // a Site Manager of some other project
-const PURCHASER = "purchaser-1";
-const GM = "gm-1";
+const PROJECT = "11111111-1111-4111-8111-111111111111"; // project-alpha
+const SM_HERE = "33333333-3333-4333-8333-333333333333"; // the Site Manager of project-alpha
+const SM_ELSEWHERE = "44444444-4444-4444-8444-444444444444"; // a Site Manager of some other project
+const PURCHASER = "22222222-2222-4222-8222-222222222222"; // purchaser-1
+const GM = "55555555-5555-4555-8555-555555555555";
 
 const users = {
   [SM_HERE]: { userid: SM_HERE, role: "Site Manager", status: "Active" },

@@ -37,6 +37,7 @@ const {
 const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
+const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -54,8 +55,18 @@ const PROJECT_COLUMNS = `projectid, createdby, name, description, clientname, st
 // p.-prefixed version for the joined detail queries.
 const DETAIL_COLUMNS = PROJECT_COLUMNS.split(",").map((c) => `p.${c.trim()}`).join(", ");
 
+// Postgres "bad input" codes: a malformed id or an over-long value is the caller's
+// mistake (400), and an unexpected database error is ours (500). Neither echoes the
+// database's own message, which names tables and columns.
+const PG_INPUT_ERROR_CODES = new Set(["22P02", "22007", "22008", "22001", "22003"]);
+
 function sendError(res, err) {
-  res.status(err.status || 500).json({ error: err.message, ...(err.details || {}) });
+  if (!err.status) {
+    if (PG_INPUT_ERROR_CODES.has(err.code)) return res.status(400).json({ error: "Invalid input value" });
+    console.error("Unhandled projects error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.status(err.status).json({ error: err.message, ...(err.details || {}) });
 }
 
 // Accepts either the pool's query function or a transaction client.
@@ -86,28 +97,63 @@ async function assertUniqueName(target, name, excludeProjectId = null) {
 
 // Shared validation for create and edit. `existing` is the stored row on edit.
 function validateProjectBody(body, existing = null) {
+  const errors = [];
+  // Run one field check; a bad value adds a field error instead of stopping the rest.
+  const check = (fn, fallback = null) => {
+    try {
+      return fn();
+    } catch (err) {
+      if (!(err instanceof InputError)) throw err;
+      errors.push({ field: err.field, message: err.message });
+      return fallback;
+    }
+  };
+  const textField = (key, current, opts) =>
+    body[key] !== undefined ? check(() => text(body[key], { field: key, ...opts })) : current ?? null;
+
   const merged = {
-    name: body.name !== undefined ? trimOrNull(body.name) : existing?.name ?? null,
-    clientName: body.clientName !== undefined ? trimOrNull(body.clientName) : existing?.clientname ?? null,
-    budget: body.budget !== undefined ? body.budget : existing ? Number(existing.budget) : undefined,
+    name: textField("name", existing?.name, { label: "Project name", max: LIMITS.projectName, required: true }),
+    clientName: textField("clientName", existing?.clientname, { label: "Client name", max: LIMITS.clientName, required: true }),
+    budget: undefined,
     startDate: body.startDate !== undefined ? body.startDate : toIso(existing?.startdate),
     constructionStartDate:
       body.constructionStartDate !== undefined ? body.constructionStartDate : toIso(existing?.constructionstartdate),
     endDate: body.endDate !== undefined ? body.endDate : toIso(existing?.enddate),
     projectType: body.projectType !== undefined ? body.projectType : existing?.projecttype ?? null,
-    municipality: body.municipality !== undefined ? trimOrNull(body.municipality) : existing?.municipality ?? null,
+    municipality: textField("municipality", existing?.municipality, {
+      label: "Municipality / city of the site",
+      max: LIMITS.municipality,
+      required: true,
+    }),
   };
 
-  const errors = [];
-  if (!merged.name) errors.push({ field: "name", message: "Project name is required" });
-  if (!merged.clientName) errors.push({ field: "clientName", message: "Client name is required" });
-  if (typeof merged.budget !== "number" || !Number.isFinite(merged.budget) || merged.budget < 0) {
-    errors.push({ field: "budget", message: "Target budget must be a number of 0 or more" });
+  if (body.budget !== undefined || !existing) {
+    // A budget is a number; a text value like "5000" from a form is read, anything else is refused.
+    merged.budget = check(() => amount(body.budget, {
+      field: "budget",
+      label: "Target budget",
+      allowZero: true,
+      max: LIMITS.projectBudgetMax,
+    }));
+  } else {
+    merged.budget = Number(existing.budget);
   }
+
+  // Optional fields: checked here so a bad value is reported together with the rest.
+  for (const [key, opts] of [
+    ["description", { label: "Description", max: LIMITS.description, multiline: true }],
+    ["province", { label: "Province", max: LIMITS.province }],
+    ["siteAddress", { label: "Site address", max: LIMITS.siteAddress }],
+  ]) {
+    if (body[key] !== undefined) check(() => text(body[key], { field: key, ...opts }));
+  }
+
   if (!PROJECT_TYPES.includes(merged.projectType)) {
     errors.push({ field: "projectType", message: `Project type must be one of: ${PROJECT_TYPES.join(", ")}` });
   }
-  if (!merged.municipality) {
+  if (!errors.some((e) => e.field === "name") && !merged.name) errors.push({ field: "name", message: "Project name is required" });
+  if (!errors.some((e) => e.field === "clientName") && !merged.clientName) errors.push({ field: "clientName", message: "Client name is required" });
+  if (!errors.some((e) => e.field === "municipality") && !merged.municipality) {
     errors.push({ field: "municipality", message: "Municipality / city of the site is required" });
   }
   errors.push(...validateProjectDates(merged));
@@ -496,8 +542,13 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
 // (client: a project that doesn't push through is cancelled).
 router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => {
   try {
-    const reason = trimOrNull(req.body.reason);
-    if (!reason) throw httpError(400, "A cancellation reason is required");
+    let reason;
+    try {
+      reason = text(req.body?.reason, { field: "reason", label: "Cancellation reason", max: LIMITS.reason, required: true, multiline: true });
+    } catch (err) {
+      if (!(err instanceof InputError)) throw err;
+      throw httpError(400, err.field === "reason" && err.message.endsWith("required") ? "A cancellation reason is required" : err.message, { fieldErrors: err.fieldErrors });
+    }
 
     const project = await withTransaction(async (client) => {
       const existing = await getProjectRow(client, req.params.id, { lock: true });

@@ -19,7 +19,6 @@ export function trayRows(scans, queued) {
       state: row.sync_status === "REJECTED" ? "upload_failed" : "waiting",
       vendor: null,
       amount: null,
-      trip: row.context?.kind === "trip",
       createdAt: row.created_at,
       queued: row,
     });
@@ -33,8 +32,6 @@ export function trayRows(scans, queued) {
       state: scan.status === "Scanning" ? "reading" : scan.status === "Failed" ? "failed" : "review",
       vendor: scan.status === "Ready" ? scan.result?.vendorName ?? null : null,
       amount: scan.status === "Ready" && Number.isFinite(amount) ? amount : null,
-      // A petty cash receipt: it ends on the Petty cash screen instead of Check receipt.
-      trip: scan.context?.kind === "trip",
       createdAt: scan.createdAt,
       scan,
     });

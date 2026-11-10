@@ -21,6 +21,8 @@ import { isReceiptType } from "../../utils/receiptFile";
 import "./SubmitExpensePage.css";
 import { useLocale } from "../../i18n/LocaleProvider";
 
+const pesoText = (cents) => `₱${(cents / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export const EMPTY_DRAFT = {
   vendorName: "",
   amount: "",
@@ -31,6 +33,7 @@ export const EMPTY_DRAFT = {
   birPermitNumber: "",
   birNumber: "",
   receiptImageURL: "",
+  note: "", // why the request is finished under budget (required then)
   lineItems: [{ description: "", amount: "", quantity: "", unitPrice: "" }],
 };
 
@@ -224,8 +227,19 @@ export function SubmitExpensePage() {
   const amountIsValid = draft.amount !== ""
     && Number.isFinite(Number(draft.amount))
     && Number(draft.amount) >= 0;
+  // Strict budget: nothing above what is left of the request; a note when it is finished under budget.
+  // (The server checks again and has the last word.)
+  const amountCents = amountIsValid ? Math.round(Number(draft.amount) * 100) : null;
+  const leftCents = selectedTicket && selectedTicket.remainingBudget != null ? Math.round(Number(selectedTicket.remainingBudget) * 100) : null;
+  const noBudget = Boolean(selectedTicket) && leftCents === null;
+  const overBudget = amountCents !== null && leftCents !== null && amountCents > leftCents;
+  const needsNote = amountCents !== null && leftCents !== null && amountCents < leftCents;
+  const noteMissing = needsNote && !draft.note.trim();
   const canSubmit = Boolean(
     selectedTicket
+      && !noBudget
+      && !overBudget
+      && !noteMissing
       && draft.receiptImageURL
       && draft.vendorName.trim()
       && amountIsValid
@@ -251,6 +265,9 @@ export function SubmitExpensePage() {
     missing.vendor && t("submit.vendor_name"),
     missing.amount && t("submit.receipt_total"),
     missing.date && t("my_expenses.receipt_date"),
+    noBudget && t("bd.none_title"),
+    overBudget && t("bd.over_title"),
+    noteMissing && t("bd.note_title"),
     gapOfLines.none && t("gap.line_item"),
     gapOfLines.numbers && t("gap.line_numbers"),
   ].filter(Boolean);
@@ -277,6 +294,7 @@ export function SubmitExpensePage() {
         receiptDate: draft.receiptDate,
         category: draft.category,
         receiptImageURL: draft.receiptImageURL,
+        submitNote: draft.note.trim() || undefined,
         tin: draft.tin.trim() || null,
         birPermitNumber: draft.birPermitNumber.trim() || null,
         birNumber: draft.birNumber.trim() || null,
@@ -431,6 +449,28 @@ export function SubmitExpensePage() {
               <Field label={vendorLabel(t("submit.field_bir_permit"), "birPermitNumber")} value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
               <Field label="OR / SI number" value={draft.birNumber} onChange={(event) => setField("birNumber", event.target.value)} />
             </TaxDetails>
+
+            {selectedTicket && (noBudget || overBudget || needsNote) && (
+              <Banner tone={noteMissing ? "warning" : "error"} title={noBudget ? t("bd.none_title") : overBudget ? t("bd.over_title") : t("bd.note_title")}>
+                {noBudget
+                  ? t("bd.none_body")
+                  : overBudget
+                    ? t("bd.over_body", { amount: pesoText(amountCents), remaining: pesoText(leftCents) })
+                    : t("bd.note_body", { unspent: pesoText(leftCents - amountCents) })}
+              </Banner>
+            )}
+            {needsNote && (
+              <Field
+                as="textarea"
+                label={t("bd.notes_required")}
+                required
+                maxLength={300}
+                missing={noteMissing}
+                missingText={t("gap.needed")}
+                value={draft.note}
+                onChange={(event) => setField("note", event.target.value)}
+              />
+            )}
 
             <div className="submit-expense-items-heading">
               <div>

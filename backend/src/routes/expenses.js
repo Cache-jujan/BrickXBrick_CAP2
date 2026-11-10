@@ -14,6 +14,7 @@ const { assertProjectActive } = require("../lib/projectRules");
 const { assertProjectNotTerminated } = require("../lib/projectHold");
 const { screenExpense } = require("../lib/screenExpense");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
+const { LIMITS, text, amount: cleanAmount } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -24,6 +25,19 @@ const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 
 // Roles that may read any expense. Everyone else is scoped to their own.
 const EXPENSE_READ_ALL_ROLES = ["General Manager", "Project Manager", "System Administrator"];
+
+// Vendor name and amount, checked the same way on submit and resubmit.
+// Zero stays allowed (a fully discounted receipt); negatives, NaN, strings
+// that aren't numbers and amounts beyond the column are a 400 naming the field.
+function cleanExpenseFields({ vendorName, amount }) {
+    if (typeof amount !== "number" && typeof amount !== "string") {
+        throw httpError(400, "amount must be a non-negative number");
+    }
+    return {
+        vendorName: text(vendorName, { field: "vendorName", label: "Vendor name", max: LIMITS.vendorName, required: true }),
+        amount: cleanAmount(amount, { field: "amount", label: "Amount", allowZero: true }),
+    };
+}
 
 function httpError(status, message) {
     const err = new Error(message);
@@ -94,7 +108,7 @@ async function screenOrFlag(expenseID) {
  */
 router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Project Manager"), async (req, res, next) => {
     try {
-        const {
+        let {
             ticketID,
             projectID: bodyProjectID,
             vendorName,
@@ -106,7 +120,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             tin,
             birPermitNumber,
             lineItems,
-        } = req.body;
+        } = req.body || {};
 
         // NOTE: birValidationStatus is deliberately NOT read from the body.
         // It decides what lands in the BIR tax-deductible report (F11), so a
@@ -115,9 +129,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
             throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
-        if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
-            throw httpError(400, "amount must be a non-negative number");
-        }
+        ({ vendorName, amount } = cleanExpenseFields({ vendorName, amount }));
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
@@ -191,16 +203,9 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             projectID = ticket.projectid;
         }
 
-        if (req.user.role === "Site Manager" && !ticketID) {
-            throw httpError(400, "Site Managers must link expenses to their own resolved Material Request ticket");
-        }
-        // Without a ticket, Layer 3 and the assignment check are skipped and a
-        // Purchaser could bill any Active project.
-        if (req.user.role === "Purchaser" && !ticketID) {
-            throw httpError(400, "Purchasers must link expenses to a Resolved ticket assigned to them");
-        }
-        if (!projectID) {
-            throw httpError(400, "projectID is required when no ticketID is provided");
+        // Every expense belongs to a requested material: no request, no purchase.
+        if (!ticketID) {
+            throw httpError(400, "ticketID is required: an expense must be for a requested material");
         }
         // Purchases are recorded only against an Active project.
         await assertProjectActive(query, projectID, "Recording an expense");
@@ -212,32 +217,49 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             await assertCanReviewProject(req.user, projectID);
         }
 
-        const result = await query(
-            `INSERT INTO expenses
-               (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
-                category, birvalidationstatus, receiptimageurl, birnumber, tin,
-                birpermitnumber, lineitems, quantity)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-             RETURNING ${EXPENSE_COLUMNS}`,
-            [
-                projectID,
-                req.user.id,
-                ticketID || null,
-                vendorName,
-                amount,
-                receiptDate,
-                category,
-                birValidationStatus,
-                receiptImageURL,
-                bir.birNumber,
-                bir.tin,
-                bir.birPermitNumber,
-                JSON.stringify(storedLineItems),
-                quantity,
-            ]
-        );
+        // The Purchaser's reason for finishing under budget (shown to the PM).
+        const submitNote = typeof req.body.submitNote === "string" ? req.body.submitNote.trim().slice(0, SUBMIT_NOTE_MAX) : "";
 
-        const expense = result.rows[0];
+        // Strict budget: checked and saved in one transaction, with the request row locked, so
+        // two submissions cannot both slip under the cap.
+        const expense = await withTransaction(async (client) => {
+            await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+            const remainingBudgetCents = await loadRemainingBudgetCents((sql, params) => client.query(sql, params), ticketID);
+            const issue = checkBudget({
+                amountCents: Math.round(amount * 100),
+                remainingBudgetCents,
+                completesRequest: true, // the request is already Resolved: this expense is what finishes it
+                note: submitNote,
+            });
+            if (issue) throw httpError(400, issue.message, { code: issue.code });
+
+            const result = await client.query(
+                `INSERT INTO expenses
+                   (projectid, submittedby, ticketid, vendorname, amount, receiptdate,
+                    category, birvalidationstatus, receiptimageurl, birnumber, tin,
+                    birpermitnumber, lineitems, quantity, submitnote)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                 RETURNING ${EXPENSE_COLUMNS}`,
+                [
+                    projectID,
+                    req.user.id,
+                    ticketID,
+                    vendorName,
+                    amount,
+                    receiptDate,
+                    category,
+                    birValidationStatus,
+                    receiptImageURL,
+                    bir.birNumber,
+                    bir.tin,
+                    bir.birPermitNumber,
+                    JSON.stringify(storedLineItems),
+                    quantity,
+                    submitNote || null,
+                ]
+            );
+            return result.rows[0];
+        });
 
         // F9 Layers 1-3. No transaction here, so the row is already visible
         // to screenExpense's queries. A screening failure is recorded as a
@@ -358,12 +380,10 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
 
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const result = await query(
-            // The extra columns label the row: what it was bought for, whether it is petty cash
-            // (no request; istripcost is its first name; rows saved earlier start "Trip cost:"),
-            // and the other projects sharing the same receipt.
+            // The extra columns label the row: what it was bought for, and the other projects
+            // sharing the same receipt.
             `SELECT e.*, u.name AS submittedbyname, u.role AS submittedbyrole,
                     (SELECT t.subject FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticketsubject,
-                    (e.ticketID IS NULL AND (e.submitNote LIKE 'Petty cash:%' OR e.submitNote LIKE 'Trip cost:%')) AS istripcost,
                     (SELECT ra.commonReceiptID FROM ReceiptAllocations ra WHERE ra.expenseID = e.expenseID LIMIT 1) AS commonreceiptid,
                     (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
                                                        'amount', e2.amount, 'status', e2.status))
@@ -507,10 +527,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
  */
 router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
-        const { reason } = req.body;
-        if (!reason || typeof reason !== "string" || !reason.trim()) {
-            throw httpError(400, "reason is required");
-        }
+        const reason = text(req.body?.reason, { field: "reason", label: "Reason", max: LIMITS.reason, required: true, multiline: true });
 
         const existing = await query("SELECT * FROM Expenses WHERE expenseID = $1", [req.params.id]);
         if (existing.rowCount === 0) {
@@ -580,7 +597,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             throw httpError(409, "Only a Rejected expense can be resubmitted");
         }
 
-        const {
+        let {
             vendorName,
             amount,
             receiptDate,
@@ -589,16 +606,14 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             tin,
             birPermitNumber,
             lineItems,
-        } = req.body;
+        } = req.body || {};
 
         // Same validation as a new submission. birValidationStatus and
         // quantity are derived server-side, never taken from the client.
         if (!vendorName || amount === undefined || amount === null || !receiptDate) {
             throw httpError(400, "vendorName, amount, and receiptDate are required");
         }
-        if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
-            throw httpError(400, "amount must be a non-negative number");
-        }
+        ({ vendorName, amount } = cleanExpenseFields({ vendorName, amount }));
         if (!category || !VALID_CATEGORIES.includes(category)) {
             throw httpError(400, `category must be one of: ${VALID_CATEGORIES.join(", ")}`);
         }
