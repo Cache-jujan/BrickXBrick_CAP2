@@ -29,6 +29,12 @@ export function MyExpensesPage() {
       .finally(() => setLoading(false));
   }, [t]);
 
+  // Portions of one split receipt share a commonReceiptID: say so on each row.
+  const partsOfReceipt = {};
+  for (const e of expenses) {
+    if (e.commonReceiptID) partsOfReceipt[e.commonReceiptID] = (partsOfReceipt[e.commonReceiptID] || 0) + 1;
+  }
+
   return (
     <div className="my-expenses-page">
       <div className="my-expenses-heading">
@@ -70,6 +76,16 @@ export function MyExpensesPage() {
                   <tr key={expense.expenseID}>
                     <td>
                       <strong>{expense.vendorName}</strong>
+                      {(expense.ticketSubject || expense.projectName) && (
+                        <p className="my-expenses-for">
+                          {[expense.ticketSubject, expense.projectName].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                      {expense.commonReceiptID && partsOfReceipt[expense.commonReceiptID] > 1 && (
+                        <p className="my-expenses-for">
+                          {t("my_expenses.split_part", { count: partsOfReceipt[expense.commonReceiptID] })}
+                        </p>
+                      )}
                       {expense.status === "Rejected" && expense.rejectionReason && (
                         <p className="my-expenses-reason">
                           <strong>{t("my_expenses.pm_note")}</strong> {expense.rejectionReason}

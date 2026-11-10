@@ -23,6 +23,7 @@ import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
 import { RequestDetailsSheet } from "@/components/request-details-sheet";
+import { SnapRequestSheet } from "@/components/snap-request-sheet";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
 import { deleteQueuedPhoto } from "@/lib/sync/task-photo";
@@ -51,6 +52,8 @@ export function ToBuy() {
   const [closingId, setClosingId] = useState<string | null>(null);
   // The request whose details sheet is open (tap a request to open it).
   const [detail, setDetail] = useState<OpenRequest | null>(null);
+  // "Which request is this receipt for?" sheet, opened by the Snap receipt button.
+  const [snapPickerOpen, setSnapPickerOpen] = useState(false);
   const [viewChoice, setView] = useState<"store" | "project">("project");
   // Site Managers don't shop, so they only see requests grouped by project. By store is for the Purchaser.
   const view = isSiteManager ? "project" : viewChoice;
@@ -181,6 +184,14 @@ export function ToBuy() {
     reset();
     startSplit(null);
     router.push("/expense/capture");
+  }
+
+  // One receipt for one request is the normal case, so the Purchaser says which request first.
+  // With a single open request there is nothing to choose; Site Managers keep snap-now.
+  function startSnap() {
+    if (isSiteManager || requests.length === 0) return snapReceipt();
+    if (requests.length === 1) return snapForRequest(requests[0]);
+    setSnapPickerOpen(true);
   }
 
   // The money or the stock ran out: close what is left, with a reason the PM can read.
@@ -422,10 +433,18 @@ export function ToBuy() {
       {/* Site Managers see the details too; filing a receipt for one request stays the Purchaser's. */}
       <RequestDetailsSheet request={detail} canSnap={!isSiteManager} onSnap={snapForRequest} onClose={() => setDetail(null)} />
 
+      <SnapRequestSheet
+        visible={snapPickerOpen}
+        requests={requests}
+        onPick={(request) => { setSnapPickerOpen(false); snapForRequest(request); }}
+        onSeveral={() => { setSnapPickerOpen(false); snapReceipt(); }}
+        onClose={() => setSnapPickerOpen(false)}
+      />
+
       {/* Always in reach, just above the tab bar. */}
       <View style={styles.pinned}>
         <View style={styles.pinnedRow}>
-          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={snapReceipt} /></View>
+          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={startSnap} /></View>
         </View>
       </View>
     </SafeAreaView>
