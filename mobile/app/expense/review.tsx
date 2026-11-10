@@ -180,8 +180,8 @@ export default function ReviewScreen() {
     allLinesValid && totalCents !== null && !totalsMatch && t("rv.err_match"),
   ];
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
-  // One-tap way out when the lines won't add up (rounding, unlisted VAT or
-  // discount). The adjustment line routes the expense to PM review.
+  // One-tap way out when the lines are SHORT of the total (rounding, unlisted VAT). The
+  // adjustment line routes the expense to PM review. Lines over the total have no fix.
   const fix = allLinesValid && !totalsMatch
     ? reconcileFix(totalCents, namedItems.map((it) => ({ id: it.id, name: it.name.trim(), cents: toCents(it.price) })))
     : null;
@@ -195,25 +195,14 @@ export default function ReviewScreen() {
   function removeItem(id: string) { setItems((prev) => prev.filter((it) => it.id !== id)); }
   function addItem() { setItems((prev) => [...prev, { id: makeId(), name: "", quantity: "", price: "" }]); }
 
-  /** Reconcile totals by adding an adjustment or applying a discount with a review note. */
+  /** Reconcile a shortfall by adding an adjustment line (it routes the expense to PM review). */
   function applyFix() {
     if (!fix) return;
-    if (fix.kind === "add") {
-      setItems((prev) => [...prev, { id: makeId(), name: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", price: formatAmountInput(fix.gapCents) }]);
-      return;
-    }
-    // The discount comes off the line; a zero-amount note line records it
-    // (and is what flags the expense for PM review).
-    setItems((prev) => [
-      ...prev.map((it) => (it.id === fix.itemId ? editLine(it, "price", formatAmountInput((toCents(it.price) ?? 0) - fix.gapCents)) : it)),
-      { id: makeId(), name: `${ADJUSTMENT_PREFIX}: ${formatPesoCents(fix.gapCents)} discount taken off ${fix.itemName}`, quantity: "0", price: "0.00" },
-    ]);
+    setItems((prev) => [...prev, { id: makeId(), name: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", price: formatAmountInput(fix.gapCents) }]);
   }
 
   function fixLabel() {
-    if (!fix) return "";
-    const gap = formatPesoCents(fix.gapCents);
-    return fix.kind === "add" ? t("rv.fix_add", { gap }) : t("rv.fix_discount", { gap, item: fix.itemName });
+    return fix ? t("rv.fix_add", { gap: formatPesoCents(fix.gapCents) }) : "";
   }
 
   function setDate(date: Date) {
@@ -244,10 +233,18 @@ export default function ReviewScreen() {
     if (namedItems.length === 0) return Alert.alert(t("rv.add_one_title"), t("rv.add_one_body"));
     if (!allLinesValid) return Alert.alert(t("rv.check_lines"), t("rv.check_lines_body"));
     if (!totalsMatch) {
-      if (!fix) return Alert.alert(t("rv.totals_mismatch"), t("rv.totals_body"));
+      // Over the receipt total: no way to adjust it away, the amounts have to be corrected.
+      if (!fix) {
+        return Alert.alert(
+          t("rv.totals_mismatch"),
+          totalCents !== null && linesCents > totalCents
+            ? t("rv.totals_gap_over", { gap: formatPesoCents(linesCents - totalCents) })
+            : t("rv.totals_body")
+        );
+      }
       return Alert.alert(
         t("rv.totals_mismatch"),
-        t(fix.kind === "add" ? "rv.totals_gap_short" : "rv.totals_gap_over", { gap: formatPesoCents(fix.gapCents) }),
+        t("rv.totals_gap_short", { gap: formatPesoCents(fix.gapCents) }),
         [{ text: t("rv.check_again"), style: "cancel" }, { text: fixLabel(), onPress: applyFix }]
       );
     }

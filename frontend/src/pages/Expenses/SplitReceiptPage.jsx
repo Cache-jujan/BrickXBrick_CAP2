@@ -315,36 +315,17 @@ export function SplitReceiptPage() {
   }
 
   /**
-   * The lines and the receipt total differ: add an "Adjustment" line for the gap, or take an
-   * overage off the biggest line as a discount and note it. Either one sends the expense to PM review.
+   * The lines are SHORT of the receipt total: add an "Adjustment" line for the gap (it sends the
+   * expense to PM review). Lines that add up to MORE than the total have no fix: no discount is
+   * taken off an item, the amounts have to be corrected before the split can be submitted.
    */
   function applyAdjustment() {
     const gap = toCents(draft.amount) - linesCents;
-    if (gap === 0) return;
-    setDraft((current) => {
-      if (gap > 0) {
-        return {
-          ...current,
-          lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
-        };
-      }
-      const over = -gap;
-      let biggest = -1;
-      current.lineItems.forEach((item, i) => {
-        if (Number(item.quantity) > 0 && (biggest < 0 || toCents(item.amount) > toCents(current.lineItems[biggest].amount))) biggest = i;
-      });
-      if (biggest < 0) return current;
-      const lineItems = current.lineItems.map((item, i) =>
-        i === biggest ? editLine(item, "amount", ((toCents(item.amount) - over) / 100).toFixed(2)) : item
-      );
-      lineItems.push({
-        description: `${ADJUSTMENT_PREFIX}: ${peso(over / 100)} discount taken off ${current.lineItems[biggest].description}`,
-        quantity: "0",
-        amount: "0.00",
-        unitPrice: "",
-      });
-      return { ...current, lineItems };
-    });
+    if (gap <= 0) return;
+    setDraft((current) => ({
+      ...current,
+      lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
+    }));
   }
 
   // Extra quantity, or finishing a request under its budget, needs a few words for the PM.
@@ -586,14 +567,15 @@ export function SplitReceiptPage() {
               tone="warning"
               title={t("split.mismatch_title")}
               action={
-                <Button type="button" variant="secondary" onClick={applyAdjustment}>
-                  {toCents(draft.amount) > linesCents
-                    ? t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })
-                    : t("rv.fix_discount_web", { gap: peso((linesCents - toCents(draft.amount)) / 100) })}
-                </Button>
+                toCents(draft.amount) > linesCents ? (
+                  <Button type="button" variant="secondary" onClick={applyAdjustment}>
+                    {t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })}
+                  </Button>
+                ) : undefined
               }
             >
-              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })} {t("split.adjust_hint")}
+              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}{" "}
+              {toCents(draft.amount) > linesCents ? t("split.adjust_hint") : t("split.over_total_hint")}
             </Banner>
           )}
 
