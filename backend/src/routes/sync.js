@@ -139,8 +139,9 @@ async function syncExpense(user, uuid, data) {
     resolveTicketInTransaction = ticket.status !== "Resolved";
     projectID = ticket.projectid;
   }
-  if (!projectID) {
-    throw new SyncReject("MISSING_PROJECT", "projectID is required when no ticketID is provided");
+  if (!ticketID) {
+    // Every expense belongs to a requested material: no request, no purchase.
+    throw new SyncReject("MISSING_TICKET", "ticketID is required: an expense must be for a requested material");
   }
   const projectStatus = await query("SELECT status FROM projects WHERE projectid = $1", [projectID]);
   if (projectStatus.rowCount === 0) {

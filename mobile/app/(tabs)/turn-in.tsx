@@ -22,7 +22,6 @@ type TrayRow = {
   state: TrayState;
   vendor: string | null;
   amount: number | null;
-  trip: boolean;
   createdAt: string;
   scan?: ReceiptScan;
   queued?: QueuedScan;
@@ -100,7 +99,7 @@ export default function TurnInScreen() {
               accessibilityRole="button"
             >
               <View style={styles.rowMain}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{row.trip ? `${t("ti.kind_trip")} · ` : ""}{row.vendor ?? t("mobile.receipt")}</Text>
+                <Text style={styles.rowTitle} numberOfLines={1}>{row.vendor ?? t("mobile.receipt")}</Text>
                 <Text style={[styles.rowMeta, rejected && { color: COLORS.errorText }]} numberOfLines={2}>
                   {rejected
                     ? t("sr.upload_failed", { reason: row.queued?.error_message ?? t("sr.server_refused") })

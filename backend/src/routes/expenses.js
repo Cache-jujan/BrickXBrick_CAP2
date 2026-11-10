@@ -202,16 +202,9 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
             projectID = ticket.projectid;
         }
 
-        if (req.user.role === "Site Manager" && !ticketID) {
-            throw httpError(400, "Site Managers must link expenses to their own resolved Material Request ticket");
-        }
-        // Without a ticket, Layer 3 and the assignment check are skipped and a
-        // Purchaser could bill any Active project.
-        if (req.user.role === "Purchaser" && !ticketID) {
-            throw httpError(400, "Purchasers must link expenses to a Resolved ticket assigned to them");
-        }
-        if (!projectID) {
-            throw httpError(400, "projectID is required when no ticketID is provided");
+        // Every expense belongs to a requested material: no request, no purchase.
+        if (!ticketID) {
+            throw httpError(400, "ticketID is required: an expense must be for a requested material");
         }
         // Purchases are recorded only against an Active project.
         await assertProjectActive(query, projectID, "Recording an expense");
@@ -369,12 +362,10 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
 
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const result = await query(
-            // The extra columns label the row: what it was bought for, whether it is petty cash
-            // (no request; istripcost is its first name; rows saved earlier start "Trip cost:"),
-            // and the other projects sharing the same receipt.
+            // The extra columns label the row: what it was bought for, and the other projects
+            // sharing the same receipt.
             `SELECT e.*, u.name AS submittedbyname, u.role AS submittedbyrole,
                     (SELECT t.subject FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticketsubject,
-                    (e.ticketID IS NULL AND (e.submitNote LIKE 'Petty cash:%' OR e.submitNote LIKE 'Trip cost:%')) AS istripcost,
                     (SELECT ra.commonReceiptID FROM ReceiptAllocations ra WHERE ra.expenseID = e.expenseID LIMIT 1) AS commonreceiptid,
                     (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
                                                        'amount', e2.amount, 'status', e2.status))

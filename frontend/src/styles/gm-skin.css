@@ -309,14 +309,12 @@
 
 /* ---- Expense pages: one accent, not blue and green ------------------- */
 
-.gm-skin .submit-expense-page[data-mode="split"],
-.gm-skin .submit-expense-page[data-mode="petty"] {
+.gm-skin .submit-expense-page[data-mode="split"] {
   --mode: #bf4307;
   --mode-dark: #9e3505;
   --mode-tint: #fcebe0;
 }
-.gm-skin .mode-tab-split svg,
-.gm-skin .mode-tab-petty svg {
+.gm-skin .mode-tab-split svg {
   color: #bf4307;
 }
 .gm-skin .mode-tab-on svg {
