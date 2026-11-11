@@ -11,7 +11,6 @@ import "./UserManagementPage.css"; // the table, toolbar and action-link styles 
 import "./VendorMasterListPage.css";
 
 const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
-const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
 const blankForm = () => ({
   vendorName: "", location: "", tin: "", birPermitType: "", birPermitNumber: "", approvalStatus: "Approved",
@@ -107,7 +106,6 @@ export function VendorMasterListPage() {
                     <th>{t("vm.col_vendor")}</th>
                     <th>{t("vm.col_tin")}</th>
                     <th>{t("vm.col_permit")}</th>
-                    <th>{t("vm.col_avg")}</th>
                     <th>{t("dashboard.status")}</th>
                     <th aria-label={t("tamper.actions")} />
                   </tr>
@@ -127,9 +125,6 @@ export function VendorMasterListPage() {
                             <span className="vendors-code">{v.birPermitNumber}</span>
                           </span>
                         ) : <span className="users-not-locked">—</span>}
-                      </td>
-                      <td data-label={t("vm.col_avg")}>
-                        {v.historicalAverage != null ? PESO.format(Number(v.historicalAverage)) : <span className="users-not-locked">—</span>}
                       </td>
                       <td><Badge status={v.approvalStatus} /></td>
                       <td className="users-actions vendors-actions">
