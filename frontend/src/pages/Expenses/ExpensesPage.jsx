@@ -16,7 +16,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { flagLabel } from "../../utils/plainLanguage";
-import { FlagReviewPanel, SplitSiblings } from "./FlagReviewPanel";
+import { FlagReviewPanel, SplitSiblings, currentPartOf } from "./FlagReviewPanel";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ExpensesPage.css";
 import { verifyExpense } from "../../api/blockchainApi";
@@ -485,7 +485,7 @@ export function ExpensesPage() {
                                       </table>
                                     </section>
                                   )}
-                                  {!flags && <SplitSiblings siblings={e.siblings} />}
+                                  {!flags && <SplitSiblings siblings={e.siblings} current={currentPartOf(e, project?.name)} />}
                                   <div className="expenses-detail-links">
                                     {e.receiptimageurl && (
                                       <a href={e.receiptimageurl} target="_blank" rel="noreferrer"><DetailIcon name="doc" />{t("expenses.view_receipt")}</a>
@@ -560,6 +560,16 @@ export function ExpensesPage() {
                 ? t("expenses.confirm_approve_body")
                 : t("expenses.confirm_reject_body")}
             </p>
+            {confirm.expense.siblings?.length > 0 && (
+              <>
+                <SplitSiblings
+                  siblings={confirm.expense.siblings}
+                  current={currentPartOf(confirm.expense, projectById[confirm.expense.projectid]?.name)}
+                  compact
+                />
+                <p className="exp-split-note">{t("expenses.split_this_only")}</p>
+              </>
+            )}
             {confirm.expense.submitnote && (
               <Banner tone="warning" title={t("expenses.submit_note")}>
                 {confirm.expense.submitnote}
