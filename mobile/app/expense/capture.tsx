@@ -191,7 +191,7 @@ export default function CaptureScreen() {
       // A Site Manager stays on this capture screen, ready for the next receipt.
       if (isSiteManager && isSplit) return pick(null);
       reset();
-      router.replace(isSplit ? afterSnap : "/");
+      router.replace(afterSnap);
     } catch (err) {
       if (copied) await deleteQueuedPhoto(copied);
       setErrorMessage(t("mx.save_failed_retry"));
@@ -211,14 +211,16 @@ export default function CaptureScreen() {
       const scan = await startScan(file, scanContext(file));
       expediteNotificationChecks(); // the "receipt ready" pop-up checks often for the next minute
       setStatus("idle");
-      if (isSplit) {
+      if (isSplit && isSiteManager) {
         // A Site Manager stays on this capture screen, ready for the next receipt.
-        if (isSiteManager) {
-          pick(null);
-          Alert.alert(t("mx.sent_title"), t("mx.sent_body"));
-          return;
-        }
+        pick(null);
+        Alert.alert(t("mx.sent_title"), t("mx.sent_body"));
+        return;
+      }
+      if (!isSiteManager) {
         // Snap now, review later: the receipt goes to the Turn In tray and OCR runs there.
+        // The "Reading receipt" screen only shows if the Purchaser opens one that is still scanning.
+        // A receipt picked from one request keeps that request: it is in the scan context.
         reset();
         router.replace(afterSnap);
         return;

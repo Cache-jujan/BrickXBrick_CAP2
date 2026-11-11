@@ -14,6 +14,8 @@ export type OcrResult = {
   missingBirFields?: string[];
   // Vendor-list auto-fill: fields it filled, and OCR readings it overrode.
   autoFilled?: string[];
+  // The vendor-list row this receipt matched. null/absent = the vendor is not on the list (a new vendor).
+  vendorMasterMatch?: { vendorID: string; vendorName: string } | null;
   vendorConflicts?: { field: string; ocrValue: string; masterValue: string }[];
   [key: string]: any;
 };

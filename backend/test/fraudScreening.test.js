@@ -603,3 +603,57 @@ test("lineitems stored as a JSON string are still read", async () => {
 
   assert.equal(result, false);
 });
+// ============================================================
+// Quantity is the requested material's lines only, not the whole receipt
+// ============================================================
+
+test("other materials and fee lines on the receipt do not trigger a quantity mismatch", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const expense = {
+    ...PADEENA_EXPENSE,
+    quantity: "115.00", // 100 cement + 15 sand
+    lineitems: [
+      { description: "CEMENT", amount: 19000, quantity: 100, unitPrice: 190 },
+      { description: "Washed sand", amount: 3000, quantity: 15, unitPrice: 200 },
+      { description: "Delivery fee", amount: 500, quantity: 0 },
+    ],
+  };
+
+  assert.equal(await screening.describeTicketMismatch(expense), false);
+});
+
+test("buying more of the requested material is still a quantity mismatch", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const reason = await screening.describeTicketMismatch({
+    ...PADEENA_EXPENSE,
+    quantity: "130.00",
+    lineitems: [
+      { description: "CEMENT", amount: 24700, quantity: 130, unitPrice: 190 },
+      { description: "Delivery fee", amount: 500, quantity: 0 },
+    ],
+  });
+
+  assert.match(reason, /^Quantity: 130 on the receipt, 100 requested/);
+});
+
+test("the quantity check uses the receipt total when no line can be tied to the request", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [{ ...PADEENA_TICKET, bomitemid: null }] }),
+  });
+
+  // The material is found through the category/vendor text, but no description matches it.
+  const reason = await screening.describeTicketMismatch({
+    ...PADEENA_EXPENSE,
+    category: "Cement",
+    quantity: "60.00",
+    lineitems: [{ description: "Bag 40kg", amount: 11400, quantity: 60 }],
+  });
+
+  assert.match(reason, /^Quantity: 60 on the receipt, 100 requested/);
+});

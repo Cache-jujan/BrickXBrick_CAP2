@@ -325,7 +325,9 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
                                               'unit', t.unit, 'approvedBudget', t.approvedBudget, 'vendorName', t.vendorName)
                        FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticket,
                     (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
-                                                       'amount', e2.amount, 'status', e2.status))
+                                                       'amount', e2.amount, 'status', e2.status,
+                                                       'quantity', e2.quantity, 'lineItems', e2.lineItems,
+                                                       'ticketSubject', (SELECT t2.subject FROM Tickets t2 WHERE t2.ticketID = e2.ticketID)))
                        FROM ReceiptAllocations ra
                        JOIN ReceiptAllocations ra2 ON ra2.commonReceiptID = ra.commonReceiptID AND ra2.expenseID <> e.expenseID
                        JOIN Expenses e2 ON e2.expenseID = ra2.expenseID
@@ -387,7 +389,9 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
                     (SELECT t.subject FROM Tickets t WHERE t.ticketID = e.ticketID) AS ticketsubject,
                     (SELECT ra.commonReceiptID FROM ReceiptAllocations ra WHERE ra.expenseID = e.expenseID LIMIT 1) AS commonreceiptid,
                     (SELECT json_agg(json_build_object('expenseId', e2.expenseID, 'projectName', p2.name,
-                                                       'amount', e2.amount, 'status', e2.status))
+                                                       'amount', e2.amount, 'status', e2.status,
+                                                       'quantity', e2.quantity, 'lineItems', e2.lineItems,
+                                                       'ticketSubject', (SELECT t2.subject FROM Tickets t2 WHERE t2.ticketID = e2.ticketID)))
                        FROM ReceiptAllocations ra
                        JOIN ReceiptAllocations ra2 ON ra2.commonReceiptID = ra.commonReceiptID AND ra2.expenseID <> e.expenseID
                        JOIN Expenses e2 ON e2.expenseID = ra2.expenseID

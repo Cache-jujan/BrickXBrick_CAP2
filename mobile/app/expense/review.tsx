@@ -76,7 +76,8 @@ export default function ReviewScreen() {
   const [edited, setEdited] = useState<Set<string>>(new Set());
   const [iosDateOpen, setIosDateOpen] = useState(false);
   // The tax fields are folded away; the Purchaser opens them, or they open when the scan was unsure of one.
-  const [taxOpen, setTaxOpen] = useState(false);
+  // null = decided by the scan (opens for a new vendor or an unsure reading); true/false = the person's own choice.
+  const [taxOpen, setTaxOpen] = useState<boolean | null>(null);
   const [zoomOpen, setZoomOpen] = useState(false);
   // Materials from the Site Managers' requests, for naming line items.
   const [materials, setMaterials] = useState<RequestedMaterial[]>([]);
@@ -201,7 +202,10 @@ export default function ReviewScreen() {
   const bir = birStatusPreview({ tin, birPermitNumber, birNumber });
   const taxFlagged = isLowConfidence("tin") || isLowConfidence("birPermitNumber") || isLowConfidence("birNumber");
   const taxFilled = !!(tin.trim() || birPermitNumber.trim() || birNumber.trim());
-  const showTax = taxOpen || taxFlagged;
+  // A vendor that is not on the vendor list has no verified tax identity, so its tax details
+  // open straight away for the person to double-check. They can still fold them away.
+  const newVendor = !result.vendorMasterMatch;
+  const showTax = taxOpen ?? (taxFlagged || newVendor);
   // Any edit counts as the user checking that row, so its OCR flag goes.
   function updateItem(id: string, patch: Partial<LineItem>) { setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch, ocr: undefined } : it))); }
   /** Synchronize a line's numeric fields and clear its OCR warning after an edit. */
@@ -279,7 +283,7 @@ export default function ReviewScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlowHeader title={t("mx.review_receipt")} caption={isSplit ? t("mx.split_step", { current: 2, total: 3 }) : t("mx.step_n", { current: 2, total: 3 })} step={{ current: 2, total: 3 }} />
+      <FlowHeader title={t("mx.review_receipt")} caption={t("mx.step_n", { current: 2, total: 3 })} step={{ current: 2, total: 3 }} />
       <KeyboardAvoider style={styles.flex}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft.resubmit && (
@@ -477,10 +481,13 @@ export default function ReviewScreen() {
           </Section>
 
           <View style={styles.section}>
-            <Pressable onPress={() => setTaxOpen((open) => !open)} style={styles.taxHeader} accessibilityRole="button" accessibilityState={{ expanded: showTax }}>
+            <Pressable onPress={() => setTaxOpen(!showTax)} style={styles.taxHeader} accessibilityRole="button" accessibilityState={{ expanded: showTax }}>
               <View style={styles.flex}>
                 <Text style={styles.sectionTitle}>
-                  {t("submit.tax_details")} <Text style={styles.taxOptional}>({t("submit.optional")})</Text>
+                  {t("submit.tax_details")}{" "}
+                  {newVendor
+                    ? <Text style={styles.taxCheck}>{t("rv.new_vendor_tag")}</Text>
+                    : <Text style={styles.taxOptional}>({t("submit.optional")})</Text>}
                 </Text>
                 {taxFilled ? <Text style={styles.taxFilled}>{t("submit.tax_filled")}</Text> : null}
               </View>
@@ -488,6 +495,15 @@ export default function ReviewScreen() {
             </Pressable>
             {showTax && (
               <View style={styles.taxFields}>
+              {newVendor && (
+                <View style={styles.newVendorBox} accessibilityRole="alert">
+                  <IconSymbol name="info.circle.fill" size={20} color={COLORS.amberText} />
+                  <Text style={styles.newVendorText}>
+                    <Text style={styles.newVendorTitle}>{t("rv.new_vendor_title")} </Text>
+                    {t("rv.new_vendor_body", { vendor: vendorName.trim() || t("dashboard.vendor") })}
+                  </Text>
+                </View>
+              )}
               <View style={styles.pair}>
                 <Field style={styles.half} label="TIN" value={tin} onChangeText={edit("tin", setTin)} keyboardType="numbers-and-punctuation" check={isLowConfidence("tin")} fromVendorList={autoFilled.includes("tin")} />
                 <Field style={styles.half} label={t("rv.bir_permit")} value={birPermitNumber} onChangeText={edit("birPermitNumber", setBirPermitNumber)} autoCapitalize="characters" check={isLowConfidence("birPermitNumber")} fromVendorList={autoFilled.includes("birPermitNumber")} />
@@ -645,6 +661,10 @@ const styles = StyleSheet.create({
   warnLine: { fontSize: 12, fontFamily: FONT.regular, color: AMBER },
   taxHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48 },
   taxOptional: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 13 },
+  taxCheck: { fontFamily: FONT.bold, color: COLORS.amberText, fontSize: 13 },
+  newVendorBox: { flexDirection: "row", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.amberBorder, backgroundColor: COLORS.amberFill },
+  newVendorText: { flex: 1, fontSize: 13, fontFamily: FONT.regular, color: COLORS.amberText, lineHeight: 19 },
+  newVendorTitle: { fontFamily: FONT.bold },
   taxFilled: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.success, marginTop: 2 },
   taxFields: { gap: 10, marginTop: 8 },
   section: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 14, marginBottom: 12 },

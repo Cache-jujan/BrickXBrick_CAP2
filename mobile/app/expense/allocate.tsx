@@ -36,10 +36,12 @@ import { useLocale } from "@/lib/i18n-context";
 type KnownTicket = { ticketID: string; projectID: string; projectName: string; materialType: string };
 
 // The note is read by the Project Manager, so it is always saved in English.
+// Quick reasons are for finishing a request UNDER budget only.
 const REASONS = [
-  { key: "price", labelKey: "ck.reason_price", text: "Prices went up." },
-  { key: "delivery", labelKey: "ck.reason_delivery", text: "Delivery or gas." },
-  { key: "promo", labelKey: "ck.reason_promo", text: "The store gave extra." },
+  { key: "cheaper", labelKey: "ck.under_cheaper", text: "Prices were lower than expected." },
+  { key: "stock", labelKey: "ck.under_stock", text: "The store ran out of stock." },
+  { key: "less", labelKey: "ck.under_less", text: "Needed less than planned." },
+  { key: "alt", labelKey: "ck.under_alt", text: "Bought a cheaper alternative." },
 ] as const;
 
 const RED = COLORS.errorText;
@@ -72,6 +74,7 @@ export default function AllocateScreen() {
   }, [isOnline]);
   const [reasonKey, setReasonKey] = useState<(typeof REASONS)[number]["key"] | null>(null);
   const [details, setDetails] = useState("");
+  const [overNote, setOverNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitProblems, setSubmitProblems] = useState<string[]>([]);
   const [result, setResult] = useState<AllocationResult | null>(null);
@@ -199,7 +202,7 @@ export default function AllocateScreen() {
         feeTargets: {},
         lineTargets,
         commonReceiptID,
-        note: needsReason ? reason : undefined,
+        note: needsReason ? reason : overNote.trim() || undefined,
       });
       setResult(saved);
       // Submitted: take it off the Turn In list so it can't be sent twice.
@@ -407,12 +410,23 @@ export default function AllocateScreen() {
           </View>
         )}
 
-        {/* Over budget or no approved budget: the server refuses it, so say so before the tap. */}
+        {/* Over budget or no approved budget: the server refuses it, so say so in red before the tap. */}
         {blockers.length > 0 && !loading && (
-          <View style={styles.errorBox}>
+          <View style={styles.overBox} accessibilityRole="alert">
+            <Text style={styles.overTitle}>{t("bd.over_title")}</Text>
+            <Text style={styles.errorBoxText}>{t("ck.over_auto")}</Text>
             {blockers.map((issue, index) => (
               <Text key={`budget-${index}`} style={styles.errorBoxText}>{issue.message}</Text>
             ))}
+            <TextInput
+              style={[styles.input, styles.overInput]}
+              value={overNote}
+              onChangeText={setOverNote}
+              placeholder={t("ck.over_note_hint")}
+              placeholderTextColor={COLORS.muted}
+              maxLength={200}
+              multiline
+            />
           </View>
         )}
 
@@ -428,6 +442,7 @@ export default function AllocateScreen() {
               <Text key={`under-${index}`} style={[styles.noticeText, { color: AMBER }]}>{issue.message}</Text>
             ))}
             <Text style={styles.reasonTitle}>{t("ck.reason_title")}</Text>
+            {underspent.length > 0 && (
             <View style={styles.chipRow}>
               {REASONS.map((r) => (
                 <TouchableOpacity
@@ -441,6 +456,7 @@ export default function AllocateScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            )}
             <TextInput
               style={styles.input}
               value={details}
@@ -508,6 +524,9 @@ const styles = StyleSheet.create({
   checkButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.errorText },
   notice: { borderRadius: 10, padding: 10 },
   noticeText: { fontSize: 13, fontFamily: FONT.medium, lineHeight: 19 },
+  overBox: { backgroundColor: RED_BG, borderWidth: 1.5, borderColor: RED, borderRadius: 14, padding: 14, gap: 8 },
+  overTitle: { fontSize: 15, fontFamily: FONT.bold, color: RED },
+  overInput: { borderColor: RED, backgroundColor: COLORS.card },
   reasonBox: { backgroundColor: AMBER_BG, gap: 8, padding: 14, borderRadius: 14 },
   reasonTitle: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 4 },
   input: { minHeight: 56, borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 12, backgroundColor: COLORS.card, padding: 10, fontSize: 14, fontFamily: FONT.regular, color: COLORS.heading, textAlignVertical: "top" },

@@ -14,6 +14,7 @@ import { EditProjectPage } from "./pages/Projects/EditProjectPage";
 import { BomPage } from "./pages/Projects/BomPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
+import { VendorMasterListPage } from "./pages/Admin/VendorMasterListPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 import { ReportsPage } from "./pages/Reports/ReportsPage";
@@ -220,6 +221,15 @@ export default function App() {
               element={
                 <RoleRoute allow={["System Administrator"]}>
                   <UserManagementPage />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/admin/vendors"
+              element={
+                <RoleRoute allow={["System Administrator"]}>
+                  <VendorMasterListPage />
                 </RoleRoute>
               }
             />

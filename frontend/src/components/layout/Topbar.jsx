@@ -40,6 +40,7 @@ const PAGE_LABELS = [
   { test: (p) => p.startsWith("/tickets"), trail: ["nav.tickets"] },
   { test: (p) => p.startsWith("/tasks/progress-review"), trail: ["nav.tasks", "nav.progress_review"] },
   { test: (p) => p === "/admin/users", trail: ["nav.administration", "nav.user_accounts"] },
+  { test: (p) => p === "/admin/vendors", trail: ["nav.administration", "nav.vendor_list"] },
   { test: (p) => p === "/blockchain/alerts", trail: ["nav.record_protection", "nav.tamper_alerts"] },
   { test: (p) => p === "/notifications", trail: ["nav.notifications"] },
   { test: (p) => p === "/account", trail: ["nav.settings"] },

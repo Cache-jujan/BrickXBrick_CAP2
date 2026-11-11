@@ -457,9 +457,20 @@ export function SubmitExpensePage() {
                 {noBudget
                   ? t("bd.none_body")
                   : overBudget
-                    ? t("bd.over_body", { amount: pesoText(amountCents), remaining: pesoText(leftCents) })
+                    ? t("ck.over_auto") + " " + t("bd.over_body", { amount: pesoText(amountCents), remaining: pesoText(leftCents) })
                     : t("bd.note_body", { unspent: pesoText(leftCents - amountCents) })}
               </Banner>
+            )}
+            {overBudget && (
+              <div className="xp-over-note">
+                <Field
+                  as="textarea"
+                  label={t("ck.over_note_hint")}
+                  maxLength={300}
+                  value={draft.note}
+                  onChange={(event) => setField("note", event.target.value)}
+                />
+              </div>
             )}
             {needsNote && (
               <Field

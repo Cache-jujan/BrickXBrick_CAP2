@@ -13,8 +13,8 @@ const SplitIcon = () => (
   <svg {...ICON_PROPS}><path d="M12 3v6" /><path d="M12 9c0 4-6 4-6 9" /><path d="M12 9c0 4 6 4 6 9" /><path d="m3 15 3 3 3-3M15 15l3 3 3-3" /></svg>
 );
 export const EXPENSE_MODES = [
-  { id: "submit", to: "/expenses/new", labelKey: "nav.submit_expense", useKey: "mode.submit_use", Icon: ReceiptIcon },
-  { id: "split", to: "/expenses/split", labelKey: "nav.split_receipt", useKey: "mode.split_use", Icon: SplitIcon },
+  { id: "submit", to: "/expenses/new", labelKey: "nav.submit_expense", titleKey: "nav.submit_expense", useKey: "mode.submit_use", Icon: ReceiptIcon },
+  { id: "split", to: "/expenses/split", labelKey: "nav.split_receipt", titleKey: "mode.split_title", useKey: "mode.split_use", Icon: SplitIcon },
 ];
 
 /**
@@ -33,7 +33,7 @@ export function ExpenseModeBar({ mode, role }) {
       <div className="mode-bar-title">
         <span className="mode-bar-icon"><Icon /></span>
         <div>
-          <h1>{t(current.labelKey)}</h1>
+          <h1>{t(current.titleKey)}</h1>
           <p>{t(current.useKey)}</p>
         </div>
       </div>

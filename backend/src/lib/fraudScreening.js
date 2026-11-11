@@ -15,6 +15,31 @@ function parseLineItems(lineItems) {
   return Array.isArray(items) ? items : [];
 }
 
+// How much of the requested material the receipt holds: the quantity of only the lines that
+// belong to this request (same rules as the material check). null when no line can be tied to it,
+// so the caller falls back to the receipt's total quantity.
+function quantityOfMatchedLines(items, ticket, ticketId) {
+  const requestedName = normalize(ticket.materialtype);
+  let found = false;
+  let sum = 0;
+  for (const item of items) {
+    if (!item) continue;
+    const description = normalize(item.description);
+    const matches = ticket.bomitemid
+      ? item.bomItemID === ticket.bomitemid
+        || (item.matchedTicketID != null && String(item.matchedTicketID) === String(ticketId))
+        || (!item.bomItemID && description === requestedName)
+      : requestedName !== "" && description.includes(requestedName);
+    if (!matches) continue;
+    const qty = item.quantity == null || item.quantity === "" ? NaN : Number(item.quantity);
+    // A matched line with no quantity cannot be added up reliably: use the receipt total.
+    if (!Number.isFinite(qty)) return null;
+    found = true;
+    sum += qty;
+  }
+  return found ? sum : null;
+}
+
 function createFraudScreening({ query } = {}) {
   const runQuery = query || require("./db").query;
 
@@ -197,9 +222,12 @@ function createFraudScreening({ query } = {}) {
     // More than requested is always a mismatch. Less is one too, unless the expense
     // is a portion of an allocation: a request is bought in several trips, so a
     // smaller quantity is expected there.
-    if (ticket.quantity != null && expense.quantity != null) {
+    // The receipt total quantity adds up every line (other materials, delivery fees), so it
+    // is only compared when no line can be tied to the request.
+    const matchedBought = quantityOfMatchedLines(itemsArray, ticket, ticketId);
+    if (ticket.quantity != null && (matchedBought != null || expense.quantity != null)) {
       const requested = Number(ticket.quantity);
-      const bought = Number(expense.quantity);
+      const bought = matchedBought ?? Number(expense.quantity);
       const differs =
         bought > requested ||
         (bought < requested && !(await isAllocationPortion(expense)));

@@ -7,6 +7,7 @@ const { query, withTransaction } = require("./lib/db");
 const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
 const adminUsers = require("./routes/adminUsers");
+const adminVendors = require("./routes/adminVendors");
 const authRoutes = require("./routes/auth");
 const meRoutes = require("./routes/me");
 const legalRoutes = require("./routes/legal");
@@ -56,6 +57,7 @@ app.use("/api/me", meRoutes);                     // your own username / passwor
 app.use("/api/auth", authRoutes);               // login / session
 app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Notice
 app.use("/api/admin/users", adminUsers);          // F1 account management
+app.use("/api/admin/vendors", adminVendors);      // Vendor Master List CRUD
 app.use("/api/projects/:projectId/bom", bomRoutes); // F2 bill of materials
 app.use("/api/projects", projectRoutes);          // F2 projects
 app.use("/api/project-templates", projectTemplateRoutes); // F2 start screen: templates / copy a past project

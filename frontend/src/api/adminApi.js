@@ -39,6 +39,30 @@ export async function sendPasswordEmail(id) {
   return data;
 }
 
+// Vendor Master List: GET/POST /api/admin/vendors, PATCH/DELETE /api/admin/vendors/:id
+// payload: { vendorName, location?, tin?, birPermitType?, birPermitNumber?, approvalStatus }
+export async function listVendors() {
+  const { data } = await apiClient.get("/api/admin/vendors");
+  return data;
+}
+
+export async function createVendor(payload) {
+  const { data } = await apiClient.post("/api/admin/vendors", payload);
+  return data;
+}
+
+export async function updateVendor(id, payload) {
+  const { data } = await apiClient.patch(`/api/admin/vendors/${id}`, payload);
+  return data;
+}
+
+export async function deleteVendor(id) {
+  const { data } = await apiClient.delete(`/api/admin/vendors/${id}`);
+  return data;
+}
+
+export const PERMIT_TYPES = ["Permit", "PTU", "ATP"];
+
 export const VALID_ROLES = [
   "General Manager",
   "Project Manager",

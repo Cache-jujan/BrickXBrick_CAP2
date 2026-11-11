@@ -55,6 +55,7 @@ const NAV_BY_ROLE = {
   "System Administrator": [
     { to: "/dashboard/admin", label: "nav.dashboard", icon: GridIcon },
     { to: "/admin/users", label: "nav.user_accounts", icon: UsersIcon },
+    { to: "/admin/vendors", label: "nav.vendor_list", icon: ClipboardCheckIcon },
     { to: "/blockchain/alerts", label: "nav.tamper_alerts", icon: ShieldAlertIcon, alerts: "live" },
   ],
 };
