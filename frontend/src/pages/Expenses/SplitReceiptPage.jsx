@@ -34,10 +34,12 @@ import "./SplitReceiptPage.css";
 // Buying more than every request wants is allowed: the extra rides on the last request and
 // the PM is told. Spending past the project's allowance, or buying extra, needs a short reason.
 
+// Quick reasons are for finishing a request UNDER budget only. The note is read by the PM, so it stays English.
 const QUICK_REASONS = [
-  { key: "ck.reason_price", text: "Prices went up." },
-  { key: "ck.reason_delivery", text: "Delivery or gas." },
-  { key: "ck.reason_promo", text: "The store gave extra." },
+  { key: "ck.under_cheaper", text: "Prices were lower than expected." },
+  { key: "ck.under_stock", text: "The store ran out of stock." },
+  { key: "ck.under_less", text: "Needed less than planned." },
+  { key: "ck.under_alt", text: "Bought a cheaper alternative." },
 ];
 
 /** Create an empty receipt draft with its own editable line item. */
@@ -347,7 +349,7 @@ export function SplitReceiptPage() {
         excludeTicketIDs: excluded,
         feeTargets,
         lineTargets,
-        note: needsReason ? note.trim() : undefined,
+        note: note.trim() || undefined,
       });
       setResult(saved);
       if (activeScanID) { dismissScan(activeScanID); setActiveScanID(""); } // this receipt is done: take it off the tray
@@ -625,11 +627,23 @@ export function SplitReceiptPage() {
             {budgetBlockers.length > 0 && (
               <Banner tone="error" title={t("bd.over_title")}>
                 <ul className="split-problems">
+                  <li><strong>{t("ck.over_auto")}</strong></li>
                   {budgetBlockers.map((issue, index) => (
                     <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
                   ))}
                 </ul>
               </Banner>
+            )}
+            {budgetBlockers.length > 0 && !needsReason && (
+              <div className="split-note split-note-over">
+                <Field
+                  as="textarea"
+                  label={t("ck.over_note_hint")}
+                  maxLength={200}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </div>
             )}
             {underspentIssues.length > 0 && (
               <Banner tone="warning" title={t("bd.note_title")}>
@@ -651,13 +665,13 @@ export function SplitReceiptPage() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
-                <div className="split-note-quick">
+                {underspentIssues.length > 0 && <div className="split-note-quick">
                   {QUICK_REASONS.map((reason) => (
                     <Button key={reason.key} type="button" variant="secondary" onClick={() => setNote((current) => (current ? `${current} ${reason.text}` : reason.text))}>
                       {t(reason.key)}
                     </Button>
                   ))}
-                </div>
+                </div>}
               </div>
             )}
 

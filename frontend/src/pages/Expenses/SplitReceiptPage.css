@@ -126,3 +126,14 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* Over budget: the note box is outlined in red to match the banner above it. */
+.split-note-over textarea,
+.xp-over-note textarea {
+  border-color: var(--color-error, #a3231b);
+  background: #fdecea;
+}
+.split-note-over label,
+.xp-over-note label {
+  color: var(--color-error, #a3231b);
+}
