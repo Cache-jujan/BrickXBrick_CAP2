@@ -1,0 +1,97 @@
+/* Vendor Master List. The page frame, toolbar and table come from UserManagementPage.css. */
+
+.vendors-name-cell {
+  min-width: 200px;
+}
+.vendors-name {
+  display: block;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.vendors-location {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+
+/* Tax identity reads like an ID, so it is set in a fixed-width face. */
+.vendors-code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.vendors-permit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.vendors-permit-type {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+
+.vendors-actions {
+  min-width: 140px;
+}
+
+.vendors-modal {
+  max-width: 560px;
+}
+.vendors-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-4);
+}
+.vendors-span-2 {
+  grid-column: 1 / -1;
+}
+.vendors-hint {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-ink-faint);
+}
+.vendors-modal .banner {
+  margin-bottom: var(--space-4);
+}
+
+/* Phone: one block per vendor, with the actions kept inside the screen. */
+@media (max-width: 720px) {
+  .vendors-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .vendors-table thead { display: none; }
+  .vendors-table,
+  .vendors-table tbody { display: block; }
+  .users-table.vendors-table > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-3);
+    row-gap: 4px;
+    align-items: center;
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .users-table.vendors-table > tbody > tr:last-child { border-bottom: none; }
+  .users-table.vendors-table > tbody > tr > td { display: block; padding: 0; height: auto; border: none; min-width: 0; }
+  .users-table.vendors-table > tbody > tr > td:nth-child(1) { grid-column: 1; min-width: 0; overflow-wrap: anywhere; }
+  .users-table.vendors-table > tbody > tr > td:nth-child(5) { grid-column: 2; grid-row: 1; }
+  .users-table.vendors-table > tbody > tr > td:nth-child(2),
+  .users-table.vendors-table > tbody > tr > td:nth-child(3),
+  .users-table.vendors-table > tbody > tr > td:nth-child(4) { grid-column: 1 / -1; color: var(--color-ink-soft); }
+  .users-table.vendors-table > tbody > tr > td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; font-family: inherit; }
+  .users-table.vendors-table > tbody > tr > td:has(> .users-not-locked) { display: none; }
+  .users-table.vendors-table > tbody > tr > td.users-actions {
+    display: flex;
+    grid-column: 1 / -1;
+    min-width: 0;
+    margin-top: var(--space-2);
+    gap: 0 var(--space-5);
+  }
+  .users-table.vendors-table .users-action-link { min-height: 44px; display: inline-flex; align-items: center; margin: 0; }
+}
