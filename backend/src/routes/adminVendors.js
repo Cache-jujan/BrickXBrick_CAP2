@@ -16,7 +16,7 @@ const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
 
 const COLUMNS = `vendorID AS "vendorID", vendorName AS "vendorName", location,
   tin, birPermitType AS "birPermitType", birPermitNumber AS "birPermitNumber",
-  historicalAverage AS "historicalAverage", approvalStatus AS "approvalStatus",
+  approvalStatus AS "approvalStatus",
   createdAt AS "createdAt"`;
 
 /** Read and check the typed fields. Throws one InputError naming the first problem. */
