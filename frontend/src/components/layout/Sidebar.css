@@ -1,4 +1,4 @@
-/* Reserves the rail's width in the page; the sidebar itself may grow past it when it opens on hover. */
+/* Reserves the rail's width in the page. */
 .sidebar-slot {
   position: relative;
   z-index: 40;
@@ -6,10 +6,6 @@
   width: var(--sidebar-width);
   transition: width var(--duration) var(--ease);
 }
-.sidebar-slot-collapsed {
-  width: var(--sidebar-width-collapsed);
-}
-
 .sidebar {
   width: 100%;
   flex-shrink: 0;
@@ -26,11 +22,6 @@
   border-right: 1px solid rgba(255, 255, 255, 0.04);
   padding: var(--space-5) var(--space-4);
   transition: width var(--duration) var(--ease);
-}
-
-.sidebar-collapsed {
-  padding-left: var(--space-3);
-  padding-right: var(--space-3);
 }
 
 .sidebar-brand {
@@ -132,32 +123,6 @@
   background: rgba(255, 255, 255, 0.28);
 }
 
-.sidebar-collapse-btn {
-  margin-top: var(--space-4);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 36px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-md);
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: color var(--duration) var(--ease), background-color var(--duration) var(--ease);
-}
-.sidebar-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-}
-.sidebar-collapse-btn svg {
-  transform: rotate(90deg);
-}
-.sidebar-collapsed .sidebar-collapse-btn svg {
-  transform: rotate(-90deg);
-}
-
 /* Who is signed in, as a small card at the bottom of the rail. */
 .sidebar-footer {
   margin-top: auto;
@@ -209,14 +174,12 @@
 /* Mobile: the sidebar becomes a drawer opened from the topbar. */
 @media (max-width: 900px) {
   /* No box of its own on a phone: the drawer is fixed, and must stay above the dimmed page. */
-  .sidebar-slot,
-  .sidebar-slot-collapsed {
+  .sidebar-slot {
     position: static;
     z-index: auto;
     width: 0;
   }
-  .sidebar,
-  .sidebar-collapsed {
+  .sidebar {
     position: fixed;
     left: 0;
     top: 0;
@@ -229,43 +192,6 @@
   .sidebar-open {
     transform: translateX(0);
   }
-  .sidebar-collapse-btn {
-    display: none;
-  }
-}
-
-/* ---------- Collapsed state ---------- */
-.sidebar-collapsed .sidebar-brand {
-  justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
-}
-
-.sidebar-collapsed .sidebar-link {
-  justify-content: center;
-  padding: 0;
-}
-
-.sidebar-collapsed .sidebar-link-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  font-size: 10px;
-}
-
-.sidebar-collapsed .sidebar-collapse-btn {
-  justify-content: center;
-  padding: 0;
-}
-
-.sidebar-collapsed .sidebar-footer {
-  justify-content: center;
-  padding: var(--space-2);
-  background: none;
-  border-color: transparent;
 }
 
 /* Ways to submit an expense, listed under "Submit expense". */
@@ -309,12 +235,6 @@
   right: var(--space-3);
   top: calc(var(--space-2) * -1 - 1px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* The collapsed rail opened by pointing at it: full width, laid over the page with a shadow. */
-.sidebar-peek {
-  width: var(--sidebar-width);
-  box-shadow: 8px 0 24px -8px rgba(0, 0, 0, 0.45);
 }
 
 /* A group row (Submit expense): the arrow sits at the right end of the row. */

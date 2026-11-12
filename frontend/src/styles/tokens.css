@@ -99,7 +99,6 @@
   --content-max: 1600px;
   --form-max: 600px;
   --sidebar-width: 268px;
-  --sidebar-width-collapsed: 84px;
 
   /* Motion */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
