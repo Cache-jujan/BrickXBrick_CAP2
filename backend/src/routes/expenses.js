@@ -15,7 +15,7 @@ const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, co
 const { assertProjectActive } = require("../lib/projectRules");
 const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
 const { assertProjectNotTerminated } = require("../lib/projectHold");
-const { screenExpense } = require("../lib/screenExpense");
+const { screenOrFlag } = require("../lib/screenExpense");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
 const { LIMITS, text, amount: cleanAmount } = require("../lib/inputRules");
 
@@ -74,33 +74,6 @@ async function assertSiteManagerProject(user, projectId) {
     }
     if (result.rows[0].sitemanagerid !== user.id) {
         throw httpError(403, "You may only submit expenses for tickets on projects assigned to you");
-    }
-}
-
-const SCREENING_FAILED_REASON =
-    "Automatic fraud screening could not run for this expense. Review it manually before approving.";
-
-/**
- * Run F9 screening on a saved expense without letting a screening failure
- * undo it. The expense row is already committed, so a throw here used to make
- * the client see a 500 for an expense that was in fact saved (and retry it).
- * If screening throws, a Screening_Failed flag is written instead, so the
- * expense lands in the PM's flagged queue rather than looking clean.
- */
-async function screenOrFlag(expenseID) {
-    try {
-        await screenExpense(expenseID);
-    } catch (err) {
-        console.error(`Expense ${expenseID} failed screening:`, err);
-        try {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
-                 VALUES ($1, 'Screening_Failed', $2, 'system', 'Pending')`,
-                [expenseID, SCREENING_FAILED_REASON]
-            );
-        } catch (flagErr) {
-            console.error(`Expense ${expenseID}: could not record the screening failure:`, flagErr);
-        }
     }
 }
 

@@ -29,7 +29,7 @@ const { isTicketFulfilled, expenseCompletesRequest, FULFILLED_MESSAGE } = requir
 const { quantityOfMatchedLines } = require("../lib/ticketQuantity");
 const { logTransition } = require("../lib/ticketTransitions");
 const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
-const { screenExpense } = require("../lib/screenExpense");
+const { screenOrFlag } = require("../lib/screenExpense");
 const { submitTaskProgress, taskPhotoExists, TaskProgressError } = require("../lib/taskProgress");
 const { submitCheckin, checkinPhotoExists, CheckinError } = require("../lib/dailyCheckin");
 
@@ -58,7 +58,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // One queue, three kinds of items, each owned by one role.
 const ROLE_FOR_TYPE = { expense: "Purchaser", task_update: "Site Manager", daily_checkin: "Site Manager" };
 
-// Process ONE queued expense. Returns the new expenseID, or throws SyncReject.
+async function alreadySynced(uuid) {
+  const seen = await query("SELECT action_uuid FROM synced_actions WHERE action_uuid = $1", [uuid]);
+  return seen.rowCount > 0;
+}
+
+// Process ONE queued expense. Returns the new expenseID (null if a concurrent
+// request had already saved this uuid), or throws SyncReject.
 // Mirrors POST /api/expenses: validate -> normalize -> insert -> screen.
 async function syncExpense(user, uuid, data) {
   const {
@@ -162,7 +168,9 @@ async function syncExpense(user, uuid, data) {
   // crash can't leave an expense without its synced_actions marker (or vice
   // versa). Screening runs AFTER commit (it reads through the pool).
   const submitNote = typeof bodySubmitNote === "string" ? bodySubmitNote.trim().slice(0, SUBMIT_NOTE_MAX) : "";
-  const expenseID = await withTransaction(async (client) => {
+  let expenseID;
+  try {
+  expenseID = await withTransaction(async (client) => {
     // Strict budget, the same rule as POST /expenses: lock the request, then check what is left.
     const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
     const lockedStatus = locked.rows?.[0]?.status;
@@ -210,8 +218,20 @@ async function syncExpense(user, uuid, data) {
     );
     return newId;
   });
+  } catch (error) {
+    // Idempotency race: another request saved this uuid between our check and our
+    // insert. The transaction rolled back, so nothing is half-written. Only a unique
+    // violation on synced_actions counts; any other 23505 is an unexpected error and
+    // the item stays pending.
+    if (error && error.code === "23505" && (await alreadySynced(uuid))) {
+      return null;
+    }
+    throw error;
+  }
 
-  await screenExpense(expenseID);
+  // The expense is committed; a screening failure must not undo it or make the
+  // phone think it was rejected. It records a Screening_Failed flag instead.
+  await screenOrFlag(expenseID);
   return expenseID;
 }
 
@@ -380,9 +400,10 @@ router.post("/", async (req, res, next) => {
         } else if (err instanceof SyncReject) {
           rejected.push({ id: uuid, code: err.code, message: err.message });
         } else {
-          // Unexpected server error on THIS item — isolate it, keep going.
-          console.error("SYNC ITEM ERROR:", uuid, err);
-          rejected.push({ id: uuid, code: "SERVER_ERROR", message: "could not sync this item" });
+          // Unexpected server error on THIS item — isolate it, keep going. It is NOT a
+          // rejection (the phone treats those as final): a brief database problem must
+          // not discard the user's work. Left in neither list, it stays pending.
+          console.error("SYNC ITEM ERROR (left pending):", uuid, err);
         }
       }
     }

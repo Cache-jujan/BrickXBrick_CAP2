@@ -61,6 +61,7 @@ async function run(sql, params = []) {
     return { rowCount: 0, rows: [] };
   }
   if (text.startsWith("insert into task_progress_log")) {
+    if (state.logInsertError) throw new Error("connection terminated");
     const [taskid, submittedby, clientsubmissionid, photoevidenceurl, note] = params;
     const row = { taskid, submittedby, clientsubmissionid, photoevidenceurl, note, reviewstatus: "Pending Review" };
     state.logs.push(row);
@@ -85,7 +86,12 @@ const realAvailability = require("../src/lib/ticketAvailability");
 stub("../src/lib/ticketAvailability", { ...realAvailability, isTicketFulfilled: async () => false, expenseCompletesRequest: async () => true });
 stub("../src/lib/ticketTransitions", { assertLegalTransition: () => {}, logTransition: async () => {} });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
-stub("../src/lib/screenExpense", { screenExpense: async () => ({ flagTypes: [] }) });
+const realScreenModule = require("../src/lib/screenExpense");
+const fakeScreen = async () => ({ flagTypes: [] });
+stub("../src/lib/screenExpense", {
+  screenExpense: fakeScreen,
+  screenOrFlag: (id) => realScreenModule.screenOrFlag(id, { screen: fakeScreen }),
+});
 const realR2 = require("../src/lib/r2");
 stub("../src/lib/r2", {
   ...realR2,
@@ -233,6 +239,19 @@ test("a storage failure is NOT a rejection: the item is left out so the phone re
   assert.equal(state.logs.length, 0);
 
   state.photoCheck = async () => true; // storage is back
+  const second = await sync([good()]);
+  assert.deepEqual(second.body, { syncedIds: [U1], rejected: [] });
+  assert.equal(state.logs.length, 1);
+});
+
+test("an unexpected server error is NOT a rejection: the item is left out so the phone retries, then it syncs", async () => {
+  reset();
+  state.logInsertError = true; // e.g. the database drops the connection mid-write
+  const first = await sync([good()]);
+  assert.deepEqual(first.body, { syncedIds: [], rejected: [] });
+  assert.equal(state.logs.length, 0);
+
+  state.logInsertError = false;
   const second = await sync([good()]);
   assert.deepEqual(second.body, { syncedIds: [U1], rejected: [] });
   assert.equal(state.logs.length, 1);
