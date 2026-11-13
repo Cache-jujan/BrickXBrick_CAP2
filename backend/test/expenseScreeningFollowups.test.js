@@ -62,8 +62,12 @@ stub("../src/lib/db", { query: fakeQuery, withTransaction: async (fn) => fn({ qu
 stub("../src/middleware/auth", { requireAuth: (req, _res, next) => { req.user = currentUser; next(); } });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/projectRules", { assertProjectActive: async () => {} });
+// The route calls screenOrFlag; keep the real one, around this file's fake screen.
+const realScreenModule = require("../src/lib/screenExpense");
+const fakeScreen = async (id) => { screened.push(id); return screenImpl(id); };
 stub("../src/lib/screenExpense", {
-  screenExpense: async (id) => { screened.push(id); return screenImpl(id); },
+  screenExpense: fakeScreen,
+  screenOrFlag: (id) => realScreenModule.screenOrFlag(id, { screen: fakeScreen }),
 });
 stub("../src/lib/blockchainService", { canonicalizeExpenseV2: () => "hash", submitHashWithTimeout: async () => ({}) });
 

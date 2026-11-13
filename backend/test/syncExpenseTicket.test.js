@@ -14,7 +14,7 @@ function stub(relative, exports) {
 const TICKET = "33333333-3333-4333-8333-333333333333";
 const PROJECT = "44444444-4444-4444-8444-444444444444";
 const UUID = "55555555-5555-4555-8555-555555555555";
-const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "1500.00", ticketQuantity: undefined };
+const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "1500.00", ticketQuantity: undefined, insertCode: undefined, syncedInsertError: false, raced: false, screenThrows: false, flags: [] };
 
 function makeRun() {
   return async (sql) => {
@@ -22,7 +22,12 @@ function makeRun() {
     // The strict budget check (lib/ticketBudget.js): the request lock, then what is left.
     if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: state.lockedStatus === null ? [] : [{ status: state.lockedStatus ?? state.ticketStatus }] };
     if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: state.remaining }] };
-    if (text.startsWith("select action_uuid")) return { rowCount: 0, rows: [] };
+    // After a lost idempotency race, the other request's synced_actions row is visible.
+    if (text.startsWith("select action_uuid")) return { rowCount: state.raced ? 1 : 0, rows: [] };
+    if (text.startsWith("insert into fraudflags")) {
+      state.flags.push(text);
+      return { rowCount: 1, rows: [] };
+    }
     if (text.startsWith("select count(*)::int as count")) {
       return { rowCount: 1, rows: [{ count: state.spentCount, quantity: state.spentCount ? 5 : 0 }] };
     }
@@ -35,11 +40,15 @@ function makeRun() {
       return { rowCount: 1, rows: [] };
     }
     if (text.startsWith("insert into expenses")) {
-      if (state.failInsert) throw new Error("insert failed");
+      if (state.failInsert) throw Object.assign(new Error("insert failed"), state.insertCode ? { code: state.insertCode } : {});
       state.expenses += 1;
       return { rowCount: 1, rows: [{ expenseid: "e-1" }] };
     }
     if (text.startsWith("insert into synced_actions")) {
+      if (state.syncedInsertError) {
+        state.raced = true; // the other request committed this uuid first
+        throw Object.assign(new Error('duplicate key value violates unique constraint "synced_actions_pkey"'), { code: "23505" });
+      }
       state.synced += 1;
       return { rowCount: 1, rows: [] };
     }
@@ -66,7 +75,16 @@ stub("../src/middleware/auth", {
 });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/ticketTransitions", { assertLegalTransition: () => {}, logTransition: async () => {} });
-stub("../src/lib/screenExpense", { screenExpense: async () => ({ flagTypes: [] }) });
+// The route calls screenOrFlag: keep the real one around a screen the tests can make throw.
+const realScreenModule = require("../src/lib/screenExpense");
+const fakeScreen = async () => {
+  if (state.screenThrows) throw new Error("screening is down");
+  return { flagTypes: [] };
+};
+stub("../src/lib/screenExpense", {
+  screenExpense: fakeScreen,
+  screenOrFlag: (id) => realScreenModule.screenOrFlag(id, { screen: fakeScreen }),
+});
 const syncRouter = require("../src/routes/sync");
 
 const expenseItem = () => ({
@@ -113,10 +131,41 @@ test("a good expense resolves its ticket and is saved", async () => {
 test("a failed expense insert leaves the ticket as it was (not Resolved)", async () => {
   Object.assign(state, { ticketStatus: "Acknowledged", failInsert: true, expenses: 0, synced: 0 });
   const res = await sync([expenseItem()]);
-  assert.equal(res.body.syncedIds.length, 0);
-  assert.equal(res.body.rejected[0].code, "SERVER_ERROR");
+  // An unexpected error is NOT a rejection (the phone treats those as final): the
+  // item is left in neither list, so it stays pending and is retried.
+  assert.deepEqual(res.body, { syncedIds: [], rejected: [] });
   assert.equal(state.ticketStatus, "Acknowledged");
   assert.equal(state.expenses, 0);
+});
+
+const CLEAN = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, insertCode: undefined, syncedInsertError: false, raced: false, screenThrows: false, flags: [] };
+
+test("a unique violation on synced_actions means another request saved this uuid: reported synced", async () => {
+  Object.assign(state, CLEAN, { syncedInsertError: true });
+  const res = await sync([expenseItem()]);
+  Object.assign(state, CLEAN);
+  assert.deepEqual(res.body, { syncedIds: [UUID], rejected: [] });
+  assert.equal(state.ticketStatus, "Acknowledged"); // this request's transaction was rolled back
+  assert.equal(state.expenses, 0);
+});
+
+test("a 23505 that is NOT from synced_actions leaves the item unanswered (not synced, not rejected)", async () => {
+  Object.assign(state, CLEAN, { failInsert: true, insertCode: "23505" });
+  const res = await sync([expenseItem()]);
+  Object.assign(state, CLEAN);
+  assert.deepEqual(res.body, { syncedIds: [], rejected: [] });
+  assert.equal(state.expenses, 0);
+});
+
+test("a screening failure after commit still reports synced and writes a Screening_Failed flag", async () => {
+  Object.assign(state, CLEAN, { screenThrows: true });
+  const res = await sync([expenseItem()]);
+  const { flags, expenses } = state;
+  Object.assign(state, CLEAN);
+  assert.deepEqual(res.body, { syncedIds: [UUID], rejected: [] });
+  assert.equal(expenses, 1);
+  assert.equal(flags.length, 1);
+  assert.match(flags[0], /screening_failed/);
 });
 
 test("a request that is already fulfilled rejects the queued expense", async () => {

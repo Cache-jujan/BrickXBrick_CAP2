@@ -38,6 +38,9 @@ app.use(cors());
 // path only keeps such a page from failing. body-parser skips a body it has
 // already read, so the global parser below leaves it alone.
 app.use("/api/reports/pdf", express.json({ limit: "2mb" }));
+// A full offline batch (many expenses with line items and notes) can pass the
+// 100 kb default; the phone would then resend the same oversized batch every 15 s.
+app.use("/api/sync", express.json({ limit: "2mb" }));
 app.use(express.json());
 
 // --- Health / session ---
