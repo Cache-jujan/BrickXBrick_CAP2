@@ -234,6 +234,10 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         // two submissions cannot both slip under the cap.
         const expense = await withTransaction(async (client) => {
             const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+            const lockedStatus = locked.rows?.[0]?.status;
+            if (lockedStatus !== "Acknowledged" && lockedStatus !== "Resolved") {
+                throw httpError(409, `Ticket must be Acknowledged or Resolved before an expense can be linked to it (it is ${lockedStatus})`);
+            }
             const run = (sql, params) => client.query(sql, params);
             const remainingBudgetCents = await loadRemainingBudgetCents(run, ticketID);
             // Does this purchase bring what is left of the request to 0? Only then does it need the

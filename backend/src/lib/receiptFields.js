@@ -78,7 +78,8 @@ function normalizeLineItems(rawItems) {
       amount: item.amount,
       quantity: Number.isFinite(item.quantity) ? item.quantity : null,
       unitPrice: resolveUnitPrice(item),
-            bomItemID: asUUIDOrNull(item.bomItemID),
+      bomItemID: asUUIDOrNull(item.bomItemID),
+      ...(asUUIDOrNull(item.matchedTicketID) ? { matchedTicketID: item.matchedTicketID } : {}),
     }));
 }
 

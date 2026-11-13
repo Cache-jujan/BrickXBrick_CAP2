@@ -20,7 +20,7 @@ function makeRun() {
   return async (sql) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     // The strict budget check (lib/ticketBudget.js): the request lock, then what is left.
-    if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: [{ status: state.ticketStatus }] };
+    if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: state.lockedStatus === null ? [] : [{ status: state.lockedStatus ?? state.ticketStatus }] };
     if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: state.remaining }] };
     if (text.startsWith("select action_uuid")) return { rowCount: 0, rows: [] };
     if (text.startsWith("select count(*)::int as count")) {
@@ -182,3 +182,16 @@ test("the purchase that brings the request to 0 resolves it", async () => {
   assert.deepEqual(res.body, { syncedIds: [UUID], rejected: [] });
   assert.equal(state.ticketStatus, "Resolved");
 });
+
+for (const status of ["Rejected", "Cancelled", null]) {
+  test(`sync rejects a ticket whose locked status is ${status}`, async () => {
+    Object.assign(state, { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, lockedStatus: status });
+    try {
+      const res = await sync([expenseItem()]);
+      assert.equal(res.body.rejected[0].code, "TICKET_NOT_OPEN");
+      assert.equal(state.expenses, 0);
+    } finally {
+      delete state.lockedStatus;
+    }
+  });
+}

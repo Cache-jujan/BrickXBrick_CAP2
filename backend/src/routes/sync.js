@@ -165,6 +165,10 @@ async function syncExpense(user, uuid, data) {
   const expenseID = await withTransaction(async (client) => {
     // Strict budget, the same rule as POST /expenses: lock the request, then check what is left.
     const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+    const lockedStatus = locked.rows?.[0]?.status;
+    if (lockedStatus !== "Acknowledged" && lockedStatus !== "Resolved") {
+        throw new SyncReject("TICKET_NOT_OPEN", `Ticket is ${lockedStatus}; expenses can only be recorded against an Acknowledged or Resolved ticket`);
+    }
     const run = (sql, params) => client.query(sql, params);
     const remainingBudgetCents = await loadRemainingBudgetCents(run, ticketID);
     // Does this purchase bring what is left of the request to 0? Only then does it need the

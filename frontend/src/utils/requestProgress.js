@@ -6,13 +6,19 @@ const hundredths = (value) => Math.round(Number(value) * 100);
 const normalize = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 /** Quantity of only the receipt lines for the requested material; null when none match or a matched line has no quantity. */
-export function matchedQuantity(lines, materialType) {
+export function matchedQuantity(lines, materialType, bomItemID, ticketID) {
   const requestedName = normalize(materialType);
-  if (!requestedName) return null;
   let found = false;
   let sum = 0;
   for (const line of lines ?? []) {
-    if (!normalize(line?.description).includes(requestedName)) continue;
+    if (!line) continue;
+    const description = normalize(line.description);
+    const matches = bomItemID
+      ? line.bomItemID === bomItemID
+        || (line.matchedTicketID != null && String(line.matchedTicketID) === String(ticketID))
+        || (!line.bomItemID && description === requestedName)
+      : requestedName !== "" && description.includes(requestedName);
+    if (!matches) continue;
     const raw = line.quantity;
     const qty = raw === "" || raw == null ? NaN : Number(raw);
     if (!Number.isFinite(qty)) return null;
