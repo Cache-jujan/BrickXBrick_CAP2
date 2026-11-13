@@ -872,6 +872,11 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site M
                 err.status = 403;
                 throw err;
             }
+            if (ticket.projectmanagerid !== req.user.id) {
+                const err = new Error("You may only resolve tickets from projects assigned to you");
+                err.status = 403;
+                throw err;
+            }
             if (ticket.status !== "Pending") {
                 const err = new Error("Report tickets can only be resolved while Pending");
                 err.status = 409;
@@ -937,6 +942,11 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
         const reasonText = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
 
         if (req.user.role === "Project Manager") {
+            if (ticket.projectmanagerid !== req.user.id) {
+                const err = new Error("You may only reject tickets from projects assigned to you");
+                err.status = 403;
+                throw err;
+            }
             if (ticket.status !== "Pending") {
                 const err = new Error("Project Manager may only reject a ticket while it is Pending");
                 err.status = 409;
