@@ -14,20 +14,20 @@ function stub(relative, exports) {
 const TICKET = "33333333-3333-4333-8333-333333333333";
 const PROJECT = "44444444-4444-4444-8444-444444444444";
 const UUID = "55555555-5555-4555-8555-555555555555";
-const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "1500.00" };
+const state = { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "1500.00", ticketQuantity: undefined };
 
 function makeRun() {
   return async (sql) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     // The strict budget check (lib/ticketBudget.js): the request lock, then what is left.
-    if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
+    if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: [{ status: state.ticketStatus }] };
     if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: state.remaining }] };
     if (text.startsWith("select action_uuid")) return { rowCount: 0, rows: [] };
     if (text.startsWith("select count(*)::int as count")) {
       return { rowCount: 1, rows: [{ count: state.spentCount, quantity: state.spentCount ? 5 : 0 }] };
     }
     if (text.startsWith("select projectid, status, assignedto")) {
-      return { rowCount: 1, rows: [{ projectid: PROJECT, status: state.ticketStatus, assignedto: "purchaser-1" }] };
+      return { rowCount: 1, rows: [{ projectid: PROJECT, status: state.ticketStatus, assignedto: "purchaser-1", quantity: state.ticketQuantity, materialtype: "Cement", bomitemid: null }] };
     }
     if (text.startsWith("select status from projects")) return { rowCount: 1, rows: [{ status: "Active" }] };
     if (text.startsWith("update tickets set status = 'resolved'")) {
@@ -65,6 +65,7 @@ stub("../src/middleware/auth", {
   requireAuth: (req, _res, next) => ((req.user = { id: "purchaser-1", role: "Purchaser" }), next()),
 });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
+stub("../src/lib/ticketTransitions", { assertLegalTransition: () => {}, logTransition: async () => {} });
 stub("../src/lib/screenExpense", { screenExpense: async () => ({ flagTypes: [] }) });
 const syncRouter = require("../src/routes/sync");
 
@@ -163,4 +164,21 @@ test("a queued expense that finishes under budget needs its note", async () => {
   const saved = await sync([item]);
   state.remaining = "1500.00";
   assert.deepEqual(saved.body.syncedIds, [UUID]);
+});
+
+test("a part purchase leaves the request Acknowledged and needs no under-budget note", async () => {
+  Object.assign(state, { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 0, remaining: "2000.00", ticketQuantity: 10 });
+  const res = await sync([expenseItem()]); // 3 of 10 bought, under budget, no note
+  Object.assign(state, { remaining: "1500.00", ticketQuantity: undefined });
+  assert.deepEqual(res.body, { syncedIds: [UUID], rejected: [] });
+  assert.equal(state.ticketStatus, "Acknowledged");
+  assert.equal(state.expenses, 1);
+});
+
+test("the purchase that brings the request to 0 resolves it", async () => {
+  Object.assign(state, { ticketStatus: "Acknowledged", failInsert: false, expenses: 0, synced: 0, spentCount: 1, remaining: "1500.00", ticketQuantity: 8 });
+  const res = await sync([expenseItem()]); // 5 already bought + 3 now = 8 of 8
+  Object.assign(state, { spentCount: 0, ticketQuantity: undefined });
+  assert.deepEqual(res.body, { syncedIds: [UUID], rejected: [] });
+  assert.equal(state.ticketStatus, "Resolved");
 });

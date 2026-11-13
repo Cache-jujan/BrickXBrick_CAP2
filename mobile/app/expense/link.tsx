@@ -6,8 +6,7 @@ import * as Crypto from "expo-crypto";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { dismissScan } from "@/lib/receipt-scans";
-import { getSession } from "@/lib/auth";
-import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
+import { resubmitExpense, submitExpense } from "@/lib/api";
 import { canEnqueue, queueExpense } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { isNetworkError } from "@/lib/sync/messages";
@@ -16,7 +15,8 @@ import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
-import { formatPeso } from "@/lib/money";
+import { formatPeso, formatQty } from "@/lib/money";
+import { matchedQuantity, receiptProgress, receiptTotalQuantity } from "@/lib/request-progress";
 import { budgetIssue } from "@/lib/budget-check";
 import { KeyboardAvoider } from "@/components/keyboard-avoider";
 import { useLocale } from "@/lib/i18n-context";
@@ -49,6 +49,19 @@ export default function LinkScreen() {
   // A rejected expense being resubmitted may have no ticket on hand: the server keeps its link.
   if (!ocrResult || (!ticket && !draft.resubmit)) return <Redirect href="/" />;
 
+  // How much of the request this receipt buys: only the lines for the requested material count.
+  // The request stays open (and in To Buy) until a purchase brings what is left to 0; the server
+  // decides and has the last word. With no quantities on hand there is no bar and the old rule applies.
+  const progress = ticket && !draft.resubmit
+    ? receiptProgress({
+        requested: ticket.requestedQuantity,
+        remaining: ticket.remainingQuantity,
+        thisQuantity: matchedQuantity(ocrResult.lineItems, ticket) ?? receiptTotalQuantity(ocrResult.lineItems),
+      })
+    : null;
+  const completes = progress ? progress.completes : true;
+  const unitText = ticket?.unit ? ` ${ticket.unit}` : "";
+
   // Arrow function declared AFTER the guard, so ocrResult stays narrowed inside it.
   const handleSubmit = async () => {
     if (busyRef.current) return; // double-tap guard
@@ -73,7 +86,7 @@ export default function LinkScreen() {
     // The strict budget, checked here so a refused amount never leaves the request Resolved.
     // The server checks again and has the last word. (A resubmit is checked by the server.)
     if (ticket && !draft.resubmit) {
-      const problem = budgetIssue({ amount: amountNum, remaining: ticket.remaining, note: notes });
+      const problem = budgetIssue({ amount: amountNum, remaining: ticket.remaining, note: notes, completes });
       if (problem?.code === "none") return Alert.alert(t("bd.none_title"), t("bd.none_body"));
       if (problem?.code === "over") {
         return Alert.alert(t("bd.over_title"), t("bd.over_body", { amount: formatPeso(amountNum), remaining: formatPeso(problem.remaining) }));
@@ -147,18 +160,8 @@ export default function LinkScreen() {
 
       if (!ticket) throw new Error(t("mx.not_linked"));
 
-      // 2) Purchasers resolve the ticket after capture. Site Managers arrive
-      // only through their own already-resolved Material Request tickets.
-      if (getSession()?.user.role !== "Site Manager") {
-        try {
-          await resolveTicket(ticket.ticketId);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!/cannot move ticket from resolved/i.test(msg)) throw err;
-        }
-      }
-
-      // 3) Submit the expense.
+      // 2) Submit the expense. The server resolves the request only when this purchase brings
+      // what is left to 0; a part purchase leaves it open for the rest, for every role.
       await submitExpense({
         ticketID: ticket.ticketId,
         vendorName: ocrResult.vendorName,
@@ -175,7 +178,12 @@ export default function LinkScreen() {
 
       // Submitted: take it off "Scanned receipts" so it can't be sent twice.
       if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
-      Alert.alert(t("mx.submitted_title"), t("mx.submitted_body"));
+      Alert.alert(
+        t("mx.submitted_title"),
+        progress && !progress.completes
+          ? `${t("mx.submitted_body")} ${t("rq.stays_open", { left: `${formatQty(progress.leftAfter)}${unitText}` })}`
+          : t("mx.submitted_body")
+      );
       router.replace("/");
       reset();
     } catch (err) {
@@ -197,11 +205,11 @@ export default function LinkScreen() {
   // The note turns required (red) when the request would be finished under budget.
   const noteRequired =
     !!ticket && !draft.resubmit &&
-    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes })?.code === "note";
+    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes, completes })?.code === "note";
 
   const overBudget =
     !!ticket && !draft.resubmit &&
-    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes })?.code === "over";
+    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes, completes })?.code === "over";
 
   const submitLabel = !category
     ? t("mx.pick_category")
@@ -222,6 +230,27 @@ export default function LinkScreen() {
               <Text style={styles.ticketSubject}>{ticket.subject}</Text>
               <Text style={styles.ticketMeta}>{ticket.projectName}</Text>
               {ticket.budget && <Text style={styles.ticketBudget}>{t("mx.approved_budget", { amount: formatPeso(ticket.budget) })}</Text>}
+            </View>
+          ) : null}
+
+          {progress ? (
+            // The same bar as To Buy: what was bought before (solid), what this receipt adds (accent).
+            <View style={[styles.qtyCard, progress.over && styles.qtyCardOver]}>
+              <Text style={styles.qtyTitle}>
+                {t("rq.bar_line", { bought: formatQty(progress.boughtBefore + progress.thisQuantity), total: `${formatQty(progress.requested)}${unitText}` })}
+              </Text>
+              <View style={styles.qtyTrack} accessibilityRole="progressbar">
+                <View style={[styles.qtyBefore, { width: `${Math.round(progress.boughtShare * 100)}%` }]} />
+                <View style={[styles.qtyThis, progress.over && styles.qtyThisOver, { width: `${Math.round((progress.afterShare - progress.boughtShare) * 100)}%` }]} />
+              </View>
+              <Text style={styles.qtyDetail}>
+                {t("rq.bar_detail", { before: formatQty(progress.boughtBefore), added: formatQty(progress.thisQuantity) })}
+              </Text>
+              {progress.over ? (
+                <Text style={[styles.qtyDetail, styles.qtyOverText]}>{t("rq.over_qty", { extra: formatQty(progress.thisQuantity - (progress.requested - progress.boughtBefore)) })}</Text>
+              ) : !progress.completes ? (
+                <Text style={styles.qtyDetail}>{t("rq.stays_open", { left: `${formatQty(progress.leftAfter)}${unitText}` })}</Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -326,6 +355,15 @@ const styles = StyleSheet.create({
   categoryChipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryTint },
   categoryChipText: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.heading },
   categoryChipTextActive: { color: COLORS.primary },
+  qtyCard: { backgroundColor: COLORS.card, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, padding: 12, gap: 6, marginBottom: 16 },
+  qtyCardOver: { borderColor: COLORS.amberBorder, backgroundColor: COLORS.amberFill },
+  qtyTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
+  qtyTrack: { flexDirection: "row", height: 8, borderRadius: 4, backgroundColor: COLORS.border, overflow: "hidden" },
+  qtyBefore: { height: 8, backgroundColor: COLORS.muted },
+  qtyThis: { height: 8, backgroundColor: COLORS.primary },
+  qtyThisOver: { backgroundColor: COLORS.errorText },
+  qtyDetail: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, lineHeight: 17 },
+  qtyOverText: { color: COLORS.amberText, fontFamily: FONT.semibold },
   noteCard: { backgroundColor: COLORS.amberFill, borderWidth: 1.5, borderColor: COLORS.amberBorder, borderRadius: 14, padding: 12, gap: 10, marginTop: 4, marginBottom: 14 },
   noteCardMissing: { borderColor: COLORS.errorText, backgroundColor: COLORS.errorFill },
   noteHead: { flexDirection: "row", alignItems: "center", gap: 10 },

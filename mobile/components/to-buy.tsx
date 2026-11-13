@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 
 import { remainingBudgetText } from "@/lib/budget-check";
-import { closeShortRequest, type OpenRequest, type Project, type Ticket } from "@/lib/api";
+import { quantityFieldsFromRequest, quantityFieldsFromTicket } from "@/lib/request-progress";
+import { type OpenRequest, type Project, type Ticket } from "@/lib/api";
 import { loadActiveProjects, loadAssignedTickets, loadOpenRequests, loadScans as loadScansCached } from "@/lib/cached-api";
 import { filterByVendor, groupByVendor, otherRequests, progressOf, vendorOptions } from "@/lib/to-buy";
 import { filterByProject, groupByProject } from "@/lib/project-groups";
@@ -48,8 +49,6 @@ export function ToBuy() {
   const [error, setError] = useState<string | null>(null);
   // Offline-first: when the list on screen is the copy saved on this phone.
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  // The request whose "close, that's all I could buy" reasons are showing.
-  const [closingId, setClosingId] = useState<string | null>(null);
   // The request whose details sheet is open (tap a request to open it).
   const [detail, setDetail] = useState<OpenRequest | null>(null);
   // "Which request is this receipt for?" sheet, opened by the Snap receipt button.
@@ -194,28 +193,6 @@ export function ToBuy() {
     setSnapPickerOpen(true);
   }
 
-  // The money or the stock ran out: close what is left, with a reason the PM can read.
-  // The reason is saved in English because the Project Manager reads it.
-  function closeShort(request: OpenRequest, reason: string) {
-    if (!isOnline) return Alert.alert(t("mx.offline_title"), t("ck.close_offline"));
-    Alert.alert(t("ck.close_title"), reason, [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("ck.close_short"),
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await closeShortRequest(request.ticketID, reason);
-            setClosingId(null);
-            load();
-          } catch {
-            Alert.alert(t("ck.close_failed"));
-          }
-        },
-      },
-    ]);
-  }
-
   // "Snap receipt for this request" in the details sheet: the receipt goes to this
   // one request (single mode), the same way an item under "Other" works.
   function snapForRequest(request: OpenRequest) {
@@ -229,6 +206,7 @@ export function ToBuy() {
       budget: request.approvedBudget == null ? undefined : String(request.approvedBudget),
       // What is left of the budget: the receipt cannot go over this.
       remaining: request.remainingBudget == null ? undefined : String(request.remainingBudget),
+      ...quantityFieldsFromRequest(request),
     });
     router.push("/expense/capture");
   }
@@ -242,6 +220,7 @@ export function ToBuy() {
       subject: ticket.subject,
       budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
       remaining: remainingBudgetText(ticket),
+      ...quantityFieldsFromTicket(ticket),
     });
     router.push("/expense/capture");
   }
@@ -373,33 +352,6 @@ export function ToBuy() {
                           ? ` · ${t("ck.given_spent", { budget: formatPeso(progress.budget), spent: formatPeso(progress.spent) })}`
                           : ""}
                       </Text>
-                      {isSiteManager ? null : (
-                        <Pressable
-                          onPress={() => setClosingId(closingId === request.ticketID ? null : request.ticketID)}
-                          style={styles.closeLink}
-                          accessibilityRole="button"
-                        >
-                          <Text style={styles.closeLinkText}>{t("ck.close_short")}</Text>
-                        </Pressable>
-                      )}
-                      {!isSiteManager && closingId === request.ticketID ? (
-                        <View style={styles.closeBox}>
-                          <Text style={styles.requestMeta}>
-                            {t("ck.close_body", { bought: formatQty(progress.bought), total: formatQty(progress.requested) })}
-                          </Text>
-                          <View style={styles.closeChips}>
-                            {[
-                              ["ck.close_budget", "Budget ran out."],
-                              ["ck.close_stock", "Store ran out of stock."],
-                              ["ck.close_other", "Other reason."],
-                            ].map(([key, english]) => (
-                              <Pressable key={key} onPress={() => closeShort(request, english)} style={styles.closeChip} accessibilityRole="button">
-                                <Text style={styles.closeChipText}>{t(key)}</Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </View>
-                      ) : null}
                     </>
                   ) : null}
                 </Pressable>
@@ -497,10 +449,4 @@ const styles = StyleSheet.create({
   track: { height: 6, borderRadius: 3, backgroundColor: COLORS.border, overflow: "hidden", marginTop: 4 },
   fill: { height: 6, borderRadius: 3, backgroundColor: SOFT.fill },
   progressText: { fontSize: 12, fontFamily: FONT.semibold, color: SOFT.text },
-  closeLink: { minHeight: MIN_TAP, justifyContent: "center", alignSelf: "flex-start" },
-  closeLinkText: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.muted },
-  closeBox: { gap: 8, backgroundColor: COLORS.bg, borderRadius: 12, padding: 10 },
-  closeChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  closeChip: { minHeight: 44, justifyContent: "center", borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 22, paddingHorizontal: 14, backgroundColor: COLORS.card },
-  closeChipText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.heading },
 });

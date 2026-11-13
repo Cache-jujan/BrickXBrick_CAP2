@@ -17,16 +17,17 @@ export function remainingBudgetText(ticket) {
 }
 
 /**
- * @param {{ amount: number, remaining?: string|number|null, note?: string|null }} input
+ * @param {{ amount: number, remaining?: string|number|null, note?: string|null, completes?: boolean }} input
+ *   completes = this purchase brings the request to 0 left (default true when the quantity is not known).
  * @returns {null | { code: "none"|"over"|"note", remaining: number|null }}
  *   none = no approved budget, over = amount above what is left,
- *   note = finishes the request with money to spare and no reason written.
+ *   note = finishes the request with money to spare and no reason written. A part purchase needs no note.
  */
-export function budgetIssue({ amount, remaining, note }) {
+export function budgetIssue({ amount, remaining, note, completes = true }) {
   if (remaining === undefined || remaining === null || remaining === "") return { code: "none", remaining: null };
   const left = cents(remaining);
   const spend = cents(amount);
   if (spend > left) return { code: "over", remaining: left / 100 };
-  if (spend < left && !String(note ?? "").trim()) return { code: "note", remaining: left / 100 };
+  if (spend < left && completes && !String(note ?? "").trim()) return { code: "note", remaining: left / 100 };
   return null;
 }

@@ -1,4 +1,9 @@
-export type SelectedTicket = { ticketId: string; projectId: string; projectName: string; subject: string; budget?: string; remaining?: string };
+// requestedQuantity / remainingQuantity / materialType / unit / bomItemID: for the "bought X of Y" bar and for
+// telling whether this receipt finishes the request. All optional: a ticket without them shows no bar.
+export type SelectedTicket = {
+  ticketId: string; projectId: string; projectName: string; subject: string; budget?: string; remaining?: string;
+  materialType?: string | null; bomItemID?: string | null; requestedQuantity?: number; remainingQuantity?: number; unit?: string | null;
+};
 // ocr: how sure the scan was about a row it filled in; cleared once the user edits the row.
 // scanned: the name the scan read, kept so a renamed row can show the receipt's own text. Never sent.
 // price is the line amount. unitPrice is typed or derived (amount / quantity); unitEntered marks one the user typed.
