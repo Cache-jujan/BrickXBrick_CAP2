@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { listVendors, createVendor, updateVendor, deleteVendor, PERMIT_TYPES } from "../../api/adminApi";
 import { extractErrorMessage } from "../../api/client";
 import { Card } from "../../components/ui/Card";
-import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Banner } from "../../components/ui/Banner";
@@ -13,7 +12,7 @@ import "./VendorMasterListPage.css";
 const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
 
 const blankForm = () => ({
-  vendorName: "", location: "", tin: "", birPermitType: "", birPermitNumber: "", approvalStatus: "Approved",
+  vendorName: "", location: "", tin: "", birPermitType: "", birPermitNumber: "",
 });
 
 export function VendorMasterListPage() {
@@ -23,7 +22,6 @@ export function VendorMasterListPage() {
   const [listError, setListError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
   // { type: "form", vendor?: row } to add or edit, { type: "delete", vendor: row }
   const [dialog, setDialog] = useState(null);
 
@@ -47,11 +45,10 @@ export function VendorMasterListPage() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return vendors.filter((v) => {
-      if (statusFilter !== "All" && v.approvalStatus !== statusFilter) return false;
       if (!q) return true;
       return [v.vendorName, v.location, v.tin, v.birPermitNumber].some((x) => (x || "").toLowerCase().includes(q));
     });
-  }, [vendors, search, statusFilter]);
+  }, [vendors, search]);
 
   function done(message) {
     setDialog(null);
@@ -80,11 +77,6 @@ export function VendorMasterListPage() {
           onChange={(e) => setSearch(e.target.value)}
           aria-label={t("vm.search_label")}
         />
-        <select className="users-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label={t("projects.filter_status")}>
-          <option value="All">{t("vm.all_statuses")}</option>
-          <option value="Approved">{t("vm.status_approved")}</option>
-          <option value="Flagged">{t("vm.status_flagged")}</option>
-        </select>
       </div>
 
       {listError && <Banner tone="error" title={listError} />}
@@ -106,7 +98,6 @@ export function VendorMasterListPage() {
                     <th>{t("vm.col_vendor")}</th>
                     <th>{t("vm.col_tin")}</th>
                     <th>{t("vm.col_permit")}</th>
-                    <th>{t("dashboard.status")}</th>
                     <th aria-label={t("tamper.actions")} />
                   </tr>
                 </thead>
@@ -126,7 +117,6 @@ export function VendorMasterListPage() {
                           </span>
                         ) : <span className="users-not-locked">—</span>}
                       </td>
-                      <td><Badge status={v.approvalStatus} /></td>
                       <td className="users-actions vendors-actions">
                         <button type="button" className="users-action-link" onClick={() => { setNotice(""); setDialog({ type: "form", vendor: v }); }}>
                           {t("vm.edit")}
@@ -190,7 +180,6 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
     tin: vendor.tin ?? "",
     birPermitType: vendor.birPermitType ?? "",
     birPermitNumber: vendor.birPermitNumber ?? "",
-    approvalStatus: vendor.approvalStatus ?? "Approved",
   } : blankForm()));
   const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
@@ -217,7 +206,6 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
       tin: form.tin.trim() || null,
       birPermitType: form.birPermitType || null,
       birPermitNumber: form.birPermitNumber.trim() || null,
-      approvalStatus: form.approvalStatus,
     };
     setBusy(true);
     try {
@@ -254,14 +242,6 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
           </label>
           <Field className="vendors-span-2" label={t("vm.f_permit_number")} maxLength={50}
             value={form.birPermitNumber} error={errors.birPermitNumber} onChange={(e) => update("birPermitNumber", e.target.value)} />
-          <label className="field vendors-span-2">
-            <span className="field-label">{t("dashboard.status")}</span>
-            <select className="field-control" value={form.approvalStatus} onChange={(e) => update("approvalStatus", e.target.value)}>
-              <option value="Approved">{t("vm.status_approved")}</option>
-              <option value="Flagged">{t("vm.status_flagged")}</option>
-            </select>
-            <span className="vendors-hint">{form.approvalStatus === "Flagged" ? t("vm.hint_flagged") : t("vm.hint_approved")}</span>
-          </label>
         </div>
         {error && <Banner tone="error" title={error} />}
         <div className="modal-actions">

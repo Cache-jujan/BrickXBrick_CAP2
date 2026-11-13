@@ -25,7 +25,9 @@ const {
   normalizeLineItems,
   computeQuantityFromLineItems,
 } = require("../lib/receiptFields");
-const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
+const { isTicketFulfilled, expenseCompletesRequest, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
+const { quantityOfMatchedLines } = require("../lib/ticketQuantity");
+const { logTransition } = require("../lib/ticketTransitions");
 const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
 const { screenExpense } = require("../lib/screenExpense");
 const { submitTaskProgress, taskPhotoExists, TaskProgressError } = require("../lib/taskProgress");
@@ -106,17 +108,18 @@ async function syncExpense(user, uuid, data) {
   if (storedLineItems.length === 0) {
     throw new SyncReject("INVALID_LINE_ITEMS", "lineItems must be an array of { description, amount }");
   }
-  const quantity = computeQuantityFromLineItems(storedLineItems);
+  // The receipt total; replaced below by the requested material's lines only once the ticket is known.
+  let quantity = computeQuantityFromLineItems(storedLineItems);
 
   const bir = normalizeBirFields({ tin, birPermitNumber, birNumber });
   const { birValidationStatus } = classifyBir(bir);
 
   // When a ticket is given, it is the source of truth for the project.
   let projectID = bodyProjectID;
-  let resolveTicketInTransaction = false;
+  let ticketForPurchase = null;
   if (ticketID) {
     const ticketResult = await query(
-      "SELECT projectid, status, assignedto, quantity FROM tickets WHERE ticketid = $1",
+      "SELECT projectid, status, assignedto, quantity, materialtype, bomitemid FROM tickets WHERE ticketid = $1",
       [ticketID]
     );
     if (ticketResult.rowCount === 0) {
@@ -134,11 +137,12 @@ async function syncExpense(user, uuid, data) {
     if (await isTicketFulfilled(query, ticketID, ticket.quantity)) {
       throw new SyncReject("TICKET_FULFILLED", FULFILLED_MESSAGE);
     }
-    // Auto-resolve: the online path calls resolveTicket before submitting, but
-    // offline queues skip that step, so the sync endpoint does it. It runs in
-    // the same transaction as the expense insert (below): a failed insert must
-    // not leave the ticket Resolved with no expense.
-    resolveTicketInTransaction = ticket.status !== "Resolved";
+    // The request is Resolved by the purchase that brings what is left to 0, in the same
+    // transaction as the expense insert (below): a failed insert must not leave the ticket
+    // Resolved with no expense. A part purchase leaves it Acknowledged.
+    // Count only the lines for this request; falls back to the receipt total.
+    quantity = quantityOfMatchedLines(storedLineItems, { ...ticket, ticketid: ticketID }, ticketID) ?? quantity;
+    ticketForPurchase = ticket;
     projectID = ticket.projectid;
   }
   if (!ticketID) {
@@ -160,21 +164,30 @@ async function syncExpense(user, uuid, data) {
   const submitNote = typeof bodySubmitNote === "string" ? bodySubmitNote.trim().slice(0, SUBMIT_NOTE_MAX) : "";
   const expenseID = await withTransaction(async (client) => {
     // Strict budget, the same rule as POST /expenses: lock the request, then check what is left.
-    await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
-    const remainingBudgetCents = await loadRemainingBudgetCents((sql, params) => client.query(sql, params), ticketID);
+    const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+    const lockedStatus = locked.rows?.[0]?.status;
+    if (lockedStatus !== "Acknowledged" && lockedStatus !== "Resolved") {
+        throw new SyncReject("TICKET_NOT_OPEN", `Ticket is ${lockedStatus}; expenses can only be recorded against an Acknowledged or Resolved ticket`);
+    }
+    const run = (sql, params) => client.query(sql, params);
+    const remainingBudgetCents = await loadRemainingBudgetCents(run, ticketID);
+    // Does this purchase bring what is left of the request to 0? Only then does it need the
+    // under-budget note, and only then is the request Resolved.
+    const completes = await expenseCompletesRequest(run, ticketID, ticketForPurchase.quantity, quantity);
     const issue = checkBudget({
       amountCents: Math.round(amount * 100),
       remainingBudgetCents,
-      completesRequest: true, // this expense is what finishes the request
+      completesRequest: completes,
       note: submitNote,
     });
     if (issue) throw new SyncReject(issue.code, issue.message);
 
-    if (resolveTicketInTransaction) {
+    if (completes && locked.rows?.[0]?.status === "Acknowledged") {
       await client.query(
-        "UPDATE tickets SET status = 'Resolved' WHERE ticketid = $1 AND status != 'Resolved'",
-        [ticketID]
+        "UPDATE tickets SET status = 'Resolved', resolvedBy = $2, resolvedAt = NOW(), updatedAt = NOW() WHERE ticketid = $1 AND status = 'Acknowledged'",
+        [ticketID, user.id]
       );
+      await logTransition(client, { ticketId: ticketID, fromStatus: "Acknowledged", toStatus: "Resolved", changedBy: user.id });
     }
     const result = await client.query(
       `INSERT INTO expenses

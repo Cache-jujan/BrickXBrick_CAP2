@@ -34,6 +34,7 @@ function norm(sql) {
 async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = norm(sql);
+  if (text.startsWith("select status from tickets")) return { rows: db.lockedStatus === null ? [] : [{ status: db.lockedStatus ?? "Resolved" }] };
   // The strict budget check (lib/ticketBudget.js): the request row lock, then what is left.
   if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
   if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: db.remaining }] };
@@ -366,3 +367,19 @@ test("resubmit: a portion of a split receipt keeps its allocation amount in step
     server.close();
   }
 });
+
+for (const status of ["Rejected", "Cancelled", null]) {
+  test(`submission rejects a ticket whose locked status is ${status}`, async () => {
+    reset();
+    db.lockedStatus = status;
+    const server = await startServer();
+    try {
+      const res = await send(server, "POST", "/api/expenses", submission());
+      assert.equal(res.status, 409);
+      assert.equal(callsStartingWith("insert into expenses").length, 0);
+    } finally {
+      delete db.lockedStatus;
+      server.close();
+    }
+  });
+}

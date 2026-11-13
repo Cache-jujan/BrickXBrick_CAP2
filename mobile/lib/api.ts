@@ -43,6 +43,8 @@ export type Ticket = {
   // expense): how many non-rejected expenses already exist against it.
   expensecount?: string | number;
   expensetotal?: string | number;
+  // Quantity already bought for this request (expenses that are not Rejected).
+  expensequantity?: string | number;
 };
 
 export type Project = {

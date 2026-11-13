@@ -68,11 +68,7 @@ async function screenExpense(expenseID, { query } = {}) {
   // Layer 2: Vendor Master List
   const vendorIssue = await checkVendor(expense);
   if (vendorIssue) {
-    const reason =
-      vendorIssue === "not_found"
-        ? "Vendor not found in VendorMasterList"
-        : "Vendor found in VendorMasterList but approvalStatus = 'Flagged'";
-    await addFlag("Vendor_Validation", reason);
+    await addFlag("Vendor_Validation", "Vendor not found in VendorMasterList");
   }
 
   // Layer 3: ticket vs receipt. Returns which parts differ (material,

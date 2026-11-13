@@ -1,9 +1,6 @@
 // F9: Multi-layer expense screening
 
-// Case- and spacing-insensitive text for comparing names ("CEMENT " = "cement").
-function normalize(value) {
-  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-}
+const { normalize, quantityOfMatchedLines } = require("./ticketQuantity");
 
 // lineitems is jsonb, but some rows hold it double-encoded (a JSON string of
 // the array), which pg hands back as a string. Read both shapes.
@@ -13,31 +10,6 @@ function parseLineItems(lineItems) {
     try { items = JSON.parse(items); } catch { return []; }
   }
   return Array.isArray(items) ? items : [];
-}
-
-// How much of the requested material the receipt holds: the quantity of only the lines that
-// belong to this request (same rules as the material check). null when no line can be tied to it,
-// so the caller falls back to the receipt's total quantity.
-function quantityOfMatchedLines(items, ticket, ticketId) {
-  const requestedName = normalize(ticket.materialtype);
-  let found = false;
-  let sum = 0;
-  for (const item of items) {
-    if (!item) continue;
-    const description = normalize(item.description);
-    const matches = ticket.bomitemid
-      ? item.bomItemID === ticket.bomitemid
-        || (item.matchedTicketID != null && String(item.matchedTicketID) === String(ticketId))
-        || (!item.bomItemID && description === requestedName)
-      : requestedName !== "" && description.includes(requestedName);
-    if (!matches) continue;
-    const qty = item.quantity == null || item.quantity === "" ? NaN : Number(item.quantity);
-    // A matched line with no quantity cannot be added up reliably: use the receipt total.
-    if (!Number.isFinite(qty)) return null;
-    found = true;
-    sum += qty;
-  }
-  return found ? sum : null;
 }
 
 function createFraudScreening({ query } = {}) {
@@ -112,22 +84,15 @@ function createFraudScreening({ query } = {}) {
     }
 
     const result = await runQuery(
-      `SELECT vendorid, approvalstatus
+      `SELECT vendorid
          FROM vendormasterlist
         WHERE LOWER(TRIM(vendorname))
             = LOWER(TRIM($1))`,
       [vendorName]
     );
 
-    if (result.rowCount === 0) {
-      return "not_found";
-    }
-
-    if (result.rows[0].approvalstatus === "Flagged") {
-      return "flagged";
-    }
-
-    return false;
+    // Every vendor on the list is trusted, so only a missing one is an issue.
+    return result.rowCount === 0 ? "not_found" : false;
   }
 
   async function isAllocationPortion(expense) {

@@ -120,23 +120,19 @@ test("unknown vendor is flagged", async () => {
   assert.equal(result, "not_found");
 });
 
-test("flagged vendor is detected", async () => {
+test("a vendor on the list passes the vendor check", async () => {
   const screening = createFraudScreening({
     query: async () => ({
       rowCount: 1,
-      rows: [
-        {
-          approvalstatus: "Flagged",
-        },
-      ],
+      rows: [{ vendorid: "v1" }],
     }),
   });
 
   const result = await screening.checkVendor({
-    vendorname: "Flagged Hardware",
+    vendorname: "Listed Hardware",
   });
 
-  assert.equal(result, "flagged");
+  assert.equal(result, false);
 });
 
 test("ticket mismatch is detected", async () => {

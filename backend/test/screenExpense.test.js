@@ -47,7 +47,7 @@ const cleanExpense = {
 };
 
 test("a clean expense returns no flags and writes nothing", async () => {
-  const db = fakeDatabase({ expense: cleanExpense, vendor: { vendorid: "v1", approvalstatus: "Approved" } });
+  const db = fakeDatabase({ expense: cleanExpense, vendor: { vendorid: "v1" } });
   const result = await screenExpense("exp-1", { query: db.query });
   assert.deepEqual(result, { flagTypes: [] });
   assert.equal(db.inserted.length, 0);
@@ -76,7 +76,7 @@ test("duplicate and unknown vendor are both flagged, each as Pending", async () 
 test("a ticket mismatch writes a Ticket_Mismatch flag", async () => {
   const db = fakeDatabase({
     expense: { ...cleanExpense, ticketid: "t-1" },
-    vendor: { vendorid: "v1", approvalstatus: "Approved" },
+    vendor: { vendorid: "v1" },
     ticket: { tickettype: "Material Request", materialtype: "rebar", quantity: "20", vendorname: null },
   });
   const result = await screenExpense("exp-1", { query: db.query });
@@ -92,7 +92,7 @@ test("an adjustment line routes the expense to PM review", async () => {
         { description: "Adjustment / rounding", quantity: 0, amount: 3.5 },
       ],
     },
-    vendor: { vendorid: "v1", approvalstatus: "Approved" },
+    vendor: { vendorid: "v1" },
   });
   const result = await screenExpense("exp-1", { query: db.query });
   assert.deepEqual(result.flagTypes, ["Receipt_Adjustment"]);
@@ -103,7 +103,7 @@ test("an adjustment line routes the expense to PM review", async () => {
 test("a line that only mentions an adjustment mid-name is not flagged", async () => {
   const db = fakeDatabase({
     expense: { ...cleanExpense, lineitems: JSON.stringify([{ description: "Hinge, adjustment type", quantity: 2, amount: 80 }]) },
-    vendor: { vendorid: "v1", approvalstatus: "Approved" },
+    vendor: { vendorid: "v1" },
   });
   const result = await screenExpense("exp-1", { query: db.query });
   assert.deepEqual(result.flagTypes, []);
@@ -120,7 +120,7 @@ const scannedDraft = {
   receiptDate: null,
   lineItems: [{ description: "HEAVY DUTY PLUG", quantity: 20, amount: 5600 }],
 };
-const approvedVendor = { vendorid: "v1", approvalstatus: "Approved" };
+const approvedVendor = { vendorid: "v1" };
 const scannedExpense = { ...cleanExpense, receiptimageurl: "/uploads/receipts/a.jpg", amount: "5600.00" };
 
 test("a line renamed away from what the scan read is flagged Receipt_Edited", async () => {

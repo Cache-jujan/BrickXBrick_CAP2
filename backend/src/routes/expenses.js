@@ -4,7 +4,9 @@
 
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
-const { isTicketFulfilled, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
+const { isTicketFulfilled, expenseCompletesRequest, FULFILLED_MESSAGE } = require("../lib/ticketAvailability");
+const { quantityOfMatchedLines } = require("../lib/ticketQuantity");
+const { assertLegalTransition, logTransition } = require("../lib/ticketTransitions");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { notifyGeneralManagers } = require("../lib/notify");
@@ -152,7 +154,8 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         if (storedLineItems.length === 0) {
             throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
         }
-        const quantity = computeQuantityFromLineItems(storedLineItems);
+        // The receipt total; replaced below by the requested material's lines only once the ticket is known.
+        let quantity = computeQuantityFromLineItems(storedLineItems);
 
         // Normalize BIR fields first so Layer 1's exact match can't be dodged
         // by spacing or hyphens ("OR 4567" vs "OR-4567").
@@ -162,10 +165,11 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         // When a ticket is given, the ticket is the source of truth for the
         // project — not the client-supplied projectID (F9 Layer 3).
         let projectID = bodyProjectID;
+        let ticketForPurchase = null;
 
         if (ticketID) {
             const ticketResult = await query(
-                "SELECT ticketid, projectid, status, assignedto, submittedby, tickettype, quantity FROM tickets WHERE ticketid = $1",
+                "SELECT ticketid, projectid, status, assignedto, submittedby, tickettype, quantity, materialtype, bomitemid FROM tickets WHERE ticketid = $1",
                 [ticketID]
             );
             if (ticketResult.rowCount === 0) {
@@ -190,11 +194,16 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
                 throw httpError(400, "GM/PM expenses can only be linked to a Material Request ticket");
             }
 
-            // Strict Resolved-only. Purchasers resolve their assigned tickets;
-            // GM/PM may link only after the assigned Purchaser has completed it.
-            if (ticket.status !== "Resolved") {
-                throw httpError(409, "Ticket must be Resolved before an expense can be linked to it");
+            // A request takes purchases while it is Acknowledged (still being bought) or Resolved.
+            // It becomes Resolved when a purchase brings what is left to 0 (see below), so buying
+            // part of it leaves it open for the rest, for every role.
+            if (ticket.status !== "Acknowledged" && ticket.status !== "Resolved") {
+                throw httpError(409, `Ticket must be Acknowledged or Resolved before an expense can be linked to it (it is ${ticket.status})`);
             }
+            // Count only the lines for this request, so other materials and fee lines on the
+            // receipt don't use up the request's quantity. Falls back to the receipt total.
+            quantity = quantityOfMatchedLines(storedLineItems, ticket, ticket.ticketid) ?? quantity;
+            ticketForPurchase = ticket;
             // A receipt scanned earlier may belong to a request that has since
             // been filled. Don't let it become a second expense for the same buy.
             if (await isTicketFulfilled(query, ticket.ticketid, ticket.quantity)) {
@@ -224,12 +233,20 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         // Strict budget: checked and saved in one transaction, with the request row locked, so
         // two submissions cannot both slip under the cap.
         const expense = await withTransaction(async (client) => {
-            await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
-            const remainingBudgetCents = await loadRemainingBudgetCents((sql, params) => client.query(sql, params), ticketID);
+            const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+            const lockedStatus = locked.rows?.[0]?.status;
+            if (lockedStatus !== "Acknowledged" && lockedStatus !== "Resolved") {
+                throw httpError(409, `Ticket must be Acknowledged or Resolved before an expense can be linked to it (it is ${lockedStatus})`);
+            }
+            const run = (sql, params) => client.query(sql, params);
+            const remainingBudgetCents = await loadRemainingBudgetCents(run, ticketID);
+            // Does this purchase bring what is left of the request to 0? Only then does it need the
+            // under-budget note, and only then is the request Resolved.
+            const completes = await expenseCompletesRequest(run, ticketID, ticketForPurchase.quantity, quantity);
             const issue = checkBudget({
                 amountCents: Math.round(amount * 100),
                 remainingBudgetCents,
-                completesRequest: true, // the request is already Resolved: this expense is what finishes it
+                completesRequest: completes,
                 note: submitNote,
             });
             if (issue) throw httpError(400, issue.message, { code: issue.code });
@@ -259,6 +276,23 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
                     submitNote || null,
                 ]
             );
+
+            // The last of the request is bought: close it, with the usual audit row and notices.
+            if (completes && locked.rows?.[0]?.status === "Acknowledged") {
+                assertLegalTransition("Acknowledged", "Resolved");
+                await client.query(
+                    `UPDATE tickets
+                        SET status = 'Resolved', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW()
+                      WHERE ticketId = $2 AND status = 'Acknowledged'`,
+                    [req.user.id, ticketID]
+                );
+                await logTransition(client, {
+                    ticketId: ticketID,
+                    fromStatus: "Acknowledged",
+                    toStatus: "Resolved",
+                    changedBy: req.user.id,
+                });
+            }
             return result.rows[0];
         });
 

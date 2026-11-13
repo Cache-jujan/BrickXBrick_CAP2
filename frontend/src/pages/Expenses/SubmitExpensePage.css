@@ -376,3 +376,32 @@
 @media (max-width: 640px) { .xp-blockers strong { margin-bottom: 2px; font-size: var(--text-xs); } }
 
 .xp-details textarea.field-control { min-height: 64px; }
+
+/* "Bought X of Y": what was bought before (solid) and what this receipt adds (accent). */
+.xp-qty {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+.xp-qty-over {
+  border-color: var(--color-status-overdue);
+  background: var(--color-surface-muted);
+}
+.xp-qty-track {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--color-border);
+}
+.xp-qty-before { background: var(--color-ink-faint); }
+.xp-qty-this { background: var(--color-brick); }
+.xp-qty-over .xp-qty-this { background: var(--color-danger); }
+.xp-qty-warn { color: var(--color-danger); font-weight: 600; }
+

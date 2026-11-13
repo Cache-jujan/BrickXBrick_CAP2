@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listTamperAlerts } from "../../api/blockchainApi";
@@ -60,17 +60,6 @@ const NAV_BY_ROLE = {
   ],
 };
 
-const COLLAPSED_KEY = "bxb_sidebar_collapsed";
-const HOVER_OPEN_MS = 120; // a short pause, so sweeping the mouse across the rail doesn't open it
-
-function readCollapsed() {
-  try {
-    return window.localStorage.getItem(COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 // A group (e.g. "Submit expense") is on the current page when the page is the group or one of its children.
 const groupIsCurrent = (link, pathname) =>
   Boolean(link.children) && (pathname === link.to || link.children.some((c) => c.to === pathname));
@@ -80,39 +69,8 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
   const { user } = useAuth();
   const { pathname } = useLocation();
   const links = NAV_BY_ROLE[user?.role] || [];
-  // The person's choice (the Collapse button), remembered between visits.
-  const [collapsedPref, setCollapsedPref] = useState(readCollapsed);
-  // While the rail is collapsed, pointing at it (or tabbing into it) opens it over the page.
-  const [peeking, setPeeking] = useState(false);
-  const peekTimer = useRef(null);
-  // The mobile drawer is always shown expanded.
-  const pinnedCollapsed = collapsedPref && !mobileOpen;
-  const collapsed = pinnedCollapsed && !peeking;
   // Groups the person opened, plus the one the current page is in.
   const [openGroups, setOpenGroups] = useState(() => new Set());
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsedPref((v) => {
-      const next = !v;
-      try {
-        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
-      } catch {
-        // the choice still applies for this visit
-      }
-      return next;
-    });
-    setPeeking(false);
-  }, []);
-
-  const startPeek = useCallback(() => {
-    window.clearTimeout(peekTimer.current);
-    peekTimer.current = window.setTimeout(() => setPeeking(true), HOVER_OPEN_MS);
-  }, []);
-  const endPeek = useCallback(() => {
-    window.clearTimeout(peekTimer.current);
-    setPeeking(false);
-  }, []);
-  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
 
   // Arriving on a page inside a group opens that group; leaving it does not close it again.
   useEffect(() => {
@@ -159,28 +117,13 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
   }, [needsAlertCount]);
 
   return (
-    // The slot keeps the rail's width in the page, so opening the rail on hover covers the page
-    // instead of pushing it sideways.
-    <div className={"sidebar-slot" + (pinnedCollapsed ? " sidebar-slot-collapsed" : "")}>
-      <aside
-        className={
-          "sidebar" +
-          (collapsed ? " sidebar-collapsed" : "") +
-          (pinnedCollapsed && peeking ? " sidebar-peek" : "") +
-          (mobileOpen ? " sidebar-open" : "")
-        }
-        onMouseEnter={pinnedCollapsed ? startPeek : undefined}
-        onMouseLeave={pinnedCollapsed ? endPeek : undefined}
-        onFocus={pinnedCollapsed ? () => { window.clearTimeout(peekTimer.current); setPeeking(true); } : undefined}
-        onBlur={pinnedCollapsed ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) endPeek(); } : undefined}
-      >
+    <div className="sidebar-slot">
+      <aside className={"sidebar" + (mobileOpen ? " sidebar-open" : "")}>
         <div className="sidebar-brand">
           <img src="/images/logo.png" alt="" className="sidebar-logo" />
-          {!collapsed && (
-            <span className="sidebar-brand-name">
-              Brick <span className="sidebar-brand-x">x</span> Brick
-            </span>
-          )}
+          <span className="sidebar-brand-name">
+            Brick <span className="sidebar-brand-x">x</span> Brick
+          </span>
         </div>
 
         <nav className="sidebar-nav">
@@ -195,22 +138,21 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
                   to={link.to}
                   end={link.to.startsWith("/dashboard") || Boolean(link.end)}
                   className={({ isActive }) =>
-                    "sidebar-link" + (isActive ? " sidebar-link-active" : "") + (hasChildren && !collapsed ? " sidebar-link-group" : "")
+                    "sidebar-link" + (isActive ? " sidebar-link-active" : "") + (hasChildren ? " sidebar-link-group" : "")
                   }
-                  title={collapsed ? t(link.label) : undefined}
                   onClick={onNavigate}
                 >
                   <span className="sidebar-link-icon">
                     <Icon />
                   </span>
-                  {!collapsed && <span className="sidebar-link-label">{t(link.label)}</span>}
+                  <span className="sidebar-link-label">{t(link.label)}</span>
                   {showBadge && (
                     <span className="sidebar-link-badge" aria-label={`${alertCount} open ${t("nav.tamper_alerts")}`}>
                       {alertCount > 9 ? "9+" : alertCount}
                     </span>
                   )}
                 </NavLink>
-                {hasChildren && !collapsed && (
+                {hasChildren && (
                   <button
                     type="button"
                     className="sidebar-group-toggle"
@@ -221,7 +163,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
                     <ChevronIcon open={groupOpen} />
                   </button>
                 )}
-                {groupOpen && !collapsed && (
+                {groupOpen && (
                   <div className="sidebar-sublinks">
                     {link.children.map((child) => (
                       <NavLink
@@ -242,34 +184,21 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
           <NavLink
             to="/account"
             className={({ isActive }) => "sidebar-link sidebar-link-settings" + (isActive ? " sidebar-link-active" : "")}
-            title={collapsed ? t("nav.settings") : undefined}
             onClick={onNavigate}
           >
             <span className="sidebar-link-icon"><GearIcon /></span>
-            {!collapsed && <span className="sidebar-link-label">{t("nav.settings")}</span>}
+            <span className="sidebar-link-label">{t("nav.settings")}</span>
           </NavLink>
         </nav>
 
-        <button
-          type="button"
-          className="sidebar-collapse-btn"
-          onClick={toggleCollapsed}
-          aria-label={t(collapsedPref ? "nav.expand_sidebar" : "nav.collapse_sidebar")}
-        >
-          <ChevronIcon open={!collapsedPref} />
-          {!collapsed && <span>{t(collapsedPref ? "nav.expand_sidebar" : "nav.collapse")}</span>}
-        </button>
-
         {/* Who is signed in: their picture (or first letter), name and role. */}
-        <div className="sidebar-footer" title={collapsed ? `${user?.name ?? ""} · ${user?.role ?? ""}` : undefined}>
+        <div className="sidebar-footer">
           <Avatar className="sidebar-footer-avatar" url={user?.avatarUrl} initial={(user?.name || "?").trim().charAt(0).toUpperCase()} />
-          {!collapsed && (
-            <span className="sidebar-footer-text">
-              <span className="sidebar-footer-label">{t("nav.signed_in_as")}</span>
-              <span className="sidebar-footer-name">{user?.name}</span>
-              <span className="sidebar-footer-role">{user?.role}</span>
-            </span>
-          )}
+          <span className="sidebar-footer-text">
+            <span className="sidebar-footer-label">{t("nav.signed_in_as")}</span>
+            <span className="sidebar-footer-name">{user?.name}</span>
+            <span className="sidebar-footer-role">{user?.role}</span>
+          </span>
         </div>
       </aside>
     </div>

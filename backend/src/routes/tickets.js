@@ -500,13 +500,12 @@ router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req
     }
 });
 
-// GET /vendors — approved vendors available for procurement tickets (SM or PM).
+// GET /vendors — trusted vendors available for procurement tickets (SM or PM).
 router.get("/vendors", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
         const result = await query(
             `SELECT vendorID AS "vendorID", vendorName AS "vendorName"
                FROM VendorMasterList
-              WHERE approvalStatus = 'Approved'
               ORDER BY vendorName ASC`
         );
         res.json(result.rows);
@@ -527,11 +526,12 @@ router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
             `SELECT t.*,
                     p.name AS projectName,
                     COALESCE(ec.expenseCount, 0) AS expenseCount,
-                    COALESCE(ec.expenseTotal, 0) AS expenseTotal
+                    COALESCE(ec.expenseTotal, 0) AS expenseTotal,
+                    COALESCE(ec.expenseQuantity, 0) AS expenseQuantity
                FROM tickets t
                JOIN projects p ON p.projectId = t.projectId
                LEFT JOIN LATERAL (
-                   SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal
+                   SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal, SUM(quantity) AS expenseQuantity
                      FROM expenses e
                     WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'
                ) ec ON TRUE
@@ -545,7 +545,7 @@ router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET /expense-linkable — resolved procurement tickets for GM/PM expense entry.
+// GET /expense-linkable — Acknowledged or Resolved procurement tickets with quantity left, for GM/PM expense entry.
 // PM results are restricted in SQL to projects managed by the calling PM.
 router.get("/expense-linkable", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
@@ -563,14 +563,21 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
                     t.subject,
                     t.vendorName AS "vendorName",
                     t.materialType AS "materialType",
+                    t.bomitemid AS "bomItemID",
                     t.quantity,
+                    t.unit,
+                    t.status,
+                    -- What is still to buy: lets the page show how much is already bought.
+                    t.quantity - COALESCE((SELECT SUM(e.quantity) FROM expenses e
+                                            WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'), 0) AS "remainingQuantity",
                     t.resolvedAt AS "resolvedAt",
                     t.approvedbudget AS "approvedBudget",
                     t.approvedbudget - COALESCE((SELECT SUM(e.amount) FROM expenses e
                                                   WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'), 0) AS "remainingBudget"
                FROM tickets t
                JOIN projects p ON p.projectId = t.projectId
-              WHERE t.status = 'Resolved'
+              -- Acknowledged: still being bought (a part purchase leaves a request open). Resolved: done or closed short.
+              WHERE t.status IN ('Acknowledged', 'Resolved')
                 AND t.ticketType = 'Material Request'
                 -- not yet fulfilled: same rule as lib/ticketAvailability.js
                 AND (
@@ -734,12 +741,13 @@ router.get("/submitted", async (req, res, next) => {
         const result = await query(
             `SELECT t.*, u.role AS rejectedByRole, n.ticketId AS resubmittedById,
                     COALESCE(ec.expenseCount, 0) AS expenseCount,
-                    COALESCE(ec.expenseTotal, 0) AS expenseTotal
+                    COALESCE(ec.expenseTotal, 0) AS expenseTotal,
+                    COALESCE(ec.expenseQuantity, 0) AS expenseQuantity
                FROM tickets t
                LEFT JOIN users u ON u.userId = t.resolvedBy
                LEFT JOIN tickets n ON n.resubmittedFromId = t.ticketId
                LEFT JOIN LATERAL (
-                   SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal
+                   SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal, SUM(quantity) AS expenseQuantity
                      FROM expenses e
                     WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected'
                ) ec ON TRUE

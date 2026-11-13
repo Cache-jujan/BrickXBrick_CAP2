@@ -67,11 +67,11 @@ async function run(sql, params = []) {
     return { rowCount: 1, rows: [row] };
   }
   // expenses (only used for the per-item isolation test): the request the expense is for
-  if (text.startsWith("select projectid, status, assignedto, quantity from tickets")) {
+  if (text.startsWith("select projectid, status, assignedto, quantity")) {
     return { rowCount: 1, rows: [{ projectid: "44444444-4444-4444-8444-444444444444", status: "Acknowledged", assignedto: "purchaser-1", quantity: 1 }] };
   }
   if (text.startsWith("update tickets set status = 'resolved'")) return { rowCount: 1, rows: [] };
-  if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
+  if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: [{ status: "Acknowledged" }] };
   if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: "1500.00" }] };
   if (text.startsWith("select status from projects")) return { rowCount: 1, rows: [{ status: "Active" }] };
   if (text.startsWith("insert into expenses")) return (state.expenses++, { rowCount: 1, rows: [{ expenseid: "e-1" }] });
@@ -82,7 +82,8 @@ async function run(sql, params = []) {
 stub("../src/lib/db", { query: run, withTransaction: async (fn) => fn({ query: run }) });
 stub("../src/middleware/auth", { requireAuth: (req, _res, next) => ((req.user = state.me), next()) });
 const realAvailability = require("../src/lib/ticketAvailability");
-stub("../src/lib/ticketAvailability", { ...realAvailability, isTicketFulfilled: async () => false });
+stub("../src/lib/ticketAvailability", { ...realAvailability, isTicketFulfilled: async () => false, expenseCompletesRequest: async () => true });
+stub("../src/lib/ticketTransitions", { assertLegalTransition: () => {}, logTransition: async () => {} });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/screenExpense", { screenExpense: async () => ({ flagTypes: [] }) });
 const realR2 = require("../src/lib/r2");

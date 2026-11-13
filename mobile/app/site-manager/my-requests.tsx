@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { remainingBudgetText } from "@/lib/budget-check";
+import { quantityFieldsFromTicket } from "@/lib/request-progress";
 import { useOnNewNotifications } from "@/lib/notification-events";
 
 import { COLORS } from "@/constants/expense-flow-colors";
@@ -134,6 +135,7 @@ export default function MyRequestsScreen() {
       subject: ticket.subject,
       budget: ticket.approvedbudget == null ? undefined : String(ticket.approvedbudget),
       remaining: remainingBudgetText(ticket),
+      ...quantityFieldsFromTicket(ticket),
     });
     router.push("/expense/capture");
   }

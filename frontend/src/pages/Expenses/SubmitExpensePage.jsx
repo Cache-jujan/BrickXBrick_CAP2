@@ -19,6 +19,7 @@ import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
 import { isReceiptType } from "../../utils/receiptFile";
+import { matchedQuantity, receiptProgress, receiptTotalQuantity } from "../../utils/requestProgress";
 import "./SubmitExpensePage.css";
 import { useLocale } from "../../i18n/LocaleProvider";
 
@@ -52,6 +53,8 @@ export function draftFromScan(result) {
   const extractedItems = Array.isArray(result.lineItems)
     ? result.lineItems.map((item) => withUnitPrice({
         description: item.description || "",
+        bomItemID: item.bomItemID,
+        matchedTicketID: item.matchedTicketID,
         amount: item.amount == null ? "" : String(item.amount),
         quantity: item.quantity == null ? "" : String(item.quantity),
         unitPrice: item.unitPrice == null ? "" : String(item.unitPrice),
@@ -234,7 +237,17 @@ export function SubmitExpensePage() {
   const leftCents = selectedTicket && selectedTicket.remainingBudget != null ? Math.round(Number(selectedTicket.remainingBudget) * 100) : null;
   const noBudget = Boolean(selectedTicket) && leftCents === null;
   const overBudget = amountCents !== null && leftCents !== null && amountCents > leftCents;
-  const needsNote = amountCents !== null && leftCents !== null && amountCents < leftCents;
+  // The request stays open until a purchase brings what is left to 0, so the note is only needed on the last one.
+  const progress = selectedTicket
+    ? receiptProgress({
+        requested: selectedTicket.quantity,
+        remaining: selectedTicket.remainingQuantity,
+        thisQuantity: matchedQuantity(namedLineItems, selectedTicket.materialType, selectedTicket.bomItemID, selectedTicket.ticketID) ?? receiptTotalQuantity(namedLineItems),
+      })
+    : null;
+  const completes = progress ? progress.completes : true;
+  const unitText = selectedTicket?.unit ? ` ${selectedTicket.unit}` : "";
+  const needsNote = amountCents !== null && leftCents !== null && amountCents < leftCents && completes;
   const noteMissing = needsNote && !draft.note.trim();
   const canSubmit = Boolean(
     selectedTicket
@@ -301,6 +314,8 @@ export function SubmitExpensePage() {
         birNumber: draft.birNumber.trim() || null,
         lineItems: validLineItems.map((item) => ({
           description: item.description.trim(),
+          bomItemID: item.bomItemID,
+          matchedTicketID: item.matchedTicketID,
           amount: Number(item.amount),
           quantity: Number(item.quantity),
           unitPrice: unitPriceForPayload(item),
@@ -314,6 +329,17 @@ export function SubmitExpensePage() {
       setReceiptName("");
       setOcrNotice("");
       setVendorInfo({ autoFilled: [], conflicts: [] });
+      // The receipt is saved even if refreshing the available requests fails.
+      setLoadingTickets(true);
+      try {
+        const rows = await listExpenseLinkableTickets();
+        setTickets(Array.isArray(rows) ? rows : []);
+      } catch (error) {
+        setTickets([]);
+        setPageError(extractErrorMessage(error, t("errors.load_tickets")));
+      } finally {
+        setLoadingTickets(false);
+      }
     } catch (error) {
       // Keep the draft so the user can fix the problem and retry.
       setPageError(extractErrorMessage(error, t("errors.submit_failed")));
@@ -420,6 +446,21 @@ export function SubmitExpensePage() {
                 <span>{selectedTicket.materialType || t("submit.material_request")}</span>
                 {selectedTicket.quantity != null && <span>{t("submit.requested_quantity", { quantity: selectedTicket.quantity })}</span>}
                 {leftCents !== null && <strong>{t("bd.left", { remaining: pesoText(leftCents) })}</strong>}
+              </div>
+            )}
+            {progress && (
+              <div className={`xp-qty${progress.over ? " xp-qty-over" : ""}`}>
+                <strong>{t("rq.bar_line", { bought: progress.boughtBefore + progress.thisQuantity, total: `${progress.requested}${unitText}` })}</strong>
+                <div className="xp-qty-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress.afterShare * 100)}>
+                  <span className="xp-qty-before" style={{ width: `${Math.round(progress.boughtShare * 100)}%` }} />
+                  <span className="xp-qty-this" style={{ width: `${Math.round((progress.afterShare - progress.boughtShare) * 100)}%` }} />
+                </div>
+                <span>{t("rq.bar_detail", { before: progress.boughtBefore, added: progress.thisQuantity })}</span>
+                {progress.over ? (
+                  <span className="xp-qty-warn">{t("rq.over_qty", { extra: progress.thisQuantity - (progress.requested - progress.boughtBefore) })}</span>
+                ) : !progress.completes ? (
+                  <span>{t("rq.stays_open", { left: `${progress.leftAfter}${unitText}` })}</span>
+                ) : null}
               </div>
             )}
             {!loadingTickets && tickets.length === 0 && !pageError && (

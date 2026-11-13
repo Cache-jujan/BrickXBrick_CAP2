@@ -40,7 +40,7 @@ export async function sendPasswordEmail(id) {
 }
 
 // Vendor Master List: GET/POST /api/admin/vendors, PATCH/DELETE /api/admin/vendors/:id
-// payload: { vendorName, location?, tin?, birPermitType?, birPermitNumber?, approvalStatus }
+// payload: { vendorName, location?, tin?, birPermitType?, birPermitNumber? }
 export async function listVendors() {
   const { data } = await apiClient.get("/api/admin/vendors");
   return data;

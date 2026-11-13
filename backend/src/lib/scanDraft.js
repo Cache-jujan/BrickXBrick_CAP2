@@ -24,8 +24,7 @@ async function findVendorMasterRecord(vendorName, query = defaultQuery) {
             birPermitType AS "birPermitType",
             birPermitNumber AS "birPermitNumber"
        FROM VendorMasterList
-      WHERE approvalStatus = 'Approved'
-        AND regexp_replace(lower(vendorName), '[^a-z0-9]+', '', 'g') =
+      WHERE regexp_replace(lower(vendorName), '[^a-z0-9]+', '', 'g') =
             regexp_replace(lower($1), '[^a-z0-9]+', '', 'g')
       ORDER BY createdAt DESC
       LIMIT 1`,
