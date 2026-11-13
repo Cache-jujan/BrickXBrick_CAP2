@@ -73,13 +73,19 @@ function normalizeLineItems(rawItems) {
         Number.isFinite(item.amount) &&
         item.amount >= 0
     )
-    .map((item) => ({
-      description: item.description.trim(),
-      amount: item.amount,
-      quantity: Number.isFinite(item.quantity) ? item.quantity : null,
-      unitPrice: resolveUnitPrice(item),
-            bomItemID: asUUIDOrNull(item.bomItemID),
-    }));
+    .map((item) => {
+      const matchedTicketID = asUUIDOrNull(item.matchedTicketID);
+      return {
+        description: item.description.trim(),
+        amount: item.amount,
+        quantity: Number.isFinite(item.quantity) ? item.quantity : null,
+        unitPrice: resolveUnitPrice(item),
+        bomItemID: asUUIDOrNull(item.bomItemID),
+        // The request this line was matched to on the review screen. Kept (when it is a valid id)
+        // so the quantity count and the material check can use it.
+        ...(matchedTicketID ? { matchedTicketID } : {}),
+      };
+    });
 }
 
 /**

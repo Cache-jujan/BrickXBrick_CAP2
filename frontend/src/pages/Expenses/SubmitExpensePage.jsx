@@ -117,22 +117,31 @@ export function SubmitExpensePage() {
     [tickets, selectedTicketId]
   );
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let active = true;
-    async function loadTickets() {
+    mountedRef.current = true; // StrictMode mounts, unmounts and mounts again in development
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // `quiet` refreshes the list after a purchase without the loading state or an error banner:
+  // the quantities bought so far must be current for the next receipt.
+  async function loadTickets({ quiet = false } = {}) {
+    if (!quiet) {
       setLoadingTickets(true);
       setPageError("");
-      try {
-        const rows = await listExpenseLinkableTickets();
-        if (active) setTickets(Array.isArray(rows) ? rows : []);
-      } catch (error) {
-        if (active) setPageError(extractErrorMessage(error, t("errors.load_tickets")));
-      } finally {
-        if (active) setLoadingTickets(false);
-      }
     }
+    try {
+      const rows = await listExpenseLinkableTickets();
+      if (mountedRef.current) setTickets(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+      if (mountedRef.current && !quiet) setPageError(extractErrorMessage(error, t("errors.load_tickets")));
+    } finally {
+      if (mountedRef.current && !quiet) setLoadingTickets(false);
+    }
+  }
+
+  useEffect(() => {
     loadTickets();
-    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
@@ -240,7 +249,7 @@ export function SubmitExpensePage() {
     ? receiptProgress({
         requested: selectedTicket.quantity,
         remaining: selectedTicket.remainingQuantity,
-        thisQuantity: matchedQuantity(namedLineItems, selectedTicket.materialType) ?? receiptTotalQuantity(namedLineItems),
+        thisQuantity: matchedQuantity(namedLineItems, selectedTicket) ?? receiptTotalQuantity(namedLineItems),
       })
     : null;
   const completes = progress ? progress.completes : true;
@@ -325,6 +334,7 @@ export function SubmitExpensePage() {
       setReceiptName("");
       setOcrNotice("");
       setVendorInfo({ autoFilled: [], conflicts: [] });
+      loadTickets({ quiet: true }); // a part purchase leaves the request open, with less left to buy
     } catch (error) {
       // Keep the draft so the user can fix the problem and retry.
       setPageError(extractErrorMessage(error, t("errors.submit_failed")));

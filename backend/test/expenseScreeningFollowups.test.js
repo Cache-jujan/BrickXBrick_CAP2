@@ -35,6 +35,7 @@ async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = norm(sql);
   // The strict budget check (lib/ticketBudget.js): the request row lock, then what is left.
+  if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: [{ status: "Resolved" }] };
   if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
   if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: db.remaining }] };
   if (text.startsWith("select ticketid, projectid, status, assignedto")) {

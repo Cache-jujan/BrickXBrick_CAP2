@@ -563,6 +563,7 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
                     t.subject,
                     t.vendorName AS "vendorName",
                     t.materialType AS "materialType",
+                    t.bomItemID AS "bomItemID",
                     t.quantity,
                     t.unit,
                     t.status,

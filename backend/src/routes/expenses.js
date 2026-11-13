@@ -234,6 +234,12 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         // two submissions cannot both slip under the cap.
         const expense = await withTransaction(async (client) => {
             const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
+            // The status read above was outside this transaction: check it again under the lock, so a
+            // request rejected or withdrawn in between does not take an expense.
+            const lockedStatus = locked.rows?.[0]?.status;
+            if (lockedStatus !== "Acknowledged" && lockedStatus !== "Resolved") {
+                throw httpError(409, `Ticket must be Acknowledged or Resolved before an expense can be linked to it (it is ${lockedStatus})`);
+            }
             const run = (sql, params) => client.query(sql, params);
             const remainingBudgetCents = await loadRemainingBudgetCents(run, ticketID);
             // Does this purchase bring what is left of the request to 0? Only then does it need the
@@ -659,7 +665,9 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
         if (storedLineItems.length === 0) {
             throw httpError(400, "lineItems must be an array of { description: string, amount: number }");
         }
-        const quantity = computeQuantityFromLineItems(storedLineItems);
+        // The receipt total; replaced inside the transaction by the request's own lines once its ticket is read.
+        let quantity = computeQuantityFromLineItems(storedLineItems);
+        const resubmitNote = typeof req.body?.submitNote === "string" ? req.body.submitNote.trim().slice(0, SUBMIT_NOTE_MAX) : "";
 
         // Normalize BIR fields so Layer 1's exact match can't be dodged.
         const bir = normalizeBirFields({ tin, birPermitNumber, birNumber });
@@ -672,17 +680,28 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
         // allocation row in step with the new amount.
         const expense = await withTransaction(async (client) => {
             const ticketID = existing.rows[0].ticketid;
+            let completes = false;
+            let ticketStatus = null;
             if (ticketID) {
-                await client.query("SELECT 1 FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
-                const remainingBudgetCents = await loadRemainingBudgetCents(
-                    (sql, params) => client.query(sql, params), ticketID, req.params.id
+                const run = (sql, params) => client.query(sql, params);
+                const lockedTicket = await client.query(
+                    "SELECT status, quantity, materialtype, bomitemid FROM tickets WHERE ticketid = $1 FOR UPDATE",
+                    [ticketID]
                 );
-                // Over budget is refused; the underspend note was given when it was first submitted.
+                const ticket = lockedTicket.rows[0];
+                ticketStatus = ticket?.status ?? null;
+                // Count only the lines for this request, as a new submission does.
+                if (ticket) quantity = quantityOfMatchedLines(storedLineItems, ticket, ticketID) ?? quantity;
+                const remainingBudgetCents = await loadRemainingBudgetCents(run, ticketID, req.params.id);
+                // This expense is Rejected now, so it is not counted yet: does it bring what is left to 0?
+                completes = ticket ? await expenseCompletesRequest(run, ticketID, ticket.quantity, quantity) : false;
+                // Over budget is refused. Finishing the request under budget needs the note: the one
+                // given when it was first submitted, or a new one sent with this resubmit.
                 const issue = checkBudget({
                     amountCents: Math.round(amount * 100),
                     remainingBudgetCents,
-                    completesRequest: false,
-                    note: "",
+                    completesRequest: completes,
+                    note: resubmitNote || existing.rows[0].submitnote || "",
                 });
                 if (issue) throw httpError(400, issue.message, { code: issue.code });
             }
@@ -691,8 +710,9 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                     SET vendorname = $1, amount = $2, receiptdate = $3, category = $4,
                         birvalidationstatus = $5, birnumber = $6, tin = $7,
                         birpermitnumber = $8, lineitems = $9, quantity = $10,
+                        submitnote = COALESCE($11, submitnote),
                         status = 'Pending', rejectionreason = NULL, approvedby = NULL
-                  WHERE expenseid = $11
+                  WHERE expenseid = $12
                   RETURNING ${EXPENSE_COLUMNS}`,
                 [
                     vendorName,
@@ -705,6 +725,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                     bir.birPermitNumber,
                     JSON.stringify(storedLineItems),
                     quantity,
+                    resubmitNote || null,
                     req.params.id,
                 ]
             );
@@ -712,6 +733,22 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                 "UPDATE receiptallocations SET allocatedamount = $1 WHERE expenseid = $2",
                 [amount, req.params.id]
             );
+            // This resubmit brings the request to 0 left while it is still open: close it, as a new purchase would.
+            if (completes && ticketStatus === "Acknowledged") {
+                assertLegalTransition("Acknowledged", "Resolved");
+                await client.query(
+                    `UPDATE tickets
+                        SET status = 'Resolved', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW()
+                      WHERE ticketId = $2 AND status = 'Acknowledged'`,
+                    [req.user.id, ticketID]
+                );
+                await logTransition(client, {
+                    ticketId: ticketID,
+                    fromStatus: "Acknowledged",
+                    toStatus: "Resolved",
+                    changedBy: req.user.id,
+                });
+            }
             return result.rows[0];
         });
 
