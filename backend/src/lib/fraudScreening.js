@@ -112,22 +112,15 @@ function createFraudScreening({ query } = {}) {
     }
 
     const result = await runQuery(
-      `SELECT vendorid, approvalstatus
+      `SELECT vendorid
          FROM vendormasterlist
         WHERE LOWER(TRIM(vendorname))
             = LOWER(TRIM($1))`,
       [vendorName]
     );
 
-    if (result.rowCount === 0) {
-      return "not_found";
-    }
-
-    if (result.rows[0].approvalstatus === "Flagged") {
-      return "flagged";
-    }
-
-    return false;
+    // Every vendor on the list is trusted, so only a missing one is an issue.
+    return result.rowCount === 0 ? "not_found" : false;
   }
 
   async function isAllocationPortion(expense) {

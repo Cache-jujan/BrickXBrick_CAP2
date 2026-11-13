@@ -500,13 +500,12 @@ router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req
     }
 });
 
-// GET /vendors — approved vendors available for procurement tickets (SM or PM).
+// GET /vendors — trusted vendors available for procurement tickets (SM or PM).
 router.get("/vendors", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
         const result = await query(
             `SELECT vendorID AS "vendorID", vendorName AS "vendorName"
                FROM VendorMasterList
-              WHERE approvalStatus = 'Approved'
               ORDER BY vendorName ASC`
         );
         res.json(result.rows);

@@ -11,12 +11,10 @@ const router = express.Router();
 router.use(requireAuth, requireRole("System Administrator"));
 
 const PERMIT_TYPES = ["Permit", "PTU", "ATP"];
-const STATUSES = ["Approved", "Flagged"];
 const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
 
 const COLUMNS = `vendorID AS "vendorID", vendorName AS "vendorName", location,
   tin, birPermitType AS "birPermitType", birPermitNumber AS "birPermitNumber",
-  approvalStatus AS "approvalStatus",
   createdAt AS "createdAt"`;
 
 /** Read and check the typed fields. Throws one InputError naming the first problem. */
@@ -35,11 +33,7 @@ function readFields(body) {
   if (birPermitNumber && !birPermitType) {
     throw new InputError("Choose the BIR permit type for this number", "birPermitType");
   }
-  const approvalStatus = body?.approvalStatus === undefined ? "Approved" : body.approvalStatus;
-  if (!STATUSES.includes(approvalStatus)) {
-    throw new InputError("Status must be Approved or Flagged", "approvalStatus");
-  }
-  return { vendorName, location, tin, birPermitType, birPermitNumber: birPermitType ? birPermitNumber : null, approvalStatus };
+  return { vendorName, location, tin, birPermitType, birPermitNumber: birPermitType ? birPermitNumber : null };
 }
 
 function sendInputError(res, err) {
@@ -76,10 +70,10 @@ router.post("/", async (req, res) => {
       return res.status(409).json({ error: "A vendor with this name is already on the list", fieldErrors: [{ field: "vendorName", message: "Already on the list" }] });
     }
     const r = await query(
-      `INSERT INTO VendorMasterList (addedBy, vendorName, location, tin, birPermitType, birPermitNumber, approvalStatus)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO VendorMasterList (addedBy, vendorName, location, tin, birPermitType, birPermitNumber)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${COLUMNS}`,
-      [req.user.id, f.vendorName, f.location, f.tin, f.birPermitType, f.birPermitNumber, f.approvalStatus]
+      [req.user.id, f.vendorName, f.location, f.tin, f.birPermitType, f.birPermitNumber]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -109,10 +103,10 @@ router.patch("/:id", async (req, res) => {
     const r = await query(
       `UPDATE VendorMasterList
           SET vendorName = $1, location = $2, tin = $3, birPermitType = $4,
-              birPermitNumber = $5, approvalStatus = $6
-        WHERE vendorID = $7
+              birPermitNumber = $5
+        WHERE vendorID = $6
        RETURNING ${COLUMNS}`,
-      [f.vendorName, f.location, f.tin, f.birPermitType, f.birPermitNumber, f.approvalStatus, id]
+      [f.vendorName, f.location, f.tin, f.birPermitType, f.birPermitNumber, id]
     );
     if (r.rowCount === 0) return res.status(404).json({ error: "Vendor not found" });
     res.json(r.rows[0]);
