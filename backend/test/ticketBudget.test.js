@@ -71,7 +71,7 @@ test("the note limit matches the stored column rule", () => {
   assert.equal(SUBMIT_NOTE_MAX, 300);
 });
 
-// ---- with a real split plan ---------------------------------------------------------
+// with a real split plan
 
 const { planAllocation } = require("../src/lib/allocationPlan");
 const fakeMatch = (description, materialType) => description.toLowerCase().includes(String(materialType).toLowerCase());

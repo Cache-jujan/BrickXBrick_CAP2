@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test_expenses_api.sh — F6 expense API test sequence (17 scenarios).
+# test_expenses_api.sh: F6 expense API test sequence (17 scenarios).
 # Mirrors the manual test plan for POST /api/expenses, GET /api/expenses/mine,
 # GET /api/expenses/:id.
 #
@@ -11,16 +11,16 @@
 
 set -uo pipefail
 
-# ─── CONFIG — fill these in ──────────────────────────────────────────────
+# ─── CONFIG: fill these in ──────────────────────────────────────────────
 BASE_URL="http://127.0.0.1:3000"          # use 127.0.0.1, not "localhost" — on Windows/
                                            # Git Bash, "localhost" can resolve to IPv6 (::1)
                                            # first and silently fail to connect (curl 000)
                                            # even when the server is up. Use your LAN IP
                                            # instead if testing from a phone/another device.
 
-# Test account credentials — must be seeded, Active, and NOT already
+# Test account credentials: must be seeded, Active, and NOT already
 # lockoutuntil-locked before you run this (5 failed logins = 15 min lock).
-# Test account credentials — must be seeded, Active, and NOT already
+# Test account credentials: must be seeded, Active, and NOT already
 # lockoutuntil-locked before you run this (5 failed logins = 15 min lock).
 EMAIL_PURCHASER_A="testpurchaser@gmail.com"; PASSWORD_PURCHASER_A="TestPurch123!"
 EMAIL_PURCHASER_B="testpurchaser2@gmail.com"; PASSWORD_PURCHASER_B="TestPurch2123!"
@@ -41,7 +41,7 @@ LAST_EXPENSE_ID=""
 # Diagnostic messages go to stderr directly (that's fine, stderr isn't
 # captured by command substitution). But any variable assignment INSIDE this
 # function, when called as $(login ...), happens in a subshell and is lost
-# once that subshell exits — so failure tracking must happen in the caller,
+# once that subshell exits: so failure tracking must happen in the caller,
 # by checking whether the printed token came back empty.
 login() {
     local email="$1"
@@ -76,7 +76,7 @@ TOKEN_PURCHASER_A=$(login "$EMAIL_PURCHASER_A" "$PASSWORD_PURCHASER_A")
 TOKEN_PURCHASER_B=$(login "$EMAIL_PURCHASER_B" "$PASSWORD_PURCHASER_B")
 TOKEN_SITE_MANAGER=$(login "$EMAIL_SITE_MANAGER" "$PASSWORD_SITE_MANAGER")
 
-# Check tokens HERE, in the main shell — not via a flag set inside login().
+# Check tokens HERE, in the main shell, not via a flag set inside login().
 LOGIN_FAILED=0
 [ -z "$TOKEN_PURCHASER_A" ] && LOGIN_FAILED=1
 [ -z "$TOKEN_PURCHASER_B" ] && LOGIN_FAILED=1
@@ -110,7 +110,7 @@ run_test() {
 }
 
 json_field() {
-    # tiny helper, avoids requiring jq — grabs "field":"value" or "field":value
+    # tiny helper, avoids requiring jq, grabs "field":"value" or "field":value
     grep -o "\"$1\":[^,}]*" /tmp/expense_test_body.json | head -1 | sed -E 's/.*: *"?([^"]*)"?/\1/'
 }
 
@@ -155,7 +155,7 @@ run_test "2. Resolved ticket assigned to B (called by A)" 403 \
 # Pending tickets always have assignedTo = NULL (assigned only at PM
 # acknowledge-time, per migration 005), so the assignment check in
 # expenses.js fires before the status check ever runs. 403 is the
-# intended behavior here, not a bug — see PR notes.
+# intended behavior here, not a bug, see PR notes.
 run_test "3. Pending ticket (unassigned, so 403 not 409)" 403 \
     -X POST "$BASE_URL/api/expenses" \
     -H "Authorization: Bearer $TOKEN_PURCHASER_A" \

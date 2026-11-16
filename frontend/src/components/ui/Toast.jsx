@@ -15,8 +15,8 @@ import "./Toast.css";
 //   const toast = useToast();
 //   toast.success(tr("tq.toast_saved"));
 //
-// Wording: short, past tense, says what happened and to what —
-// "“Gutter” assigned to Ana Cruz.", "Changes saved." — not "Success!".
+// Wording: short, past tense, says what happened and to what,
+// "“Gutter” assigned to Ana Cruz.", "Changes saved.", not "Success!".
 
 const ToastContext = createContext(null);
 const AUTO_CLOSE_MS = { success: 4500, info: 4500, error: 0 }; // 0 = stays until dismissed

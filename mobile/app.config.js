@@ -4,7 +4,7 @@
 
 // Static bundle identifier and deep-link scheme.
 // NOTE: scheme must match the redirect URI configured in your OAuth
-// provider (Supabase) — update that dashboard setting to
+// provider (Supabase): update that dashboard setting to
 // "brickxbrick://oauth/callback" if it isn't already.
 const bundleId = "com.fourloop.brickxbrick";
 const scheme = "brickxbrick";

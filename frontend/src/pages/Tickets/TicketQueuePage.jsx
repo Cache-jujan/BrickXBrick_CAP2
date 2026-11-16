@@ -50,7 +50,7 @@ const UNIT_OPTIONS = [
   "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
 ];
 
-// Quick-pick reasons for rejecting — keeps the reason the SM sees consistent
+// Quick-pick reasons for rejecting: keeps the reason the SM sees consistent
 // and readable. The PM can still add a note (or write a note alone).
 const REJECT_REASONS = ["tq.reason_qty", "tq.reason_dup", "tq.reason_wrong", "tq.reason_phase"];
 
@@ -118,7 +118,7 @@ export function TicketQueuePage() {
       // Seed the approved-budget inputs with the BOM figure (qty × unit cost)
       // for on-BOM Material Requests; otherwise the PM types it. Site Managers
       // no longer give a budget (post-consultation fix, Nov 2026).
-      // Purchaser select starts empty — no silent default.
+      // Purchaser select starts empty: no silent default.
       setApprovedBudgets((current) => {
         const next = { ...current };
         for (const t of rows) {
@@ -325,7 +325,7 @@ export function TicketQueuePage() {
   }
 
   function handleCreated() {
-    // A PM-created ticket is born Acknowledged — refresh whichever tab is open.
+    // A PM-created ticket is born Acknowledged: refresh whichever tab is open.
     loadTab(activeTab);
   }
 
@@ -605,7 +605,7 @@ export function TicketQueuePage() {
   );
 }
 
-// ---- BOM context (on-BOM Material Requests) ----
+// BOM context (on-BOM Material Requests)
 
 // Pesos rounded to the centavo, so 493 × 300.1 doesn't print float noise.
 function centavos(amount) {
@@ -721,7 +721,7 @@ function todayInputValue() {
   return toInputDate(new Date().toISOString());
 }
 
-// ---- A compact row: enough to recognise the ticket, click it to see everything ----
+// A compact row: enough to recognise the ticket, click it to see everything
 function TicketRow({ ticket, onOpen, highlightId }) {
   const { t: tr, tv, formatDate } = useLocale();
   const meta = TYPE_META[ticket.tickettype] || { key: "work" };
@@ -758,7 +758,7 @@ function TicketRow({ ticket, onOpen, highlightId }) {
   );
 }
 
-// ---- The ticket in a modal: the full card, with every action it already had ----
+// The ticket in a modal: the full card, with every action it already had
 function TicketModal({ ticket, onClose, cardProps }) {
   const { t: tr } = useLocale();
   const closeRef = useRef(null);
@@ -781,7 +781,7 @@ function TicketModal({ ticket, onClose, cardProps }) {
   );
 }
 
-// ---- A single ticket card ----
+// A single ticket card
 function TicketCard(props) {
   const {
     ticket, purchasers, assignments, setAssignments, approvedBudgets, setApprovedBudgets,
@@ -937,7 +937,7 @@ function TicketCard(props) {
   );
 }
 
-// ---- Batch block: a group of tickets submitted together ----
+// Batch block: a group of tickets submitted together
 function BatchBlock(props) {
   const { tickets, purchasers, setAssignments, submittingId, onAssignAll } = props;
   const { t: tr, formatDate } = useLocale();
@@ -1007,7 +1007,7 @@ function useEscapeKey(handler) {
   }, []);
 }
 
-// ---- Reject modal ----
+// Reject modal
 function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSubmit }) {
   const { t: tr } = useLocale();
   useEscapeKey(onCancel);
@@ -1055,7 +1055,7 @@ function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSub
   );
 }
 
-// ---- Edit modal ----
+// Edit modal
 function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendors, onCancel, onSave }) {
   useEscapeKey(onCancel);
   const { t: tr } = useLocale();

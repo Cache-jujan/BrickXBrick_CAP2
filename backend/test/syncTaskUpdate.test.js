@@ -123,7 +123,7 @@ const item = (uuid, data, type = "task_update") => ({ uuid, type, data });
 const good = (uuid = U1, extra = {}) => item(uuid, { taskId: T1, photoUrl: photo(), note: "done", ...extra });
 const codeOf = (res, id) => res.body.rejected.find((r) => r.id === id)?.code;
 
-// ---- the happy path ----------------------------------------------------------------
+// the happy path
 
 test("a valid update is synced and creates exactly one Pending Review row", async () => {
   reset();
@@ -155,7 +155,7 @@ test("replaying an item whose task was since Completed still reports synced (not
   assert.equal(again.body.rejected.length, 0);
 });
 
-// ---- one test per reject code ------------------------------------------------------------
+// one test per reject code
 
 test("TASK_NOT_FOUND: unknown task, and a taskId that is not an id", async () => {
   reset();
@@ -267,7 +267,7 @@ test("a replay never touches storage (no photo check for an already-saved item)"
   assert.equal(state.storageCalls, before);
 });
 
-// ---- roles and isolation ---------------------------------------------------------------------
+// roles and isolation
 
 const expense = () =>
   item(

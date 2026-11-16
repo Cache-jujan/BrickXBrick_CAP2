@@ -55,7 +55,7 @@ export function SearchableSelect({
   const selected = options.find((o) => o.value === value) || null;
   const shown = useMemo(() => filterOptions(options, query), [options, query]);
   const typing = query.trim() !== "";
-  // Rows that matched (not just pinned) — to know when to say "no match".
+  // Rows that matched (not just pinned): to know when to say "no match".
   const matched = shown.filter((o) => !o.pinned).length;
 
   function openList() {

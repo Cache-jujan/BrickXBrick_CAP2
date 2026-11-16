@@ -1,4 +1,4 @@
-// F1 — new-account invite and password emails must open /set-password.
+// F1: new-account invite and password emails must open /set-password.
 // If redirectTo is missing or malformed, Supabase opens its Site URL instead
 // and the new user lands on Sign in with no password (bug reported 2026-10-16).
 const test = require("node:test");

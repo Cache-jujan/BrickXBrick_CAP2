@@ -1,4 +1,4 @@
-// ticketAvailability.js — is a Material Request still waiting for a purchase?
+// ticketAvailability.js: is a Material Request still waiting for a purchase?
 //
 // A scanned receipt can sit in the app for hours. By the time it is submitted
 // the request may already have been filled by another receipt, a split, or a

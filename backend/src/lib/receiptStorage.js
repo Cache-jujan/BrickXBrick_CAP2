@@ -1,4 +1,4 @@
-// receiptStorage.js — where receiptImageURL actually comes from.
+// receiptStorage.js: where receiptImageURL actually comes from.
 //
 // `expenses.receiptimageurl` is NOT NULL, so something has to produce a
 // real, retrievable URL at submit time. Rather than accept a placeholder
@@ -44,7 +44,7 @@ const CONTENT_TYPE_BY_MIME = {
   "application/pdf": "application/pdf",
 };
 
-// receipts/<uuid>.<jpg|png|webp|pdf> — the only key shape this module ever writes.
+// receipts/<uuid>.<jpg|png|webp|pdf>: the only key shape this module ever writes.
 const RECEIPT_KEY_RE = /^receipts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|pdf)$/i;
 
 function isAllowedMime(mimeType) {
@@ -65,7 +65,7 @@ function hasValidReceiptBytes(buffer, mimeType) {
  * Persist a receipt image and return the URL to store in
  * expenses.receiptimageurl.
  *
- * The object name is a random UUID, never the client-supplied name — an
+ * The object name is a random UUID, never the client-supplied name, an
  * uploaded filename is attacker-controlled.
  */
 async function storeReceiptImage(buffer, mimeType) {

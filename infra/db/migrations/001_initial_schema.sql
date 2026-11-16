@@ -135,5 +135,5 @@ CREATE TABLE BlockchainLogs (
 
 -- NOTE: three additional SQLite tables (offlineExpenseQueue, offlineTaskUpdates,
 -- offlineTicketInteractions) exist ONLY on the Android device for F10 offline
--- support. They are not part of this Postgres schema — build those when you
+-- support. They are not part of this Postgres schema, build those when you
 -- reach F10, not now.

@@ -51,7 +51,7 @@ function queue(extra = {}) {
   return { clientId, res };
 }
 
-// ---- rules ------------------------------------------------------------------
+// rules
 
 test("manilaDate is the Philippine day, whatever the phone's zone", () => {
   assert.equal(rules.manilaDate(new Date("2026-10-22T17:00:00Z")), "2026-10-23");
@@ -78,7 +78,7 @@ test("a queued slot shows as Queued unless the server already has it", () => {
   assert.deepEqual(rules.slotStates(server, pending, PROJECT).map((s) => s.state), ["Submitted", "Queued", "Upcoming"]);
 });
 
-// ---- queue ------------------------------------------------------------------
+// queue
 
 test("a saved check-in counts toward the one offline limit", () => {
   setup();
@@ -118,7 +118,7 @@ test("the 100-entry rule applies, but replacing a waiting check-in is still allo
   assert.equal(queue({ summary: "again" }).res.queued, true); // replaces, so no extra entry
 });
 
-// ---- sync -------------------------------------------------------------------
+// sync
 
 test("photos upload first (with the project id); the batch carries only URLs", async () => {
   setup();

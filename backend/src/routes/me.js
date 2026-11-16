@@ -1,4 +1,4 @@
-// me.js — what any signed-in user may change about their own account.
+// me.js: what any signed-in user may change about their own account.
 const express = require("express");
 const multer = require("multer");
 const { query } = require("../lib/db");
@@ -27,7 +27,7 @@ function receiveAvatar(req, res, next) {
   });
 }
 
-// PATCH /api/me/profile — set your username. Everyone else then sees you as
+// PATCH /api/me/profile: set your username. Everyone else then sees you as
 // "username.role" (stored in Users.name, see lib/displayName.js).
 // Body: { username }
 // 200 { user: { id, name, username, email, role } }   400 invalid
@@ -50,7 +50,7 @@ router.patch("/profile", async (req, res, next) => {
   }
 });
 
-// POST /api/me/change-password — change your password while signed in (like
+// POST /api/me/change-password: change your password while signed in (like
 // Facebook: the current password plus the new one).
 // A wrong current password counts on the same counter as a wrong password at
 // login: after MAX_ATTEMPTS the account is locked for LOCKOUT_MINUTES. Without
@@ -107,7 +107,7 @@ router.post("/change-password", async (req, res, next) => {
   }
 });
 
-// POST /api/me/avatar — set your profile picture. multipart/form-data, field "photo"
+// POST /api/me/avatar: set your profile picture. multipart/form-data, field "photo"
 // (a JPEG or PNG, up to 2 MB).
 // 200 { avatarUrl }   400 missing / wrong type / too large
 router.post("/avatar", receiveAvatar, async (req, res, next) => {
@@ -124,7 +124,7 @@ router.post("/avatar", receiveAvatar, async (req, res, next) => {
   }
 });
 
-// DELETE /api/me/avatar — go back to the initial-letter circle.
+// DELETE /api/me/avatar: go back to the initial-letter circle.
 // 200 { avatarUrl: null }
 router.delete("/avatar", async (req, res, next) => {
   try {

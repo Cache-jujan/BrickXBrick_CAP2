@@ -1,4 +1,4 @@
-// F1 — account lockout holds on every API call, and the login route does not
+// F1: account lockout holds on every API call, and the login route does not
 // reveal account state to someone who does not know the password.
 const test = require("node:test");
 const assert = require("node:assert/strict");

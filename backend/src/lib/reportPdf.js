@@ -1,4 +1,4 @@
-// reportPdf.js — F11 PDF export. buildReportDocDefinition is pure (it only
+// reportPdf.js: F11 PDF export. buildReportDocDefinition is pure (it only
 // builds the pdfmake document object, so tests can inspect it); renderPdf is
 // the only function that touches pdfmake.
 //
@@ -176,7 +176,7 @@ function buildReportDocDefinition(summary, options) {
   const { from, to } = summary.period;
   const watchGap = summary.watchGapPoints ?? 10;
 
-  // --- Headline figures ------------------------------------------------------
+  // Headline figures
   const left = t.netPnL;
   const leftPct = t.varianceToDatePct === null || t.varianceToDatePct === undefined ? null : -t.varianceToDatePct;
   const tile = (label, value, sub, extra = {}) => ({
@@ -212,7 +212,7 @@ function buildReportDocDefinition(summary, options) {
     margin: [0, 12, 0, 0],
   };
 
-  // --- Budget and spend by project ----------------------------------------
+  // Budget and spend by project
   const row = (name, f, bold = false) => {
     const status = statusOf(f);
     const b = bold ? { bold: true } : {};
@@ -251,7 +251,7 @@ function buildReportDocDefinition(summary, options) {
     fontSize: 8,
   };
 
-  // --- Budget used vs work done -------------------------------------------
+  // Budget used vs work done
   const usedValues = [...summary.projects, t].map((f) => f.cumulativeUtilizationPct ?? 0);
   const axisMax = Math.max(100, Math.ceil(Math.max(...usedValues) / 10) * 10);
   const barRows = summary.projects.map((p) => [{ text: p.name, fontSize: 8 }, usedDoneBars(p, axisMax), usedDoneValues(p)]);
@@ -272,7 +272,7 @@ function buildReportDocDefinition(summary, options) {
   };
   const watching = summary.projects.filter((p) => p.health === "watch").map((p) => p.name);
 
-  // --- Spending by month ----------------------------------------------------
+  // Spending by month
   const months = summary.months || [];
   const monthTotals = t.monthlySpend || [];
   const maxMonth = Math.max(0, ...monthTotals);
@@ -301,7 +301,7 @@ function buildReportDocDefinition(summary, options) {
         },
       ];
 
-  // --- BIR ------------------------------------------------------------------
+  // BIR
   const birRows = summary.projects.map((p) => [p.name, right(formatAmount(p.birDeductibleSpend))]);
 
   const content = [

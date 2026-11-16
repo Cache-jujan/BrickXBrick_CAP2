@@ -19,7 +19,7 @@ const TABS = [
   { value: "reviewed", labelKey: "tamper.tab_reviewed" },
 ];
 
-// FUNCTION F12 — Blockchain Tamper Alerts (GM / System Administrator)
+// FUNCTION F12: Blockchain Tamper Alerts (GM / System Administrator)
 // Reads GET /api/blockchain/alerts?status=open|reviewed and writes via
 // PATCH /api/blockchain/alerts/:id/resolve { note }.
 // Reviewing an alert never hides it: it moves to "Reviewed" with who, when

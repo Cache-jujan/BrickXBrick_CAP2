@@ -65,7 +65,7 @@ export default function SiteManagerTaskDetailScreen() {
   // Set when the task on screen is the copy saved on this phone (offline).
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  // F10 — offline queue state for THIS task.
+  // F10: offline queue state for THIS task.
   const { isOnline, pendingCount, refreshPendingCount, syncing, lastSync } = useNetwork();
   const [queued, setQueued] = useState<QueuedUpdate | null>(null);
   const [rejectedHere, setRejectedHere] = useState<QueuedUpdate[]>([]);
@@ -178,7 +178,7 @@ export default function SiteManagerTaskDetailScreen() {
       : t("sm.qb_online");
 
   const evidenceUrl = task?.pendingphotoevidenceurl || task?.photoevidenceurl;
-  // D-04: flag only ever lived on the log row — the SM had no way to see
+  // D-04: flag only ever lived on the log row, the SM had no way to see
   // that a submission was flagged, let alone why, short of asking the PM.
   const flagged = task?.latestreviewstatus === "Flagged";
 
@@ -202,7 +202,7 @@ export default function SiteManagerTaskDetailScreen() {
     }
   }
 
-  // F10 — no connection: keep the photo on the phone and queue the update. It is
+  // F10: no connection: keep the photo on the phone and queue the update. It is
   // sent by itself on reconnect (lib/sync/sync.js). One queued update per task:
   // a newer one replaces the older one.
   // updateId: pass the online attempt's clientSubmissionId when a submit just

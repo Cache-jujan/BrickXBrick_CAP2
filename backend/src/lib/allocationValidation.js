@@ -1,4 +1,4 @@
-// allocationValidation.js — request validation for F8 split receipts.
+// allocationValidation.js: request validation for F8 split receipts.
 //
 // Two unit rules keep every comparison exact:
 //   - money is integer centavos   (₱16,800.00 -> 1680000)
@@ -8,6 +8,7 @@
 
 const { asUUIDOrNull } = require("./uuid");
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
+// Strict UUID check: the version digit must be 1-8 and the variant digit 8, 9, a or b.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_AMOUNT_CENTS = 999_999_999_999; // DECIMAL(12,2)
 const MAX_LINES = 200;
@@ -173,7 +174,7 @@ function parseFeeTargets(value, lines) {
   return targets;
 }
 
-// Body for POST /api/allocations/preview — only what the split needs.
+// Body for POST /api/allocations/preview: only what the split needs.
 // lineTargets: the Purchaser matched a receipt line to a request by hand, { lineIndex: ticketID }.
 // Unlike feeTargets it works for any line, quantity or not.
 function parseLineTargets(value, lines) {
@@ -204,7 +205,7 @@ function validatePlanInput(body = {}) {
   };
 }
 
-// Body for POST /api/allocations — the plan input plus the receipt fields.
+// Body for POST /api/allocations: the plan input plus the receipt fields.
 // Does NOT check that lines add up to receiptTotal; the route does that with
 // validateAllocationSum so UTC-003/004 test the same function the route uses.
 function validateAllocationBody(body = {}) {

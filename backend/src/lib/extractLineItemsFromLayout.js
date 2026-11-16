@@ -3,16 +3,16 @@
 /**
  * extractLineItemsFromLayout(words)
  *
- * words: [{ text, vertices: [{x,y}x4] }]  — raw Vision API word boxes,
+ * words: [{ text, vertices: [{x,y}x4] }]: raw Vision API word boxes,
  * as produced by dump-vision-layout.js (index 0 / full-text blob already stripped).
  *
  * Pipeline:
- *   1. Orientation detection  — median word angle, snap to nearest 0/90/180/270°
+ *   1. Orientation detection: median word angle, snap to nearest 0/90/180/270°
  *   2. Rotate all word boxes by the correction angle
- *   3. Watermark rejection    — drop words still >20° off-axis after correction
- *   4. Row reconstruction     — y-proximity clustering, tolerance = 0.6 * median word height
- *   5. Column mapping         — anchor to header row word x-centers, classify by keyword
- *   6. Table-end detection    — stop after 2 consecutive rows with no qty AND no amount
+ *   3. Watermark rejection: drop words still >20° off-axis after correction
+ *   4. Row reconstruction: y-proximity clustering, tolerance = 0.6 * median word height
+ *   5. Column mapping: anchor to header row word x-centers, classify by keyword
+ *   6. Table-end detection: stop after 2 consecutive rows with no qty AND no amount
  */
 
 function centerAndSize(vertices) {
@@ -95,12 +95,12 @@ function extractLineItemsFromLayout(words, opts = {}) {
     return { orientationDeg: 0, watermarkDropped: 0, headerFound: false, lineItems: [], rows: [] };
   }
 
-  // --- Step 1: orientation detection ---
+  // Step 1: orientation detection
   const rawAngles = words.map((w) => wordAngleDeg(w.vertices));
   const medianAngle = median(rawAngles);
   const correction = -snapToNearest90(medianAngle); // rotate by -snap to bring text to horizontal
 
-  // --- Step 2: rotate all word boxes ---
+  // Step 2: rotate all word boxes
   const rotated = words.map((w) => {
     const rv = w.vertices.map((v) => rotatePoint(v.x, v.y, correction));
     const { cx, cy, w: ww, h: hh } = centerAndSize(rv);
@@ -108,7 +108,7 @@ function extractLineItemsFromLayout(words, opts = {}) {
     return { text: w.text, cx, cy, w: ww, h: hh, angleAfter };
   });
 
-  // --- Step 3: watermark / off-axis rejection ---
+  // Step 3: watermark / off-axis rejection
   const kept = [];
   let dropped = 0;
   for (const w of rotated) {
@@ -127,7 +127,7 @@ function extractLineItemsFromLayout(words, opts = {}) {
     return { orientationDeg: -correction, watermarkDropped: dropped, headerFound: false, lineItems: [], rows: [] };
   }
 
-  // --- Step 4: row reconstruction (y-proximity clustering) ---
+  // Step 4: row reconstruction (y-proximity clustering)
   const medianHeight = median(kept.map((w) => w.h)) || 20;
   const rowTolerance = 0.6 * medianHeight;
 
@@ -155,7 +155,7 @@ function extractLineItemsFromLayout(words, opts = {}) {
     text: c.words.sort((a, b) => a.cx - b.cx).map((w) => w.text).join(" "),
   }));
 
-  // --- Step 5: locate header row + column mapping ---
+  // Step 5: locate header row + column mapping
   let headerRowIdx = -1;
   let columnMap = null; // { qty: x, unit: x, article: x, price: x, amount: x }
 
@@ -201,7 +201,7 @@ function extractLineItemsFromLayout(words, opts = {}) {
     return best;
   }
 
-  // --- Step 6: table-end detection + row spacing gap check ---
+  // Step 6: table-end detection + row spacing gap check
   const bodyRows = rows.slice(headerRowIdx + 1);
   const rowGaps = [];
   for (let i = 1; i < bodyRows.length; i++) {

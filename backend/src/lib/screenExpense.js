@@ -1,4 +1,4 @@
-// screenExpense.js — F9 shared helper. Runs every screening layer on one
+// screenExpense.js: F9 shared helper. Runs every screening layer on one
 // expense and writes FraudFlags for the PM review queue.
 //
 // ALWAYS call this AFTER COMMIT, never inside a transaction. It reads through

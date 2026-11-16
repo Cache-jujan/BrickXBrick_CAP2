@@ -1,4 +1,4 @@
-// POST /api/me/change-password — the current password is required, and wrong
+// POST /api/me/change-password: the current password is required, and wrong
 // guesses count toward the same lockout as the login screen.
 const test = require("node:test");
 const assert = require("node:assert/strict");

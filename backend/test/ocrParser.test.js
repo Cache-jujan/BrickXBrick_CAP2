@@ -8,7 +8,7 @@ const { lineItemsFromWords, cleanWords, firstAmountToken } = require("../src/lib
 const NOW = new Date("2026-10-09T00:00:00Z");
 const fixture = (name) => require(path.join(__dirname, "..", "scripts", "receipt-test-results", name));
 
-// --- dates ---
+// dates
 test("M/D/Y is the default reading", () => {
   assert.equal(extractDate("Date: 6-3-25", NOW), "2025-06-03");
 });
@@ -34,7 +34,7 @@ test("'Date Issued' printer dates are ignored when a sale date exists", () => {
   assert.equal(extractDate("Date: 6-3-25\nDate Issued: June 7, 2026", NOW), "2025-06-03");
 });
 
-// --- BIR permit / ATP ---
+// BIR permit / ATP
 test("ATP numbers are recognized and typed", () => {
   const out = parseReceiptText("Authority to Print No.: 080AU20230000001328\n");
   assert.equal(out.birPermitNumber, "080AU20230000001328");
@@ -51,7 +51,7 @@ test("a PTU permit is typed PTU", () => {
   assert.equal(out.birPermitType, "PTU");
 });
 
-// --- layout line items ---
+// layout line items
 test("missing vertex coordinates default to 0", () => {
   const [w] = cleanWords([{ text: "A", vertices: [{ y: 5 }, { x: 3 }, {}, { x: 1, y: 1 }] }]);
   assert.deepEqual(w.vertices, [{ x: 0, y: 5 }, { x: 3, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 1 }]);

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# BrickXBrick — one Clique validator node per EC2 instance (3 instances, 1 AWS account).
+# BrickXBrick: one Clique validator node per EC2 instance (3 instances, 1 AWS account).
 #
 #   sudo bash setup-node.sh init                       # on EACH node: docker, swap, signer key, nodekey
 #   sudo bash setup-node.sh start <N> <ADDRS> <ENODES> # on EACH node: genesis, peers, run geth

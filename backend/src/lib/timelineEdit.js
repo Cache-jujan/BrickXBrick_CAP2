@@ -1,4 +1,4 @@
-// timelineEdit.js — F3: the PM's "Edit timeline" changes, in one place.
+// timelineEdit.js (F3): the PM's "Edit timeline" changes, in one place.
 //
 // The PM can rename or re-date milestones and tasks, and delete them, from one
 // modal. The modal sends every change in ONE request and this file applies them
@@ -52,7 +52,7 @@ function dateKey(value) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// --- 1. read and validate the request body -----------------------------------
+// 1. read and validate the request body
 
 function parseEntry(raw, { idKey, nameKey, label, seen }) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -113,7 +113,7 @@ function parseTimelineChanges(body) {
     return { milestones, tasks };
 }
 
-// --- 2. which tasks cannot be deleted ----------------------------------------
+// 2. which tasks cannot be deleted
 
 // taskIds -> Map(taskId -> "progress" | "documents"). Both tables are checked
 // for every id, with the removed documents included on purpose: the record of
@@ -152,7 +152,7 @@ async function loadTimelineLocks(run, projectId) {
     return Object.fromEntries(locks);
 }
 
-// --- 3. decide what can be saved ---------------------------------------------
+// 3. decide what can be saved
 
 const LOCK_REASON = {
     progress: "has a progress submission",
@@ -271,7 +271,7 @@ function planTimelineChanges(current, changes) {
     };
 }
 
-// --- 4. apply ----------------------------------------------------------------
+// 4. apply
 
 // Non-blocking date warnings, one per re-dated item that falls outside its
 // phase window. `project` is the row getOwnedProject returns (lower-case keys).

@@ -1,8 +1,8 @@
-// r2.js — thin S3-compatible upload helper for Cloudflare R2.
+// r2.js: thin S3-compatible upload helper for Cloudflare R2.
 //
 // Built for F5 (task photo evidence). F6's receipts.js never persists the
 // receipt image anywhere (it OCRs straight off the multer buffer), so there
-// was no existing helper to reuse — this is the first version. If F6 later
+// was no existing helper to reuse: this is the first version. If F6 later
 // needs to store receipt images too, extend this file rather than writing a
 // second one.
 
@@ -43,7 +43,7 @@ const EXT_BY_MIME = { "image/jpeg": "jpg", "image/png": "png" };
 // access (R2's public dev URL or a custom domain) and returns a plain URL.
 // R2 objects are private by default. If this bucket is NOT public, this
 // needs to return a signed GET URL instead (@aws-sdk/s3-request-presigner)
-// — confirm which setup is actually live before this goes past local
+// confirm which setup is actually live before this goes past local
 // testing.
 async function uploadBuffer(buffer, { contentType, keyPrefix = "uploads" }) {
     const ext = EXT_BY_MIME[contentType];

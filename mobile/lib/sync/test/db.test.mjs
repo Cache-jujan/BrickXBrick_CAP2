@@ -22,7 +22,7 @@ function fresh() {
 const backdate = (table, column, hours) =>
   shim.rawDb().exec(`UPDATE ${table} SET ${column} = '${new Date(Date.now() - hours * HOUR).toISOString()}'`);
 
-// ---- the pure rule --------------------------------------------------------------
+// the pure rule
 
 test("evaluateEnqueue: under both limits is allowed", () => {
   assert.deepEqual(q.evaluateEnqueue({ pendingCount: 99, oldestCreatedAt: new Date().toISOString() }).allowed, true);
@@ -47,7 +47,7 @@ test("evaluateEnqueue: oldest entry just under 72h is fine, just over is STALE",
   assert.match(stale.message, /72 hours/);
 });
 
-// ---- both queues share one count ------------------------------------------------------
+// both queues share one count
 
 test("the 101st entry is blocked, counting expenses and task updates together", () => {
   fresh();
@@ -76,7 +76,7 @@ test("replacing a task's pending update still works when the queue is full", () 
   assert.equal(q.getPendingCount(), 100);
 });
 
-// ---- one pending update per task -------------------------------------------------------------
+// one pending update per task
 
 test("a newer update for the same task replaces the older one and returns the old photo path", () => {
   fresh();
@@ -103,7 +103,7 @@ test("different tasks queue side by side; the pending lookup is per task", () =>
   assert.equal(q.getPendingTaskUpdateForTask("nope"), null);
 });
 
-// ---- 72 hours -----------------------------------------------------------------------------------------
+// 72 hours
 
 test("an old pending entry blocks NEW entries (STALE) but is never deleted and still syncs", () => {
   fresh();
@@ -143,7 +143,7 @@ test("old rejected rows are tidied away after 72h; old pending rows are not", ()
   assert.equal(q.getPendingTaskUpdateCount(), 1);
 });
 
-// ---- life cycle ----------------------------------------------------------------------------------------------
+// life cycle
 
 test("photo URL is remembered, synced rows are purged and their file paths returned", () => {
   fresh();
@@ -208,7 +208,7 @@ test("old expense behavior is unchanged: pending list is oldest first, synced ro
   assert.equal(q.getPendingCount(), 0);
 });
 
-// ---- the phone crash: "NativeDatabase.prepareSync ... NullPointerException" ----------
+// the phone crash: "NativeDatabase.prepareSync ... NullPointerException"
 
 test("initDb opens the database once, however often it runs (no second handle to be garbage-collected)", () => {
   fresh();

@@ -1,4 +1,4 @@
-// F2 — budget-justification BOM (adviser item 6): cost categories for every
+// F2: budget-justification BOM (adviser item 6): cost categories for every
 // section, non-material costs, and an escalation allowance on top of the price
 // agreed with the client. Synthetic figures only.
 const test = require("node:test");

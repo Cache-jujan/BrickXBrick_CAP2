@@ -3,18 +3,16 @@
 // Converts raw Google Vision OCR text into a structured receipt object.
 // Rewritten against 5 real photographed Philippine receipts (hardware
 // store invoices, delivery receipts, sales invoices) instead of a clean
-// synthetic example. Real receipts are messy — OCR misreads characters,
+// synthetic example. Real receipts are messy: OCR misreads characters,
 // columns get scrambled, and formats vary wildly between printers. This
 // parser is written to fail *visibly* (low confidence) rather than
 // *silently* (wrong value or null with no signal).
 //
 // Output shape is intentionally close to the original so the frontend
-// (OcrResult type) doesn't need a rewrite — it just gains a few new
+// (OcrResult type) doesn't need a rewrite: it just gains a few new
 // fields: birPermitNumber, lineItems, and a `confidence` map.
 
-// ---------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------
 
 const MONTHS = {
   jan: "01", january: "01",
@@ -78,9 +76,7 @@ function normalizeAmount(raw) {
   return Number.isNaN(n) ? null : n;
 }
 
-// ---------------------------------------------------------------------
 // Vendor name
-// ---------------------------------------------------------------------
 // storeName = lines[0] breaks on real photos: stray labels, tags, or
 // misread characters often land above the actual business name. Instead,
 // score the first several lines and pick the best business-name-shaped
@@ -130,18 +126,16 @@ function extractVendorName(lines) {
   return best;
 }
 
-// ---------------------------------------------------------------------
 // Date
-// ---------------------------------------------------------------------
 // Real samples included: "8/25/26", "6-5-26", "6-3-25", "07/15/2026",
-// "JULY 24, 2026" — the old regex (\d{2}/\d{2}/\d{4}) only caught one
+// "JULY 24, 2026", the old regex (\d{2}/\d{2}/\d{4}) only caught one
 // of these five. Philippine business forms here consistently read as
 // MM-DD-YY(YY).
 
-// Receipts commonly carry a second, unrelated date — "Date Issued:" on a
+// Receipts commonly carry a second, unrelated date, "Date Issued:" on a
 // printer's BIR accreditation/ATP stamp, e.g. "Date Issued: June 7, 2021"
-// — which is years off from the actual transaction date. Any match whose
-// preceding ~15 characters mention "issued" is deprioritized rather than
+// which is years off from the actual transaction date. Any match whose
+// preceding ~20 characters mention "issued" is deprioritized rather than
 // dropped entirely (kept only as a last-resort fallback).
 function hasIssuedContext(text, matchIndex) {
   const before = text.slice(Math.max(0, matchIndex - 20), matchIndex);
@@ -205,15 +199,13 @@ function isRealDate(iso) {
   return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d;
 }
 
-// ---------------------------------------------------------------------
 // Amount
-// ---------------------------------------------------------------------
 // Prioritize the most specific label first ("TOTAL AMOUNT DUE" beats a
 // bare "TOTAL", which can appear multiple times for subtotals/VAT
 // breakdowns on a formal sales invoice).
 
 // A "bare label" line: something like "Cash", "Received By:", or
-// "CUSTOMER'S SIGNATURE" — text with no digits at all. These commonly sit
+// "CUSTOMER'S SIGNATURE": text with no digits at all. These commonly sit
 // between a TOTAL label and an unrelated later number (an OR serial, a
 // year, a permit number), so hitting one signals "give up on this label,
 // the real value probably isn't near here" rather than "keep scanning
@@ -243,7 +235,7 @@ function extractAmount(lines) {
       // Otherwise scan a few following lines for a money value. Skip past
       // plain descriptive lines ("Received the above in good order..."),
       // but give up once we hit another all-caps label-looking line with
-      // no digits (e.g. "CASHIER", "SIGNATURE") — that's a stronger sign
+      // no digits (e.g. "CASHIER", "SIGNATURE"), that's a stronger sign
       // we've drifted into an unrelated section.
       for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
         const line = lines[j];
@@ -263,12 +255,10 @@ function extractAmount(lines) {
   return null;
 }
 
-// ---------------------------------------------------------------------
 // TIN
-// ---------------------------------------------------------------------
 // Philippine TIN: XXX-XXX-XXX, optionally with a 4-5 digit branch code.
 // Receipts often contain more than one TIN (the customer's own VAT REG
-// TIN vs. the printer's TIN at the bottom) — prefer one near a "TIN"
+// TIN vs. the printer's TIN at the bottom): prefer one near a "TIN"
 // label over a bare match found anywhere in the text.
 
 function extractTIN(text) {
@@ -286,14 +276,12 @@ function extractTIN(text) {
   return { value: null, confidence: "low" };
 }
 
-// ---------------------------------------------------------------------
 // BIR Permit Number
-// ---------------------------------------------------------------------
 // Genuinely hard: receipts often carry a PRINTER'S accreditation/ATP
 // number ("Accreditation No.", "Authority to Print No.") that looks
 // identical in shape to a business's own BIR permit but belongs to a
 // completely different entity. We actively avoid grabbing those, but
-// this field should always be treated as needing manual review —
+// this field should always be treated as needing manual review,
 // mark it low confidence even on a "successful" match.
 
 function extractBirPermit(text) {
@@ -314,11 +302,9 @@ function extractBirPermit(text) {
   return { value: null, type: null, confidence: "low" };
 }
 
-// ---------------------------------------------------------------------
 // OR / SI Number
-// ---------------------------------------------------------------------
 // None of the 5 real samples had a number immediately following an
-// "OR"/"SI"/"INVOICE" label — the actual serial is usually pre-printed
+// "OR"/"SI"/"INVOICE" label: the actual serial is usually pre-printed
 // separately, e.g. "No. 1171759", "No 598127", "No 44181", "N0 096493".
 // Try the explicit label first; if that fails, fall back to a bare
 // "No" + digits pattern and flag it as low confidence, since that
@@ -339,10 +325,8 @@ function extractOrSi(text) {
   return { value: null, confidence: "low" };
 }
 
-// ---------------------------------------------------------------------
 // Line items
-// ---------------------------------------------------------------------
-// This is the weakest part of OCR extraction — receipt tables get
+// This is the weakest part of OCR extraction: receipt tables get
 // scrambled badly (see receipt (3), where qty/description/price/amount
 // all landed as separate out-of-order lines). Rather than guess wrong,
 // this only returns items it's reasonably sure about: lines that match
@@ -350,17 +334,17 @@ function extractOrSi(text) {
 // out left-to-right on a single OCR line, which is what you get on
 // cleaner deliveries/receipts (e.g. image 2, image 5 samples).
 // Everything else is left for the user to add manually via the existing
-// "+ Add item" flow in the review screen — that UI already exists and
+// "+ Add item" flow in the review screen: that UI already exists and
 // is the right fallback for this, not a smarter regex.
 
 function extractLineItems(lines) {
   const items = [];
   const usedIndices = new Set();
 
-  // Pattern A: qty  description  price  amount  (4 columns, strict — original pattern)
+  // Pattern A: qty  description  price  amount  (4 columns, strict, original pattern)
   const fourColPattern = /^(\d{1,5})\s+([A-Za-z][A-Za-z0-9 .\/"'-]{2,40}?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)$/;
 
-  // Pattern B: qty  description  amount  (3 columns — no separate unit price column)
+  // Pattern B: qty  description  amount  (3 columns, no separate unit price column)
   const threeColPattern = /^(\d{1,5})\s+([A-Za-z][A-Za-z0-9 .\/"'-]{2,40}?)\s+([\d,]+\.\d{2})$/;
 
   lines.forEach((line, idx) => {
@@ -394,7 +378,7 @@ function extractLineItems(lines) {
     }
   });
 
-  // Fallback pass: bare "description  amount" lines (qty implied as 1) —
+  // Fallback pass: bare "description  amount" lines (qty implied as 1),
   // catches receipts where OCR dropped the qty column entirely. Explicitly
   // skips total/subtotal/tax/change/cash lines so we don't misread the
   // receipt total as a line item.
@@ -423,9 +407,7 @@ function extractLineItems(lines) {
   return items;
 }
 
-// ---------------------------------------------------------------------
 // Main entry point
-// ---------------------------------------------------------------------
 
 function parseReceiptText(rawText) {
   const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);

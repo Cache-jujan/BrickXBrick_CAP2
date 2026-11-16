@@ -1,4 +1,4 @@
-// lineItemMath.js — quantity, unit price and line amount move together.
+// lineItemMath.js: quantity, unit price and line amount move together.
 //
 // Handwritten receipts often leave the unit price blank, so it is derived from
 // the row total: quantity 3, amount 300 -> 100 each. Everything is computed in

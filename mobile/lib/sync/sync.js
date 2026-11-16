@@ -1,4 +1,4 @@
-// F10 — Push queued offline work to POST /api/sync.
+// F10: Push queued offline work to POST /api/sync.
 //
 // Two queues feed one batch: expenses (Purchaser) and task submissions
 // (Site Manager). Order on reconnect:

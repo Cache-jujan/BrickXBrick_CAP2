@@ -1,4 +1,4 @@
-// avatar.js — checks for profile pictures. The browser's idea of the file type
+// avatar.js: checks for profile pictures. The browser's idea of the file type
 // can't be trusted, so the first bytes of the file decide.
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 

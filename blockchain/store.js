@@ -76,9 +76,8 @@ async function main() {
     console.log(`node verify.js ${fakeExpense.expenseID}`);
   } catch (err) {
     if (err.message === "TIMEOUT") {
-      // PART B — UC-12-01 Exception E1: fewer than 2 of 3 nodes online.
-      // Instead of hanging forever (the actual bug this fixes) or
-      // crashing, queue the expense for a later retry.
+      // UC-12-01 Exception E1: fewer than 2 of 3 validator nodes are online, so the tx never confirms.
+      // Queue the expense and let retry.js try again later, instead of hanging or crashing.
       const queueEntry = {
         expenseID: fakeExpense.expenseID,
         hash,

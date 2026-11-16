@@ -1,4 +1,4 @@
-// F7 — BIR verification and Formal / Informal classification.
+// F7: BIR verification and Formal / Informal classification.
 //
 // receiptFields.test.js covers normalizeBirFields in isolation. This file
 // covers what was untested:
@@ -27,7 +27,7 @@ const INFORMAL = "Informal";
 const ALL = { tin: "123-456-789-000", birPermitNumber: "FP-0123", birNumber: "OR 4567" };
 const classify = (raw) => classifyBir(normalizeBirFields(raw));
 
-// ---- 1. classification matrix ----------------------------------------------
+// 1. classification matrix
 
 test("all three BIR fields present -> Formal", () => {
   assert.deepEqual(classify(ALL), { birValidationStatus: FORMAL, missingBirFields: [] });
@@ -92,7 +92,7 @@ test("TODO: an OR/SI number of 0 should not count as Formal", { todo: true }, ()
   assert.equal(classify({ ...ALL, birNumber: "0" }).birValidationStatus, INFORMAL);
 });
 
-// ---- 2. the routes use the server's classification --------------------------
+// 2. the routes use the server's classification
 
 // Replace a module with a fake BEFORE the route file loads it. node --test runs
 // each test file in its own process, so this cannot leak into other tests.
@@ -303,7 +303,7 @@ test("a Site Manager cannot resubmit (Purchaser only)", async () => {
   }
 });
 
-// ---- 3. every submit path derives the status from classifyBir ---------------
+// 3. every submit path derives the status from classifyBir
 
 const ROUTES = ["expenses.js", "allocations.js", "sync.js"];
 
@@ -328,7 +328,7 @@ test("no route reads birValidationStatus from the request", () => {
   }
 });
 
-// ---- 4. the code and the database agree on the two values -------------------
+// 4. the code and the database agree on the two values
 
 test("the two statuses are exactly what the expenses CHECK constraint allows", () => {
   const sql = fs.readFileSync(path.join(__dirname, "../../infra/db/migrations/001_initial_schema.sql"), "utf8");

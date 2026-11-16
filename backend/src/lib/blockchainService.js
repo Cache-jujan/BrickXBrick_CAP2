@@ -1,10 +1,12 @@
-// blockchainService.js — production wiring of the F12 spike logic into the
+// blockchainService.js: production wiring of the F12 spike logic into the
 // live backend. Wraps hashExpense/submitHashWithTimeout so routes never
 // touch ethers.js directly.
 const crypto = require("crypto");
 const { Web3 } = require("web3");
 
 const RPC_URL = process.env.GETH_RPC_URL;
+// Wait up to 30 seconds for the chain to confirm, then throw "TIMEOUT".
+// That usually means fewer than 2 of the 3 validator nodes are online (UC-12-01 E1).
 const SUBMIT_TIMEOUT_MS = 30000;
 
 // receiptDate is a Postgres DATE. node-postgres turns it into a JS Date at
@@ -12,7 +14,7 @@ const SUBMIT_TIMEOUT_MS = 30000;
 // different results on a laptop (Asia/Manila) and on Cloud Run (UTC) and
 // raised false tamper alerts. Every hash recorded so far was made on
 // Philippine time, so we normalise to "midnight in Manila" no matter where
-// the server runs — existing on-chain hashes stay valid.
+// the server runs: existing on-chain hashes stay valid.
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 function canonicalReceiptDate(value) {
@@ -32,7 +34,7 @@ function canonicalReceiptDate(value) {
 }
 
 function canonicalizeExpense(expense) {
-    // Only hash the fields that define the record's financial truth —
+    // Only hash the fields that define the record's financial truth,
     // not volatile bookkeeping columns like updatedAt.
     const canonical = {
         expenseID: expense.expenseid,
@@ -84,7 +86,7 @@ function matchesApprovedHash(expense, onChainHash) {
     return onChainHash === canonicalizeExpenseV2(expense) || onChainHash === canonicalizeExpense(expense);
 }
 
-// --- F11: report hash ----------------------------------------------------
+// F11: report hash
 // A report is hashed from the report_events row, so the hash can be
 // recomputed later from what is stored. Same lessons as the expense hash:
 // fixed key order, sorted ids, and no value that depends on server timezone.
@@ -135,6 +137,8 @@ function canonicalizeReport(row) {
     return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
+// Sends the hash as a 0-value transaction to ourselves, with the hash in the data field.
+// Returns the tx hash, block number, sender and the validator count for the BlockchainLogs row.
 async function submitHashWithTimeout(hash) {
     const web3 = new Web3(RPC_URL);
     const [fromAddress] = await web3.eth.getAccounts();
@@ -153,6 +157,7 @@ async function submitHashWithTimeout(hash) {
     const peers = await web3.requestManager
         .send({ method: "admin_peers", params: [] })
         .catch(() => []);
+    // Connected peers, plus this node, gives the validator count for the log.
     const validatorNodeCount = peers.length + 1;
 
     return {

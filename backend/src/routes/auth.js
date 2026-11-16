@@ -32,7 +32,7 @@ router.post("/login", async (req, res) => {
     );
  
     // Same generic message whether the email doesn't exist or the password
-    // is wrong — don't leak which one it was.
+    // is wrong: don't leak which one it was.
     const genericFail = () =>
       res.status(401).json({ error: "Invalid email or password" });
  
@@ -80,7 +80,7 @@ router.post("/login", async (req, res) => {
       return genericFail();
     }
  
-    // Success — clear any prior failed-attempt state.
+    // Success: clear any prior failed-attempt state.
     await query(
       `UPDATE users SET failedloginattempts = 0, lockoutuntil = NULL WHERE userID = $1`,
       [user.userid]
@@ -109,7 +109,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// POST /refresh — swap a refresh token for a new access token, so the mobile
+// POST /refresh: swap a refresh token for a new access token, so the mobile
 // app stays signed in (and can send what it queued offline) without asking for
 // the password again.
 // Body: { refreshToken }

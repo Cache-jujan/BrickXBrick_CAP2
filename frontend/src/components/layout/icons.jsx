@@ -1,4 +1,4 @@
-// Small inline icon set for the sidebar/topbar — no icon-library dependency.
+// Small inline icon set for the sidebar/topbar: no icon-library dependency.
 
 export function GridIcon() {
   return (
@@ -81,7 +81,7 @@ export function BellIcon() {
   );
 }
 
-// ---- Notification-type icons (per-type, see utils/notificationMeta.js) ----
+// Notification-type icons (per-type, see utils/notificationMeta.js)
 
 export function TicketGlyph() {
   return (
@@ -170,7 +170,7 @@ export function RefreshGlyph() {
     </svg>
   );
 }
-// ---- Navigation icons: one distinct shape per sidebar item ------------------
+// Navigation icons: one distinct shape per sidebar item
 function NavSvg({ children }) {
   return (
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"

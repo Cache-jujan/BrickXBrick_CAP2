@@ -229,7 +229,7 @@
   display: none;
 }
 
-/* ---- Status tabs: a hint, a note under the vendor, and quick decisions --- */
+/* Status tabs: a hint, a note under the vendor, and quick decisions */
 
 .expenses-hint {
   margin: 0 0 var(--space-3);
@@ -367,7 +367,7 @@
   .expenses-table .expenses-badges { justify-content: flex-end; }
 }
 
-/* ---- Detail panel sections: a title, then a small table or grid ----------- */
+/* Detail panel sections: a title, then a small table or grid */
 
 .exp-section {
   margin-bottom: var(--space-4);
@@ -413,7 +413,7 @@
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
-/* ---- One split receipt: every project's part, the one being reviewed marked ---- */
+/* One split receipt: every project's part, the one being reviewed marked */
 .exp-parts {
   max-width: 760px;
 }

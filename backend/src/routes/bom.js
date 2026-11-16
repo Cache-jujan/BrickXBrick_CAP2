@@ -282,8 +282,6 @@ async function touch(client, bomId, userId) {
   await client.query(`UPDATE boms SET updatedby = $2::uuid, updatedat = NOW() WHERE bomid = $1::uuid`, [bomId, userId]);
 }
 
-// ---------------------------------------------------------------------------
-
 router.get("/", requireRole(GM, PM), async (req, res) => {
   try {
     const project = await loadProject(query, req.params.projectId);
@@ -301,7 +299,7 @@ router.get("/", requireRole(GM, PM), async (req, res) => {
   }
 });
 
-// POST /import — multipart field "file". Parses the company BOM layout and
+// POST /import: multipart field "file". Parses the company BOM layout and
 // replaces the whole Draft. The header block and the signatures are skipped.
 router.post("/import", requireRole(GM), (req, res, next) => {
   upload.single("file")(req, res, (err) => (err ? sendError(res, err) : next()));
@@ -346,7 +344,7 @@ router.post("/import", requireRole(GM), (req, res, next) => {
   }
 });
 
-// PUT / — save the GM's edits to the Draft, or start a BOM by hand.
+// PUT /: save the GM's edits to the Draft, or start a BOM by hand.
 // Sections and items keep their ids; ones left out are deleted unless a
 // Material Request already uses them. Figures "as written in the file" stay.
 router.put("/", requireRole(GM), async (req, res) => {
@@ -444,7 +442,7 @@ router.put("/", requireRole(GM), async (req, res) => {
   }
 });
 
-// PATCH /approve — body { confirmWarnings: true } when there are warnings.
+// PATCH /approve: body { confirmWarnings: true } when there are warnings.
 router.patch("/approve", requireRole(GM), async (req, res) => {
   try {
     // Adviser item 5: record when and with whom the client agreed (the agreement
@@ -509,7 +507,7 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
   }
 });
 
-// PATCH /reopen — body { reason }. Approved -> Draft so the GM can correct it.
+// PATCH /reopen: body { reason }. Approved -> Draft so the GM can correct it.
 router.patch("/reopen", requireRole(GM), async (req, res) => {
   try {
     const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
@@ -544,7 +542,7 @@ router.patch("/reopen", requireRole(GM), async (req, res) => {
   }
 });
 
-// DELETE / — remove a Draft BOM of a Draft project (e.g. the wrong file was uploaded).
+// DELETE /: remove a Draft BOM of a Draft project (e.g. the wrong file was uploaded).
 router.delete("/", requireRole(GM), async (req, res) => {
   try {
     await withTransaction(async (client) => {
@@ -562,7 +560,7 @@ router.delete("/", requireRole(GM), async (req, res) => {
   }
 });
 
-// GET /items?search= — items of the APPROVED BOM, for Material Requests.
+// GET /items?search=: items of the APPROVED BOM, for Material Requests.
 // GM and the owning PM see unit costs; the assigned SM and Purchasers don't.
 router.get("/items", requireRole(GM, PM, "Site Manager", "Purchaser"), async (req, res) => {
   try {

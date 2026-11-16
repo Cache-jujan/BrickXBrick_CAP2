@@ -1,4 +1,4 @@
-// POST/DELETE /api/me/avatar — only real JPEG/PNG pictures up to 2 MB are stored.
+// POST/DELETE /api/me/avatar: only real JPEG/PNG pictures up to 2 MB are stored.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");

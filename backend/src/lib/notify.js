@@ -1,4 +1,4 @@
-// notify.js — small helper for writing notifications.
+// notify.js: small helper for writing notifications.
 //
 // Always called with the transaction `client` of the change that triggered
 // the notification, so the notification commits or rolls back together with
@@ -124,7 +124,7 @@ async function notifyTicketTransition(client, { ticketId, toStatus, changedBy })
       entityId: ticketId,
       message: `Your request "${subject}" was rejected (${project}).${reason}`,
     });
-    // If a Purchaser rejected it, the PM hears too — as a manager notice.
+    // If a Purchaser rejected it, the PM hears too, as a manager notice.
     // (When the PM is the one rejecting, excludeUserId drops them here.)
     await notify(client, {
       recipientIds: [t.projectmanagerid],

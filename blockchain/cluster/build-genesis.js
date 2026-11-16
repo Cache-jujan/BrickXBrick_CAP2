@@ -1,7 +1,7 @@
 const fs = require("fs");
 const { config } = require("process");
 
-// Paste the 3 addresses geth printed in Step 7, in any order — this script sorts them.
+// Paste the 3 addresses geth printed in Step 7, in any order, this script sorts them.
 const signers = [
   "0xb591b59117b473dfb9dd679ab8d8f358bd973eb3",
   "0x73e822e31429ee266477800406c9694d39ba242f",

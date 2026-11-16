@@ -1,4 +1,4 @@
-// receiptScans.js — F6 background scanning (ReceiptScans table, migration 033).
+// receiptScans.js: F6 background scanning (ReceiptScans table, migration 033).
 //
 // POST /receipts/scans stores the image, inserts a 'Scanning' row and answers
 // at once; runScan() then OCRs in this same process and marks the row
@@ -16,6 +16,7 @@
 const { NotAReceiptError } = require("./receiptOcr");
 const { deleteReceiptImage } = require("./receiptStorage");
 
+// A scan still 'Scanning' after 3 minutes is treated as Failed (see the note at the top of this file).
 const STALE_AFTER_MS = 3 * 60 * 1000;
 const STALE_MESSAGE = "Reading this receipt took too long. Enter the details manually from the photo.";
 const FAILED_MESSAGE = "Couldn't read this receipt. Enter the details manually from the photo.";

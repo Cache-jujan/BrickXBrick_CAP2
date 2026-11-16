@@ -1,4 +1,4 @@
-// F10 — quiet logging for the offline/sync code.
+// F10: quiet logging for the offline/sync code.
 //
 // console.warn and console.error pop up as toasts in a development build, and
 // a phone without signal fails a request every few seconds, so expected
