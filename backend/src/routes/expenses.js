@@ -448,6 +448,8 @@ router.get("/:id", async (req, res, next) => {
 
 /**
  * Approve a Pending expense as its project's PM or a GM, atomically resolving flags.
+ * blockchainStatus becomes Pending in the same transaction as the approval, so a
+ * crash before the chain write still leaves the expense for the retry in server.js.
  * Then submit its SHA-256 hash to the Geth PoA cluster and log the confirmed
  * transaction. Insufficient nodes leave blockchainStatus Pending for retry.
  */
@@ -474,7 +476,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
         /** Atomically approve a Pending expense and its flags and tell its submitter; throw 409 if already reviewed. */
         await withTransaction(async (client) => {
             const claimed = await client.query(
-                "UPDATE Expenses SET status = 'Approved', approvedBy = $1, approvedAt = NOW() WHERE expenseID = $2 AND status = 'Pending'",
+                "UPDATE Expenses SET status = 'Approved', approvedBy = $1, approvedAt = NOW(), blockchainStatus = 'Pending' WHERE expenseID = $2 AND status = 'Pending'",
                 [req.user.id, req.params.id]
             );
             if (claimed.rowCount === 0) {
@@ -605,6 +607,18 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             throw httpError(404, "Expense not found");
         }
         await assertProjectNotTerminated(query, { projectId: existing.rows[0].projectid });
+        // An approved expense is locked. While its chain write is still Pending, the retry
+        // hashes whatever the row holds at that moment, so an edit now would be anchored
+        // as if it were the approved version.
+        if (existing.rows[0].status === "Approved") {
+            const waiting = existing.rows[0].blockchainstatus === "Pending";
+            throw httpError(
+                409,
+                waiting
+                    ? "Only a Rejected expense can be resubmitted. This one is approved and waiting to be written to the blockchain, so it can't be edited."
+                    : "Only a Rejected expense can be resubmitted. This one is already approved, so it can't be edited."
+            );
+        }
         if (existing.rows[0].status !== "Rejected") {
             throw httpError(409, "Only a Rejected expense can be resubmitted");
         }
@@ -669,7 +683,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                         birvalidationstatus = $5, birnumber = $6, tin = $7,
                         birpermitnumber = $8, lineitems = $9, quantity = $10,
                         status = 'Pending', rejectionreason = NULL, approvedby = NULL
-                  WHERE expenseid = $11
+                  WHERE expenseid = $11 AND status = 'Rejected'
                   RETURNING ${EXPENSE_COLUMNS}`,
                 [
                     vendorName,
@@ -685,6 +699,11 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                     req.params.id,
                 ]
             );
+            // The row can stop being Rejected between the read above and this UPDATE (a double
+            // click, or a reviewer approving it in between). Never write over it then.
+            if (result.rowCount === 0) {
+                throw httpError(409, "Only a Rejected expense can be resubmitted");
+            }
             await client.query(
                 "UPDATE receiptallocations SET allocatedamount = $1 WHERE expenseid = $2",
                 [amount, req.params.id]

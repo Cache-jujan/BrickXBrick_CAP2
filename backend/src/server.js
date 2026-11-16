@@ -110,7 +110,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-// F12: automatically retry any expense stuck at blockchainStatus='Pending' every 60s.
+// F12: automatically retry approved expenses that are not on the chain yet, every 60s.
 let retryRunning = false;
 async function retryPendingBlockchainWrites() {
     if (retryRunning) return;
@@ -119,16 +119,28 @@ async function retryPendingBlockchainWrites() {
         // Only approved expenses that have NEVER been secured. An expense that
         // already has a chain record is never re-secured: otherwise setting its
         // status to 'Pending' would write a fresh hash of changed data.
+        // 'None' is included because an approval that was cut off before its chain
+        // write (crash, redeploy) used to stay at 'None' and was never picked up.
+        // The 2 minute wait keeps this away from an approval request that is still
+        // sending its own hash (that call times out after 30 seconds).
         const pending = await query(
             `SELECT * FROM Expenses e
-              WHERE e.blockchainStatus = 'Pending' AND e.status = 'Approved'
+              WHERE e.status = 'Approved' AND e.blockchainStatus IN ('None', 'Pending')
                 AND NOT EXISTS (SELECT 1 FROM BlockchainLogs bl
                                  WHERE bl.expenseID = e.expenseID AND bl.eventType = 'ExpenseApproved')
+                AND (e.approvedAt IS NULL OR e.approvedAt < NOW() - INTERVAL '2 minutes')
               ORDER BY e.approvedAt NULLS FIRST
               LIMIT 20`
         );
         for (const expense of pending.rows) {
             try {
+                // Mark it as waiting so the 72-hour rule and the GM pending count include it.
+                if (expense.blockchainstatus === "None") {
+                    await query(
+                        "UPDATE Expenses SET blockchainStatus = 'Pending' WHERE expenseID = $1 AND blockchainStatus = 'None'",
+                        [expense.expenseid]
+                    );
+                }
                 const hash = canonicalizeExpenseV2(expense);
                 const { txHash, blockNumber, validatorNodeCount } = await submitHashWithTimeout(hash);
                 await query(
