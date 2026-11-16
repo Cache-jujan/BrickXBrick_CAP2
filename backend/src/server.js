@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { corsOptions } = require("./lib/corsOptions");
+const { makeRateLimiters } = require("./lib/rateLimits");
 const helmet = require("helmet");
 
 const { requireAuth } = require("./middleware/auth");
@@ -37,7 +38,19 @@ const app = express();
 // is off on purpose: this API only returns JSON and PDF bytes, never a page,
 // and the web app is served by Vercel, so a CSP here would protect nothing.
 app.use(helmet({ contentSecurityPolicy: false }));
+// Cloud Run puts exactly one proxy (Google's front end) between the client and
+// this app. Trusting one hop makes req.ip the real client address, which the
+// rate limiters below key on. Do not set this to `true`: any client could then
+// pick its own IP with an X-Forwarded-For header.
+app.set("trust proxy", 1);
 app.use(cors(corsOptions()));
+// Rate limits sit after cors, so a 429 still carries the CORS headers and the
+// browser shows the message, and before the body parsers, so a flood is turned
+// away without parsing its body. /health is outside /api and never limited.
+const rateLimits = makeRateLimiters();
+app.use("/api", rateLimits.general);
+app.use("/api/auth/login", rateLimits.login);
+app.use("/api/me/change-password", rateLimits.changePassword);
 // The report PDF route draws its own charts now, but a Reports page opened
 // before an update still sends its chart as a base64 PNG (up to ~1.5 MB), far
 // above the 100 kb default. The route ignores it; the higher limit for that one
