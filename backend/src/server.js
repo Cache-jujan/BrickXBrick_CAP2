@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { corsOptions } = require("./lib/corsOptions");
 const helmet = require("helmet");
 
 const { requireAuth } = require("./middleware/auth");
@@ -36,7 +37,7 @@ const app = express();
 // is off on purpose: this API only returns JSON and PDF bytes, never a page,
 // and the web app is served by Vercel, so a CSP here would protect nothing.
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors());
+app.use(cors(corsOptions()));
 // The report PDF route draws its own charts now, but a Reports page opened
 // before an update still sends its chart as a base64 PNG (up to ~1.5 MB), far
 // above the 100 kb default. The route ignores it; the higher limit for that one
