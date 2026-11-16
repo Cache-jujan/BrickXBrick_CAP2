@@ -6,7 +6,7 @@ const { termsFields } = require("./legal");
 
 const router = express.Router();
 
-const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
+const { LOCKOUT_MINUTES, recordFailedAttempt } = require("../lib/loginLockout");
 
 
 // Tentative need adjustment if na implement na ang frontend
@@ -26,7 +26,7 @@ router.post("/login", async (req, res) => {
  
   try {
     const userResult = await query(
-      `SELECT userid, name, username, email, role, status, lockoutuntil, failedloginattempts, avatarurl
+      `SELECT userid, name, username, email, role, status, lockoutuntil, avatarurl
        FROM users WHERE email = $1`,
       [email]
     );
@@ -57,22 +57,10 @@ router.post("/login", async (req, res) => {
     const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
  
     if (error) {
-      const attempts = user.failedloginattempts + 1;
-      const lockingNow = attempts >= MAX_ATTEMPTS;
- 
-      await query(
-        `UPDATE users
-         SET failedloginattempts = $1,
-             lockoutuntil = $2
-         WHERE userid = $3`,
-        [
-          lockingNow ? 0 : attempts, // reset counter once the lock is set
-          lockingNow ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : null,
-          user.userid,
-        ]
-      );
- 
-      if (lockingNow) {
+      // Counted in one atomic UPDATE (see lib/loginLockout.js).
+      const { locked } = await recordFailedAttempt(query, user.userid);
+
+      if (locked) {
         return res.status(423).json({
           error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
         });

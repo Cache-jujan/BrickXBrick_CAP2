@@ -25,8 +25,19 @@ stub("../src/lib/db", {
     if (text.startsWith("select") && text.includes("where supabaseuserid")) {
       return { rowCount: 1, rows: [{ userid: "u1", name: "T", username: "t", email: "t@gmail.com", role: "Purchaser", status: "Active", lockoutuntil: state.lockoutuntil }] };
     }
-    if (text.startsWith("select") && text.includes("failedloginattempts")) {
-      return { rowCount: 1, rows: [{ email: "t@gmail.com", supabaseuserid: "auth-1", failedloginattempts: state.attempts }] };
+    if (text.startsWith("select email")) {
+      return { rowCount: 1, rows: [{ email: "t@gmail.com", supabaseuserid: "auth-1" }] };
+    }
+    // The wrong-password count is one UPDATE (lib/loginLockout.js). This does the same sum the database does.
+    if (text.startsWith("update users") && text.includes("failedloginattempts + 1")) {
+      state.updates.push({ text, params });
+      const next = state.attempts + 1;
+      if (next >= params[1]) {
+        state.attempts = 0;
+        return { rowCount: 1, rows: [{ failedloginattempts: 0, locked: true }] };
+      }
+      state.attempts = next;
+      return { rowCount: 1, rows: [{ failedloginattempts: next, locked: false }] };
     }
     if (text.startsWith("update")) state.updates.push({ text, params });
     return { rowCount: 1, rows: [] };
@@ -78,7 +89,8 @@ test("a wrong current password is refused, counted, and says how many tries are 
   assert.equal(r.status, 401);
   assert.match(r.body.error, /4 attempts left/);
   assert.equal(state.adminUpdates.length, 0, "the password must not change");
-  assert.deepEqual(state.updates[0].params, [1, null, "u1"]);
+  assert.equal(state.updates.length, 1, "the count is one statement");
+  assert.equal(state.updates[0].params[0], "u1");
 });
 
 test("the last try before the lock says 1 attempt left", async () => {
@@ -94,9 +106,10 @@ test("the 5th wrong current password locks the account for 15 minutes", async ()
   const r = await change(good);
   assert.equal(r.status, 423);
   assert.match(r.body.error, /locked for 15 minutes/);
-  const [attempts, until, id] = state.updates[0].params;
-  assert.equal(attempts, 0, "the counter restarts once the lock is set");
+  const [id, limit, until] = state.updates[0].params;
   assert.equal(id, "u1");
+  assert.equal(limit, 5);
+  assert.equal(state.attempts, 0, "the counter restarts once the lock is set");
   const minutes = (new Date(until).getTime() - before) / 60000;
   assert.ok(minutes > 14.9 && minutes < 15.1, `locked for ${minutes} minutes`);
   assert.equal(state.adminUpdates.length, 0);

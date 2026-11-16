@@ -9,7 +9,7 @@ const { requireAuth } = require("../middleware/auth");
 const { uploadBuffer } = require("../lib/r2");
 const { AVATAR_MAX_BYTES, sniffImageType } = require("../lib/avatar");
 const { brokenPasswordRules, PASSWORD_RULES_MESSAGE } = require("../lib/passwordRules");
-const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
+const { LOCKOUT_MINUTES, recordFailedAttempt } = require("../lib/loginLockout");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -71,28 +71,22 @@ router.post("/change-password", async (req, res, next) => {
   }
   try {
     const found = await query(
-      `SELECT email, supabaseuserid, failedloginattempts FROM users WHERE userid = $1`,
+      `SELECT email, supabaseuserid FROM users WHERE userid = $1`,
       [req.user.id]
     );
-    const { email, supabaseuserid, failedloginattempts } = found.rows[0];
+    const { email, supabaseuserid } = found.rows[0];
 
     // Prove the current password first; a stolen token alone must not be enough.
     const { error: signInError } = await supabaseAnon.auth.signInWithPassword({ email, password: currentPassword });
     if (signInError) {
-      const attempts = (failedloginattempts || 0) + 1;
-      const locking = attempts >= MAX_ATTEMPTS;
-      await query(
-        `UPDATE users SET failedloginattempts = $1, lockoutuntil = $2 WHERE userid = $3`,
-        [locking ? 0 : attempts, locking ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : null, req.user.id]
-      );
-      if (locking) {
+      const { locked, attemptsLeft } = await recordFailedAttempt(query, req.user.id);
+      if (locked) {
         return res.status(423).json({
           error: `Too many wrong passwords. Your account is locked for ${LOCKOUT_MINUTES} minutes.`,
         });
       }
-      const left = MAX_ATTEMPTS - attempts;
       return res.status(401).json({
-        error: `Current password is incorrect. ${left} ${left === 1 ? "attempt" : "attempts"} left before your account is locked.`,
+        error: `Current password is incorrect. ${attemptsLeft} ${attemptsLeft === 1 ? "attempt" : "attempts"} left before your account is locked.`,
       });
     }
 
