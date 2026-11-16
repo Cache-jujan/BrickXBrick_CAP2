@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 
 const { requireAuth } = require("./middleware/auth");
 const { query, withTransaction } = require("./lib/db");
@@ -31,6 +32,10 @@ const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
 
 const app = express();
+// Security headers (nosniff, frame denial, HSTS, no X-Powered-By, ...). The CSP
+// is off on purpose: this API only returns JSON and PDF bytes, never a page,
+// and the web app is served by Vercel, so a CSP here would protect nothing.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 // The report PDF route draws its own charts now, but a Reports page opened
 // before an update still sends its chart as a base64 PNG (up to ~1.5 MB), far
