@@ -109,7 +109,7 @@ test("a line that only mentions an adjustment mid-name is not flagged", async ()
   assert.deepEqual(result.flagTypes, []);
 });
 
-// ---- scan comparison: the expense against the server's own scan ---------------------
+// scan comparison: the expense against the server's own scan
 
 const scannedDraft = {
   vendorName: "Cebu Builders Supply",

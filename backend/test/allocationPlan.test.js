@@ -230,7 +230,7 @@ test("closing a request short needs a reason of reasonable length", () => {
   assert.throws(() => validateCloseShortReason("x".repeat(301)), (e) => e.status === 400);
 });
 
-// ---- Matched by hand (lineTargets) ---------------------------------------------------------
+// Matched by hand (lineTargets)
 
 const { submitNoteFor } = require("../src/lib/allocationPlan");
 

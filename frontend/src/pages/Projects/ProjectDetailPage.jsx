@@ -91,7 +91,7 @@ export function ProjectDetailPage() {
   // F3: milestone/task creation happens in-place via modals (was a separate
   // page). taskDialog carries the milestone it targets so the title can name it.
   const [milestoneDialog, setMilestoneDialog] = useState(false);
-  // #5: phase picks how the milestone's tasks get owned — Planning tasks are
+  // #5: phase picks how the milestone's tasks get owned, Planning tasks are
   // "Handled by: GM/PM" with no Site Manager involved, Construction tasks
   // keep the existing SM-assignment flow. Defaults to Construction so this
   // form behaves exactly like before unless the PM changes it.
@@ -103,10 +103,10 @@ export function ProjectDetailPage() {
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState("");
   // #5: the backend never rejects an out-of-phase-window due date, it just
-  // flags it back — surfaced here as a dismissible info banner after a
+  // flags it back: surfaced here as a dismissible info banner after a
   // successful create, not inside the (by-then-closed) modal.
   const [scheduleWarning, setScheduleWarning] = useState("");
-  // #5: a Planning task has no SM review flow — the owning PM marks it done
+  // #5: a Planning task has no SM review flow, the owning PM marks it done
   // directly. { task } while a confirm dialog is open.
   // Planning-task documents dialog: the task whose files are open, or null.
   const [docsTask, setDocsTask] = useState(null);
@@ -131,7 +131,7 @@ export function ProjectDetailPage() {
       .catch((err) => {
         if (cancelled) return;
         // assertProjectAccess in projects.js 403s a Project Manager who
-        // isn't this project's projectmanagerid — a reachable, expected
+        // isn't this project's projectmanagerid: a reachable, expected
         // state rather than an actual error.
         if (err?.response?.status === 403) {
           setAccessDenied(true);
@@ -469,7 +469,7 @@ export function ProjectDetailPage() {
   const progressPct = Math.round(Number(project.progress || 0));
   const location = [project.siteaddress, project.municipality, project.province].filter(Boolean).join(", ");
 
-  // Only the owning Project Manager may add milestones/tasks — mirrors
+  // Only the owning Project Manager may add milestones/tasks, mirrors
   // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   // Planning-task documents: the GM (any project) or the owning PM may open

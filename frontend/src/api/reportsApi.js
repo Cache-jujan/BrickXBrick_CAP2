@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-// GET /api/reports/summary — General Manager only.
+// GET /api/reports/summary: General Manager only.
 // filters: { projectIds: string[] (1 to 5), from: "YYYY-MM-DD", to: "YYYY-MM-DD" }
 // Returns { generatedAt, period, empty, projects: [...], totals: {...},
 //           warnings: { pendingExpenses, fraudFlaggedExpenses } }.
@@ -31,7 +31,7 @@ function filenameFrom(contentDisposition, fallback) {
   return match ? match[1] : fallback;
 }
 
-// POST /api/reports/pdf — General Manager only.
+// POST /api/reports/pdf: General Manager only.
 // Only the filters are sent: the server recomputes every figure and draws the
 // charts itself.
 // Returns { blob, filename, reportId, anchorStatus: "Confirmed" | "Pending" }.
@@ -54,7 +54,7 @@ export async function downloadReportPdf({ projectIds, from, to }) {
   }
 }
 
-// POST /api/reports/:id/anchor — retry securing a Pending report on the
+// POST /api/reports/:id/anchor, retry securing a Pending report on the
 // blockchain. Resolves with { anchorStatus: "Confirmed" | "Pending", txHash?, warning? }
 // (200 when Confirmed, 202 while the network is still unavailable).
 export async function anchorReport(reportId) {

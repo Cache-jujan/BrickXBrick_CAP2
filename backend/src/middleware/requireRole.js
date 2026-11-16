@@ -1,4 +1,4 @@
-// requireRole.js — RBAC gate. Use AFTER requireAuth.
+// requireRole.js: RBAC gate. Use AFTER requireAuth.
 function requireRole(...allowedRoles) {
   return function (req, res, next) {
     if (!req.user || !req.user.role) {

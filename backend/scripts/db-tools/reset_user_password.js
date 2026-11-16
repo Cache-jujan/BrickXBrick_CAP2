@@ -14,7 +14,7 @@ const EMAIL = "testpurchaser2@gmail.com";
 const NEW_PASSWORD = "TestPurch2123!";
 
 async function main() {
-    // Look up the real Supabase user ID — it's a different UUID from the
+    // Look up the real Supabase user ID: it's a different UUID from the
     // app's userID (Postgres userID != Supabase auth user id).
     const pool = new Pool({
         connectionString: process.env.DATABASE_URL,

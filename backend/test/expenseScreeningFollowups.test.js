@@ -34,6 +34,7 @@ function norm(sql) {
 async function fakeQuery(sql, params = []) {
   db.calls.push({ sql, params });
   const text = norm(sql);
+  if (text.startsWith("select status from tickets")) return { rows: db.lockedStatus === null ? [] : [{ status: db.lockedStatus ?? "Resolved" }] };
   // The strict budget check (lib/ticketBudget.js): the request row lock, then what is left.
   if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: [{ status: "Resolved" }] };
   if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
@@ -62,8 +63,12 @@ stub("../src/lib/db", { query: fakeQuery, withTransaction: async (fn) => fn({ qu
 stub("../src/middleware/auth", { requireAuth: (req, _res, next) => { req.user = currentUser; next(); } });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/projectRules", { assertProjectActive: async () => {} });
+// The route calls screenOrFlag; keep the real one, around this file's fake screen.
+const realScreenModule = require("../src/lib/screenExpense");
+const fakeScreen = async (id) => { screened.push(id); return screenImpl(id); };
 stub("../src/lib/screenExpense", {
-  screenExpense: async (id) => { screened.push(id); return screenImpl(id); },
+  screenExpense: fakeScreen,
+  screenOrFlag: (id) => realScreenModule.screenOrFlag(id, { screen: fakeScreen }),
 });
 stub("../src/lib/blockchainService", { canonicalizeExpenseV2: () => "hash", submitHashWithTimeout: async () => ({}) });
 
@@ -126,7 +131,7 @@ function reset({ user = { id: "user-1", role: "Purchaser" } } = {}) {
   currentUser = user;
 }
 
-// ---- 1. screening failure -> Screening_Failed flag, still 201 ---------------
+// 1. screening failure -> Screening_Failed flag, still 201
 
 test("POST /expenses: screening throws -> 201 with the saved expense and a Screening_Failed flag", async () => {
   const server = await startServer();
@@ -178,7 +183,7 @@ test("POST /expenses: screening AND the failure flag both fail -> still 201", as
   }
 });
 
-// ---- 2. resubmit keeps the PM's resolved flags -------------------------------
+// 2. resubmit keeps the PM's resolved flags
 
 test("resubmit: deletes only still-open system flags, so Rejected flags stay as history", async () => {
   const server = await startServer();
@@ -215,7 +220,7 @@ test("resubmit: a screening failure after the edit still returns the updated exp
   }
 });
 
-// ---- 3. resubmit stays Purchaser-only and owner-only -------------------------
+// 3. resubmit stays Purchaser-only and owner-only
 
 test("resubmit: a Purchaser can resubmit their own Rejected expense", async () => {
   const server = await startServer();
@@ -266,7 +271,7 @@ test("resubmit: an expense that is not Rejected cannot be resubmitted (409)", as
     server.close();
   }
 });
-// ---- strict budget (lib/ticketBudget.js) ---------------------------------------
+// strict budget (lib/ticketBudget.js)
 
 test("POST /expenses: more than the remaining budget is refused with OVER_BUDGET and nothing is saved", async () => {
   const server = await startServer();
@@ -331,7 +336,7 @@ test("POST /expenses: an expense with no ticketID is refused for every role", as
   }
 });
 
-// ---- resubmit: strict budget, and a split portion's allocation row ------------
+// resubmit: strict budget, and a split portion's allocation row
 
 test("resubmit: over what is left of the request is refused, nothing is saved", async () => {
   const server = await startServer();
@@ -367,3 +372,19 @@ test("resubmit: a portion of a split receipt keeps its allocation amount in step
     server.close();
   }
 });
+
+for (const status of ["Rejected", "Cancelled", null]) {
+  test(`submission rejects a ticket whose locked status is ${status}`, async () => {
+    reset();
+    db.lockedStatus = status;
+    const server = await startServer();
+    try {
+      const res = await send(server, "POST", "/api/expenses", submission());
+      assert.equal(res.status, 409);
+      assert.equal(callsStartingWith("insert into expenses").length, 0);
+    } finally {
+      delete db.lockedStatus;
+      server.close();
+    }
+  });
+}

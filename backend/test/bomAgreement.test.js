@@ -1,4 +1,4 @@
-// F2 — recording the client's agreement when the BOM is approved (adviser item 5).
+// F2: recording the client's agreement when the BOM is approved (adviser item 5).
 // The agreement happens outside the system; approving the BOM must record when
 // and with whom, and purchases only start after the project is activated.
 const test = require("node:test");
@@ -44,7 +44,7 @@ test("'today' is the date in the Philippines, not the server's", () => {
   assert.equal(manilaToday(new Date("2026-10-16T15:30:00Z")), "2026-10-16");
 });
 
-// ---- route: approval without the agreement never reaches the database -------
+// route: approval without the agreement never reaches the database
 const touched = [];
 stub("../src/lib/db", {
   query: async (sql) => {

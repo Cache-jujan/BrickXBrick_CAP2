@@ -106,7 +106,7 @@ export default function LinkScreen() {
     busyRef.current = true;
     setSubmitting(true);
     try {
-      // F10 — offline: queue the expense in SQLite instead of POSTing.
+      // F10: offline: queue the expense in SQLite instead of POSTing.
       // The server (POST /api/sync) runs the full validation + screening on reconnect.
       if (!isOnline) {
         if (!ticket) throw new Error(t("mx.not_linked"));

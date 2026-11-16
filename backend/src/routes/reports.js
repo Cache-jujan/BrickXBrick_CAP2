@@ -1,4 +1,4 @@
-// reports.js — F11 Financial Analytics and Reporting. General Manager only.
+// reports.js: F11 Financial Analytics and Reporting. General Manager only.
 //
 //   GET  /summary?projectIds=a,b&from=YYYY-MM-DD&to=YYYY-MM-DD
 //   POST /pdf     { projectIds, from, to }  ->  application/pdf
@@ -96,7 +96,7 @@ router.post("/pdf", async (req, res, next) => {
   }
 });
 
-// POST /:id/anchor — retry a Pending report. 200 once Confirmed, 202 while the
+// POST /:id/anchor, retry a Pending report. 200 once Confirmed, 202 while the
 // chain is still unavailable (same convention as expense approval).
 router.post("/:id/anchor", async (req, res, next) => {
   try {

@@ -107,7 +107,7 @@ export default function TicketRequestScreen() {
   const { t, tv, intlLocale } = useLocale();
   const session = getSession();
   // Optional query param: when present, this screen is in "fix & resubmit"
-  // mode — one card prefilled from the rejected ticket, project locked,
+  // mode: one card prefilled from the rejected ticket, project locked,
   // "+ Add another" hidden, and the ticket id sent back as resubmittedFromId.
   // projectId (from the project summary) picks that project up front.
   const { resubmitFrom, projectId } = useLocalSearchParams<{ resubmitFrom?: string; projectId?: string }>();
@@ -327,7 +327,7 @@ export default function TicketRequestScreen() {
     }
   }
 
-  // ---- Render states ----------------------------------------------------
+  // Render states
   // The confirmation is a screen, not a pop-up: it can't be dismissed by
   // accident, and the form is gone so the same tickets can't be sent twice.
   if (sent) {

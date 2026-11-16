@@ -1,4 +1,4 @@
-// taskDocuments.js — rules for documents attached to Planning-phase tasks.
+// taskDocuments.js: rules for documents attached to Planning-phase tasks.
 //
 // Pure helpers (unit-tested in test/taskDocuments.test.js). The routes in
 // routes/tasks.js do the database and R2 work.
@@ -63,7 +63,7 @@ function sha256Hex(buffer) {
     return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-// task-documents/<taskId>/<random uuid>.<ext> — the only shape this writes.
+// task-documents/<taskId>/<random uuid>.<ext>: the only shape this writes.
 function buildStorageKey(taskId, ext) {
     return `task-documents/${taskId}/${crypto.randomUUID()}.${ext}`;
 }

@@ -1,4 +1,4 @@
-// Daily progress check-ins — the pure rules the phone applies before saving
+// Daily progress check-ins: the pure rules the phone applies before saving
 // one (no React, no database), so they can be tested. The server checks the
 // same things again; this only saves the Site Manager a failed round trip.
 

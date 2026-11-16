@@ -14,7 +14,7 @@ import {
   FolderIcon,
 } from "../components/layout/icons";
 
-// type -> { Icon, bg, fg, fallbackKey } — the fallback text only shows if the backend's
+// type -> { Icon, bg, fg, fallbackKey }, the fallback text only shows if the backend's
 // message is ever empty; every current producer always sends a message.
 export const NOTIFICATION_META = {
   TicketSubmitted:     { Icon: TicketGlyph,      bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.ticket_submitted" },

@@ -1,9 +1,13 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { corsOptions } = require("./lib/corsOptions");
+const { makeRateLimiters } = require("./lib/rateLimits");
+const { createGracefulShutdown } = require("./lib/gracefulShutdown");
+const helmet = require("helmet");
 
 const { requireAuth } = require("./middleware/auth");
-const { query, withTransaction } = require("./lib/db");
+const { query, withTransaction, pool } = require("./lib/db");
 const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
 const adminUsers = require("./routes/adminUsers");
@@ -31,18 +35,37 @@ const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
 
 const app = express();
-app.use(cors());
+// Security headers (nosniff, frame denial, HSTS, no X-Powered-By, ...). The CSP
+// is off on purpose: this API only returns JSON and PDF bytes, never a page,
+// and the web app is served by Vercel, so a CSP here would protect nothing.
+app.use(helmet({ contentSecurityPolicy: false }));
+// Cloud Run puts exactly one proxy (Google's front end) between the client and
+// this app. Trusting one hop makes req.ip the real client address, which the
+// rate limiters below key on. Do not set this to `true`: any client could then
+// pick its own IP with an X-Forwarded-For header.
+app.set("trust proxy", 1);
+app.use(cors(corsOptions()));
+// Rate limits sit after cors, so a 429 still carries the CORS headers and the
+// browser shows the message, and before the body parsers, so a flood is turned
+// away without parsing its body. /health is outside /api and never limited.
+const rateLimits = makeRateLimiters();
+app.use("/api", rateLimits.general);
+app.use("/api/auth/login", rateLimits.login);
+app.use("/api/me/change-password", rateLimits.changePassword);
 // The report PDF route draws its own charts now, but a Reports page opened
 // before an update still sends its chart as a base64 PNG (up to ~1.5 MB), far
 // above the 100 kb default. The route ignores it; the higher limit for that one
 // path only keeps such a page from failing. body-parser skips a body it has
 // already read, so the global parser below leaves it alone.
 app.use("/api/reports/pdf", express.json({ limit: "2mb" }));
+// A full offline batch (many expenses with line items and notes) can pass the
+// 100 kb default; the phone would then resend the same oversized batch every 15 s.
+app.use("/api/sync", express.json({ limit: "2mb" }));
 app.use(express.json());
 
-// --- Health / session ---
+// Health / session
 app.get("/health", (req, res) => res.json({ ok: true }));
-// GET /api/me — the signed-in user, plus whether they have accepted the
+// GET /api/me: the signed-in user, plus whether they have accepted the
 // current Terms of Use / Privacy Notice (routes/legal.js).
 app.get("/api/me", requireAuth, async (req, res, next) => {
   try {
@@ -52,7 +75,7 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
   }
 });
 
-// --- Routes ---
+// Routes
 app.use("/api/me", meRoutes);                     // your own username / password
 app.use("/api/auth", authRoutes);               // login / session
 app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Notice
@@ -75,7 +98,7 @@ app.use("/api/reports", reportRoutes);            // F11 financial analytics
 app.use("/api/notifications", notificationRoutes); // notifications
 
 // D-09: malformed input (bad UUID, bad date) was never validated before
-// hitting Postgres, so it bubbled up here as a raw driver error — 500s with
+// hitting Postgres, so it bubbled up here as a raw driver error, 500s with
 // text like `invalid input syntax for type uuid: "abc"`, leaking schema
 // details and failing checks that expected a clean 400. Map the common
 // input-shaped SQLSTATE codes to 400 and stop echoing unmapped DB errors.
@@ -86,14 +109,14 @@ const PG_INPUT_ERROR_CODES = new Set([
   "22001", // string_data_right_truncation
 ]);
 
-// --- Error handler (must stay last, after all routes) ---
+// Error handler (must stay last, after all routes)
 app.use((err, req, res, next) => {
   if (!err.status && err.code) {
     if (PG_INPUT_ERROR_CODES.has(err.code)) {
       return res.status(400).json({ error: "Invalid input value" });
     }
     // Any other raw Postgres error reaching here is a bug, not a bad
-    // request — don't leak schema/column details in the response body.
+    // request: don't leak schema/column details in the response body.
     console.error("Unhandled DB error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -107,7 +130,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-// F12: automatically retry any expense stuck at blockchainStatus='Pending' every 60s.
+// The background timers below are kept here so a SIGTERM can stop them (see the end of this file).
+const timers = [];
+
+// F12: automatically retry approved expenses that are not on the chain yet, every 60s.
 let retryRunning = false;
 async function retryPendingBlockchainWrites() {
     if (retryRunning) return;
@@ -116,16 +142,28 @@ async function retryPendingBlockchainWrites() {
         // Only approved expenses that have NEVER been secured. An expense that
         // already has a chain record is never re-secured: otherwise setting its
         // status to 'Pending' would write a fresh hash of changed data.
+        // 'None' is included because an approval that was cut off before its chain
+        // write (crash, redeploy) used to stay at 'None' and was never picked up.
+        // The 2 minute wait keeps this away from an approval request that is still
+        // sending its own hash (that call times out after 30 seconds).
         const pending = await query(
             `SELECT * FROM Expenses e
-              WHERE e.blockchainStatus = 'Pending' AND e.status = 'Approved'
+              WHERE e.status = 'Approved' AND e.blockchainStatus IN ('None', 'Pending')
                 AND NOT EXISTS (SELECT 1 FROM BlockchainLogs bl
                                  WHERE bl.expenseID = e.expenseID AND bl.eventType = 'ExpenseApproved')
+                AND (e.approvedAt IS NULL OR e.approvedAt < NOW() - INTERVAL '2 minutes')
               ORDER BY e.approvedAt NULLS FIRST
               LIMIT 20`
         );
         for (const expense of pending.rows) {
             try {
+                // Mark it as waiting so the 72-hour rule and the GM pending count include it.
+                if (expense.blockchainstatus === "None") {
+                    await query(
+                        "UPDATE Expenses SET blockchainStatus = 'Pending' WHERE expenseID = $1 AND blockchainStatus = 'None'",
+                        [expense.expenseid]
+                    );
+                }
                 const hash = canonicalizeExpenseV2(expense);
                 const { txHash, blockNumber, validatorNodeCount } = await submitHashWithTimeout(hash);
                 await query(
@@ -147,7 +185,7 @@ async function retryPendingBlockchainWrites() {
         retryRunning = false;
     }
 }
-setInterval(retryPendingBlockchainWrites, 60_000);
+timers.push(setInterval(retryPendingBlockchainWrites, 60_000));
 
 // F12: proactively re-check secured expenses against the hash written to
 // the chain at approval, instead of waiting for a GM to click "Verify".
@@ -170,7 +208,7 @@ async function scanForTampering() {
         scanRunning = false;
     }
 }
-setInterval(scanForTampering, 180_000); // every 3 minutes
+timers.push(setInterval(scanForTampering, 180_000)); // every 3 minutes
 
 // F3/F5: schedule variance is otherwise only recomputed on task-create or
 // PM Acknowledge, so a milestone/task that goes stale with no activity
@@ -189,8 +227,21 @@ async function runScheduleVarianceSweep() {
         varianceSweepRunning = false;
     }
 }
-setInterval(runScheduleVarianceSweep, 120_000); // every 2 minutes
+timers.push(setInterval(runScheduleVarianceSweep, 120_000)); // every 2 minutes
 
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend listening on port ${PORT}`);
 });
+
+// Cloud Run sends SIGTERM on every redeploy and scale-down and kills the
+// container about 10 seconds later. Stop the timers, finish the requests and
+// the background pass in progress, close the DB pool, then exit
+// (lib/gracefulShutdown.js). Ctrl+C locally takes the same path.
+const shutdown = createGracefulShutdown({
+  server,
+  stopTimers: () => timers.forEach(clearInterval),
+  isBusy: () => retryRunning || scanRunning || varianceSweepRunning,
+  closeDb: () => pool.end(),
+});
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

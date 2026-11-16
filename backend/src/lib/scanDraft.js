@@ -1,4 +1,4 @@
-// scanDraft.js — F6 receipt OCR -> expense draft. Shared by the synchronous
+// scanDraft.js: F6 receipt OCR -> expense draft. Shared by the synchronous
 // POST /receipts/scan and the background POST /receipts/scans job, so both
 // return exactly the same draft.
 

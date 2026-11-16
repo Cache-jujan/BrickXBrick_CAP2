@@ -5,23 +5,17 @@
 const hundredths = (value) => Math.round(Number(value) * 100);
 const normalize = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
-/**
- * Quantity of only the receipt lines for the request; null when none match or a matched line has
- * no quantity (the caller then uses the receipt total). Same rule as the server's
- * quantityOfMatchedLines: a BOM-linked request takes lines with its BOM link, a line matched to it,
- * or an unlinked line with exactly its name; any other request takes lines containing its name.
- * ticket: { ticketID, materialType, bomItemID }
- */
-export function matchedQuantity(lines, ticket) {
-  const requestedName = normalize(ticket?.materialType);
+/** Quantity of only the receipt lines for the requested material; null when none match or a matched line has no quantity. */
+export function matchedQuantity(lines, materialType, bomItemID, ticketID) {
+  const requestedName = normalize(materialType);
   let found = false;
   let sum = 0;
   for (const line of lines ?? []) {
     if (!line) continue;
     const description = normalize(line.description);
-    const matches = ticket?.bomItemID
-      ? line.bomItemID === ticket.bomItemID
-        || (line.matchedTicketID != null && String(line.matchedTicketID) === String(ticket.ticketID))
+    const matches = bomItemID
+      ? line.bomItemID === bomItemID
+        || (line.matchedTicketID != null && String(line.matchedTicketID) === String(ticketID))
         || (!line.bomItemID && description === requestedName)
       : requestedName !== "" && description.includes(requestedName);
     if (!matches) continue;

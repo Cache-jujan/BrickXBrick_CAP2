@@ -53,6 +53,8 @@ export function draftFromScan(result) {
   const extractedItems = Array.isArray(result.lineItems)
     ? result.lineItems.map((item) => withUnitPrice({
         description: item.description || "",
+        bomItemID: item.bomItemID,
+        matchedTicketID: item.matchedTicketID,
         amount: item.amount == null ? "" : String(item.amount),
         quantity: item.quantity == null ? "" : String(item.quantity),
         unitPrice: item.unitPrice == null ? "" : String(item.unitPrice),
@@ -249,7 +251,7 @@ export function SubmitExpensePage() {
     ? receiptProgress({
         requested: selectedTicket.quantity,
         remaining: selectedTicket.remainingQuantity,
-        thisQuantity: matchedQuantity(namedLineItems, selectedTicket) ?? receiptTotalQuantity(namedLineItems),
+        thisQuantity: matchedQuantity(namedLineItems, selectedTicket.materialType, selectedTicket.bomItemID, selectedTicket.ticketID) ?? receiptTotalQuantity(namedLineItems),
       })
     : null;
   const completes = progress ? progress.completes : true;
@@ -321,6 +323,8 @@ export function SubmitExpensePage() {
         birNumber: draft.birNumber.trim() || null,
         lineItems: validLineItems.map((item) => ({
           description: item.description.trim(),
+          bomItemID: item.bomItemID,
+          matchedTicketID: item.matchedTicketID,
           amount: Number(item.amount),
           quantity: Number(item.quantity),
           unitPrice: unitPriceForPayload(item),
@@ -334,7 +338,17 @@ export function SubmitExpensePage() {
       setReceiptName("");
       setOcrNotice("");
       setVendorInfo({ autoFilled: [], conflicts: [] });
-      loadTickets({ quiet: true }); // a part purchase leaves the request open, with less left to buy
+      // The receipt is saved even if refreshing the available requests fails.
+      setLoadingTickets(true);
+      try {
+        const rows = await listExpenseLinkableTickets();
+        setTickets(Array.isArray(rows) ? rows : []);
+      } catch (error) {
+        setTickets([]);
+        setPageError(extractErrorMessage(error, t("errors.load_tickets")));
+      } finally {
+        setLoadingTickets(false);
+      }
     } catch (error) {
       // Keep the draft so the user can fix the problem and retry.
       setPageError(extractErrorMessage(error, t("errors.submit_failed")));

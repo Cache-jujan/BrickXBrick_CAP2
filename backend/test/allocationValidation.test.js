@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// ---- lineTargets ---------------------------------------------------------------------------
+// lineTargets
 
 const { parseLineTargets } = require("../src/lib/allocationValidation");
 

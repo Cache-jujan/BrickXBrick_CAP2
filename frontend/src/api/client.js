@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// Base URL comes from Vite env — set VITE_API_URL in .env (see .env.example).
+// Base URL comes from Vite env: set VITE_API_URL in .env (see .env.example).
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export const apiClient = axios.create({
@@ -18,7 +18,7 @@ apiClient.interceptors.request.use((config) => {
 });
 
 // Centralize the "your session died" case. 401 here always means the
-// token is missing/invalid/expired — requireAuth on the backend never
+// token is missing/invalid/expired: requireAuth on the backend never
 // uses 401 for anything else (DB errors are 500, RBAC failures are 403).
 let onUnauthorized = () => {};
 export function registerUnauthorizedHandler(fn) {

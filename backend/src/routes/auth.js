@@ -6,7 +6,7 @@ const { termsFields } = require("./legal");
 
 const router = express.Router();
 
-const { MAX_ATTEMPTS, LOCKOUT_MINUTES } = require("../lib/loginLockout");
+const { LOCKOUT_MINUTES, recordFailedAttempt } = require("../lib/loginLockout");
 
 
 // Tentative need adjustment if na implement na ang frontend
@@ -26,13 +26,13 @@ router.post("/login", async (req, res) => {
  
   try {
     const userResult = await query(
-      `SELECT userid, name, username, email, role, status, lockoutuntil, failedloginattempts, avatarurl
+      `SELECT userid, name, username, email, role, status, lockoutuntil, avatarurl
        FROM users WHERE email = $1`,
       [email]
     );
  
     // Same generic message whether the email doesn't exist or the password
-    // is wrong — don't leak which one it was.
+    // is wrong: don't leak which one it was.
     const genericFail = () =>
       res.status(401).json({ error: "Invalid email or password" });
  
@@ -57,22 +57,10 @@ router.post("/login", async (req, res) => {
     const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
  
     if (error) {
-      const attempts = user.failedloginattempts + 1;
-      const lockingNow = attempts >= MAX_ATTEMPTS;
- 
-      await query(
-        `UPDATE users
-         SET failedloginattempts = $1,
-             lockoutuntil = $2
-         WHERE userid = $3`,
-        [
-          lockingNow ? 0 : attempts, // reset counter once the lock is set
-          lockingNow ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : null,
-          user.userid,
-        ]
-      );
- 
-      if (lockingNow) {
+      // Counted in one atomic UPDATE (see lib/loginLockout.js).
+      const { locked } = await recordFailedAttempt(query, user.userid);
+
+      if (locked) {
         return res.status(423).json({
           error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
         });
@@ -80,7 +68,7 @@ router.post("/login", async (req, res) => {
       return genericFail();
     }
  
-    // Success — clear any prior failed-attempt state.
+    // Success: clear any prior failed-attempt state.
     await query(
       `UPDATE users SET failedloginattempts = 0, lockoutuntil = NULL WHERE userID = $1`,
       [user.userid]
@@ -109,7 +97,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// POST /refresh — swap a refresh token for a new access token, so the mobile
+// POST /refresh: swap a refresh token for a new access token, so the mobile
 // app stays signed in (and can send what it queued offline) without asking for
 // the password again.
 // Body: { refreshToken }

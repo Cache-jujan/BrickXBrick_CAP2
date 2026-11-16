@@ -39,7 +39,7 @@ import { ToastProvider } from "./components/ui/Toast";
 // use the mobile app, which hits the same backend endpoint.
 const WEB_BROADCAST_ROLES = ["General Manager", "Project Manager"];
 
-// These roles have no web app at all — they work entirely from mobile. Rather
+// These roles have no web app at all: they work entirely from mobile. Rather
 // than a dashboard, they hit a full-screen "use the app" wall at the app entry
 // (see AppShell), so no sidebar or web page is ever reachable for them.
 const MOBILE_ONLY_ROLES = ["Site Manager", "Purchaser"];

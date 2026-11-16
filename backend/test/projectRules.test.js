@@ -16,7 +16,7 @@ const {
   DEFAULT_SETTINGS,
 } = require("../src/lib/projectRules");
 
-// --- dates ------------------------------------------------------------------
+// dates
 
 test("dates: development <= construction <= completion is valid", () => {
   assert.deepEqual(
@@ -66,7 +66,7 @@ test("dates: completion before construction is rejected", () => {
   assert.equal(errors[0].field, "endDate");
 });
 
-// --- service area -----------------------------------------------------------
+// service area
 
 test("service area: parsing trims, lowercases and drops blanks", () => {
   assert.deepEqual(parseServiceArea(" Consolacion , Liloan,, "), ["consolacion", "liloan"]);
@@ -94,7 +94,7 @@ test("warnings: outside the service area produces a warning, inside does not", (
   assert.equal(warnings[0].code, "OUTSIDE_SERVICE_AREA");
 });
 
-// --- availability -----------------------------------------------------------
+// availability
 
 test("availability: a PM with 0 open projects is available at limit 1", () => {
   assert.equal(evaluateAvailability([], 1).available, true);
@@ -111,7 +111,7 @@ test("availability: an SM with 2 sites is available at limit 3, with 3 is not", 
   assert.equal(evaluateAvailability([{}, {}, {}], 3).available, false);
 });
 
-// --- status transitions ------------------------------------------------------
+// status transitions
 
 test("transitions: Draft -> Active and Active -> Completed are allowed", () => {
   assert.doesNotThrow(() => assertStatusTransition("Draft", "Active"));
@@ -126,7 +126,7 @@ test("transitions: Draft -> Completed and Completed -> Active are rejected with 
   }
 });
 
-// --- settings ---------------------------------------------------------------
+// settings
 
 test("settings: rows override defaults; bad values fall back", async () => {
   const runQuery = async () => ({
@@ -142,7 +142,7 @@ test("settings: rows override defaults; bad values fall back", async () => {
   assert.deepEqual(settings.serviceAreaMunicipalities, ["consolacion", "liloan"]);
 });
 
-// --- assertManagerAvailable --------------------------------------------------
+// assertManagerAvailable
 
 function fakeClient({ user, openProjects }) {
   const calls = [];

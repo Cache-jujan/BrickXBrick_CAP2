@@ -102,7 +102,7 @@ test("unknown task 404; someone else's task 403; completed task 409 - nothing st
   assert.equal(state.uploads.length, 0);
 });
 
-// ---- taskPhotoExists / r2 helpers ----------------------------------------------
+// taskPhotoExists / r2 helpers
 
 const BASE = "https://pub.example.com";
 

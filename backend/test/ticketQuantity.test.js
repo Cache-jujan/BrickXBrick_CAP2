@@ -1,36 +1,26 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const { normalizeLineItems } = require("../src/lib/receiptFields");
-const { quantityOfMatchedLines } = require("../src/lib/ticketQuantity");
-
-const TICKET_ID = "7c2f6f0e-5a3b-4c1d-9e8f-0a1b2c3d4e5f";
-const BOM_ID = "11111111-2222-4333-8444-555555555555";
-const bomTicket = { materialtype: "Cement", bomitemid: BOM_ID };
-
-test("normalizeLineItems keeps a valid matchedTicketID and drops a bad one", () => {
-  const [kept, dropped, none] = normalizeLineItems([
-    { description: "Delivery", amount: 100, quantity: 3, matchedTicketID: TICKET_ID },
-    { description: "Sand", amount: 50, quantity: 1, matchedTicketID: "not-a-uuid" },
-    { description: "Gravel", amount: 50, quantity: 1 },
-  ]);
-  assert.equal(kept.matchedTicketID, TICKET_ID);
-  assert.equal("matchedTicketID" in dropped, false);
-  assert.equal("matchedTicketID" in none, false);
-});
-
-test("a BOM request counts a differently named line matched to it, after normalizing", () => {
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { normalizeLineItems } = require('../src/lib/receiptFields');
+const { quantityOfMatchedLines } = require('../src/lib/ticketQuantity');
+const ticketID = '33333333-3333-4333-8333-333333333333';
+const bomItemID = '44444444-4444-4444-8444-444444444444';
+test('normalized explicit ticket matches survive and frontend agrees with server', async () => {
+  const { matchedQuantity } = await import('../../frontend/src/utils/requestProgress.js');
+  const ticket = { materialtype: 'Cement', bomitemid: bomItemID };
   const lines = normalizeLineItems([
-    { description: "Cement", amount: 100, quantity: 2, bomItemID: BOM_ID },
-    { description: "Portland bags", amount: 150, quantity: 3, matchedTicketID: TICKET_ID },
-    { description: "Sand", amount: 80, quantity: 8 },
+    { description: 'Brand product', quantity: 2, amount: 20, matchedTicketID: ticketID },
+    { description: 'Other', quantity: 3, amount: 30, bomItemID },
+    { description: ' CEMENT ', quantity: 4, amount: 40 },
+    { description: 'Portland cement', quantity: 20, amount: 100 },
+    { description: 'Sand', quantity: 10, amount: 100, matchedTicketID: {} },
   ]);
-  assert.equal(quantityOfMatchedLines(lines, bomTicket, TICKET_ID), 5);
-});
-
-test("a line matched to another request is not counted", () => {
-  const lines = normalizeLineItems([
-    { description: "Portland bags", amount: 150, quantity: 3, matchedTicketID: "99999999-2222-4333-8444-555555555555" },
-  ]);
-  assert.equal(quantityOfMatchedLines(lines, bomTicket, TICKET_ID), null);
+  assert.equal(lines[0].matchedTicketID, ticketID);
+  assert.equal(lines[4].matchedTicketID, undefined);
+  assert.equal(quantityOfMatchedLines(lines, ticket, ticketID), 9);
+  assert.equal(matchedQuantity(lines, 'Cement', bomItemID, ticketID), 9);
+  for (const unmatched of [[lines[3]], [{ description: 'Cement', quantity: null }]]) {
+    assert.equal(quantityOfMatchedLines(unmatched, ticket, ticketID), null);
+    assert.equal(matchedQuantity(unmatched, 'Cement', bomItemID, ticketID), null);
+  }
+  assert.equal(matchedQuantity([lines[3]], 'Cement'), 20);
 });

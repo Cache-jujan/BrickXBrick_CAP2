@@ -31,7 +31,7 @@
   white-space: nowrap;
 }
 
-/* --- Welcome banner: dark, with a photo of one of JJC-R's projects --------- */
+/* Welcome banner: dark, with a photo of one of JJC-R's projects */
 
 /* The photo sits on the right at full strength and fades into the dark left
    side (a mask, not a dark veil over it), so the building stays bright and the
@@ -117,7 +117,7 @@
   color: rgba(255, 255, 255, 0.75);
 }
 
-/* --- KPI cards ------------------------------------------------------------ */
+/* KPI cards */
 
 .dash-kpis {
   display: grid;
@@ -193,7 +193,7 @@ a.dash-kpi:hover {
   font-weight: 600;
 }
 
-/* --- Layout and panels --------------------------------------------------- */
+/* Layout and panels */
 
 .dash-main {
   display: grid;
@@ -378,7 +378,7 @@ a.dash-kpi:hover {
   color: var(--color-ink);
 }
 
-/* --- Tables --------------------------------------------------------------- */
+/* Tables */
 
 .dash-table {
   width: 100%;
@@ -413,7 +413,7 @@ a.dash-kpi:hover {
   white-space: nowrap;
 }
 
-/* --- Project status list -------------------------------------------------- */
+/* Project status list */
 
 .dash-projects {
   list-style: none;
@@ -488,7 +488,7 @@ a.dash-kpi:hover {
   font-weight: 600;
 }
 
-/* --- Blockchain audit summary: a dark card, echoing the banner ------------ */
+/* Blockchain audit summary: a dark card, echoing the banner */
 
 .dash-audit-panel {
   background:
@@ -668,7 +668,7 @@ a.dash-kpi:hover {
   }
 }
 
-/* ---- PM "Needs your attention" panel ---------------------------------- */
+/* PM "Needs your attention" panel */
 .attn-groups {
   display: flex;
   flex-direction: column;

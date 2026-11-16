@@ -51,7 +51,12 @@ stub("../src/lib/db", { query: fakeQuery, withTransaction: async (fn) => fn({ qu
 stub("../src/middleware/auth", { requireAuth: (req, _res, next) => { req.user = currentUser; next(); } });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/projectRules", { assertProjectActive: async () => {} });
-stub("../src/lib/screenExpense", { screenExpense: async () => ({ flagTypes: [] }) });
+const realScreenModule = require("../src/lib/screenExpense");
+const fakeScreen = async () => ({ flagTypes: [] });
+stub("../src/lib/screenExpense", {
+  screenExpense: fakeScreen,
+  screenOrFlag: (id) => realScreenModule.screenOrFlag(id, { screen: fakeScreen }),
+});
 stub("../src/lib/blockchainService", { canonicalizeExpenseV2: () => "hash", submitHashWithTimeout: async () => ({}) });
 
 const expensesRouter = require("../src/routes/expenses");

@@ -172,7 +172,7 @@ test("duplicate ids are collapsed (project counted once)", async () => {
   assert.equal(res.body.projects.length, 1);
 });
 
-// ---- POST /pdf ---------------------------------------------------------------
+// POST /pdf
 
 test("PDF: General Manager gets a real PDF attachment and one Pending report_events row", async () => {
   state.me = { id: "u1", name: "Test GM", role: "General Manager" };
@@ -223,7 +223,7 @@ test("PHP formatting: thousands separators, 2 decimals, negatives, no peso glyph
   assert.equal(formatPhp(1234567.891), "PHP 1,234,567.89");
 });
 
-// ---- anchoring through the routes ------------------------------------------------
+// anchoring through the routes
 
 const GM = { id: "u1", name: "Test GM", role: "General Manager" };
 const chainDown = async () => { throw new Error("TIMEOUT"); };

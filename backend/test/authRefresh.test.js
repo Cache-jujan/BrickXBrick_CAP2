@@ -1,4 +1,4 @@
-// F1 — the mobile app keeps its sign-in alive: login hands out a refresh token,
+// F1: the mobile app keeps its sign-in alive: login hands out a refresh token,
 // and POST /api/auth/refresh swaps it for a new access token. A deactivated or
 // locked account is refused, and Supabase being down is not "signed out".
 const test = require("node:test");

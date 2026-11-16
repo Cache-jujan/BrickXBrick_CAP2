@@ -1,4 +1,4 @@
-// F10 — Network + offline-queue state for the whole app.
+// F10: Network + offline-queue state for the whole app.
 //
 // Provides { isOnline, pendingCount, refreshPendingCount, syncing, lastSync, syncNow }.
 // - syncing:  a sync run is in progress (the banner says "sending…")

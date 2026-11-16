@@ -1,10 +1,10 @@
-// visionClient.js — builds the Google Cloud Vision client correctly.
+// visionClient.js: builds the Google Cloud Vision client correctly.
 //
 // The bug this replaces: `keyFilename` expects a PATH to a service-account
 // JSON file. Passing an API key string (GOOGLE_VISION_API_KEY) makes the
 // library try to open a file named after your key and fail with ENOENT.
 // The Vision Node client authenticates with a service account, not with an
-// API key — GOOGLE_VISION_API_KEY should come out of .env entirely.
+// API key: GOOGLE_VISION_API_KEY should come out of .env entirely.
 //
 // Local dev  -> GOOGLE_APPLICATION_CREDENTIALS=./keystore/google-service-account.json
 // Cloud Run  -> GOOGLE_SERVICE_ACCOUNT_JSON='<the whole JSON, one line>'

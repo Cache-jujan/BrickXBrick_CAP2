@@ -1,10 +1,12 @@
-// reportFilters.js — validate the F11 report filters (projectIds, from, to).
+// reportFilters.js: validate the F11 report filters (projectIds, from, to).
 // Pure: no database. The route turns the thrown error into a 400.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_PROJECTS = 5; // manuscript scope
+// A report covers at most a year: 366 days, so a leap year still fits.
 const MAX_RANGE_DAYS = 366;
+// Milliseconds in a day, used to count the days in the date range.
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function validationError(fieldErrors) {

@@ -1,4 +1,4 @@
-// userOpenWork.js — F1: what a user is still responsible for.
+// userOpenWork.js (F1): what a user is still responsible for.
 //
 // Used before a System Administrator changes someone's role or deactivates
 // them. If the person still manages an open project, has unfinished tasks, or

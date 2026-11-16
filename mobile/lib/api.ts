@@ -19,7 +19,7 @@ export type Ticket = {
   description: string | null;
   status: string;
   createdat: string;
-  // Procurement fields — present on Material Request / Work Item tickets,
+  // Procurement fields: present on Material Request / Work Item tickets,
   // used by My Requests and the Fix & Resubmit prefill.
   materialtype?: string | null;
   quantity?: string | number | null;
@@ -35,7 +35,7 @@ export type Ticket = {
   rejectionreason?: string | null;
   rejectedbyrole?: string | null;
   // Resubmission wiring. resubmittedfromid: this ticket replaces that one.
-  // resubmittedbyid: the newer ticket that replaced THIS one (if any) — lets
+  // resubmittedbyid: the newer ticket that replaced THIS one (if any), lets
   // My Requests show "Resubmitted ✓" instead of a "Fix & resubmit" button.
   resubmittedfromid?: string | null;
   resubmittedbyid?: string | null;
@@ -186,7 +186,7 @@ export async function fetchAllAssignedTickets(role: "Purchaser" | "Site Manager"
   return res.json();
 }
 
-// ── daily progress check-ins (Site Manager) ──
+// daily progress check-ins (Site Manager)
 export type CheckinSlotName = "Morning" | "Midday" | "EndOfDay";
 export type CheckinSlot = {
   slot: CheckinSlotName;
@@ -410,7 +410,7 @@ export async function submitExpense(body: ExpenseSubmission) {
   return data;
 }
 
-// ---- Rejected expenses: correct and resubmit --------------------------------
+// Rejected expenses: correct and resubmit
 
 // One row of GET /api/expenses/mine. amount is a string (Postgres numeric) and
 // receiptDate a full timestamp (Postgres DATE read as midnight server time).
@@ -460,7 +460,7 @@ export async function resubmitExpense(expenseID: string, body: ExpenseResubmissi
   return data;
 }
 
-// ---- F8 split receipt ------------------------------------------------------
+// F8 split receipt
 
 // Error that keeps the server's `details` (e.g. which lines aren't covered).
 export class ApiError extends Error {
@@ -651,7 +651,7 @@ export async function closeShortRequest(ticketID: string, reason: string): Promi
   await readJson(res, "Failed to close the request");
 }
 
-// ---- Notifications (#6c) ---------------------------------------------------
+// Notifications (#6c)
 
 export type AppNotification = {
   notificationid: string;

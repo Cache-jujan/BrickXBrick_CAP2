@@ -1,4 +1,4 @@
-// receiptFields.js — the single translation point between parser.js output
+// receiptFields.js: the single translation point between parser.js output
 // and the `expenses` table, plus the canonical aliased column list.
 //
 // Why this file exists:
@@ -37,7 +37,7 @@ const EXPENSE_COLUMNS = `
   submitnote           AS "submitNote"
 `;
 
-// numeric(12,2) comes back from pg as a STRING, and that is correct — JS
+// numeric(12,2) comes back from pg as a STRING, and that is correct, JS
 // floats can't hold pesos exactly. Leave amounts as strings end-to-end;
 // use integer centavos if you ever need arithmetic (F11).
 
@@ -57,7 +57,7 @@ function resolveUnitPrice(item) {
  * Drop line items the expenses validator would reject, rather than handing
  * the client a draft that 400s on submit. normalizeAmount() returns null on
  * a value it couldn't read, and the four-column regex can match a row whose
- * description is junk — both get filtered out here. Anything dropped is
+ * description is junk: both get filtered out here. Anything dropped is
  * re-added by the user through the existing "+ Add item" flow.
  */
 function normalizeLineItems(rawItems) {
@@ -73,19 +73,14 @@ function normalizeLineItems(rawItems) {
         Number.isFinite(item.amount) &&
         item.amount >= 0
     )
-    .map((item) => {
-      const matchedTicketID = asUUIDOrNull(item.matchedTicketID);
-      return {
-        description: item.description.trim(),
-        amount: item.amount,
-        quantity: Number.isFinite(item.quantity) ? item.quantity : null,
-        unitPrice: resolveUnitPrice(item),
-        bomItemID: asUUIDOrNull(item.bomItemID),
-        // The request this line was matched to on the review screen. Kept (when it is a valid id)
-        // so the quantity count and the material check can use it.
-        ...(matchedTicketID ? { matchedTicketID } : {}),
-      };
-    });
+    .map((item) => ({
+      description: item.description.trim(),
+      amount: item.amount,
+      quantity: Number.isFinite(item.quantity) ? item.quantity : null,
+      unitPrice: resolveUnitPrice(item),
+      bomItemID: asUUIDOrNull(item.bomItemID),
+      ...(asUUIDOrNull(item.matchedTicketID) ? { matchedTicketID: item.matchedTicketID } : {}),
+    }));
 }
 
 /**
@@ -130,19 +125,38 @@ function isValidPhTin(value) {
   return !/^(\d)\1{8}$/.test(tin.slice(0, 9));
 }
 
+// Words a vendor, a clerk or the OCR writes when a receipt has no real permit
+// or OR/SI number. Compared after removing everything except letters and
+// digits, so "N/A", "n-a" and "N A" are all "NA".
+const PLACEHOLDER_WORDS = new Set(["NA", "NONE", "NIL", "NULL", "TBA", "TBD"]);
+
+/**
+ * True when a permit or OR/SI number is only a stand-in: empty, a
+ * "not applicable" word, or zeros only ("0", "000"). Shape only: it cannot
+ * tell a real number from a made-up one that happens to look right.
+ * Safe on raw or normalized input, because scanDraft.js passes the OCR draft
+ * to classifyBir before normalizeBirFields has run.
+ */
+function isPlaceholderCode(value) {
+  const code = String(value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length === 0) return true;
+  return PLACEHOLDER_WORDS.has(code) || /^0+$/.test(code);
+}
+
 /**
  * F7 classification. Presence check on the three BIR-required fields, plus a
- * format check on the TIN; it does NOT verify a TIN is real.
+ * format check on the TIN and a placeholder check on the permit and OR/SI
+ * numbers; it does NOT verify any of them is real.
  *
- * This runs server-side on submit, not just on scan — birValidationStatus
+ * This runs server-side on submit, not just on scan, birValidationStatus
  * decides what lands in the BIR tax-deductible report (F11), so a client
  * must not be able to declare its own receipt Formal.
  */
 function classifyBir({ tin, birPermitNumber, birNumber }) {
   const missing = [];
   if (!isValidPhTin(tin)) missing.push("tin");
-  if (!birPermitNumber) missing.push("birPermitNumber");
-  if (!birNumber) missing.push("birNumber");
+  if (isPlaceholderCode(birPermitNumber)) missing.push("birPermitNumber");
+  if (isPlaceholderCode(birNumber)) missing.push("birNumber");
 
   return {
     birValidationStatus: missing.length === 0 ? "Formal-Tax-Deductible" : "Informal",
@@ -206,8 +220,8 @@ function sameVendorValue(field, a, b) {
  * trusted vendor identity, so its values win (existing policy). Returns
  * what changed so the review screen can show it instead of silently
  * overwriting what the user sees on the paper receipt:
- *   autoFilled      — fields OCR left empty that the master list filled
- *   vendorConflicts — fields where OCR read a different value; the master
+ *   autoFilled: fields OCR left empty that the master list filled
+ *   vendorConflicts: fields where OCR read a different value; the master
  *                     value is kept and the OCR reading is reported
  * Pure: does not mutate the draft passed in.
  */
@@ -237,6 +251,7 @@ module.exports = {
   toExpenseDraft,
   classifyBir,
   isValidPhTin,
+  isPlaceholderCode,
   normalizeBirFields,
   normalizeLineItems,
   resolveUnitPrice,

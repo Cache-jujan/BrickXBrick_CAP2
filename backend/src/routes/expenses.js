@@ -1,5 +1,5 @@
-// expenses.js — F6 expense submission + ticket linking, plus review access.
-// Table 35 (Expenses) already exists in 001_initial_schema.sql — no migration
+// expenses.js: F6 expense submission + ticket linking, plus review access.
+// Table 35 (Expenses) already exists in 001_initial_schema.sql, no migration
 // needed. This route just exposes it.
 
 const express = require("express");
@@ -15,14 +15,14 @@ const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, co
 const { assertProjectActive } = require("../lib/projectRules");
 const { checkBudget, loadRemainingBudgetCents, SUBMIT_NOTE_MAX } = require("../lib/ticketBudget");
 const { assertProjectNotTerminated } = require("../lib/projectHold");
-const { screenExpense } = require("../lib/screenExpense");
+const { screenOrFlag } = require("../lib/screenExpense");
 const { canonicalizeExpenseV2, submitHashWithTimeout } = require("../lib/blockchainService");
 const { LIMITS, text, amount: cleanAmount } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
 
-// Labor is intentionally excluded — the DB CHECK isn't built yet, so this is
+// Labor is intentionally excluded: the DB CHECK isn't built yet, so this is
 // enforced here until that constraint lands.
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 
@@ -74,33 +74,6 @@ async function assertSiteManagerProject(user, projectId) {
     }
     if (result.rows[0].sitemanagerid !== user.id) {
         throw httpError(403, "You may only submit expenses for tickets on projects assigned to you");
-    }
-}
-
-const SCREENING_FAILED_REASON =
-    "Automatic fraud screening could not run for this expense. Review it manually before approving.";
-
-/**
- * Run F9 screening on a saved expense without letting a screening failure
- * undo it. The expense row is already committed, so a throw here used to make
- * the client see a 500 for an expense that was in fact saved (and retry it).
- * If screening throws, a Screening_Failed flag is written instead, so the
- * expense lands in the PM's flagged queue rather than looking clean.
- */
-async function screenOrFlag(expenseID) {
-    try {
-        await screenExpense(expenseID);
-    } catch (err) {
-        console.error(`Expense ${expenseID} failed screening:`, err);
-        try {
-            await query(
-                `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
-                 VALUES ($1, 'Screening_Failed', $2, 'system', 'Pending')`,
-                [expenseID, SCREENING_FAILED_REASON]
-            );
-        } catch (flagErr) {
-            console.error(`Expense ${expenseID}: could not record the screening failure:`, flagErr);
-        }
     }
 }
 
@@ -163,7 +136,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         const { birValidationStatus } = classifyBir(bir);
 
         // When a ticket is given, the ticket is the source of truth for the
-        // project — not the client-supplied projectID (F9 Layer 3).
+        // project: not the client-supplied projectID (F9 Layer 3).
         let projectID = bodyProjectID;
         let ticketForPurchase = null;
 
@@ -234,8 +207,6 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         // two submissions cannot both slip under the cap.
         const expense = await withTransaction(async (client) => {
             const locked = await client.query("SELECT status FROM tickets WHERE ticketid = $1 FOR UPDATE", [ticketID]);
-            // The status read above was outside this transaction: check it again under the lock, so a
-            // request rejected or withdrawn in between does not take an expense.
             const lockedStatus = locked.rows?.[0]?.status;
             if (lockedStatus !== "Acknowledged" && lockedStatus !== "Resolved") {
                 throw httpError(409, `Ticket must be Acknowledged or Resolved before an expense can be linked to it (it is ${lockedStatus})`);
@@ -309,7 +280,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
     }
 });
 
-// GET /mine — the caller's own submitted expenses.
+// GET /mine: the caller's own submitted expenses.
 router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const result = await query(
@@ -334,7 +305,7 @@ router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, n
     }
 });
 
-// GET /flagged — PM/GM queue of Pending expenses with unresolved fraud flags.
+// GET /flagged: PM/GM queue of Pending expenses with unresolved fraud flags.
 // Must stay ABOVE "/:id" or Express treats "flagged" as an id.
 router.get("/flagged", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
@@ -399,7 +370,7 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
     }
 });
 
-// GET / — GM/PM view of all expenses, optional ?projectId= filter.
+// GET /: GM/PM view of all expenses, optional ?projectId= filter.
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
@@ -442,7 +413,7 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
     } catch (err) { next(err); }
 });
 
-// GET /:id — role-scoped: Purchaser sees only their own submissions, GM any,
+// GET /:id, role-scoped: Purchaser sees only their own submissions, GM any,
 // PM only expenses on projects they manage.
 router.get("/:id", async (req, res, next) => {
     try {
@@ -477,6 +448,8 @@ router.get("/:id", async (req, res, next) => {
 
 /**
  * Approve a Pending expense as its project's PM or a GM, atomically resolving flags.
+ * blockchainStatus becomes Pending in the same transaction as the approval, so a
+ * crash before the chain write still leaves the expense for the retry in server.js.
  * Then submit its SHA-256 hash to the Geth PoA cluster and log the confirmed
  * transaction. Insufficient nodes leave blockchainStatus Pending for retry.
  */
@@ -503,7 +476,7 @@ router.patch("/:id/approve", requireRole("Project Manager", "General Manager"), 
         /** Atomically approve a Pending expense and its flags and tell its submitter; throw 409 if already reviewed. */
         await withTransaction(async (client) => {
             const claimed = await client.query(
-                "UPDATE Expenses SET status = 'Approved', approvedBy = $1, approvedAt = NOW() WHERE expenseID = $2 AND status = 'Pending'",
+                "UPDATE Expenses SET status = 'Approved', approvedBy = $1, approvedAt = NOW(), blockchainStatus = 'Pending' WHERE expenseID = $2 AND status = 'Pending'",
                 [req.user.id, req.params.id]
             );
             if (claimed.rowCount === 0) {
@@ -621,7 +594,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
     }
 });
 
-// PATCH /:id/resubmit — Purchaser edits and resubmits their own Rejected
+// PATCH /:id/resubmit, Purchaser edits and resubmits their own Rejected
 // expense. Resets to Pending and clears rejectionReason.
 router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) => {
     try {
@@ -634,6 +607,18 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
             throw httpError(404, "Expense not found");
         }
         await assertProjectNotTerminated(query, { projectId: existing.rows[0].projectid });
+        // An approved expense is locked. While its chain write is still Pending, the retry
+        // hashes whatever the row holds at that moment, so an edit now would be anchored
+        // as if it were the approved version.
+        if (existing.rows[0].status === "Approved") {
+            const waiting = existing.rows[0].blockchainstatus === "Pending";
+            throw httpError(
+                409,
+                waiting
+                    ? "Only a Rejected expense can be resubmitted. This one is approved and waiting to be written to the blockchain, so it can't be edited."
+                    : "Only a Rejected expense can be resubmitted. This one is already approved, so it can't be edited."
+            );
+        }
         if (existing.rows[0].status !== "Rejected") {
             throw httpError(409, "Only a Rejected expense can be resubmitted");
         }
@@ -674,7 +659,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
         const { birValidationStatus } = classifyBir(bir);
 
         // The receipt image, ticket link and project are NOT changed on a
-        // resubmit — only the correctable fields. The receipt already exists.
+        // resubmit: only the correctable fields. The receipt already exists.
         // One transaction: the request is locked while its budget is checked (the expense's own
         // old amount does not count against it), and a portion of a split receipt keeps its
         // allocation row in step with the new amount.
@@ -712,7 +697,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                         birpermitnumber = $8, lineitems = $9, quantity = $10,
                         submitnote = COALESCE($11, submitnote),
                         status = 'Pending', rejectionreason = NULL, approvedby = NULL
-                  WHERE expenseid = $12
+                  WHERE expenseid = $11 AND status = 'Rejected'
                   RETURNING ${EXPENSE_COLUMNS}`,
                 [
                     vendorName,
@@ -729,6 +714,11 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                     req.params.id,
                 ]
             );
+            // The row can stop being Rejected between the read above and this UPDATE (a double
+            // click, or a reviewer approving it in between). Never write over it then.
+            if (result.rowCount === 0) {
+                throw httpError(409, "Only a Rejected expense can be resubmitted");
+            }
             await client.query(
                 "UPDATE receiptallocations SET allocatedamount = $1 WHERE expenseid = $2",
                 [amount, req.params.id]

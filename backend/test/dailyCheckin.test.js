@@ -41,7 +41,7 @@ const input = (extra = {}) => ({
 const rejectsWith = (fn, code) =>
   assert.throws(fn, (e) => e instanceof CheckinError && e.code === code, `expected ${code}`);
 
-// ---- time -------------------------------------------------------------------
+// time
 
 test("manilaParts reads the Philippine day and minutes, across midnight UTC", () => {
   assert.deepEqual(manilaParts(new Date("2026-10-23T06:30:00Z")), { date: "2026-10-23", minutes: 14 * 60 + 30 });
@@ -84,7 +84,7 @@ test("slotState: Submitted, Open, Upcoming, Missed", () => {
   assert.equal(s("Morning", "2026-10-24", now), "Upcoming");
 });
 
-// ---- input ------------------------------------------------------------------
+// input
 
 test("a valid check-in is normalised; the day comes from capturedAt in Manila time", () => {
   const out = normalizeCheckin(input({ capturedAt: "2026-10-22T17:30:00Z", slot: "Morning" }), NOW);
@@ -117,7 +117,7 @@ test("input rules", () => {
   assert.equal(normalizeCheckin(input({ needsPmAction: true, issues: "Cement late" }), NOW).needsPmAction, true);
 });
 
-// ---- photos -----------------------------------------------------------------
+// photos
 
 const BASE = "https://r2.example/";
 const keyFromUrl = (url) => (typeof url === "string" && url.startsWith(BASE) ? url.slice(BASE.length) : null);
@@ -137,7 +137,7 @@ test("only photos stored under checkins/<projectId>/ count", async () => {
   ); // a storage problem is never "missing"
 });
 
-// ---- submit -----------------------------------------------------------------
+// submit
 
 // A fake database: recognises each statement by its start and records everything.
 function fakeDb({ project = {}, existingById = null, slotTaken = false, tasksFound = null, conflictOnInsert = null } = {}) {
@@ -254,7 +254,7 @@ test("submit never changes a task, a milestone, progress or the task photo revie
   assert.ok(!/task_progress_log|completionPercentage|task_documents/i.test(text.replace("SELECT t.taskId", "")));
 });
 
-// ---- review -----------------------------------------------------------------
+// review
 
 function reviewDb({ pmId = ID(2) } = {}) {
   const calls = [];

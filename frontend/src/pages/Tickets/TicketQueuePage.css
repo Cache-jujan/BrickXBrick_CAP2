@@ -21,7 +21,7 @@
   color: var(--color-ink-faint);
 }
 
-/* ---- Status tabs (Needs action / With purchaser / History) ------------- */
+/* Status tabs (Needs action / With purchaser / History) */
 .ticket-tabs {
   display: flex;
   gap: var(--space-1);
@@ -48,7 +48,7 @@
   border-bottom-color: var(--color-brick);
 }
 
-/* ---- Controls row: type filters + project filter ----------------------- */
+/* Controls row: type filters + project filter */
 .ticket-queue-controls {
   display: flex;
   align-items: center;
@@ -113,7 +113,7 @@
 .ticket-project-filter .ss-list,
 .ticket-batch-assign .ss-list { min-width: 260px; }
 
-/* ---- Empty states ------------------------------------------------------ */
+/* Empty states */
 .ticket-queue-empty {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -125,7 +125,7 @@
 .ticket-queue-empty p { margin: 0 auto; max-width: 48ch; color: var(--color-ink-soft); }
 .ticket-queue-empty-filtered { padding: var(--space-5); }
 
-/* ---- Ticket cards ------------------------------------------------------ */
+/* Ticket cards */
 .ticket-queue-list {
   display: flex;
   flex-direction: column;
@@ -187,7 +187,7 @@
 .ticket-card-facts dt { font-size: var(--text-xs); color: var(--color-ink-faint); margin-bottom: 2px; }
 .ticket-card-facts dd { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--color-ink); }
 
-/* ---- BOM context strip ------------------------------------------------- */
+/* BOM context strip */
 .bom-strip {
   display: flex;
   align-items: center;
@@ -226,7 +226,7 @@
 .bom-strip-grid dd.bom-strip-ok { color: var(--color-success); font-weight: 700; }
 .bom-strip-grid dd.bom-strip-flag { color: var(--color-danger); font-weight: 700; }
 
-/* ---- Foot / action area ------------------------------------------------ */
+/* Foot / action area */
 .ticket-card-foot {
   display: flex;
   flex-direction: column;
@@ -272,7 +272,7 @@
 .ticket-reject-link:hover { text-decoration: underline; }
 .ticket-reject-link:disabled { color: var(--color-ink-faint); cursor: default; text-decoration: none; }
 
-/* ---- Batch block ------------------------------------------------------- */
+/* Batch block */
 .ticket-batch {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -294,7 +294,7 @@
 .ticket-batch-body { display: flex; flex-direction: column; gap: var(--space-3); }
 .ticket-card-in-batch { box-shadow: none; }
 
-/* ---- Reject modal chips ------------------------------------------------ */
+/* Reject modal chips */
 .modal-narrow { max-width: 460px; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .modal-close {
@@ -312,7 +312,7 @@
 .reject-chip:hover { color: var(--color-ink); }
 .reject-chip-on { background: var(--color-danger-bg); border-color: var(--color-danger); color: var(--color-danger); }
 
-/* ---- Edit modal grid --------------------------------------------------- */
+/* Edit modal grid */
 .modal-ticket { max-width: 600px; max-height: calc(100vh - 2 * var(--space-5)); overflow-y: auto; }
 .modal.modal-ticket-wide { max-width: 920px; }
 .modal-ticket-wide .modal-head { margin-bottom: var(--space-4); }
@@ -322,7 +322,7 @@
 .edit-grid .field { margin-bottom: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-5); }
 
-/* ---- Deep-link highlight ----------------------------------------------- */
+/* Deep-link highlight */
 .ticket-card-focus { outline: 2px solid var(--color-brick); outline-offset: 2px; animation: ticket-focus-fade 2.5s var(--ease); }
 @keyframes ticket-focus-fade {
   0%, 60% { box-shadow: 0 0 0 4px var(--color-brick-tint); }
@@ -338,7 +338,7 @@
   .ticket-card-actions { flex-direction: column; align-items: flex-start; }
   .edit-row { grid-template-columns: 1fr; gap: 0; }
 }
-/* ---- Queue rows and the ticket modal ------------------------------------ */
+/* Queue rows and the ticket modal */
 
 .ticket-queue-list {
   display: grid;

@@ -1,4 +1,4 @@
-// adminVendors.js — Vendor Master List CRUD. System Administrator only.
+// adminVendors.js: Vendor Master List CRUD. System Administrator only.
 // Receipts keep the vendor name as text (Expenses.vendorName), so a vendor can be removed
 // without breaking old expenses; later receipts from it are simply screened as "not on the list".
 const express = require("express");
@@ -11,6 +11,7 @@ const router = express.Router();
 router.use(requireAuth, requireRole("System Administrator"));
 
 const PERMIT_TYPES = ["Permit", "PTU", "ATP"];
+// Philippine TIN: 9 digits in groups of 3 (123-456-789), plus an optional branch code of 3 to 5 digits.
 const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
 
 const COLUMNS = `vendorID AS "vendorID", vendorName AS "vendorName", location,

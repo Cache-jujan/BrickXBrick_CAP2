@@ -1,5 +1,6 @@
-// displayName.js — the "username.role" label shown on the organizational side.
+// displayName.js: the "username.role" label shown on the organizational side.
 
+// A username is 3 to 30 letters, digits or underscores.
 const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
 
 function roleSlug(role) {

@@ -382,7 +382,7 @@ export function SplitReceiptPage() {
     return <Banner tone="error" title={t("auth.not_authorized_title")}>{t("split.not_authorized_body")}</Banner>;
   }
 
-  // ---- After a successful submit ------------------------------------------
+  // After a successful submit
   if (result) {
     /** Resolve a saved request's project name, using a fallback if it is unknown. */
     const name = (id) => known[id]?.projectName ?? t("split.request");

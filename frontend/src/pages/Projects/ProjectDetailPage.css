@@ -169,7 +169,7 @@
   }
 }
 
-/* Record Protection (F12) — the project's tamper-proof record section.
+/* Record Protection (F12): the project's tamper-proof record section.
    The seal is the one distinctive element; everything else stays quiet. */
 .record-protection {
   margin-top: var(--space-7);
@@ -274,7 +274,7 @@
   margin-bottom: var(--space-4);
 }
 
-/* --- Header ------------------------------------------------------------- */
+/* Header */
 
 .pd-header {
   display: flex;
@@ -308,7 +308,7 @@
   color: var(--color-ink-soft);
 }
 
-/* --- Summary: one surface, three labelled groups ------------------------ */
+/* Summary: one surface, three labelled groups */
 
 .pd-summary {
   display: grid;
@@ -396,7 +396,7 @@
   margin-left: var(--space-1);
 }
 
-/* --- Team --------------------------------------------------------------- */
+/* Team */
 
 .pd-team-grid {
   display: grid;
@@ -460,7 +460,7 @@
   }
 }
 
-/* --- Bill of Materials summary ------------------------------------------ */
+/* Bill of Materials summary */
 
 .pd-bom {
   margin-bottom: var(--space-6);

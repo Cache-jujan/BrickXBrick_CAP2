@@ -31,7 +31,7 @@ function validBody(overrides = {}) {
   };
 }
 
-// ---- Manuscript unit tests ----
+// Manuscript unit tests
 
 test("UTC-003: 2000 + 2500 against 4500 is valid", () => {
   assert.deepEqual(validateAllocationSum([{ amount: 2000 }, { amount: 2500 }], 4500), { valid: true });
@@ -55,7 +55,7 @@ test("validateAllocationSum returns valid:false instead of throwing on bad input
   assert.equal(validateAllocationSum([{ amount: 100 }], "100").valid, false);
 });
 
-// ---- Body validation ----
+// Body validation
 
 test("accepts a valid split body and converts to integer units", () => {
   const body = validateAllocationBody(validBody());

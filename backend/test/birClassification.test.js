@@ -1,4 +1,4 @@
-// F7 — BIR verification and Formal / Informal classification.
+// F7: BIR verification and Formal / Informal classification.
 //
 // receiptFields.test.js covers normalizeBirFields in isolation. This file
 // covers what was untested:
@@ -27,7 +27,7 @@ const INFORMAL = "Informal";
 const ALL = { tin: "123-456-789-000", birPermitNumber: "FP-0123", birNumber: "OR 4567" };
 const classify = (raw) => classifyBir(normalizeBirFields(raw));
 
-// ---- 1. classification matrix ----------------------------------------------
+// 1. classification matrix
 
 test("all three BIR fields present -> Formal", () => {
   assert.deepEqual(classify(ALL), { birValidationStatus: FORMAL, missingBirFields: [] });
@@ -65,12 +65,16 @@ test("numeric input (not strings) is accepted", () => {
   assert.equal(classify({ tin: 123456789000, birPermitNumber: 123, birNumber: 4567 }).birValidationStatus, FORMAL);
 });
 
-// Known gaps. The TIN has a format check, but the permit and OR/SI numbers are
-// only checked for presence, so these receipts are currently marked tax-deductible.
-// They are marked `todo` so they document the gap without failing the suite;
-// turn them into plain tests once the team decides the validation rules.
-test("TODO: a placeholder permit number such as N/A should not count as Formal", { todo: true }, () => {
-  assert.equal(classify({ ...ALL, birPermitNumber: "N/A" }).birValidationStatus, INFORMAL);
+// The permit and OR/SI numbers are checked for presence and against a short
+// list of placeholders; like the TIN, they are not checked against any registry.
+test("a placeholder permit number such as N/A is not Formal and is named", () => {
+  for (const value of ["N/A", "n/a", "NA", "N-A", "none", "NIL", "TBA", "0", "000"]) {
+    assert.deepEqual(
+      classify({ ...ALL, birPermitNumber: value }),
+      { birValidationStatus: INFORMAL, missingBirFields: ["birPermitNumber"] },
+      value,
+    );
+  }
 });
 
 test("TIN must be 9 digits plus an optional 3-5 digit branch code", () => {
@@ -88,11 +92,29 @@ test("placeholder TINs (all zeros, one repeated digit) are not Formal", () => {
   }
 });
 
-test("TODO: an OR/SI number of 0 should not count as Formal", { todo: true }, () => {
-  assert.equal(classify({ ...ALL, birNumber: "0" }).birValidationStatus, INFORMAL);
+test("a placeholder OR/SI number such as 0 is not Formal and is named", () => {
+  for (const value of ["0", "00", "N/A", "none"]) {
+    assert.deepEqual(
+      classify({ ...ALL, birNumber: value }),
+      { birValidationStatus: INFORMAL, missingBirFields: ["birNumber"] },
+      value,
+    );
+  }
 });
 
-// ---- 2. the routes use the server's classification --------------------------
+test("real-looking permit and OR/SI numbers that contain zeros or letters stay Formal", () => {
+  for (const value of ["0001234", "FP-0000", "OR 100", "NAB-123", "A0"]) {
+    assert.equal(classify({ ...ALL, birPermitNumber: value, birNumber: value }).birValidationStatus, FORMAL, value);
+  }
+});
+
+test("classifyBir gives the same answer on raw input, as the OCR scan path passes it", () => {
+  assert.equal(classifyBir({ tin: "123-456-789-000", birPermitNumber: "N/A", birNumber: "OR 4567" }).birValidationStatus, INFORMAL);
+  assert.equal(classifyBir({ tin: "123-456-789-000", birPermitNumber: "FP-0123", birNumber: " 0 " }).birValidationStatus, INFORMAL);
+  assert.equal(classifyBir({ tin: "123-456-789-000", birPermitNumber: "FP-0123", birNumber: "OR 4567" }).birValidationStatus, FORMAL);
+});
+
+// 2. the routes use the server's classification
 
 // Replace a module with a fake BEFORE the route file loads it. node --test runs
 // each test file in its own process, so this cannot leak into other tests.
@@ -111,7 +133,6 @@ async function fakeQuery(sql, params = []) {
   const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
   // The strict budget check (lib/ticketBudget.js): the request row lock, then what is left.
   if (text.startsWith("select status from tickets")) return { rowCount: 1, rows: [{ status: "Resolved" }] };
-  if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
   if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: "500.00" }] };
   if (text.startsWith("select ticketid, projectid, status, assignedto")) {
     return { rowCount: 1, rows: [{ ticketid: "ticket-1", projectid: "project-1", status: "Resolved", assignedto: "user-1", submittedby: "sm-1", tickettype: "Material Request" }] };
@@ -128,7 +149,12 @@ stub("../src/lib/db", { query: fakeQuery, withTransaction: async (fn) => fn({ qu
 stub("../src/middleware/auth", { requireAuth: (req, _res, next) => { req.user = currentUser; next(); } });
 stub("../src/lib/receiptStorage", { receiptImageExists: async () => true });
 stub("../src/lib/projectRules", { assertProjectActive: async () => {} });
-stub("../src/lib/screenExpense", { screenExpense: async (id) => { screened.push(id); return { flagTypes: [] }; } });
+const realScreenModule = require("../src/lib/screenExpense");
+const fakeScreen = async (id) => { screened.push(id); return { flagTypes: [] }; };
+stub("../src/lib/screenExpense", {
+  screenExpense: fakeScreen,
+  screenOrFlag: (id) => realScreenModule.screenOrFlag(id, { screen: fakeScreen }),
+});
 stub("../src/lib/blockchainService", { canonicalizeExpense: () => "hash", submitHashWithTimeout: async () => ({}) });
 
 const expensesRouter = require("../src/routes/expenses");
@@ -299,7 +325,7 @@ test("a Site Manager cannot resubmit (Purchaser only)", async () => {
   }
 });
 
-// ---- 3. every submit path derives the status from classifyBir ---------------
+// 3. every submit path derives the status from classifyBir
 
 const ROUTES = ["expenses.js", "allocations.js", "sync.js"];
 
@@ -324,7 +350,7 @@ test("no route reads birValidationStatus from the request", () => {
   }
 });
 
-// ---- 4. the code and the database agree on the two values -------------------
+// 4. the code and the database agree on the two values
 
 test("the two statuses are exactly what the expenses CHECK constraint allows", () => {
   const sql = fs.readFileSync(path.join(__dirname, "../../infra/db/migrations/001_initial_schema.sql"), "utf8");

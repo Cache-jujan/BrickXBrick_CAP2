@@ -31,7 +31,7 @@
   margin-top: var(--space-1);
 }
 
-/* --- Empty state -------------------------------------------------------- */
+/* Empty state */
 
 .bom-empty {
   background: var(--color-surface);
@@ -63,7 +63,7 @@
   margin-top: var(--space-3);
 }
 
-/* --- Totals strip --------------------------------------------------------- */
+/* Totals strip */
 
 .bom-totals {
   display: grid;
@@ -114,7 +114,7 @@
   font-weight: 600;
 }
 
-/* --- Checks ------------------------------------------------------------- */
+/* Checks */
 
 .bom-checks {
   background: var(--color-surface);
@@ -134,7 +134,7 @@
   color: var(--color-ink-soft);
 }
 
-/* --- Sections ----------------------------------------------------------- */
+/* Sections */
 
 .bom-section {
   margin-bottom: var(--space-6);
@@ -248,7 +248,7 @@
   text-align: center;
 }
 
-/* --- Inline inputs ------------------------------------------------------ */
+/* Inline inputs */
 
 .bom-input {
   width: 100%;
@@ -383,7 +383,7 @@
   gap: var(--space-3);
 }
 
-/* --- Unsaved changes bar ------------------------------------------------ */
+/* Unsaved changes bar */
 
 .bom-savebar {
   position: sticky;
@@ -407,7 +407,7 @@
   gap: var(--space-2);
 }
 
-/* --- Dialog ------------------------------------------------------------- */
+/* Dialog */
 
 .bom-dialog-list {
   max-height: 200px;

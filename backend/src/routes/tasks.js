@@ -1,4 +1,4 @@
-// tasks.js — F3: task listing. F5: task progress submission (two-phase:
+// tasks.js (F3): task listing. F5: task progress submission (two-phase:
 // SM submits -> Pending Review -> PM Acknowledges or Flags).
 const express = require("express");
 const multer = require("multer");
@@ -26,11 +26,11 @@ const { notify } = require("../lib/notify");
 const router = express.Router();
 router.use(requireAuth);
 
-// GET /assigned — tasks assigned to the calling Site Manager.
-// D-14: previously task columns only — an SM with tasks on several projects
+// GET /assigned: tasks assigned to the calling Site Manager.
+// D-14: previously task columns only, an SM with tasks on several projects
 // couldn't tell them apart. Now joins milestone/project names.
 // D-04: previously only surfaced a photo URL for a still-Pending submission
-// — a Flagged submission was invisible here, so the SM never knew to
+// a Flagged submission was invisible here, so the SM never knew to
 // resubmit. Now surfaces the latest submission's status/reason regardless
 // of outcome (Pending Review, Flagged, Acknowledged, or Superseded).
 router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
@@ -76,7 +76,7 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
     }
 });
 
-// --- F5: task progress submission ---------------------------------------
+// F5: task progress submission
 
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png"];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -120,7 +120,7 @@ function assertEvidencePhoto(file) {
     }
 }
 
-// POST /:id/photo — F10: store ONE task photo and return its URL, nothing else.
+// POST /:id/photo, F10: store ONE task photo and return its URL, nothing else.
 // An offline-queued submission cannot carry the image inside the JSON sync
 // batch, so on reconnect the phone uploads the photo here first, then sends the
 // URL through POST /api/sync. Same storage (R2, tasks/<id>/) and the same
@@ -153,21 +153,21 @@ router.post("/:id/photo", requireRole("Site Manager"), upload.single("photo"), a
     }
 });
 
-// POST /:id/progress — Site Manager assigned to the task marks it done.
+// POST /:id/progress, Site Manager assigned to the task marks it done.
 // Tasks are binary (WBS leaf items) -- no percentage in the payload. Photo
 // is required; the task row is NOT touched here, only on PM Acknowledge.
 //
 // Request: multipart/form-data
-//   clientSubmissionId  UUID, required — idempotency key, see migration
+//   clientSubmissionId  UUID, required, idempotency key, see migration
 //                        010 comment. Generated on-device; F10 must carry
 //                        the SAME value through a queued-then-replayed
 //                        sync, or this dedup does nothing for them.
-//   note                string, optional — context on THIS submission
+//   note                string, optional, context on THIS submission
 //                        only (e.g. "photo's dark, couldn't retake
-//                        on-site"). NOT the issue-reporting mechanism —
+//                        on-site"). NOT the issue-reporting mechanism:
 //                        that's a separate POST /api/tickets with
 //                        ticketType: "Report", decoupled from this route.
-//   photo               file, required — JPEG/PNG, <=10MB
+//   photo               file, required, JPEG/PNG, <=10MB
 router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo"), async (req, res, next) => {
     try {
         const { clientSubmissionId } = req.body;
@@ -206,12 +206,12 @@ router.post("/:id/progress", requireRole("Site Manager"), upload.single("photo")
     }
 });
 
-// GET /progress-log — PM's review queue, scoped to projects they manage.
+// GET /progress-log: PM's review queue, scoped to projects they manage.
 // ?status= filters reviewStatus, defaults to Pending Review.
 router.get("/progress-log", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const status = req.query.status || "Pending Review";
-        // D-13: previously selected only t.milestoneId — the review card
+        // D-13: previously selected only t.milestoneId, the review card
         // showed a raw UUID with no project, so the PM couldn't tell which
         // project/milestone a submission belonged to without a lookup.
         const result = await query(
@@ -230,7 +230,7 @@ router.get("/progress-log", requireRole("Project Manager"), async (req, res, nex
     }
 });
 
-// PATCH /progress-log/:logId/review — PM only, must own the project.
+// PATCH /progress-log/:logId/review, PM only, must own the project.
 // decision: "Acknowledge" -> task flips to Completed, milestone recalcs.
 //           "Flag" (requires reason) -> task untouched, SM must resubmit.
 router.patch("/progress-log/:logId/review", requireRole("Project Manager"), async (req, res, next) => {
@@ -261,7 +261,7 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
         // D-06: the old check-then-act (read reviewStatus, then UPDATE)
         // let concurrent Acknowledge + Flag both pass the read and both
         // succeed, leaving the log Flagged while the task flipped to
-        // Completed. Claim the row atomically — only the request that
+        // Completed. Claim the row atomically: only the request that
         // actually flips Pending Review -> something else proceeds; the
         // other gets 0 rows back and 409s.
         const result = await withTransaction(async (client) => {
@@ -290,7 +290,7 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
             let task;
             if (decision === "Acknowledge") {
                 // updatedBy reflects the SM who did the work, not the PM
-                // reviewing it — reviewedBy on the log row already tracks
+                // reviewing it: reviewedBy on the log row already tracks
                 // the PM's action separately.
                 const taskUpdate = await client.query(
                     `UPDATE tasks
@@ -333,7 +333,7 @@ router.patch("/progress-log/:logId/review", requireRole("Project Manager"), asyn
     }
 });
 
-// --- #5: Planning-phase task completion ----------------------------------
+// #5: Planning-phase task completion
 
 // task + its milestone's phase/project, for the PM-ownership + phase check.
 async function getTaskForCompletion(taskId) {
@@ -354,8 +354,8 @@ async function getTaskForCompletion(taskId) {
     return result.rows[0];
 }
 
-// PATCH /:id/complete — PM marks a Planning-phase task done. There's no SM
-// photo-submission/review flow for Planning work (#5) — it's "Handled by:
+// PATCH /:id/complete, PM marks a Planning-phase task done. There's no SM
+// photo-submission/review flow for Planning work (#5), it's "Handled by:
 // GM/PM" and only the owning PM can close it out, optionally with a note.
 // Construction tasks keep going through POST /:id/progress + the PM
 // Acknowledge/Flag review above; this route refuses them.
@@ -404,7 +404,7 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
     }
 });
 
-// --- Planning-task documents ----------------------------------------------
+// Planning-task documents
 //
 // A Planning task is "Handled by GM/PM" and has no photo flow, so the only way
 // to show real work was a note. These routes let the GM (any project) or the
@@ -495,7 +495,7 @@ const DOCUMENT_COLUMNS = `d.documentId   AS "documentID",
                     d.uploadedBy   AS "uploadedBy",
                     u.name         AS "uploadedByName"`;
 
-// GET /:id/documents — the task's live documents, oldest first.
+// GET /:id/documents, the task's live documents, oldest first.
 router.get("/:id/documents", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const task = await getPlanningTaskContext(req.params.id);
@@ -516,7 +516,7 @@ router.get("/:id/documents", requireRole("General Manager", "Project Manager"), 
     }
 });
 
-// POST /:id/documents — attach one file (form field "file").
+// POST /:id/documents, attach one file (form field "file").
 router.post("/:id/documents", requireRole("General Manager", "Project Manager"), receiveDocument, async (req, res, next) => {
     try {
         const task = await getPlanningTaskContext(req.params.id);
@@ -561,7 +561,7 @@ router.post("/:id/documents", requireRole("General Manager", "Project Manager"),
     }
 });
 
-// GET /:id/documents/:docId/download — { url, fileName }. The client opens
+// GET /:id/documents/:docId/download, { url, fileName }. The client opens
 // the url. Returned from an authenticated call so that making the bucket
 // private later only changes documentUrl() in lib/taskDocuments.js.
 router.get("/:id/documents/:docId/download", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
@@ -592,7 +592,7 @@ router.get("/:id/documents/:docId/download", requireRole("General Manager", "Pro
     }
 });
 
-// DELETE /:id/documents/:docId — soft delete (the row stays, marked deleted).
+// DELETE /:id/documents/:docId, soft delete (the row stays, marked deleted).
 router.delete("/:id/documents/:docId", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const task = await getPlanningTaskContext(req.params.id);

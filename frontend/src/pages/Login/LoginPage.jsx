@@ -11,14 +11,14 @@ import { LanguageToggle } from "../../i18n/LanguageToggle";
 import { AuthShell } from "../../components/auth/AuthShell";
 import "./LoginPage.css";
 
-// Feature list mirrors what the backend actually supports today — RBAC
+// Feature list mirrors what the backend actually supports today, RBAC
 // (F1), project/expense tracking (F2/F6), and the F12 blockchain audit
 // trail. Do not add claims for features that aren't implemented.
-// FUNCTION F1 — Login
+// FUNCTION F1: Login
 // STATUS: IMPLEMENTED
 // PURPOSE: authenticate against POST /api/auth/login (Supabase-backed) and
 // redirect to the role's dashboard.
-// NOTE: this system has no self-registration and no Google/OAuth login —
+// NOTE: this system has no self-registration and no Google/OAuth login,
 // accounts are created by a System Administrator only (see adminUsers.js).
 // Do not add a "Continue with Google" or sign-up affordance here.
 export function LoginPage() {
@@ -44,7 +44,7 @@ export function LoginPage() {
       navigate(destination, { replace: true });
     } catch (err) {
       // The backend intentionally returns the same generic message whether
-      // the email or the password was wrong — surface it as-is. A locked
+      // the email or the password was wrong: surface it as-is. A locked
       // account (423) and a deactivated account (403) get their own
       // explicit messages from the server, which we also just relay.
       setError(extractErrorMessage(err, t("errors.invalid_login")));
@@ -124,7 +124,7 @@ export function LoginPage() {
   );
 }
 
-/* --- Icons — small inline SVGs, no icon-library dependency --- */
+/* --- Icons: small inline SVGs, no icon-library dependency --- */
 
 function ArrowIcon() {
   return (

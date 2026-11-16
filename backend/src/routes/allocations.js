@@ -1,4 +1,4 @@
-// allocations.js — F8 split-receipt allocation (no-bookkeeper design).
+// allocations.js: F8 split-receipt allocation (no-bookkeeper design).
 //
 // The actor scans ONE receipt. The server splits each receipt line across the
 // open Material Requests for that material, oldest request first, and saves
@@ -115,7 +115,7 @@ async function loadSaved(client, commonReceiptID, userId) {
   };
 }
 
-// GET /open-requests — open requests with remaining quantity, oldest first.
+// GET /open-requests: open requests with remaining quantity, oldest first.
 router.get("/open-requests", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   try {
     res.json(await loadOpenRequests(req.user));
@@ -124,7 +124,7 @@ router.get("/open-requests", requireRole(...ALLOCATION_ROLES), async (req, res, 
   }
 });
 
-// POST /preview — the split the server WOULD save. Writes nothing.
+// POST /preview: the split the server WOULD save. Writes nothing.
 router.post("/preview", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   try {
     const input = validatePlanInput(req.body);
@@ -142,7 +142,7 @@ router.post("/preview", requireRole(...ALLOCATION_ROLES), async (req, res, next)
   }
 });
 
-// POST / — save the split.
+// POST /: save the split.
 router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   try {
     // 1. Shape of the body, and the receipt image must be one we stored.
@@ -292,7 +292,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
   }
 });
 
-// POST /close-short/:ticketId — "that's all I could buy". The money ran out (or the store ran
+// POST /close-short/:ticketId, "that's all I could buy". The money ran out (or the store ran
 // out), so the request is closed with what was bought so far and a reason the PM can read.
 // Resolving goes through the same transition log as any other resolve, so the usual
 // ticket notifications fire.

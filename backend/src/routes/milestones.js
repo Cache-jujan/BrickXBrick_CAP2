@@ -1,4 +1,4 @@
-// milestones.js — F3: milestone + task creation, PM-owned only.
+// milestones.js (F3): milestone + task creation, PM-owned only.
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
@@ -38,7 +38,7 @@ async function getOwnedProject(projectId, userId) {
     // D-11: an Archived project had no status check, so milestones/tasks
     // could still be created on a project that's supposed to be closed.
     // Draft is allowed too: the PM plans the project (e.g. a "Planning
-    // phase" milestone) before construction starts — adviser item 2.
+    // phase" milestone) before construction starts: adviser item 2.
     if (!PLANNABLE_STATUSES.includes(project.status)) {
         const err = new Error(`This project is ${project.status} — milestones and tasks can only be created on a Draft or Active project`);
         err.status = 409;
@@ -47,7 +47,7 @@ async function getOwnedProject(projectId, userId) {
     return project;
 }
 
-// D-03: GM, the owning PM, or the project's assigned SM — same boundary
+// D-03: GM, the owning PM, or the project's assigned SM, same boundary
 // projects.js already enforces on project reads. Milestone routes had only
 // requireAuth, so any logged-in role could read another project's data.
 function assertProjectAccess(project, user) {
@@ -89,12 +89,12 @@ async function getMilestoneWithProject(milestoneId) {
     return result.rows[0];
 }
 
-// POST / — PM creates a milestone under a project they manage.
+// POST /: PM creates a milestone under a project they manage.
 router.post("/", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const { projectID, dueDate } = req.body;
         // D-12: the web UI trims before posting, but the API accepted a
-        // whitespace-only name directly (e.g. "   ") — trim server-side too.
+        // whitespace-only name directly (e.g. "   "): trim server-side too.
         const name = text(req.body.name, { field: "name", label: "Milestone name", max: LIMITS.milestoneName }) || "";
         // #5: a milestone's phase decides how its tasks will later be owned
         // (Planning → Handled by GM/PM, no Site Manager; Construction →
@@ -116,7 +116,7 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
 
         const project = await getOwnedProject(projectID, req.user.id);
 
-        // Non-blocking: the PM is told but never stopped — they may have a
+        // Non-blocking: the PM is told but never stopped, they may have a
         // real reason for a date outside the usual window.
         const warning = dateWindowWarning(phase, dueDate, project);
 
@@ -130,7 +130,7 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
             const newMilestone = insertResult.rows[0];
 
             // A milestone can be created already past its own due date
-            // (W-03) — derive its real status immediately instead of
+            // (W-03): derive its real status immediately instead of
             // leaving it "On Track" until the next task or sweep.
             await recalcMilestoneProgress(client, newMilestone.milestoneid);
 
@@ -147,7 +147,7 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
     }
 });
 
-// GET /?projectId= — list milestones for a project.
+// GET /?projectId=: list milestones for a project.
 router.get("/", async (req, res, next) => {
     try {
         const { projectId } = req.query;
@@ -170,7 +170,7 @@ router.get("/", async (req, res, next) => {
     }
 });
 
-// GET /attention — the owning PM's at-risk and overdue milestones across their
+// GET /attention: the owning PM's at-risk and overdue milestones across their
 // open projects, for the dashboard "Needs your attention" panel. Declared
 // before "/:id" so Express doesn't read "attention" as a milestone id.
 // Milestone status is the server-derived schedule status (milestoneProgress.js);
@@ -194,7 +194,7 @@ router.get("/attention", requireRole("Project Manager"), async (req, res, next) 
     }
 });
 
-// GET /timeline/locks?projectId= — the tasks of this project that cannot be
+// GET /timeline/locks?projectId=: the tasks of this project that cannot be
 // deleted (they have a progress submission or attached documents), so the
 // "Edit timeline" modal can say so before the PM tries. Owning PM only, on a
 // Draft or Active project, like the edit itself. Declared before "/:id".
@@ -214,7 +214,7 @@ router.get("/timeline/locks", requireRole("Project Manager"), async (req, res, n
     }
 });
 
-// PATCH /timeline — the PM's "Edit timeline" save: rename, re-date and delete
+// PATCH /timeline: the PM's "Edit timeline" save: rename, re-date and delete
 // milestones and tasks of one project in a single all-or-nothing transaction.
 // body: { projectID,
 //         milestones: [{ milestoneID, name?, dueDate?, remove? }],
@@ -240,10 +240,10 @@ router.patch("/timeline", requireRole("Project Manager"), async (req, res, next)
 
 const TASK_HANDLERS = ["GM", "PM"];
 
-// POST /:id/tasks — PM creates a task under a milestone they own.
+// POST /:id/tasks, PM creates a task under a milestone they own.
 // Construction milestones: task is assigned to the project's Site Manager
-// (schema is 1 SM per project — no open pick), exactly as before.
-// Planning milestones (#5): there's no Site Manager involvement at all —
+// (schema is 1 SM per project: no open pick), exactly as before.
+// Planning milestones (#5): there's no Site Manager involvement at all,
 // the task is just "Handled by: GM" or "Handled by: PM" (informational),
 // assignedTo stays NULL, and only a PM can later mark it done.
 router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next) => {
@@ -264,7 +264,7 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
             err.status = 403;
             throw err;
         }
-        // D-11: mirror getOwnedProject's Active check here — this route
+        // D-11: mirror getOwnedProject's Active check here, this route
         // reaches the project via the milestone, not getOwnedProject.
         if (!PLANNABLE_STATUSES.includes(milestone.projectstatus)) {
             const err = new Error(`This project is ${milestone.projectstatus} — tasks can only be created on a Draft or Active project`);
@@ -303,12 +303,12 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
             );
             const newTask = insertResult.rows[0];
 
-            // A new task starts at 0% and shifts the milestone's average —
+            // A new task starts at 0% and shifts the milestone's average,
             // recalc now, not just when future progress updates land (F5).
             await recalcMilestoneProgress(client, req.params.id);
 
             // D-16: UC-03-01 step 5 says the system notifies the assigned
-            // SM. Planning tasks have no SM to notify — PM created it and
+            // SM. Planning tasks have no SM to notify: PM created it and
             // the PM handles it, so there's no one else to tell.
             if (!isPlanning) {
                 await client.query(
@@ -327,7 +327,7 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
     }
 });
 
-// GET /:id — single milestone with its tasks nested.
+// GET /:id, single milestone with its tasks nested.
 router.get("/:id", async (req, res, next) => {
     try {
         const milestoneResult = await query(

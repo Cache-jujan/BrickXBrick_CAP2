@@ -11,7 +11,7 @@ const MIN = 1;
 const MAX = 10;
 
 /**
- * F2 — how many open (Draft/Active) projects a Project Manager and a Site
+ * F2: how many open (Draft/Active) projects a Project Manager and a Site
  * Manager may hold at once (adviser item 4). It's the client's policy, so the
  * General Manager can change it here without a code change. Lowering a limit
  * never removes anyone from a project; it only blocks new assignments.

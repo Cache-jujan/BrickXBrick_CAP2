@@ -23,7 +23,7 @@ const PURCHASER_B_EMAIL = "testpurchaser2@gmail.com";
 const PURCHASER_B_PASSWORD = "TestPurch2123!";
 const PURCHASER_B_USERID = "53e9fbd2-3056-4372-a975-b61797c26b53";
 
-// "Ticket Test Project" — testsm is siteManagerId here, so SM can create on it.
+// "Ticket Test Project": testsm is siteManagerId here, so SM can create on it.
 const PROJECT_ID = "ef403363-8377-46ee-902f-54634c558356";
 
 const NEW_PM_EMAIL = "testpm_seed@gmail.com";

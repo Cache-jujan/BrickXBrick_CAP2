@@ -1,4 +1,4 @@
-// layoutLineItems.js — turns Vision word boxes into parser-shaped line items
+// layoutLineItems.js: turns Vision word boxes into parser-shaped line items
 // using extractLineItemsFromLayout (row clustering + header column mapping).
 //
 // Returns null when the layout pass can't find a table header or reads no

@@ -21,7 +21,7 @@
   --radius-lg: 18px;
 }
 
-/* ---- Page headings -------------------------------------------------- */
+/* Page headings */
 
 .gm-skin h1 {
   font-size: 1.625rem;
@@ -59,7 +59,7 @@
   margin: var(--space-6) 0 var(--space-3);
 }
 
-/* ---- Cards ---------------------------------------------------------- */
+/* Cards */
 
 .gm-skin .card,
 .gm-skin .projects-table-wrap,
@@ -111,7 +111,7 @@
   border-radius: 14px;
 }
 
-/* ---- Tabs: one soft switch everywhere ------------------------------- */
+/* Tabs: one soft switch everywhere */
 
 .gm-skin .projects-toolbar,
 .gm-skin .expenses-toolbar {
@@ -190,7 +190,7 @@
   box-shadow: 0 1px 2px rgba(48, 47, 40, 0.12), 0 4px 10px -6px rgba(48, 47, 40, 0.2);
 }
 
-/* ---- Search boxes, fields, selects ---------------------------------- */
+/* Search boxes, fields, selects */
 
 .gm-skin .projects-search,
 .gm-skin .expenses-search,
@@ -216,7 +216,7 @@
   font-weight: 650;
 }
 
-/* ---- Buttons -------------------------------------------------------- */
+/* Buttons */
 
 .gm-skin .btn {
   border-radius: 12px;
@@ -244,7 +244,7 @@
   box-shadow: 0 1px 2px rgba(48, 47, 40, 0.08);
 }
 
-/* ---- Tables --------------------------------------------------------- */
+/* Tables */
 
 .gm-skin .users-table th,
 .gm-skin .tamper-table th {
@@ -282,7 +282,7 @@
   color: var(--color-ink-soft);
 }
 
-/* ---- Modals ---------------------------------------------------------- */
+/* Modals */
 
 .gm-skin .modal-overlay {
   background: rgba(28, 26, 23, 0.5);
@@ -298,7 +298,7 @@
   font-weight: 700;
 }
 
-/* ---- Notifications --------------------------------------------------- */
+/* Notifications */
 
 .gm-skin .notifications-group-label {
   font-size: var(--text-xs);
@@ -307,7 +307,7 @@
   text-transform: none;
 }
 
-/* ---- Expense pages: one accent, not blue and green ------------------- */
+/* Expense pages: one accent, not blue and green */
 
 .gm-skin .submit-expense-page[data-mode="split"] {
   --mode: #bf4307;
@@ -321,7 +321,7 @@
   color: #fff;
 }
 
-/* ---- Labels and empty states ---------------------------------------- */
+/* Labels and empty states */
 
 /* Small labels read as normal text, not shouting. */
 .gm-skin .limits-label,
@@ -388,7 +388,7 @@
   border-left-color: var(--gm-line);
 }
 
-/* ---- Expense pages: header switch ------------------------------------ */
+/* Expense pages: header switch */
 
 .gm-skin .mode-bar {
   padding: var(--space-3) var(--space-5);
@@ -418,7 +418,7 @@
   box-shadow: 0 -10px 24px -16px rgba(48, 47, 40, 0.3), var(--gm-shadow);
 }
 
-/* ---- Daily check-ins ------------------------------------------------- */
+/* Daily check-ins */
 
 .gm-skin .checkins-tabs {
   padding: 4px;
@@ -443,7 +443,7 @@
   letter-spacing: -0.02em;
 }
 
-/* ---- Open requests --------------------------------------------------- */
+/* Open requests */
 
 .gm-skin .open-requests-page {
   gap: var(--space-4);
@@ -527,7 +527,7 @@
   background: linear-gradient(90deg, #e06a26 0%, var(--color-brick) 100%);
 }
 
-/* ---- Phones ---------------------------------------------------------- */
+/* Phones */
 
 @media (max-width: 520px) {
   .gm-skin .open-requests-group {
@@ -552,7 +552,7 @@
   accent-color: var(--color-brick);
 }
 
-/* ---- Expenses: expanded row with icons and a clear action bar --------- */
+/* Expenses: expanded row with icons and a clear action bar */
 
 .gm-skin .expenses-ic {
   display: inline-block;
@@ -635,7 +635,7 @@
   background-position: 14px center;
 }
 
-/* ---- Expenses: each status reads apart ------------------------------- */
+/* Expenses: each status reads apart */
 
 .gm-skin .expenses-hint {
   margin-top: calc(-1 * var(--space-1));

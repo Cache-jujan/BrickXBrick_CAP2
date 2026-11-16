@@ -137,7 +137,7 @@
   font-weight: 600;
   color: var(--color-brick);
   text-decoration: none;
-  /* Rendered as a <button> now (opens the add-task modal) — strip the native
+  /* Rendered as a <button> now (opens the add-task modal), strip the native
      button chrome so it still reads as the inline link it was. */
   background: none;
   border: none;

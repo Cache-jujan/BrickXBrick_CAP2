@@ -25,7 +25,7 @@ const MONTH = new Intl.DateTimeFormat("en-PH", { month: "short", year: "numeric"
 
 // Per the Process spec: the web dashboard is for General Manager and
 // Project Manager (plus System Administrator for account management).
-// Site Manager and Purchaser are mobile-only roles — see /mobile app.
+// Site Manager and Purchaser are mobile-only roles: see /mobile app.
 const WEB_ROLES = ["General Manager", "Project Manager"];
 
 const RANGES = [3, 6, 12];
@@ -40,7 +40,7 @@ export function DashboardPage() {
   if (WEB_ROLES.includes(user.role)) {
     return <ProjectsOverview role={user.role} name={user.name} userId={user.id} />;
   }
-  // Site Manager and Purchaser have no web app — they're walled at the app
+  // Site Manager and Purchaser have no web app: they're walled at the app
   // entry (AppShell in App.jsx) and never reach a dashboard. This is just a
   // defensive fallback.
   return <Navigate to="/" replace />;
@@ -187,7 +187,7 @@ function ProjectsOverview({ role, name, userId }) {
     return () => { cancelled = true; };
   }, [canSeeAlerts]);
 
-  // A Project Manager only manages the projects assigned to them — scope
+  // A Project Manager only manages the projects assigned to them, scope
   // "their" numbers to that, mirroring assertProjectAccess on the backend.
   // A General Manager sees everything, same as GET /api/projects broadcast.
   const scopedProjects = role === "Project Manager"

@@ -14,7 +14,7 @@ import "./Sidebar.css";
 // Split receipt is the exception, so it is not in the sidebar: it is a link on the Submit expense page.
 
 // alerts: "live" reads the badge count from GET /api/blockchain/alerts (real
-// backend data — see FRONTEND_IMPLEMENTATION_TRACKER.md). Omit the key
+// backend data: see FRONTEND_IMPLEMENTATION_TRACKER.md). Omit the key
 // entirely for nav items that don't need a badge.
 const NAV_BY_ROLE = {
   "General Manager": [
@@ -91,8 +91,8 @@ export function Sidebar({ mobileOpen = false, onNavigate }) {
 
   const needsAlertCount = links.some((l) => l.alerts === "live");
 
-  // FUNCTION F12 — Blockchain Tamper Detection sidebar badge
-  // STATUS: IMPLEMENTED (frontend) — reads the existing, already-working
+  // FUNCTION F12: Blockchain Tamper Detection sidebar badge
+  // STATUS: IMPLEMENTED (frontend), reads the existing, already-working
   // GET /api/blockchain/alerts endpoint (open alerts only, per its own
   // WHERE resolvedAt IS NULL filter), so the count is always accurate as
   // of the last fetch.
