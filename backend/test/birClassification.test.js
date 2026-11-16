@@ -65,12 +65,16 @@ test("numeric input (not strings) is accepted", () => {
   assert.equal(classify({ tin: 123456789000, birPermitNumber: 123, birNumber: 4567 }).birValidationStatus, FORMAL);
 });
 
-// Known gaps. The TIN has a format check, but the permit and OR/SI numbers are
-// only checked for presence, so these receipts are currently marked tax-deductible.
-// They are marked `todo` so they document the gap without failing the suite;
-// turn them into plain tests once the team decides the validation rules.
-test("TODO: a placeholder permit number such as N/A should not count as Formal", { todo: true }, () => {
-  assert.equal(classify({ ...ALL, birPermitNumber: "N/A" }).birValidationStatus, INFORMAL);
+// The permit and OR/SI numbers are checked for presence and against a short
+// list of placeholders; like the TIN, they are not checked against any registry.
+test("a placeholder permit number such as N/A is not Formal and is named", () => {
+  for (const value of ["N/A", "n/a", "NA", "N-A", "none", "NIL", "TBA", "0", "000"]) {
+    assert.deepEqual(
+      classify({ ...ALL, birPermitNumber: value }),
+      { birValidationStatus: INFORMAL, missingBirFields: ["birPermitNumber"] },
+      value,
+    );
+  }
 });
 
 test("TIN must be 9 digits plus an optional 3-5 digit branch code", () => {
@@ -88,8 +92,26 @@ test("placeholder TINs (all zeros, one repeated digit) are not Formal", () => {
   }
 });
 
-test("TODO: an OR/SI number of 0 should not count as Formal", { todo: true }, () => {
-  assert.equal(classify({ ...ALL, birNumber: "0" }).birValidationStatus, INFORMAL);
+test("a placeholder OR/SI number such as 0 is not Formal and is named", () => {
+  for (const value of ["0", "00", "N/A", "none"]) {
+    assert.deepEqual(
+      classify({ ...ALL, birNumber: value }),
+      { birValidationStatus: INFORMAL, missingBirFields: ["birNumber"] },
+      value,
+    );
+  }
+});
+
+test("real-looking permit and OR/SI numbers that contain zeros or letters stay Formal", () => {
+  for (const value of ["0001234", "FP-0000", "OR 100", "NAB-123", "A0"]) {
+    assert.equal(classify({ ...ALL, birPermitNumber: value, birNumber: value }).birValidationStatus, FORMAL, value);
+  }
+});
+
+test("classifyBir gives the same answer on raw input, as the OCR scan path passes it", () => {
+  assert.equal(classifyBir({ tin: "123-456-789-000", birPermitNumber: "N/A", birNumber: "OR 4567" }).birValidationStatus, INFORMAL);
+  assert.equal(classifyBir({ tin: "123-456-789-000", birPermitNumber: "FP-0123", birNumber: " 0 " }).birValidationStatus, INFORMAL);
+  assert.equal(classifyBir({ tin: "123-456-789-000", birPermitNumber: "FP-0123", birNumber: "OR 4567" }).birValidationStatus, FORMAL);
 });
 
 // 2. the routes use the server's classification

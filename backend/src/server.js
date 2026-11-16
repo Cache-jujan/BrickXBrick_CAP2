@@ -1,9 +1,13 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { corsOptions } = require("./lib/corsOptions");
+const { makeRateLimiters } = require("./lib/rateLimits");
+const { createGracefulShutdown } = require("./lib/gracefulShutdown");
+const helmet = require("helmet");
 
 const { requireAuth } = require("./middleware/auth");
-const { query, withTransaction } = require("./lib/db");
+const { query, withTransaction, pool } = require("./lib/db");
 const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
 const adminUsers = require("./routes/adminUsers");
@@ -31,7 +35,23 @@ const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
 
 const app = express();
-app.use(cors());
+// Security headers (nosniff, frame denial, HSTS, no X-Powered-By, ...). The CSP
+// is off on purpose: this API only returns JSON and PDF bytes, never a page,
+// and the web app is served by Vercel, so a CSP here would protect nothing.
+app.use(helmet({ contentSecurityPolicy: false }));
+// Cloud Run puts exactly one proxy (Google's front end) between the client and
+// this app. Trusting one hop makes req.ip the real client address, which the
+// rate limiters below key on. Do not set this to `true`: any client could then
+// pick its own IP with an X-Forwarded-For header.
+app.set("trust proxy", 1);
+app.use(cors(corsOptions()));
+// Rate limits sit after cors, so a 429 still carries the CORS headers and the
+// browser shows the message, and before the body parsers, so a flood is turned
+// away without parsing its body. /health is outside /api and never limited.
+const rateLimits = makeRateLimiters();
+app.use("/api", rateLimits.general);
+app.use("/api/auth/login", rateLimits.login);
+app.use("/api/me/change-password", rateLimits.changePassword);
 // The report PDF route draws its own charts now, but a Reports page opened
 // before an update still sends its chart as a base64 PNG (up to ~1.5 MB), far
 // above the 100 kb default. The route ignores it; the higher limit for that one
@@ -110,6 +130,9 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
+// The background timers below are kept here so a SIGTERM can stop them (see the end of this file).
+const timers = [];
+
 // F12: automatically retry approved expenses that are not on the chain yet, every 60s.
 let retryRunning = false;
 async function retryPendingBlockchainWrites() {
@@ -162,7 +185,7 @@ async function retryPendingBlockchainWrites() {
         retryRunning = false;
     }
 }
-setInterval(retryPendingBlockchainWrites, 60_000);
+timers.push(setInterval(retryPendingBlockchainWrites, 60_000));
 
 // F12: proactively re-check secured expenses against the hash written to
 // the chain at approval, instead of waiting for a GM to click "Verify".
@@ -185,7 +208,7 @@ async function scanForTampering() {
         scanRunning = false;
     }
 }
-setInterval(scanForTampering, 180_000); // every 3 minutes
+timers.push(setInterval(scanForTampering, 180_000)); // every 3 minutes
 
 // F3/F5: schedule variance is otherwise only recomputed on task-create or
 // PM Acknowledge, so a milestone/task that goes stale with no activity
@@ -204,8 +227,21 @@ async function runScheduleVarianceSweep() {
         varianceSweepRunning = false;
     }
 }
-setInterval(runScheduleVarianceSweep, 120_000); // every 2 minutes
+timers.push(setInterval(runScheduleVarianceSweep, 120_000)); // every 2 minutes
 
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend listening on port ${PORT}`);
 });
+
+// Cloud Run sends SIGTERM on every redeploy and scale-down and kills the
+// container about 10 seconds later. Stop the timers, finish the requests and
+// the background pass in progress, close the DB pool, then exit
+// (lib/gracefulShutdown.js). Ctrl+C locally takes the same path.
+const shutdown = createGracefulShutdown({
+  server,
+  stopTimers: () => timers.forEach(clearInterval),
+  isBusy: () => retryRunning || scanRunning || varianceSweepRunning,
+  closeDb: () => pool.end(),
+});
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
