@@ -1,10 +1,10 @@
-// scheduleWindows.js — #5: non-blocking date-window warnings for milestones
+// scheduleWindows.js (#5): non-blocking date-window warnings for milestones
 // and tasks, by project phase.
 //
 // Planning work is expected inside [project.startDate, project.constructionStartDate].
 // Construction work is expected inside [project.constructionStartDate ?? project.startDate, project.endDate].
-// A date outside its phase's window is never rejected — the PM may have a
-// real reason — it's just flagged back to them. Missing project dates mean
+// A date outside its phase's window is never rejected, the PM may have a
+// real reason: it's just flagged back to them. Missing project dates mean
 // there's no window to check against, so no warning is produced.
 
 function toDate(value) {
@@ -14,7 +14,7 @@ function toDate(value) {
 }
 
 // phase: 'Planning' | 'Construction'. project: a row with startDate/
-// constructionStartDate/endDate (any casing — called with the lowercased
+// constructionStartDate/endDate (any casing: called with the lowercased
 // column names Postgres returns, e.g. project.startdate).
 function dateWindowWarning(phase, dueDate, project) {
     const due = toDate(dueDate);

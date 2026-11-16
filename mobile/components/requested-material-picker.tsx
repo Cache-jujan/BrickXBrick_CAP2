@@ -1,4 +1,4 @@
-// requested-material-picker.tsx — bottom-sheet list of the materials the
+// requested-material-picker.tsx: bottom-sheet list of the materials the
 // Site Managers requested (open Material Request tickets), so the Purchaser
 // can name a line item from the ticket instead of typing it or trusting OCR.
 //

@@ -242,7 +242,7 @@
   }
 }
 
-/* ---- Shared layout for Submit expense and Split receipt -------------------------
+/* Shared layout for Submit expense and Split receipt.
    Receipt on the left, details on the right, submit bar pinned to the bottom: on a laptop the
    whole job fits on one screen, with little or no scrolling. */
 .xp-layout {

@@ -1,9 +1,9 @@
-// sync.js — F10 Offline Operation & Data Synchronization.
+// sync.js: F10 Offline Operation & Data Synchronization.
 //
 // The mobile app queues actions taken while offline (in local SQLite) and,
 // on reconnect, POSTs them here as a batch. This endpoint replays each queued
 // action against the real server logic, so an offline submission is treated
-// exactly like an online one — it is just a delivery delay, never a way to
+// exactly like an online one: it is just a delivery delay, never a way to
 // bypass F9 fraud screening.
 //
 // Idempotency: every queued item carries a client-generated `uuid`. An expense
@@ -39,7 +39,7 @@ router.use(requireAuth);
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 
 // A rejection the client should NOT retry (business/validation failure).
-// Network errors never reach here — those fail the whole HTTP call and the
+// Network errors never reach here: those fail the whole HTTP call and the
 // client keeps the items PENDING_SYNC for automatic retry.
 class SyncReject extends Error {
   constructor(code, message) {
@@ -348,7 +348,7 @@ async function syncDailyCheckin(user, uuid, data) {
   }
 }
 
-// POST /api/sync — batch of queued offline actions.
+// POST /api/sync: batch of queued offline actions.
 // Body: { items: [ { uuid, type: "expense" | "task_update" | "daily_checkin", data: {...} }, ... ] }
 // Any signed-in user may call it; each item is checked against ITS OWN role
 // (expense: Purchaser, task_update and daily_checkin: Site Manager), so one wrong item never
@@ -400,7 +400,7 @@ router.post("/", async (req, res, next) => {
         } else if (err instanceof SyncReject) {
           rejected.push({ id: uuid, code: err.code, message: err.message });
         } else {
-          // Unexpected server error on THIS item — isolate it, keep going. It is NOT a
+          // Unexpected server error on THIS item: isolate it, keep going. It is NOT a
           // rejection (the phone treats those as final): a brief database problem must
           // not discard the user's work. Left in neither list, it stays pending.
           console.error("SYNC ITEM ERROR (left pending):", uuid, err);

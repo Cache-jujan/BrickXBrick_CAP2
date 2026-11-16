@@ -1,10 +1,10 @@
 // Regression tests for:
-//   D-01 — a milestone that goes past due with no task activity stayed
+//   D-01: a milestone that goes past due with no task activity stayed
 //          "On Track" forever because status was only ever recomputed on
 //          task-create or PM Acknowledge, never on the passage of time.
-//   D-08 — an overdue task under an on-track milestone never alerted,
+//   D-08: an overdue task under an on-track milestone never alerted,
 //          because only milestone-level dates were ever evaluated.
-//   D-10 — the schedule-variance alert text omitted the milestone name,
+//   D-10: the schedule-variance alert text omitted the milestone name,
 //          making multiple alerts on one project indistinguishable.
 //
 // sweepScheduleVariance/recalcMilestoneProgress take an injectable `client`
@@ -24,7 +24,7 @@ function daysFromNow(n) {
 
 // Minimal in-memory stand-in for the subset of SQL milestoneProgress.js
 // issues. Matches on the fixed query prefixes in src/lib/milestoneProgress.js
-// — if that file's queries change shape, these matchers need updating too.
+// if that file's queries change shape, these matchers need updating too.
 function makeFakeDb({ milestones = [], tasks = [], projects = [], generalManagers = [] }) {
   const state = {
     milestones: milestones.map((m) => ({ ...m })),
@@ -186,7 +186,7 @@ test("D-08: an overdue task under an on-track milestone alerts (UC-05-01 postcon
 
   await sweepScheduleVariance(client);
 
-  // Milestone itself stays On Track — it's 30 days out — but the overdue
+  // Milestone itself stays On Track: it's 30 days out, but the overdue
   // task alerts independently.
   assert.equal(client.state.milestones[0].status, "On Track");
 

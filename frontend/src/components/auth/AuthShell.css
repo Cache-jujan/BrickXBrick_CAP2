@@ -7,7 +7,7 @@
   background: #f6f4f1;
 }
 
-/* ---- Left: the story over a construction photo ----------------------- */
+/* Left: the story over a construction photo */
 
 .auth-story {
   position: relative;
@@ -115,7 +115,7 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* ---- Right: the form card -------------------------------------------- */
+/* Right: the form card */
 
 .auth-side {
   display: flex;
@@ -246,7 +246,7 @@
   height: 34px;
 }
 
-/* ---- Smaller screens -------------------------------------------------- */
+/* Smaller screens */
 
 @media (max-width: 980px) {
   .auth-screen {

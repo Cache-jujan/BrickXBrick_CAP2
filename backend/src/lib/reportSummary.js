@@ -1,4 +1,4 @@
-// reportSummary.js — F11 summary math as a pure function (no database).
+// reportSummary.js: F11 summary math as a pure function (no database).
 //
 // The SQL loader (added in R4) returns plain rows; buildSummary turns them
 // into the figures on the Reports page and the PDF. Money is added up in whole
@@ -205,11 +205,9 @@ function buildSummary(projects, spendRows, warningRows, now, period) {
   };
 }
 
-// ---------------------------------------------------------------------------
 // SQL loaders. queryFn is (text, params) => { rows }, so tests pass a fake.
 // DECIMAL and DATE columns are cast to text in SQL: amounts arrive exact and
 // dates arrive as YYYY-MM-DD, with no server-timezone Date objects.
-// ---------------------------------------------------------------------------
 
 function httpError(status, message, details) {
   const error = new Error(message);

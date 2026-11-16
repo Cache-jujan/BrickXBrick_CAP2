@@ -1,4 +1,4 @@
-// dailyCheckin.js — daily progress check-ins, shared by the online route
+// dailyCheckin.js: daily progress check-ins, shared by the online route
 // (routes/checkins.js) and the offline sync (routes/sync.js, type
 // "daily_checkin"). One rule set: an offline check-in is only a delivery delay.
 //
@@ -37,7 +37,7 @@ class CheckinError extends Error {
   }
 }
 
-// ---- time -------------------------------------------------------------------
+// time
 
 // A Date as Philippine calendar day + minutes since midnight.
 function manilaParts(date) {
@@ -99,7 +99,7 @@ function slotState({ slot, day, now, windows, submitted }) {
   return "Missed";
 }
 
-// ---- input ------------------------------------------------------------------
+// input
 
 function cleanText(value, field, { required, max }) {
   if (value === undefined || value === null || value === "") {
@@ -179,7 +179,7 @@ function normalizeCheckin(input, now = new Date()) {
   };
 }
 
-// ---- photos -----------------------------------------------------------------
+// photos
 
 // Only photos this server stored for THIS project count: checkins/<projectId>/...
 function photoKeyOk(url, projectId, keyFromUrl = r2.keyFromPublicUrl) {
@@ -199,7 +199,7 @@ async function checkinPhotoExists(url, projectId, deps = {}) {
   return objectExists(keyFromUrl(url));
 }
 
-// ---- submit -----------------------------------------------------------------
+// submit
 
 async function loadProject(query, projectId) {
   const result = await query(
@@ -339,7 +339,7 @@ async function submitCheckin({ user, input, verifyPhoto, now = new Date() }, dep
   }
 }
 
-// ---- Site Manager: today ---------------------------------------------------------
+// Site Manager: today
 
 /**
  * Today's three slots for every Active project this Site Manager runs.
@@ -434,7 +434,7 @@ async function loadCheckinDetail(user, checkinId, { query = db.query } = {}) {
   };
 }
 
-// ---- Project Manager: list + review ----------------------------------------------
+// Project Manager: list + review
 
 function addDaysIso(iso, days) {
   const [y, m, d] = iso.split("-").map(Number);

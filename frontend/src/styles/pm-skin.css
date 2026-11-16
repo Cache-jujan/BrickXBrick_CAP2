@@ -1,6 +1,6 @@
 /* Project Manager additions to the shared web skin (gm-skin.css). */
 
-/* ---- Tickets: tabs and chips follow the shared soft switch ---------------- */
+/* Tickets: tabs and chips follow the shared soft switch */
 
 .pm-skin .ticket-queue {
   max-width: none;
@@ -49,7 +49,7 @@
 .pm-skin .ticket-row-work { border-left-color: var(--color-terracotta); }
 .pm-skin .ticket-row-report { border-left-color: var(--color-border-strong); }
 
-/* ---- Project Manager dashboard: long peso totals fit their card --------- */
+/* Project Manager dashboard: long peso totals fit their card */
 
 .pm-dash .dash-kpi {
   gap: var(--space-3);

@@ -18,7 +18,7 @@ import "./ReportsPage.css";
 
 const STAMP_OPTIONS = { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" };
 
-// FUNCTION F11 — Financial Analytics and Reporting (General Manager only).
+// FUNCTION F11: Financial Analytics and Reporting (General Manager only).
 // Generate asks GET /api/reports/summary; the server does all the maths, this
 // page only shows it. The cards describe the filters that were GENERATED, not
 // whatever is currently typed in the form, so a half-edited date never makes

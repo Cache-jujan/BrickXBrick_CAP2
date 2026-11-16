@@ -1,4 +1,4 @@
-// db.js — one shared Postgres connection pool for the whole app.
+// db.js: one shared Postgres connection pool for the whole app.
 const { Pool, types, defaults } = require("pg");
 
 // All TIMESTAMP columns are "without time zone" and filled by NOW(), which

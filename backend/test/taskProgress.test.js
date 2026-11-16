@@ -125,7 +125,7 @@ test("the note is optional and stored as null", async () => {
   assert.equal(log.note, null);
 });
 
-// ---- one submission waits for review at a time (Site Manager) ------------------------
+// one submission waits for review at a time (Site Manager)
 
 test("a submission already waiting for review blocks a new one: 409 AWAITING_REVIEW, no upload, no write", async () => {
   const t = makeDeps({ pending: true });

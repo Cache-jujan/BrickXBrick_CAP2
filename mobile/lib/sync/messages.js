@@ -1,4 +1,4 @@
-// F10 — plain-language text for sync results. Pure (no React, no database), so
+// F10: plain-language text for sync results. Pure (no React, no database), so
 // the wording rules can be tested.
 
 // Server reject codes a Site Manager can see on a task update, in words a
@@ -109,7 +109,7 @@ export function buildSyncSummary(result, t) {
   return { title: t ? t("sync.title") : "Sync complete", message: lines.join("\n") };
 }
 
-// ---- loading errors -------------------------------------------------------------
+// loading errors
 
 // iOS says "Network request failed"; Android (expo/fetch, OkHttp) says things like
 // "fetch failed: java.net.SocketException: Connection reset"; browsers say
@@ -164,7 +164,7 @@ export function plainError(error, fallback, t) {
   return typeof error === "string" && error ? error : fallback;
 }
 
-// ---- the status strip at the top of the app -------------------------------------
+// the status strip at the top of the app
 
 export const SENT_SHOW_MS = 5000;
 

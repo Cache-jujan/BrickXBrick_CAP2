@@ -3,7 +3,7 @@
 //   GET  /api/legal          anyone (no sign-in): the current text and version,
 //                            so the login page can link to it
 //   GET  /api/legal/status   signed-in user: have I accepted the current version?
-//   POST /api/legal/accept   signed-in user: body { version } — records the
+//   POST /api/legal/accept   signed-in user: body { version }, records the
 //                            acceptance with the time, IP address and device
 //
 // The web and mobile apps block everything else until the current version

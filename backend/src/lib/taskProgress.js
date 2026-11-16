@@ -1,4 +1,4 @@
-// taskProgress.js — F5 task progress submission, shared by the online route
+// taskProgress.js: F5 task progress submission, shared by the online route
 // (POST /api/tasks/:id/progress) and the F10 offline sync (routes/sync.js).
 //
 // One rule set: an offline submission is only a delivery delay, so both paths

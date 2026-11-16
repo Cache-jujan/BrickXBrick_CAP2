@@ -1,4 +1,4 @@
-// adminUsers.js — F1 account actions. System Administrator only.
+// adminUsers.js: F1 account actions. System Administrator only.
 const express = require("express");
 const { query } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
@@ -10,6 +10,7 @@ const { roleSlug } = require("../lib/displayName");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { LIMITS, InputError, text } = require("../lib/inputRules");
+// Only Gmail addresses are accepted here: 6 to 30 letters, digits or dots before @gmail.com.
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
 
 const router = express.Router();
@@ -184,7 +185,7 @@ router.post("/:id/unlock", async (req, res) => {
   res.json(result.rows[0]);
 });
 
-// SEND PASSWORD EMAIL — "Enforce change password upon login" (adviser, F1).
+// SEND PASSWORD EMAIL: "Enforce change password upon login" (adviser, F1).
 // The System Administrator never types or sees a password. This sends the
 // user an email link to set their own password at /set-password:
 //   - account never confirmed (invite not used yet) -> the invite is sent again

@@ -55,7 +55,7 @@ export function useOfflineStrip() {
   return { visible, height };
 }
 
-// 10.2 — one strip at the top of every screen for the offline queue:
+// 10.2: one strip at the top of every screen for the offline queue:
 // offline (with the queued count), sending, waiting to retry, or all sent.
 export function OfflineBanner() {
   const state = useBannerState();

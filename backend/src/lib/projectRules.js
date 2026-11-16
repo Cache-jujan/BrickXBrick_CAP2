@@ -1,4 +1,4 @@
-// projectRules.js — F2 project lifecycle and manager-assignment rules.
+// projectRules.js: F2 project lifecycle and manager-assignment rules.
 //
 // Pure functions first (unit-tested in test/projectRules.test.js), then the
 // helpers that need a database. Every DB helper takes `runQuery` (or a
@@ -8,7 +8,7 @@
 //   - Lifecycle dates, type, location: adviser consultation (Oct 2026), item 3
 //   - One open project per PM, three per SM, Consolacion service area:
 //     pilot client answers (Oct 2026); limits live in system_settings
-//   - Pre-construction assignment: adviser item 2 — PM is required at
+//   - Pre-construction assignment: adviser item 2, PM is required at
 //     creation, SM is required before the project can be activated
 
 const PROJECT_TYPES = [
@@ -170,9 +170,7 @@ function assertStatusTransition(from, to) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Database helpers
-// ---------------------------------------------------------------------------
 
 async function loadProjectSettings(runQuery) {
   const result = await runQuery(
@@ -256,7 +254,7 @@ async function loadManagerWorkload(runQuery, role, { excludeProjectId = null, se
 /**
  * Throws unless `userId` is an active user with `role` who can take one more
  * project. Locks the user row (FOR UPDATE) so two GMs assigning the same
- * manager at the same moment can't both get past the limit — call it with
+ * manager at the same moment can't both get past the limit, call it with
  * the transaction client.
  */
 async function assertManagerAvailable(client, { userId, role, excludeProjectId = null, settings }) {

@@ -1,7 +1,7 @@
 // Shared notification presentation for mobile: per-type icon + accent colour,
 // relative time, day-grouping, and tap routing. Mirrors
 // frontend/src/utils/notificationMeta.js so the same event looks and routes
-// the same way on web and mobile — just rendered with IconSymbol instead of
+// the same way on web and mobile: just rendered with IconSymbol instead of
 // inline SVGs.
 import type { Href } from "expo-router";
 
@@ -100,13 +100,13 @@ export function groupByDay(notifications: AppNotification[]): [string, AppNotifi
 }
 
 // Where tapping a notification should go, for the given role. Returns null
-// for "mark read only, no navigation" — matches the web app's routing map.
+// for "mark read only, no navigation", matches the web app's routing map.
 // Return type is Href (not string): with Expo Router's typed routes generated
-// (.expo/types/router.d.ts — present once `expo start` has run locally), a
+// (.expo/types/router.d.ts: present once `expo start` has run locally), a
 // function that returns plain `string` gets widened past the generated route
 // union and every call site's router.push/replace fails to type-check. Each
-// of these is a route we know is valid, so it's asserted `as Href` here —
-// once, at the source — rather than cast at every call site.
+// of these is a route we know is valid, so it's asserted `as Href` here,
+// once, at the source, rather than cast at every call site.
 export function routeForNotification(n: AppNotification, role: "Purchaser" | "Site Manager"): Href | null {
   const type = n.relatedentitytype;
   if (type === "Ticket") {
@@ -123,7 +123,7 @@ export function routeForNotification(n: AppNotification, role: "Purchaser" | "Si
     // A finished receipt scan: the Purchaser's Turn In tab lists them; a Site Manager's receipts are on the Receipt tab.
     return (role === "Purchaser" ? "/turn-in" : "/(tabs)") as Href;
   }
-  // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet —
+  // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet,
   // mark read only (mirrors the web app's "Unknown -> mark read only").
   return null;
 }

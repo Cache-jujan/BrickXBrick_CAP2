@@ -49,8 +49,8 @@ const EMPTY_FORM = {
 // budget (post-consultation fix, Nov 2026). The caller decides what happens on
 // success / cancel.
 //
-// onSuccess(ticket, { isPM }) — called after the ticket is created.
-// onCancel()                  — called when the user backs out.
+// onSuccess(ticket, { isPM }), called after the ticket is created.
+// onCancel(): called when the user backs out.
 export function TicketForm({ onSuccess, onCancel, onClose }) {
   const { user } = useAuth();
   const { t, tv } = useLocale();
@@ -275,7 +275,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const isMaterialReq = form.ticketType === "Material Request";
   const isWorkItem = form.ticketType === "Work Item";
   const notInBom = isMaterialReq && form.bomItemID === NOT_IN_BOM;
-  // An on-BOM item carries its own unit — show it read-only so it's clear the
+  // An on-BOM item carries its own unit: show it read-only so it's clear the
   // request will use the BOM's unit, not a free choice.
   const selectedBomItem = bomItems.find((it) => it.bomItemId === form.bomItemID);
   const onBomUnit = isMaterialReq && form.bomItemID && !notInBom ? selectedBomItem?.unit : null;

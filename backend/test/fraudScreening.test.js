@@ -164,9 +164,7 @@ test("ticket mismatch is detected", async () => {
   assert.equal(result, true);
 });
 
-// ============================================================
 // T2c-L3: BOM-aware material matching tests
-// ============================================================
 
 test("T2c-L3: BOM-linked ticket + matching expense line item = no mismatch", async () => {
   const bomItemID = "550e8400-e29b-41d4-a716-446655440000";
@@ -503,11 +501,9 @@ test("more than requested is a mismatch even for an allocation portion", async (
   assert.equal(result, true);
 });
 
-// ============================================================
 // Unlinked receipt line that reads exactly the requested material
 // (the OCR read "CEMENT" but the purchaser didn't tap
 // "Match to a requested material")
-// ============================================================
 
 const PADEENA_TICKET = {
   tickettype: "Material Request",
@@ -599,9 +595,7 @@ test("lineitems stored as a JSON string are still read", async () => {
 
   assert.equal(result, false);
 });
-// ============================================================
 // Quantity is the requested material's lines only, not the whole receipt
-// ============================================================
 
 test("other materials and fee lines on the receipt do not trigger a quantity mismatch", async () => {
   const screening = createFraudScreening({

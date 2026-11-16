@@ -1,6 +1,6 @@
 const { notifyTicketTransition } = require("./notify");
 
-// ticketTransitions.js — F4 ticket-status state machine.
+// ticketTransitions.js: F4 ticket-status state machine.
 // Pending is the only starting state; Resolved/Rejected are terminal.
 //
 // Pending -> Acknowledged or Rejected
@@ -9,7 +9,7 @@ const { notifyTicketTransition } = require("./notify");
 // Note: this table only enforces which STATES a transition may occur between.
 // It does not know WHO is making the transition. routes/tickets.js applies
 // additional role-based preconditions on top of this (e.g. a PM may only
-// reject from Pending, never from Acknowledged) — see the /reject handler.
+// reject from Pending, never from Acknowledged), see the /reject handler.
 
 const ALLOWED_TRANSITIONS = {
     Pending: ["Acknowledged", "Rejected"],
@@ -35,7 +35,7 @@ function assertLegalTransition(currentStatus, targetStatus) {
 // Side effect: a status change to Acknowledged / Resolved / Rejected also
 // writes the matching notifications (same client, same transaction). Putting
 // this here means every path that moves a ticket notifies the right people
-// with no per-route wiring — the F8 allocation resolve included. The initial
+// with no per-route wiring: the F8 allocation resolve included. The initial
 // Pending transition produces no notification; the create path handles the
 // "new request" notice (it knows about batching). Never notifies the actor.
 async function logTransition(client, { ticketId, fromStatus, toStatus, changedBy }) {

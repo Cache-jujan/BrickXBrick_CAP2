@@ -1,4 +1,4 @@
-// tickets.js — F4 ticket creation, acknowledgment, and status transitions.
+// tickets.js: F4 ticket creation, acknowledgment, and status transitions.
 
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
@@ -72,7 +72,7 @@ async function getTicket(ticketId) {
     return result.rows[0];
 }
 
-// POST / — create a ticket.
+// POST /: create a ticket.
 //
 // Two creators:
 //   Site Manager    raises a request on their own assigned project. It starts
@@ -160,7 +160,7 @@ async function createTicketRecord(client, user, body) {
         const isMaterialReq = ticketType === "Material Request";
         const isWorkItem = ticketType === "Work Item";
 
-        // Reports are the Site Manager's issue-report channel — the PM resolves
+        // Reports are the Site Manager's issue-report channel, the PM resolves
         // them, not creates them.
         if (isPM && ticketType === "Report") {
             const err = new Error("Project Managers create Material Request or Work Item tickets; Reports are raised by the Site Manager");
@@ -242,7 +242,7 @@ async function createTicketRecord(client, user, body) {
         }
 
         // Tickets (and the purchases behind them) start only once the project
-        // is Active — Draft is the planning stage before the BOM is approved.
+        // is Active: Draft is the planning stage before the BOM is approved.
         if (project.status !== "Active") {
             const err = new Error(`Tickets can only be created on an Active project; this project is ${project.status}`);
             err.status = 409;
@@ -455,7 +455,7 @@ async function createTicketRecord(client, user, body) {
         }
 }
 
-// POST / — create a single ticket (SM request, or PM direct create).
+// POST /: create a single ticket (SM request, or PM direct create).
 router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
         const ticket = await withTransaction(async (client) => {
@@ -469,7 +469,7 @@ router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res
     }
 });
 
-// POST /batch — create several tickets atomically (all succeed or none).
+// POST /batch: create several tickets atomically (all succeed or none).
 // Used by the Site Manager's mobile multi-card form. Mixed ticket types are
 // allowed; each item is validated exactly like a single create.
 router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
@@ -500,7 +500,7 @@ router.post("/batch", requireRole("Site Manager", "Project Manager"), async (req
     }
 });
 
-// GET /vendors — trusted vendors available for procurement tickets (SM or PM).
+// GET /vendors: trusted vendors available for procurement tickets (SM or PM).
 router.get("/vendors", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
     try {
         const result = await query(
@@ -514,11 +514,11 @@ router.get("/vendors", requireRole("Site Manager", "Project Manager"), async (re
     }
 });
 
-// GET /assigned — tickets currently routed to the calling Purchaser.
+// GET /assigned: tickets currently routed to the calling Purchaser.
 // Pending tickets are naturally excluded: assignedTo is NULL until a PM
 // acknowledges and assigns a Purchaser.
 // expenseCount/expenseTotal: same non-blocking double-capture tightening as
-// /submitted (see comment there) — Purchasers can also add more than one
+// /submitted (see comment there): Purchasers can also add more than one
 // expense to a ticket, this just surfaces that one is already captured.
 router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     try {
@@ -545,7 +545,7 @@ router.get("/assigned", requireRole("Purchaser"), async (req, res, next) => {
     }
 });
 
-// GET /expense-linkable — Acknowledged or Resolved procurement tickets with quantity left, for GM/PM expense entry.
+// GET /expense-linkable: Acknowledged or Resolved procurement tickets with quantity left, for GM/PM expense entry.
 // PM results are restricted in SQL to projects managed by the calling PM.
 router.get("/expense-linkable", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
@@ -596,7 +596,7 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
     }
 });
 
-// GET /pending — pending tickets for projects owned by the calling PM.
+// GET /pending: pending tickets for projects owned by the calling PM.
 // The project scope is enforced in SQL so a PM cannot see another PM's queue.
 router.get("/pending", requireRole("Project Manager"), async (req, res, next) => {
     try {
@@ -615,7 +615,7 @@ router.get("/pending", requireRole("Project Manager"), async (req, res, next) =>
     }
 });
 
-// GET /managed — all tickets on the calling PM's projects, filtered by a
+// GET /managed: all tickets on the calling PM's projects, filtered by a
 // status group, with the context the PM needs to act:
 //   ?status=Pending       -> "Needs action" queue (same rows as /pending)
 //   ?status=Acknowledged  -> "With purchaser"
@@ -692,7 +692,7 @@ router.get("/managed", requireRole("Project Manager"), async (req, res, next) =>
     }
 });
 
-// GET /purchasers — who a PM can assign a purchase to: the active Purchasers.
+// GET /purchasers: who a PM can assign a purchase to: the active Purchasers.
 // With ?projectID=<id> for a project this PM manages, that project's active Site
 // Manager is added to the end of the list (role "Site Manager"), because the PM can
 // hand a purchase straight to them instead of waiting for their request.
@@ -725,14 +725,14 @@ router.get("/purchasers", requireRole("Project Manager"), async (req, res, next)
     }
 });
 
-// GET /submitted — tickets created by the calling user (Site Manager view).
+// GET /submitted: tickets created by the calling user (Site Manager view).
 // No role gate: the WHERE filter already scopes results to the caller's own
 // tickets, so a PM/Purchaser hitting this just gets an empty list.
 //
 // Also returns, per ticket: resubmittedById (the newer ticket that
-// resubmitted this one, if any — lets My Requests show "Resubmitted ✓"
+// resubmitted this one, if any, lets My Requests show "Resubmitted ✓"
 // instead of a "Fix & resubmit" button) and expenseCount/expenseTotal
-// (non-rejected expenses already captured against it — a ticket CAN
+// (non-rejected expenses already captured against it, a ticket CAN
 // legitimately have more than one, so this is display-only: it flips the
 // card's action from "+ Add Expense" to "+ Add another expense", never a
 // backend block).
@@ -761,7 +761,7 @@ router.get("/submitted", async (req, res, next) => {
     }
 });
 
-// PATCH /:id/acknowledge — PM only, Pending -> Acknowledged.
+// PATCH /:id/acknowledge, PM only, Pending -> Acknowledged.
 // This is the point at which a specific Purchaser is assigned to the ticket.
 router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res, next) => {
     try {
@@ -862,10 +862,10 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
     }
 });
 
-// PATCH /:id/resolve — Material Request/Work Item: the assigned buyer only (a
+// PATCH /:id/resolve, Material Request/Work Item: the assigned buyer only (a
 // Purchaser, or the project's Site Manager when the PM assigned them),
 // Acknowledged -> Resolved. Report: Project Manager only, Pending ->
-// Resolved directly — Report never goes through /acknowledge, so this is
+// Resolved directly: Report never goes through /acknowledge, so this is
 // intentionally NOT run through assertLegalTransition (that table only
 // knows Acknowledged -> Resolved; Pending -> Resolved is a Report-only
 // exception, not a general state-machine rule).
@@ -941,7 +941,7 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site M
     }
 });
 
-// PATCH /:id/reject — PM (Pending only) or assigned Purchaser (Acknowledged only).
+// PATCH /:id/reject, PM (Pending only) or assigned Purchaser (Acknowledged only).
 router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
@@ -1019,13 +1019,13 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
     }
 });
 
-// PATCH /:id — the Project Manager edits a Site Manager's pending ticket
+// PATCH /:id, the Project Manager edits a Site Manager's pending ticket
 // before acting on it (fix a quantity, add the vendor the SM didn't know, etc).
 // Declared after the specific /:id/* routes so it only matches a bare id.
 //
 // Scope: PM-only, on a project they manage, and only while the ticket is still
 // Pending. Editable fields depend on the ticket's shape; the BOM linkage itself
-// (which BOM item, or on-BOM vs not-in-BOM) is NOT editable here — an on-BOM
+// (which BOM item, or on-BOM vs not-in-BOM) is NOT editable here, an on-BOM
 // Material Request keeps its BOM-derived materialType and unit locked.
 router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
     try {
@@ -1062,7 +1062,7 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
 
         if (isMaterialReq || isWorkItem) {
             set("quantity", cleanQuantity(quantity));
-            // Vendor is optional (nullable) — only the PM sets it.
+            // Vendor is optional (nullable): only the PM sets it.
             set("vendorName", text(vendorName, { field: "vendorName", label: "Vendor", max: LIMITS.vendorName }));
         }
 

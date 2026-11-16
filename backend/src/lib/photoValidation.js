@@ -1,4 +1,4 @@
-// photoValidation.js — D-07: the client-declared MIME type was the only
+// photoValidation.js (D-07): the client-declared MIME type was the only
 // check on evidence photos, so a text file, an HTML file, a 0-byte file and
 // a corrupt JPEG were all accepted as long as the upload said image/jpeg or
 // image/png. Check the file's actual magic bytes instead of trusting the

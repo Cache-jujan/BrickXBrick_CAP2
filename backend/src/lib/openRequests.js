@@ -1,4 +1,4 @@
-// openRequests.js — the open Material Requests a split receipt can fill.
+// openRequests.js: the open Material Requests a split receipt can fill.
 //
 // An open request is an Acknowledged Material Request whose remaining
 // quantity is above 0:

@@ -19,7 +19,7 @@ import "./Topbar.css";
 const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
 const DROPDOWN_LIMIT = 8;
 
-// Purely cosmetic label map for the topbar title/breadcrumb — does not
+// Purely cosmetic label map for the topbar title/breadcrumb, does not
 // affect routing. Falls back to a generic label for any unmatched or
 // dynamic (":id") route rather than showing nothing.
 // Each page renders its own <h1>, so the top bar only shows where the page
@@ -87,7 +87,7 @@ export function Topbar({ onMenuClick }) {
   }, []);
 
   // Poll unread count in the background so the badge stays current even
-  // without opening the dropdown. Unchanged from the prior implementation —
+  // without opening the dropdown. Unchanged from the prior implementation,
   // cancelled/cleared on unmount, so no leaked interval or stale-state write.
   useEffect(() => {
     let cancelled = false;

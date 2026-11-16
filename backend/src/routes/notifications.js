@@ -1,6 +1,6 @@
-// notifications.js — F3-adjacent: read/ack notifications created by
+// notifications.js: F3-adjacent: read/ack notifications created by
 // milestoneProgress.js (ScheduleVarianceAlert) and, if added later, other
-// notification producers. Recipient-scoped only — no cross-user access.
+// notification producers. Recipient-scoped only: no cross-user access.
 const express = require("express");
 const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
@@ -8,7 +8,7 @@ const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
 router.use(requireAuth);
 
-// GET /mine — the calling user's notifications, newest first.
+// GET /mine: the calling user's notifications, newest first.
 //   ?unreadOnly=true   only unread
 //   ?before=<ISO ts>   keyset page: rows older than this createdAt (for "load more")
 //   ?limit=<n>         page size (default 30, max 100)
@@ -29,7 +29,7 @@ router.get("/mine", async (req, res, next) => {
         params.push(limit);
 
         // Milestone/Task notifications carry the milestone's or task's own id
-        // as relatedEntityId (see milestoneProgress.js) — join through to the
+        // as relatedEntityId (see milestoneProgress.js): join through to the
         // project id so the web app's notifications can deep-link straight to
         // "that project's milestones", the same way the Ticket join does.
         const result = await query(
@@ -64,7 +64,7 @@ router.get("/mine", async (req, res, next) => {
     }
 });
 
-// GET /unread-count — lightweight endpoint for a bell badge, avoids
+// GET /unread-count: lightweight endpoint for a bell badge, avoids
 // pulling the full list just to show a number.
 router.get("/unread-count", async (req, res, next) => {
     try {
@@ -78,7 +78,7 @@ router.get("/unread-count", async (req, res, next) => {
     }
 });
 
-// PATCH /:id/read — mark one notification read. Scoped to the owner —
+// PATCH /:id/read, mark one notification read. Scoped to the owner,
 // can't mark someone else's notification as read.
 router.patch("/:id/read", async (req, res, next) => {
     try {
@@ -97,7 +97,7 @@ router.patch("/:id/read", async (req, res, next) => {
     }
 });
 
-// PATCH /read-all — mark every unread notification for the caller as read.
+// PATCH /read-all: mark every unread notification for the caller as read.
 router.patch("/read-all", async (req, res, next) => {
     try {
         await query(

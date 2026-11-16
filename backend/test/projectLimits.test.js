@@ -1,4 +1,4 @@
-// F2 — manager workload and editable assignment limits (adviser item 4).
+// F2: manager workload and editable assignment limits (adviser item 4).
 //   - each open project in the workload carries its progress %
 //   - every manager (free or busy) carries their open projects and counts
 //   - the GM can read and change the limits (1–10); others can't; bad values are refused

@@ -130,7 +130,7 @@ function reset({ user = { id: "user-1", role: "Purchaser" } } = {}) {
   currentUser = user;
 }
 
-// ---- 1. screening failure -> Screening_Failed flag, still 201 ---------------
+// 1. screening failure -> Screening_Failed flag, still 201
 
 test("POST /expenses: screening throws -> 201 with the saved expense and a Screening_Failed flag", async () => {
   const server = await startServer();
@@ -182,7 +182,7 @@ test("POST /expenses: screening AND the failure flag both fail -> still 201", as
   }
 });
 
-// ---- 2. resubmit keeps the PM's resolved flags -------------------------------
+// 2. resubmit keeps the PM's resolved flags
 
 test("resubmit: deletes only still-open system flags, so Rejected flags stay as history", async () => {
   const server = await startServer();
@@ -219,7 +219,7 @@ test("resubmit: a screening failure after the edit still returns the updated exp
   }
 });
 
-// ---- 3. resubmit stays Purchaser-only and owner-only -------------------------
+// 3. resubmit stays Purchaser-only and owner-only
 
 test("resubmit: a Purchaser can resubmit their own Rejected expense", async () => {
   const server = await startServer();
@@ -270,7 +270,7 @@ test("resubmit: an expense that is not Rejected cannot be resubmitted (409)", as
     server.close();
   }
 });
-// ---- strict budget (lib/ticketBudget.js) ---------------------------------------
+// strict budget (lib/ticketBudget.js)
 
 test("POST /expenses: more than the remaining budget is refused with OVER_BUDGET and nothing is saved", async () => {
   const server = await startServer();
@@ -335,7 +335,7 @@ test("POST /expenses: an expense with no ticketID is refused for every role", as
   }
 });
 
-// ---- resubmit: strict budget, and a split portion's allocation row ------------
+// resubmit: strict budget, and a split portion's allocation row
 
 test("resubmit: over what is left of the request is refused, nothing is saved", async () => {
   const server = await startServer();

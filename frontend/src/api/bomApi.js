@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-// F2 Bill of Materials — /api/projects/:projectId/bom (see backend/src/routes/bom.js)
+// F2 Bill of Materials: /api/projects/:projectId/bom (see backend/src/routes/bom.js)
 
 // GM or the owning PM. { projectId, projectStatus, projectBudget, bom: null | {...} }
 export async function getBom(projectId) {

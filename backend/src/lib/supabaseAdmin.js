@@ -1,4 +1,4 @@
-// supabaseAdmin.js — Supabase client using the SERVICE-ROLE key.
+// supabaseAdmin.js: Supabase client using the SERVICE-ROLE key.
 // Backend-only. This key can create/delete auth users. Never ship to browser.
 const { createClient } = require("@supabase/supabase-js");
 const supabaseAdmin = createClient(

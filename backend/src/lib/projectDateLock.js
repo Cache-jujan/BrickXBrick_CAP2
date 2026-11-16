@@ -1,4 +1,4 @@
-// projectDateLock.js — the target date of development and the target date of
+// projectDateLock.js: the target date of development and the target date of
 // construction are locked once a project leaves Draft (Nov 2026 refinement).
 //
 // While a project is in Draft the GM can still move them freely: planning,
@@ -7,7 +7,7 @@
 // anyone, the General Manager included. The target date of completion is NOT
 // locked: it is the one date that can still move once work has started.
 //
-// Completed / Cancelled / Archived projects never reach this check — the edit
+// Completed / Cancelled / Archived projects never reach this check, the edit
 // route already refuses them with its own 409.
 
 const { httpError } = require("./projectRules");

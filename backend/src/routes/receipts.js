@@ -1,4 +1,4 @@
-// receipts.js — F6 receipt capture + OCR extraction.
+// receipts.js: F6 receipt capture + OCR extraction.
 //
 // Returns a draft in the exact shape POST /expenses expects, so the review
 // screen can correct the low-confidence fields and post it straight back.
@@ -32,7 +32,7 @@ const SCAN_ROLES = ["Purchaser", "Site Manager", "General Manager", "Project Man
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Every route here touches OCR quota and writes files to disk — none of it
+// Every route here touches OCR quota and writes files to disk, none of it
 // should be reachable unauthenticated.
 router.use(requireAuth);
 

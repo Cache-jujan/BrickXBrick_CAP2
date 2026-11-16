@@ -1,4 +1,4 @@
-// F6.3 — PDF receipts go to Vision files:annotate, not images:annotate.
+// F6.3: PDF receipts go to Vision files:annotate, not images:annotate.
 // A fake Vision client stands in for Google, so these run offline.
 const test = require("node:test");
 const assert = require("node:assert/strict");

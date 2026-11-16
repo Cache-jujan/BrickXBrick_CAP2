@@ -1,4 +1,4 @@
-// F10 — the phone-side photo helpers for queued task submissions.
+// F10: the phone-side photo helpers for queued task submissions.
 //
 // A queued update cannot carry its photo inside the JSON sync batch, so on
 // reconnect each photo is uploaded first (POST /api/tasks/:id/photo) and the

@@ -1,4 +1,4 @@
-// projectHold.js — a Suspended project takes no new work.
+// projectHold.js: a Suspended project takes no new work.
 //
 // Requests, purchases, check-ins and offline syncs already need an Active
 // project, so a hold stops them. Task progress had no project check, so this is

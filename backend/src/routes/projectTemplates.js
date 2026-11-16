@@ -1,4 +1,4 @@
-// projectTemplates.js — F2: the start screen for "New project".
+// projectTemplates.js (F2): the start screen for "New project".
 //
 // General Manager only. Read-only: templates are seeded by migration and are
 // never edited from the app. Nothing here creates a project; POST /api/projects
@@ -124,7 +124,7 @@ router.get("/copy-sources/:projectId", async (req, res) => {
   }
 });
 
-// Body: { start, startDate, constructionStartDate, endDate } — the same `start`
+// Body: { start, startDate, constructionStartDate, endDate }, the same `start`
 // the create call will send. Dates may be entered but unsaved, so nothing is stored.
 router.post("/preview", async (req, res) => {
   try {

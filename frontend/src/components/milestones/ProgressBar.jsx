@@ -1,7 +1,7 @@
 import "./ProgressBar.css";
 
 // Milestone status is server-derived (deriveStatus in milestoneProgress.js)
-// from due-date proximity + completion % — never set by the frontend.
+// from due-date proximity + completion %: never set by the frontend.
 // This just picks a fill color to match Badge's tone for the same status.
 const FILL_TONE = {
   "On Track": "active",

@@ -55,7 +55,7 @@ export function quickRanges(now = new Date()) {
   ];
 }
 
-// ---- project dates -------------------------------------------------------------
+// project dates
 // The projects list returns DATE columns as ISO timestamps. Read the local
 // calendar day, the same way the Projects pages do.
 export function projectDay(value) {

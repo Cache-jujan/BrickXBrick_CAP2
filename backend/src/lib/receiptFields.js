@@ -1,4 +1,4 @@
-// receiptFields.js — the single translation point between parser.js output
+// receiptFields.js: the single translation point between parser.js output
 // and the `expenses` table, plus the canonical aliased column list.
 //
 // Why this file exists:
@@ -37,7 +37,7 @@ const EXPENSE_COLUMNS = `
   submitnote           AS "submitNote"
 `;
 
-// numeric(12,2) comes back from pg as a STRING, and that is correct — JS
+// numeric(12,2) comes back from pg as a STRING, and that is correct, JS
 // floats can't hold pesos exactly. Leave amounts as strings end-to-end;
 // use integer centavos if you ever need arithmetic (F11).
 
@@ -57,7 +57,7 @@ function resolveUnitPrice(item) {
  * Drop line items the expenses validator would reject, rather than handing
  * the client a draft that 400s on submit. normalizeAmount() returns null on
  * a value it couldn't read, and the four-column regex can match a row whose
- * description is junk — both get filtered out here. Anything dropped is
+ * description is junk: both get filtered out here. Anything dropped is
  * re-added by the user through the existing "+ Add item" flow.
  */
 function normalizeLineItems(rawItems) {
@@ -129,7 +129,7 @@ function isValidPhTin(value) {
  * F7 classification. Presence check on the three BIR-required fields, plus a
  * format check on the TIN; it does NOT verify a TIN is real.
  *
- * This runs server-side on submit, not just on scan — birValidationStatus
+ * This runs server-side on submit, not just on scan, birValidationStatus
  * decides what lands in the BIR tax-deductible report (F11), so a client
  * must not be able to declare its own receipt Formal.
  */
@@ -201,8 +201,8 @@ function sameVendorValue(field, a, b) {
  * trusted vendor identity, so its values win (existing policy). Returns
  * what changed so the review screen can show it instead of silently
  * overwriting what the user sees on the paper receipt:
- *   autoFilled      — fields OCR left empty that the master list filled
- *   vendorConflicts — fields where OCR read a different value; the master
+ *   autoFilled: fields OCR left empty that the master list filled
+ *   vendorConflicts: fields where OCR read a different value; the master
  *                     value is kept and the OCR reading is reported
  * Pure: does not mutate the draft passed in.
  */

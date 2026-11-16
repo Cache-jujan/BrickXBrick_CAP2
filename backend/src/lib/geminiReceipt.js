@@ -1,4 +1,4 @@
-// geminiReceipt.js — F6 receipt OCR through Gemini (the only OCR engine).
+// geminiReceipt.js: F6 receipt OCR through Gemini (the only OCR engine).
 //
 // Gemini reads the image or PDF and returns structured JSON in one call, so
 // there is no rawText -> regex step. geminiJsonToParsed() maps that JSON onto
@@ -148,9 +148,7 @@ async function extractReceiptJson(buffer, mimeType, { gemini, model } = {}) {
   }
 }
 
-// ---------------------------------------------------------------------
-// Pure mapper — unit-tested without calling Google.
-// ---------------------------------------------------------------------
+// Pure mapper: unit-tested without calling Google.
 
 const PERMIT_TYPES = { ATP: "ATP", PTU: "PTU", PERMIT: "Permit" };
 

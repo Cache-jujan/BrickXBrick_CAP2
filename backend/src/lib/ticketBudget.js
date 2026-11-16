@@ -1,4 +1,4 @@
-// ticketBudget.js — the strict budget rules for a Material Request (post-consultation fix).
+// ticketBudget.js: the strict budget rules for a Material Request (post-consultation fix).
 //
 //   1. A request with no approved budget cannot be bought against.
 //   2. An expense can never be more than what is left of the approved budget

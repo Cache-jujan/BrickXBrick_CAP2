@@ -1,4 +1,4 @@
-// inputRules.js — one place for the rules every typed-in value must pass.
+// inputRules.js: one place for the rules every typed-in value must pass.
 //
 // Server-side validation is the authority (the web and phone checks only help
 // the user earlier). Each helper does the same four things the usual input

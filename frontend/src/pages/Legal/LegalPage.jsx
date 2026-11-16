@@ -16,7 +16,7 @@ import { LegalBrand, ReadingProgress, readingMinutes } from "./LegalChrome";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./LegalPages.css";
 
-// /legal — Terms of Use and Privacy Notice, readable by anyone (linked from
+// /legal: Terms of Use and Privacy Notice, readable by anyone (linked from
 // the login page and from the user menu). ?doc=privacy opens the Privacy tab.
 export function LegalPage() {
   const { status } = useAuth();

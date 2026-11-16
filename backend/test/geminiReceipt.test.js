@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const { geminiJsonToParsed, extractReceiptJson } = require("../src/lib/geminiReceipt");
 const { toExpenseDraft, classifyBir } = require("../src/lib/receiptFields");
 
-// FAKE receipt values only — see the confidentiality note in geminiReceipt.js.
+// FAKE receipt values only: see the confidentiality note in geminiReceipt.js.
 const fullReceipt = {
   storeName: "Sample Hardware Trading",
   tin: "111-222-333-00000",

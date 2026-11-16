@@ -39,7 +39,7 @@ const TIPS = [
   { key: "account.tip_4", Icon: RefreshGlyph },
 ];
 
-// /account — every signed-in user can set a username and change their password.
+// /account: every signed-in user can set a username and change their password.
 // Others see the username as "username.role".
 export function AccountPage() {
   const { user, markUsernameChanged, markAvatarChanged } = useAuth();

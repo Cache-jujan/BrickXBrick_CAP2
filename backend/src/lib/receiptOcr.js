@@ -1,4 +1,4 @@
-// receiptOcr.js — runs the OCR for POST /receipts/scan. Gemini is the only
+// receiptOcr.js: runs the OCR for POST /receipts/scan. Gemini is the only
 // engine: the main model, then the fallback model, then an empty draft for
 // manual entry. Gemini returns the parseReceiptText() shape, so the route
 // (and F7 / F8 behind it) see the same fields as before.

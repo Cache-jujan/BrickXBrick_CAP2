@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-// GET /api/expenses — optional project filter, e.g. listExpenses(projectId)
+// GET /api/expenses: optional project filter, e.g. listExpenses(projectId)
 export async function listExpenses(projectId) {
   const { data } = await apiClient.get("/api/expenses", {
     params: projectId ? { projectId } : undefined,
@@ -8,13 +8,13 @@ export async function listExpenses(projectId) {
   return data;
 }
 
-// GET /api/expenses/mine — Purchaser's own submitted expenses.
+// GET /api/expenses/mine: Purchaser's own submitted expenses.
 export async function listMyExpenses() {
   const { data } = await apiClient.get("/api/expenses/mine");
   return data;
 }
 
-// GET /api/expenses/:id — single expense detail.
+// GET /api/expenses/:id, single expense detail.
 export async function getExpense(id) {
   const { data } = await apiClient.get(`/api/expenses/${id}`);
   return data;
@@ -31,7 +31,7 @@ export async function rejectExpense(id, reason) {
   return data;
 }
 
-// PATCH /api/expenses/:id/resubmit — Purchaser resubmits a Rejected expense.
+// PATCH /api/expenses/:id/resubmit, Purchaser resubmits a Rejected expense.
 export async function resubmitExpense(id, payload) {
   const { data } = await apiClient.patch(
     `/api/expenses/${id}/resubmit`,
@@ -40,7 +40,7 @@ export async function resubmitExpense(id, payload) {
   return data;
 }
 
-// POST /api/receipts/scan — the form field must be named "file".
+// POST /api/receipts/scan: the form field must be named "file".
 export async function scanReceipt(file) {
   const fd = new FormData();
   fd.append("file", file);
@@ -63,13 +63,13 @@ export async function startReceiptScan(file, context) {
   return data;
 }
 
-// GET /api/receipts/scans — the caller's recent scans: Scanning, Ready (with the draft) or Failed.
+// GET /api/receipts/scans: the caller's recent scans: Scanning, Ready (with the draft) or Failed.
 export async function listReceiptScans() {
   const { data } = await apiClient.get("/api/receipts/scans");
   return data;
 }
 
-// DELETE /api/receipts/scans/:id — hides a scan (submitted, or discarded).
+// DELETE /api/receipts/scans/:id, hides a scan (submitted, or discarded).
 export async function dismissReceiptScan(scanID) {
   await apiClient.delete(`/api/receipts/scans/${scanID}`);
 }
@@ -79,7 +79,7 @@ export async function submitExpense(payload) {
   return data;
 }
 
-// GET /api/expenses/flagged — Pending expenses with unresolved fraud flags.
+// GET /api/expenses/flagged: Pending expenses with unresolved fraud flags.
 export async function listFlaggedExpenses() {
   const { data } = await apiClient.get("/api/expenses/flagged");
   return data;

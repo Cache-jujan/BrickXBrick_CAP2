@@ -1,4 +1,4 @@
-// F10 — Offline queues (SQLite): expenses (Purchaser) and task submissions
+// F10: Offline queues (SQLite): expenses (Purchaser) and task submissions
 // (Site Manager).
 //
 // Stores what was captured while the device is offline. Each row carries a
@@ -6,7 +6,7 @@
 //
 // ONE rule decides whether a new entry may be queued, for both queues together:
 // canEnqueue(). At 100 pending entries, or when the oldest pending entry is
-// older than 72 hours, no NEW entry is accepted — the user must sync first.
+// older than 72 hours, no NEW entry is accepted, the user must sync first.
 // Pending entries are never deleted for being old: they still sync.
 //
 // Status lifecycle: pending → synced  (purged after sync)
@@ -35,7 +35,7 @@ const MAX_PENDING = resolveMaxPending();
 
 let db = null;
 
-// ── one connection, kept for the life of the app ─────────────────────────────
+// one connection, kept for the life of the app
 // expo-sqlite shares ONE native connection per database file. Opening the file
 // again hands back that same connection, and when an older JavaScript handle
 // to it is garbage-collected it CLOSES the shared connection. Every later query
@@ -161,7 +161,7 @@ export function purgeExpired() {
   run("DELETE FROM offline_checkins WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
 }
 
-// ── the one queue rule ───────────────────────────────────────────────────────
+// the one queue rule
 
 // Pure: decide from three numbers, so it can be tested without a database.
 //   pendingCount    entries already waiting (both queues, minus any entry the
@@ -287,7 +287,7 @@ export function dismissRejected(uuid) {
   run("DELETE FROM offline_expenses WHERE uuid = ? AND status = 'rejected';", [uuid]);
 }
 
-// ── task submissions (Site Manager) ──────────────────────────────────────────
+// task submissions (Site Manager)
 
 // Queue one task submission. Returns
 //   { queued: true,  replacedPhotoPath }  replacedPhotoPath is the file of the
@@ -409,7 +409,7 @@ export function dismissRejectedTaskUpdate(updateId) {
 }
 
 
-// ── daily check-ins (Site Manager) ───────────────────────────────────────────
+// daily check-ins (Site Manager)
 // One pending check-in per person, project, day and slot: saving it again
 // replaces the waiting one (the server allows only one per slot anyway).
 
@@ -555,7 +555,7 @@ export function dismissRejectedCheckin(clientId) {
   return row ? JSON.parse(row.photo_paths || "[]") : [];
 }
 
-// ── small settings (the saved sign-in) ───────────────────────────────────────
+// small settings (the saved sign-in)
 
 export function kvGet(key) {
   if (!db) return null;
@@ -573,7 +573,7 @@ export function kvDelete(key) {
   run("DELETE FROM app_kv WHERE key = ?;", [key]);
 }
 
-// ── last-known server answers (read offline) ─────────────────────────────────
+// last-known server answers (read offline)
 // One row per screen query per user, so a second person on the same phone
 // never sees the first person's data.
 
@@ -592,7 +592,7 @@ export function cacheRead(key, userId) {
   return row ? { data: JSON.parse(row.body), savedAt: row.saved_at } : null;
 }
 
-// ── receipt photos waiting to be uploaded for reading ────────────────────────
+// receipt photos waiting to be uploaded for reading
 // Reading a receipt (OCR) happens on the server, so offline the photo is saved
 // here and uploaded on reconnect. The server then reads it in the background
 // and it appears under "Scanned receipts" like any other scan.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
-// migrate.js — the one way to apply database migrations.
+// migrate.js: the one way to apply database migrations.
 //
 // Why this exists: migrations used to be applied by hand, with no record of
 // which files had run on which database. That caused repeat test failures

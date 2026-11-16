@@ -39,7 +39,7 @@ test("an empty result (no rows) means nothing is charged yet", async () => {
   assert.equal(await isTicketFulfilled(async () => ({ rows: [] }), "t-1", 10), false);
 });
 
-// ---- completesRequest: a request is Resolved only by the purchase that brings it to 0 ----
+// completesRequest: a request is Resolved only by the purchase that brings it to 0
 
 const { completesRequest } = require("../src/lib/ticketAvailability");
 const { quantityOfMatchedLines } = require("../src/lib/ticketQuantity");

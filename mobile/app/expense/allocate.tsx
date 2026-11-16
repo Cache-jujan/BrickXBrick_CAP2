@@ -1,4 +1,4 @@
-// allocate.tsx — "Check receipt": the last step for a receipt that is not tied to one request.
+// allocate.tsx: "Check receipt": the last step for a receipt that is not tied to one request.
 //
 // The Purchaser's job here is small: confirm which requests the receipt paid for (the app
 // has already ticked the ones that match) and, only when they spent past what the PM gave or
@@ -248,7 +248,7 @@ export default function AllocateScreen() {
               ? t("ck.need_reason")
               : t("al2.goes_to_pm");
 
-  // ---- After a successful submit -----------------------------------------
+  // After a successful submit
   if (result) {
     const name = (id: string) => known[id]?.projectName ?? t("split.request");
     const screening = Object.values(result.screening ?? {});
@@ -293,7 +293,7 @@ export default function AllocateScreen() {
     );
   }
 
-  // ---- Check receipt -----------------------------------------------------
+  // Check receipt
   const rows = [
     ...portions.map((p) => ({ id: p.ticketID, ticked: true, portion: p })),
     ...unticked.map((id) => ({ id, ticked: false, portion: undefined })),

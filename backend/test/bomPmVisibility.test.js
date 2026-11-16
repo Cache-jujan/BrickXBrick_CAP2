@@ -1,4 +1,4 @@
-// F2 — the owning Project Manager sees the BOM only once the General Manager
+// F2: the owning Project Manager sees the BOM only once the General Manager
 // has approved it. A Draft (including one reopened for revision) is the GM's
 // working copy; its figures can still change and the client has not agreed yet.
 const test = require("node:test");

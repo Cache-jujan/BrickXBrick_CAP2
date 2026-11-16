@@ -6,13 +6,13 @@ export async function listUsers() {
   return data;
 }
 
-// POST /api/admin/users — payload: { name, email, role }; an invitation email is sent
+// POST /api/admin/users: payload: { name, email, role }; an invitation email is sent
 export async function createUser(payload) {
   const { data } = await apiClient.post("/api/admin/users", payload);
   return data;
 }
 
-// PATCH /api/admin/users/:id — payload: { role?, status? }
+// PATCH /api/admin/users/:id, payload: { role?, status? }
 export async function updateUser(id, payload) {
   const { data } = await apiClient.patch(`/api/admin/users/${id}`, payload);
   return data;
@@ -71,7 +71,7 @@ export const VALID_ROLES = [
   "System Administrator",
 ];
 
-// GET /api/admin/users/overview — counts for the top of the admin page
+// GET /api/admin/users/overview: counts for the top of the admin page
 export async function getAdminOverview() {
   const { data } = await apiClient.get("/api/admin/users/overview");
   return data;

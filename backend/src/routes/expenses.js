@@ -1,5 +1,5 @@
-// expenses.js — F6 expense submission + ticket linking, plus review access.
-// Table 35 (Expenses) already exists in 001_initial_schema.sql — no migration
+// expenses.js: F6 expense submission + ticket linking, plus review access.
+// Table 35 (Expenses) already exists in 001_initial_schema.sql, no migration
 // needed. This route just exposes it.
 
 const express = require("express");
@@ -22,7 +22,7 @@ const { LIMITS, text, amount: cleanAmount } = require("../lib/inputRules");
 const router = express.Router();
 router.use(requireAuth);
 
-// Labor is intentionally excluded — the DB CHECK isn't built yet, so this is
+// Labor is intentionally excluded: the DB CHECK isn't built yet, so this is
 // enforced here until that constraint lands.
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 
@@ -136,7 +136,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
         const { birValidationStatus } = classifyBir(bir);
 
         // When a ticket is given, the ticket is the source of truth for the
-        // project — not the client-supplied projectID (F9 Layer 3).
+        // project: not the client-supplied projectID (F9 Layer 3).
         let projectID = bodyProjectID;
         let ticketForPurchase = null;
 
@@ -280,7 +280,7 @@ router.post("/", requireRole("Purchaser", "Site Manager", "General Manager", "Pr
     }
 });
 
-// GET /mine — the caller's own submitted expenses.
+// GET /mine: the caller's own submitted expenses.
 router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const result = await query(
@@ -305,7 +305,7 @@ router.get("/mine", requireRole("Purchaser", "Site Manager"), async (req, res, n
     }
 });
 
-// GET /flagged — PM/GM queue of Pending expenses with unresolved fraud flags.
+// GET /flagged: PM/GM queue of Pending expenses with unresolved fraud flags.
 // Must stay ABOVE "/:id" or Express treats "flagged" as an id.
 router.get("/flagged", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
@@ -370,7 +370,7 @@ router.get("/flagged", requireRole("Project Manager", "General Manager"), async 
     }
 });
 
-// GET / — GM/PM view of all expenses, optional ?projectId= filter.
+// GET /: GM/PM view of all expenses, optional ?projectId= filter.
 router.get("/", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
@@ -413,7 +413,7 @@ router.get("/", requireRole("General Manager", "Project Manager"), async (req, r
     } catch (err) { next(err); }
 });
 
-// GET /:id — role-scoped: Purchaser sees only their own submissions, GM any,
+// GET /:id, role-scoped: Purchaser sees only their own submissions, GM any,
 // PM only expenses on projects they manage.
 router.get("/:id", async (req, res, next) => {
     try {
@@ -592,7 +592,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "General Manager"), a
     }
 });
 
-// PATCH /:id/resubmit — Purchaser edits and resubmits their own Rejected
+// PATCH /:id/resubmit, Purchaser edits and resubmits their own Rejected
 // expense. Resets to Pending and clears rejectionReason.
 router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) => {
     try {
@@ -643,7 +643,7 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
         const { birValidationStatus } = classifyBir(bir);
 
         // The receipt image, ticket link and project are NOT changed on a
-        // resubmit — only the correctable fields. The receipt already exists.
+        // resubmit: only the correctable fields. The receipt already exists.
         // One transaction: the request is locked while its budget is checked (the expense's own
         // old amount does not count against it), and a portion of a split receipt keeps its
         // allocation row in step with the new amount.

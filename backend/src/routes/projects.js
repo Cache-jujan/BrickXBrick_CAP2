@@ -1,4 +1,4 @@
-// projects.js — F2: Project Initialization
+// projects.js (F2): Project Initialization
 //
 // Lifecycle (Oct 2026 revision; see lib/projectRules.js for the sources):
 //   Draft      created by the GM after the client signs the BOM; PM is assigned
@@ -166,7 +166,7 @@ function validateProjectBody(body, existing = null) {
 
 // node-postgres returns a DATE as a JS Date at *local* midnight of the
 // server. toISOString() would convert that to UTC, which on a Philippine
-// server (UTC+8) is the previous day — so read the local calendar fields.
+// server (UTC+8) is the previous day: so read the local calendar fields.
 function toIso(value) {
   if (!value) return null;
   if (typeof value === "string") return value.slice(0, 10);
@@ -184,7 +184,7 @@ async function getProjectRow(target, projectId, { lock = false } = {}) {
   return result.rows[0];
 }
 
-// CREATE — GM only. The client has already signed the BOM; the project
+// CREATE: GM only. The client has already signed the BOM; the project
 // starts as Draft so the PM can plan before construction (adviser item 2).
 router.post("/", requireRole("General Manager"), async (req, res) => {
   try {
@@ -297,7 +297,7 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// LIST — broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter.
+// LIST: broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter.
 // Site Managers and Project Managers are scoped to their own projects so
 // pickers cannot expose unrelated projects and ticket creation cannot be
 // directed at a project they do not manage. Purchasers see no budget.
@@ -338,7 +338,7 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
   }
 });
 
-// GET /eligible-managers?projectId= — GM only. Every active PM with the open
+// GET /eligible-managers?projectId=: GM only. Every active PM with the open
 // projects they hold and whether they can take one more. The dropdown shows
 // only `available` managers; the busy ones are listed with their schedules
 // (adviser item 2). Pass projectId when editing so the current project
@@ -353,7 +353,7 @@ router.get("/eligible-managers", requireRole("General Manager"), async (req, res
   }
 });
 
-// GET /eligible-site-managers?projectId= — GM/PM. Same shape as above.
+// GET /eligible-site-managers?projectId=: GM/PM. Same shape as above.
 router.get("/eligible-site-managers", requireRole("General Manager", "Project Manager"), async (req, res) => {
   try {
     const excludeProjectId = req.query.projectId || null;
@@ -364,7 +364,7 @@ router.get("/eligible-site-managers", requireRole("General Manager", "Project Ma
   }
 });
 
-// GET /options — values the Create/Edit Project form needs.
+// GET /options: values the Create/Edit Project form needs.
 router.get("/options", requireRole("General Manager"), async (req, res) => {
   try {
     const settings = await loadProjectSettings(query);
@@ -379,7 +379,7 @@ router.get("/options", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// GET /settings/limits — GM. How many open (Draft/Active) projects a PM and an
+// GET /settings/limits: GM. How many open (Draft/Active) projects a PM and an
 // SM may hold at once (adviser item 4; client policy, editable without a code change).
 router.get("/settings/limits", requireRole("General Manager"), async (req, res) => {
   try {
@@ -390,7 +390,7 @@ router.get("/settings/limits", requireRole("General Manager"), async (req, res) 
   }
 });
 
-// PATCH /settings/limits — GM. Body { pm?, sm? }, whole numbers 1–10.
+// PATCH /settings/limits: GM. Body { pm?, sm? }, whole numbers 1–10.
 // Lowering a limit never unassigns anyone; it only blocks new assignments.
 router.patch("/settings/limits", requireRole("General Manager"), async (req, res) => {
   try {
@@ -403,7 +403,7 @@ router.patch("/settings/limits", requireRole("General Manager"), async (req, res
   }
 });
 
-// PATCH /:id — GM edits project details (adviser item 4). Status changes use
+// PATCH /:id, GM edits project details (adviser item 4). Status changes use
 // the dedicated routes below. Completed/Cancelled/Archived projects are read-only.
 router.patch("/:id", requireRole("General Manager"), async (req, res) => {
   try {
@@ -494,7 +494,7 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// PATCH /:id/activate — GM. Draft -> Active. Requires both managers assigned.
+// PATCH /:id/activate, GM. Draft -> Active. Requires both managers assigned.
 // The project's Bill of Materials must be approved (routes/bom.js).
 router.patch("/:id/activate", requireRole("General Manager"), async (req, res) => {
   try {
@@ -538,7 +538,7 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
   }
 });
 
-// PATCH /:id/cancel — GM. Draft/Active -> Cancelled, with a reason
+// PATCH /:id/cancel, GM. Draft/Active -> Cancelled, with a reason
 // (client: a project that doesn't push through is cancelled).
 router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => {
   try {
@@ -601,7 +601,7 @@ async function suspensionRecipients(client, row) {
 
 const SUSPENSION_REASON_MAX = 500;
 
-// PATCH /:id/suspend — GM. Active -> Suspended, with a reason and an optional
+// PATCH /:id/suspend, GM. Active -> Suspended, with a reason and an optional
 // expected resume date. Nothing else is changed: dates, tasks, requests and
 // budget stay as they are, so resuming picks up where work stopped.
 router.patch("/:id/suspend", requireRole("General Manager"), async (req, res) => {
@@ -651,7 +651,7 @@ router.patch("/:id/suspend", requireRole("General Manager"), async (req, res) =>
   }
 });
 
-// PATCH /:id/resume — GM. Suspended -> Active. The project keeps its original
+// PATCH /:id/resume, GM. Suspended -> Active. The project keeps its original
 // activation date and target dates; the hold stays in project_status_log.
 router.patch("/:id/resume", requireRole("General Manager"), async (req, res) => {
   try {
@@ -689,7 +689,7 @@ router.patch("/:id/resume", requireRole("General Manager"), async (req, res) => 
   }
 });
 
-// GET /:id/status-history — the holds and resumes of a project, newest first.
+// GET /:id/status-history, the holds and resumes of a project, newest first.
 router.get("/:id/status-history", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
   try {
     const project = await loadDetail(req.params.id);
@@ -709,7 +709,7 @@ router.get("/:id/status-history", requireRole(...PROJECT_MANAGEMENT_ROLES), asyn
   }
 });
 
-// PATCH /:id/complete — GM. Active -> Completed, recording the actual
+// PATCH /:id/complete, GM. Active -> Completed, recording the actual
 // completion / turnover date (defaults to today).
 router.patch("/:id/complete", requireRole("General Manager"), async (req, res) => {
   try {
@@ -737,7 +737,7 @@ router.patch("/:id/complete", requireRole("General Manager"), async (req, res) =
   }
 });
 
-// PATCH /:id/site-manager — GM or the owning PM may assign, replace, or clear
+// PATCH /:id/site-manager, GM or the owning PM may assign, replace, or clear
 // the Site Manager. Only active Site Manager accounts under the SM project
 // limit are valid assignments.
 //
@@ -746,11 +746,11 @@ router.patch("/:id/complete", requireRole("General Manager"), async (req, res) =
 // tasks and the new SM got 403 on them. Reassignment now moves every open
 // (non-Completed) task under this project's milestones to the new SM in the
 // same transaction as the project update. Completed tasks keep their
-// original assignee — the work and photo evidence really are theirs, and
+// original assignee: the work and photo evidence really are theirs, and
 // the PM review route doesn't key off current assignment anyway.
 //
 // Only Construction-phase tasks are ever assigned to a Site Manager (see
-// reassignSiteManager.js) — clearing the SM (siteManagerId: null) while open
+// reassignSiteManager.js): clearing the SM (siteManagerId: null) while open
 // ones exist would silently leave them with the outgoing SM, so that's
 // rejected with 409 instead. Clearing is only allowed once no open
 // Construction tasks remain. An Active project must keep a Site Manager.
@@ -876,7 +876,7 @@ async function loadTerminationSummary(row) {
   };
 }
 
-// SINGLE — includes computed overall progress (mean of milestone completion %)
+// SINGLE: includes computed overall progress (mean of milestone completion %)
 router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
   try {
     const project = await loadDetail(req.params.id);
@@ -888,7 +888,7 @@ router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) =>
   }
 });
 
-// GET /:id/overview — project + progress + all milestones, each with its tasks nested.
+// GET /:id/overview, project + progress + all milestones, each with its tasks nested.
 // One combined payload for a GM/PM overview page instead of N+1 calls
 // (project detail -> milestone list -> per-milestone task list).
 router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {

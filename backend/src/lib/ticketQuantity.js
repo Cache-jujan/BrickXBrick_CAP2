@@ -1,4 +1,4 @@
-// ticketQuantity.js — how much of a requested material a receipt holds.
+// ticketQuantity.js: how much of a requested material a receipt holds.
 //
 // A receipt can list other materials and fee lines (delivery, VAT) next to the requested
 // one, so the receipt's total quantity is not the quantity bought for the request. These

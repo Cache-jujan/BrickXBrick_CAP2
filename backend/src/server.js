@@ -43,9 +43,9 @@ app.use("/api/reports/pdf", express.json({ limit: "2mb" }));
 app.use("/api/sync", express.json({ limit: "2mb" }));
 app.use(express.json());
 
-// --- Health / session ---
+// Health / session
 app.get("/health", (req, res) => res.json({ ok: true }));
-// GET /api/me — the signed-in user, plus whether they have accepted the
+// GET /api/me: the signed-in user, plus whether they have accepted the
 // current Terms of Use / Privacy Notice (routes/legal.js).
 app.get("/api/me", requireAuth, async (req, res, next) => {
   try {
@@ -55,7 +55,7 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
   }
 });
 
-// --- Routes ---
+// Routes
 app.use("/api/me", meRoutes);                     // your own username / password
 app.use("/api/auth", authRoutes);               // login / session
 app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Notice
@@ -78,7 +78,7 @@ app.use("/api/reports", reportRoutes);            // F11 financial analytics
 app.use("/api/notifications", notificationRoutes); // notifications
 
 // D-09: malformed input (bad UUID, bad date) was never validated before
-// hitting Postgres, so it bubbled up here as a raw driver error — 500s with
+// hitting Postgres, so it bubbled up here as a raw driver error, 500s with
 // text like `invalid input syntax for type uuid: "abc"`, leaking schema
 // details and failing checks that expected a clean 400. Map the common
 // input-shaped SQLSTATE codes to 400 and stop echoing unmapped DB errors.
@@ -89,14 +89,14 @@ const PG_INPUT_ERROR_CODES = new Set([
   "22001", // string_data_right_truncation
 ]);
 
-// --- Error handler (must stay last, after all routes) ---
+// Error handler (must stay last, after all routes)
 app.use((err, req, res, next) => {
   if (!err.status && err.code) {
     if (PG_INPUT_ERROR_CODES.has(err.code)) {
       return res.status(400).json({ error: "Invalid input value" });
     }
     // Any other raw Postgres error reaching here is a bug, not a bad
-    // request — don't leak schema/column details in the response body.
+    // request: don't leak schema/column details in the response body.
     console.error("Unhandled DB error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }

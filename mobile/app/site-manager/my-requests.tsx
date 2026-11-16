@@ -141,7 +141,7 @@ export default function MyRequestsScreen() {
   }
 
   function onScrollFail(info: { index: number }) {
-    // Item not measured yet (still rendering) — retry shortly.
+    // Item not measured yet (still rendering): retry shortly.
     setTimeout(() => {
       listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.2 });
     }, 150);

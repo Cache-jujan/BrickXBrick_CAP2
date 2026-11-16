@@ -1,4 +1,4 @@
-// F1 — "Enforce change password upon login" and safe role changes.
+// F1: "Enforce change password upon login" and safe role changes.
 //
 //   1. The System Administrator can only SEND a password email; no route
 //      accepts a password typed by an admin.
@@ -134,7 +134,7 @@ async function call(method, url, body) {
   }
 }
 
-// ---- 1. password emails ------------------------------------------------------
+// 1. password emails
 
 test("send password email to an active account: recovery link, current password untouched, lockout cleared", async () => {
   reset({ confirmed: true });
@@ -192,7 +192,7 @@ test("only a System Administrator can send password emails", async () => {
   assert.equal(res.status, 403);
 });
 
-// ---- 2. role change / deactivation guard ------------------------------------
+// 2. role change / deactivation guard
 
 test("changing the role of a PM who still manages open projects is refused, naming them", async () => {
   reset();
