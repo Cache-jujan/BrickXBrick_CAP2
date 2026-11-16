@@ -125,9 +125,28 @@ function isValidPhTin(value) {
   return !/^(\d)\1{8}$/.test(tin.slice(0, 9));
 }
 
+// Words a vendor, a clerk or the OCR writes when a receipt has no real permit
+// or OR/SI number. Compared after removing everything except letters and
+// digits, so "N/A", "n-a" and "N A" are all "NA".
+const PLACEHOLDER_WORDS = new Set(["NA", "NONE", "NIL", "NULL", "TBA", "TBD"]);
+
+/**
+ * True when a permit or OR/SI number is only a stand-in: empty, a
+ * "not applicable" word, or zeros only ("0", "000"). Shape only: it cannot
+ * tell a real number from a made-up one that happens to look right.
+ * Safe on raw or normalized input, because scanDraft.js passes the OCR draft
+ * to classifyBir before normalizeBirFields has run.
+ */
+function isPlaceholderCode(value) {
+  const code = String(value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length === 0) return true;
+  return PLACEHOLDER_WORDS.has(code) || /^0+$/.test(code);
+}
+
 /**
  * F7 classification. Presence check on the three BIR-required fields, plus a
- * format check on the TIN; it does NOT verify a TIN is real.
+ * format check on the TIN and a placeholder check on the permit and OR/SI
+ * numbers; it does NOT verify any of them is real.
  *
  * This runs server-side on submit, not just on scan, birValidationStatus
  * decides what lands in the BIR tax-deductible report (F11), so a client
@@ -136,8 +155,8 @@ function isValidPhTin(value) {
 function classifyBir({ tin, birPermitNumber, birNumber }) {
   const missing = [];
   if (!isValidPhTin(tin)) missing.push("tin");
-  if (!birPermitNumber) missing.push("birPermitNumber");
-  if (!birNumber) missing.push("birNumber");
+  if (isPlaceholderCode(birPermitNumber)) missing.push("birPermitNumber");
+  if (isPlaceholderCode(birNumber)) missing.push("birNumber");
 
   return {
     birValidationStatus: missing.length === 0 ? "Formal-Tax-Deductible" : "Informal",
@@ -232,6 +251,7 @@ module.exports = {
   toExpenseDraft,
   classifyBir,
   isValidPhTin,
+  isPlaceholderCode,
   normalizeBirFields,
   normalizeLineItems,
   resolveUnitPrice,
