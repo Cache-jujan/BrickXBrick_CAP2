@@ -12,5 +12,6 @@ ENV NODE_ENV=production
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
-
+# Run node directly, not through npm: npm does not pass SIGTERM on to node, so
+# the shutdown handler in src/server.js would never run on a Cloud Run redeploy.
+CMD ["node", "src/server.js"]
