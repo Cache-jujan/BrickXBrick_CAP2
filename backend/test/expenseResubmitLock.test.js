@@ -13,7 +13,7 @@ function stub(relative, exports) {
   require.cache[file] = { id: file, filename: file, loaded: true, exports };
 }
 
-const db = { calls: [], row: null, updateExpensesRowCount: 1 };
+const db = { calls: [], row: null, updateExpensesRowCount: 1, notifyFails: false };
 let inTransaction = false;
 let chainImpl = async () => ({ txHash: "0xabc", blockNumber: 7, validatorNodeCount: 3 });
 let currentUser = { id: "gm-1", role: "General Manager", name: "gm.general-manager" };
@@ -35,6 +35,12 @@ async function fakeQuery(sql, params = []) {
   if (text.startsWith("update expenses set status = 'approved'")) return { rowCount: 1, rows: [] };
   if (text.startsWith("update expenses")) {
     return { rowCount: db.updateExpensesRowCount, rows: db.updateExpensesRowCount ? [{ expenseID: params[params.length - 1] }] : [] };
+  }
+  if (text.startsWith("select name, projectmanagerid from projects")) return { rowCount: 1, rows: [{ name: "Tower A", projectmanagerid: "pm-1" }] };
+  if (text.startsWith("savepoint") || text.startsWith("release savepoint") || text.startsWith("rollback to savepoint")) return { rowCount: 0, rows: [] };
+  if (text.startsWith("insert into notifications")) {
+    if (db.notifyFails) throw new Error("violates check constraint notifications_type_check");
+    return { rowCount: 1, rows: [] };
   }
   if (text.startsWith("select 1 from tickets")) return { rowCount: 1, rows: [] };
   if (text.startsWith("select t.approvedbudget")) return { rowCount: 1, rows: [{ remaining: "100000.00" }] };
@@ -86,6 +92,7 @@ function reset({ user, row, updateExpensesRowCount = 1 } = {}) {
   db.calls.length = 0;
   db.row = row || null;
   db.updateExpensesRowCount = updateExpensesRowCount;
+  db.notifyFails = false;
   chainImpl = async () => ({ txHash: "0xabc", blockNumber: 7, validatorNodeCount: 3 });
   currentUser = user || { id: "gm-1", role: "General Manager", name: "gm.general-manager" };
 }
@@ -144,6 +151,39 @@ test("resubmit: the UPDATE only touches a Rejected row", async () => {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const [update] = callsStartingWith("update expenses");
     assert.match(norm(update.sql), /where expenseid = \$11 and status = 'rejected'/);
+  } finally {
+    server.close();
+  }
+});
+
+test("resubmit: the project's PM is told it is back for review, in the same transaction", async () => {
+  const server = await startServer();
+  try {
+    reset({ user: { ...purchaser, name: "Pat Purchaser" }, row: expenseRow({ status: "Rejected" }) });
+    const res = await send(server, "PATCH", "/api/expenses/exp-1/resubmit", resubmitBody());
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const [note] = callsStartingWith("insert into notifications");
+    assert.ok(note, "a notification was written");
+    assert.equal(note.inTransaction, true);
+    const [recipient, type, entityType, entityId, message] = note.params;
+    assert.equal(recipient, "pm-1");
+    assert.equal(type, "ExpenseResubmitted");
+    assert.equal(entityType, "Expense");
+    assert.equal(entityId, "exp-1");
+    assert.match(message, /Pat Purchaser resubmitted an expense: Cebu Builders Supply .* on Tower A\./);
+  } finally {
+    server.close();
+  }
+});
+
+test("resubmit: a failed notification (migration 060 not run yet) never fails the resubmit", async () => {
+  const server = await startServer();
+  try {
+    reset({ user: { ...purchaser, name: "Pat Purchaser" }, row: expenseRow({ status: "Rejected" }) });
+    db.notifyFails = true;
+    const res = await send(server, "PATCH", "/api/expenses/exp-1/resubmit", resubmitBody());
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(callsStartingWith("rollback to savepoint").length, 1);
   } finally {
     server.close();
   }
