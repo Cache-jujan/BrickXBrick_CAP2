@@ -5,7 +5,7 @@
 // bought more than was requested, say why in a few words. The split maths stays on the
 // server; the Project Manager sees the reason and decides.
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import * as Crypto from "expo-crypto";
@@ -65,6 +65,8 @@ export default function AllocateScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // True while a pull-down reload is running, so the pull spinner shows instead of the inline one.
+  const [pulling, setPulling] = useState(false);
   const { isOnline } = useNetwork();
   // Back online: run the preview again.
   const wasOnline = React.useRef(isOnline);
@@ -135,7 +137,10 @@ export default function AllocateScreen() {
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setPulling(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -227,6 +232,12 @@ export default function AllocateScreen() {
     setRefreshKey((k) => k + 1);
   }
 
+  // Leave without submitting: the receipt stays in the scanned list, ready to check once the request exists.
+  function backToBuy() {
+    router.replace("/");
+    reset();
+  }
+
   function finish() {
     router.replace("/turn-in");
     reset();
@@ -310,7 +321,12 @@ export default function AllocateScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader title={t("ck.title")} />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => { setPulling(true); retryPreview(); }} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      >
         <View style={styles.summary}>
           <View style={styles.flex}>
             <Text style={styles.summaryVendor} numberOfLines={1}>{receipt.vendorName || t("mobile.receipt")}</Text>
@@ -325,7 +341,7 @@ export default function AllocateScreen() {
           <Text style={styles.help}>{t("ck.scope_note", { projects: scope.projectNames.join(", ") })}</Text>
         ) : null}
 
-        {loading && <ActivityIndicator color={COLORS.primary} />}
+        {loading && !pulling && <ActivityIndicator color={COLORS.primary} />}
         {!isOnline ? (
           <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
             <Text style={[styles.noticeText, { color: AMBER }]}>{t("al.offline_banner")}</Text>
@@ -387,17 +403,25 @@ export default function AllocateScreen() {
         })}
         {feeTarget ? <Text style={styles.help}>{t("ck.fees_note", { project: feeTarget })}</Text> : null}
 
-        {/* Nothing matches: the only way forward is a request, so say who can file it. */}
+        {/* Nothing matches: the only way forward is a request, and only the Site Manager can file it. */}
         {!loading && missing.length > 0 && (
-          <View style={styles.errorBox} accessibilityRole="alert">
+          <View style={styles.missingCard} accessibilityRole="alert">
+            <Text style={styles.missingTitle}>{t("al3.missing_title")}</Text>
             {missing.map((piece) => (
-              <Text key={piece.lineIndex} style={styles.errorBoxText}>
+              <Text key={piece.lineIndex} style={styles.missingItem}>
                 {t("al2.no_request", { description: piece.description, amount: formatPeso(piece.amount) })}
               </Text>
             ))}
-            <Text style={styles.errorBoxText}>{t("al2.no_request_help")}</Text>
-            <TouchableOpacity style={styles.checkButton} onPress={retryPreview} accessibilityRole="button">
-              <Text style={styles.checkButtonText}>{t("al.check_new")}</Text>
+            <View style={styles.contactBox}>
+              <IconSymbol name="person.crop.circle" size={24} color={COLORS.primary} />
+              <View style={styles.flex}>
+                <Text style={styles.contactTitle}>{t("al3.contact_title")}</Text>
+                <Text style={styles.contactBody}>{t("al2.no_request_help")}</Text>
+              </View>
+            </View>
+            <Text style={styles.missingNote}>{t("al3.reload_note")}</Text>
+            <TouchableOpacity style={styles.backButton} onPress={backToBuy} accessibilityRole="button">
+              <Text style={styles.backButtonText}>{t("al3.back_to_buy")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -520,8 +544,15 @@ const styles = StyleSheet.create({
 
   errorBox: { backgroundColor: COLORS.errorFill, borderWidth: 1, borderColor: COLORS.errorBorder, borderRadius: 14, padding: 12, gap: 8 },
   errorBoxText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 19 },
-  checkButton: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: COLORS.errorBorder, borderRadius: 12, backgroundColor: COLORS.card },
-  checkButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.errorText },
+  missingCard: { backgroundColor: AMBER_BG, borderLeftWidth: 5, borderLeftColor: AMBER, borderRadius: 14, padding: 14, gap: 10 },
+  missingTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading },
+  missingItem: { fontSize: 14, fontFamily: FONT.medium, color: COLORS.heading, lineHeight: 20 },
+  contactBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12, padding: 12 },
+  contactTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
+  contactBody: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.heading, lineHeight: 19, marginTop: 2 },
+  missingNote: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.muted, lineHeight: 19 },
+  backButton: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12, backgroundColor: COLORS.card },
+  backButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.primary },
   notice: { borderRadius: 10, padding: 10 },
   noticeText: { fontSize: 13, fontFamily: FONT.medium, lineHeight: 19 },
   overBox: { backgroundColor: RED_BG, borderWidth: 1.5, borderColor: RED, borderRadius: 14, padding: 14, gap: 8 },

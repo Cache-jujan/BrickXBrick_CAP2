@@ -27,3 +27,6 @@ Thumbs.db
 .vscode/
 .idea/
 '@ | Set-Content backend/.gitignore
+
+# Claude Code local settings
+.claude/

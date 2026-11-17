@@ -7,7 +7,7 @@ import { remainingBudgetText } from "@/lib/budget-check";
 import { quantityFieldsFromRequest, quantityFieldsFromTicket } from "@/lib/request-progress";
 import { type OpenRequest, type Project, type Ticket } from "@/lib/api";
 import { loadActiveProjects, loadAssignedTickets, loadOpenRequests, loadScans as loadScansCached } from "@/lib/cached-api";
-import { filterByVendor, groupByVendor, otherRequests, progressOf, vendorOptions } from "@/lib/to-buy";
+import { otherRequests, progressOf } from "@/lib/to-buy";
 import { filterByProject, groupByProject } from "@/lib/project-groups";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { useOnNewNotifications } from "@/lib/notification-events";
@@ -53,13 +53,7 @@ export function ToBuy() {
   const [detail, setDetail] = useState<OpenRequest | null>(null);
   // "Which request is this receipt for?" sheet, opened by the Snap receipt button.
   const [snapPickerOpen, setSnapPickerOpen] = useState(false);
-  const [viewChoice, setView] = useState<"store" | "project">("project");
-  // Site Managers don't shop, so they only see requests grouped by project. By store is for the Purchaser.
-  const view = isSiteManager ? "project" : viewChoice;
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
-  // "Which project is this receipt for?" sheet, opened by Snap receipt while no project is picked.
-  // By store: show one store only (the store key; null = all stores).
-  const [vendorFilter, setVendorFilter] = useState<string | null>(null);
   // Site Manager only: receipts being read or ready to review, and ones saved on this phone offline.
   const [scans, setScans] = useState<ReceiptScan[]>([]);
   const [queuedScans, setQueuedScans] = useState<QueuedScan[]>([]);
@@ -147,30 +141,17 @@ export function ToBuy() {
     () => groupByProject(requests, (r: OpenRequest) => ({ id: r.projectID, name: r.projectName, at: r.createdAt })),
     [requests]
   );
-  // The project filter belongs to By project; By store has the store filter only.
-  const activeFilter = view === "project" && projectChoices.some((p) => p.projectId === projectFilter) ? projectFilter : null;
-  const storeChoices = useMemo(() => vendorOptions(requests), [requests]);
-  const activeVendor = storeChoices.some((s) => s.key === vendorFilter) ? vendorFilter : null;
-  const filtered = useMemo(() => {
-    return view === "store"
-      ? (filterByVendor(requests, activeVendor) as OpenRequest[])
-      : (filterByProject(requests, activeFilter) as OpenRequest[]);
-  }, [requests, activeFilter, activeVendor, view]);
-  const sections = useMemo(() => {
-    if (view === "project") {
-      return groupByProject(filtered, (r: OpenRequest) => ({ id: r.projectID, name: r.projectName, at: r.createdAt })).map((g) => ({
+  const activeFilter = projectChoices.some((p) => p.projectId === projectFilter) ? projectFilter : null;
+  const filtered = useMemo(() => filterByProject(requests, activeFilter) as OpenRequest[], [requests, activeFilter]);
+  const sections = useMemo(
+    () =>
+      groupByProject(filtered, (r: OpenRequest) => ({ id: r.projectID, name: r.projectName, at: r.createdAt })).map((g) => ({
         key: g.projectId,
         title: g.projectName,
         requests: g.items as OpenRequest[],
-      }));
-    }
-    return groupByVendor(filtered).map((g) => ({
-      key: g.key || "any",
-      // Requests with no store asked for are only in "All stores".
-      title: g.vendorName ?? t("tb.all_stores"),
-      requests: g.requests as OpenRequest[],
-    }));
-  }, [filtered, view, t]);
+      })),
+    [filtered]
+  );
 
   function projectNameOf(ticket: Ticket) {
     return ticket.projectname ?? projectsById[ticket.projectid]?.name ?? t("mr.unknown_project");
@@ -238,16 +219,7 @@ export function ToBuy() {
             <Text style={styles.title}>{t("tb.title")}</Text>
             <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
           </View>
-          {view === "store" && storeChoices.length > 1 ? (
-            <FilterButton
-              label={t("tb.filter_store")}
-              allLabel={t("tb.all_stores")}
-              options={storeChoices.map((s) => ({ id: s.key, label: s.vendorName ?? "" }))}
-              value={activeVendor}
-              onChange={setVendorFilter}
-            />
-          ) : null}
-          {view === "project" && projectChoices.length > 1 ? (
+          {projectChoices.length > 1 ? (
             <FilterButton
               label={t("tb.filter_project")}
               allLabel={t("tb.all_projects")}
@@ -280,32 +252,10 @@ export function ToBuy() {
 
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 
-        {!isSiteManager && storeChoices.length > 1 && (
-          <View style={styles.controls}>
-            {!isSiteManager ? (
-            <View style={styles.segment}>
-              {(["project", "store"] as const).map((mode) => (
-                <Pressable
-                  key={mode}
-                  onPress={() => setView(mode)}
-                  style={[styles.segmentItem, view === mode && styles.segmentOn]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: view === mode }}
-                >
-                  <Text style={[styles.segmentText, view === mode && styles.segmentTextOn]}>
-                    {t(mode === "store" ? "tb.view_store" : "tb.view_project")}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            ) : null}
-          </View>
-        )}
-
-        {sections.length > 0 && (view === "store" ? activeVendor === null : activeFilter === null) ? (
+        {sections.length > 0 && activeFilter === null ? (
           <View style={styles.allBanner} accessibilityRole="header">
             <IconSymbol name="folder.fill" size={20} color={SOFT.text} />
-            <Text style={styles.allBannerTitle} numberOfLines={1}>{t(view === "store" ? "tb.all_stores" : "tb.all_projects")}</Text>
+            <Text style={styles.allBannerTitle} numberOfLines={1}>{t("tb.all_projects")}</Text>
             <Text style={styles.allBannerCount}>
               {t(filtered.length === 1 ? "tb.items_one" : "tb.items_other", { count: filtered.length })}
             </Text>
@@ -385,7 +335,7 @@ export function ToBuy() {
       </ScrollView>
 
       {/* Site Managers see the details too; filing a receipt for one request stays the Purchaser's. */}
-      <RequestDetailsSheet request={detail} canSnap={!isSiteManager} onSnap={snapForRequest} onClose={() => setDetail(null)} />
+      <RequestDetailsSheet request={detail} canSnap onSnap={snapForRequest} onClose={() => setDetail(null)} />
 
       <SnapRequestSheet
         visible={snapPickerOpen}
@@ -419,16 +369,9 @@ const styles = StyleSheet.create({
 
   offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
 
-  controls: { gap: 10 },
   pinnedRow: { flexDirection: "row", gap: 10 },
   pinnedMain: { flex: 3 },
   pinned: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
-  // Two real buttons, so it reads as something to tap; the open one takes the action color.
-  segment: { flexDirection: "row", gap: 8 },
-  segmentItem: { flex: 1, minHeight: MIN_TAP, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
-  segmentOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  segmentText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.heading },
-  segmentTextOn: { color: "#FFFFFF", fontFamily: FONT.bold },
 
   group: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, gap: 12 },
   // Each store / project is a tinted band with an accent edge, so it stands out from the requests under it.
