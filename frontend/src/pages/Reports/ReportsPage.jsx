@@ -135,28 +135,33 @@ export function ReportsPage() {
   }, [problems.length, error, fieldErrors]);
 
   // The server recomputes the figures and draws the PDF's charts itself.
+  // The PDF comes back at once with "Pending" in its footer; securing it on the
+  // blockchain (which can take up to 30 seconds) is a second request made right
+  // after the download, so nobody waits for the chain before the file arrives.
   async function exportPdf() {
     if (!generated) return;
     setExporting(true);
     setExportError("");
     setExportResult(null);
+    let reportId = null;
     try {
       const result = await downloadReportPdf(generated);
       saveBlob(result.blob, result.filename);
-      setExportResult({ reportId: result.reportId, anchorStatus: result.anchorStatus, retrying: false, retryMessage: "" });
+      reportId = result.reportId;
+      setExportResult({ reportId, anchorStatus: result.anchorStatus, retrying: Boolean(reportId), retryMessage: "" });
     } catch (err) {
       setExportError(extractErrorMessage(err, t("errors.export_failed")));
     } finally {
       setExporting(false);
     }
+    if (reportId) await secureReport(reportId);
   }
 
-  // The PDF already downloaded with "Pending" in its footer; this only secures
-  // the stored report on the blockchain. It never makes a new PDF.
-  async function retryAnchor() {
-    setExportResult((r) => ({ ...r, retrying: true, retryMessage: "" }));
+  // Ask the server to put the stored report's hash on the blockchain. It never
+  // makes a new PDF; the PDF already downloaded.
+  async function secureReport(reportId) {
     try {
-      const result = await anchorReport(exportResult.reportId);
+      const result = await anchorReport(reportId);
       setExportResult((r) => ({
         ...r,
         retrying: false,
@@ -166,6 +171,12 @@ export function ReportsPage() {
     } catch (err) {
       setExportResult((r) => ({ ...r, retrying: false, retryMessage: extractErrorMessage(err, t("errors.anchor_failed")) }));
     }
+  }
+
+  // The "Try again" button: same call, for when the network was unavailable.
+  async function retryAnchor() {
+    setExportResult((r) => ({ ...r, retrying: true, retryMessage: "" }));
+    await secureReport(exportResult.reportId);
   }
 
   return (
@@ -340,7 +351,13 @@ export function ReportsPage() {
             </Banner>
           )}
 
-          {exportResult && exportResult.anchorStatus !== "Confirmed" && (
+          {exportResult && exportResult.anchorStatus !== "Confirmed" && exportResult.retrying && !exportResult.retryMessage && (
+            <Banner tone="info" title={t("rep.securing_title")}>
+              {t("rep.securing_body")}
+            </Banner>
+          )}
+
+          {exportResult && exportResult.anchorStatus !== "Confirmed" && !(exportResult.retrying && !exportResult.retryMessage) && (
             <Banner
               tone="warning"
               title={t("rep.pending_title")}

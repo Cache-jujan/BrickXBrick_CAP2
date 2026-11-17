@@ -77,6 +77,9 @@ async function run(sql, params = []) {
   if (text.startsWith("select status from projects")) return { rowCount: 1, rows: [{ status: "Active" }] };
   if (text.startsWith("insert into expenses")) return (state.expenses++, { rowCount: 1, rows: [{ expenseid: "e-1" }] });
   if (text.startsWith("insert into synced_actions")) return (state.synced.add(params[0]), { rowCount: 1, rows: [] });
+  if (text.startsWith("select t.taskname")) return { rowCount: 1, rows: [{ taskname: "Pour slab", projectname: "Tower A", projectmanagerid: "pm-1" }] };
+  if (text.startsWith("savepoint") || text.startsWith("release savepoint") || text.startsWith("rollback to savepoint")) return { rowCount: 0, rows: [] };
+  if (text.startsWith("insert into notifications")) return { rowCount: 1, rows: [] };
   throw new Error("unexpected query: " + text);
 }
 

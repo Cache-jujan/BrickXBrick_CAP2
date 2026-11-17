@@ -27,6 +27,8 @@ export const NOTIFICATION_META = {
   BlockchainOverdue:   { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.blockchain_overdue" },
   TamperAlert:         { Icon: ShieldAlertGlyph, bg: "#FDE8E8", fg: "#9F1239", fallbackKey: "notif.fallback.tamper_alert" },
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_assigned" },
+  TaskSubmitted:       { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_submitted" },
+  ExpenseResubmitted:  { Icon: RefreshGlyph,     bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.expense_resubmitted" },
   TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.task_acknowledged" },
   TaskFlagged:         { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.task_flagged" },
   CheckinIssue:        { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.checkin_issue" },
