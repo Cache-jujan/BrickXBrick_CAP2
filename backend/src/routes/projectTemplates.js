@@ -66,7 +66,7 @@ router.get("/", async (req, res) => {
          LEFT JOIN project_template_tasks k ON k.templateMilestoneId = m.templateMilestoneId
         WHERE t.isActive
         GROUP BY t.templateId
-        ORDER BY t.projectType, CASE t.size WHEN 'small' THEN 1 WHEN 'large' THEN 2 ELSE 3 END`
+        ORDER BY t.projectType, CASE t.size WHEN 'small' THEN 1 WHEN 'medium' THEN 2 WHEN 'large' THEN 3 ELSE 4 END`
     );
     res.json(
       result.rows.map((r) => ({

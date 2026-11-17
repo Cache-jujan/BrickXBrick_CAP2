@@ -28,7 +28,7 @@ function useDoubleTap(onSingle, onDouble) {
   };
 }
 
-const SIZE_TITLE = { small: "Small", large: "Large", custom: "Custom" };
+const SIZE_TITLE = { small: "Small", medium: "Medium", large: "Large", custom: "Custom" };
 
 export function ProjectStartGallery({ templates, sources, value, onChange, onNext, onCancel }) {
   const [search, setSearch] = useState("");
