@@ -59,6 +59,9 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
 
   const pickedTemplate = mode === "template" ? templates.find((t) => t.templateId === value.templateId) : null;
 
+  // Only a category with a chosen template looks selected; Blank and Copy leave every category plain.
+  const chosenType = mode === "template" ? value.projectType : null;
+
   const pickedLabel =
     mode === "template" ? value.name
     : mode === "copy" ? (value?.sourceProjectId ? value.name : "Choose a project to copy")
@@ -127,11 +130,12 @@ export function ProjectStartGallery({ templates, sources, value, onChange, onNex
                 <button
                   key={type}
                   type="button"
-                  className={"psg-card psg-category" + (mode !== "copy" && type === activeType ? " psg-card-open" : "")}
-                  aria-pressed={mode !== "copy" && type === activeType}
+                  className={"psg-card psg-category" + (type === chosenType ? " psg-card-open" : "")}
+                  aria-pressed={type === chosenType}
                   onClick={() => {
+                    // Opening a category also picks its Small template, so one click is enough to continue.
                     setOpenType(type);
-                    if (mode === "copy") onChange(null);
+                    onChange(templateChoice(list.find((t) => t.size === "small") ?? list[0]));
                   }}
                 >
                   <span className="psg-icon"><CategoryIcon type={type} /></span>
