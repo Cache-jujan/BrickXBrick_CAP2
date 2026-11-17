@@ -9,7 +9,7 @@ const { quantityOfMatchedLines } = require("../lib/ticketQuantity");
 const { assertLegalTransition, logTransition } = require("../lib/ticketTransitions");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
-const { notifyGeneralManagers } = require("../lib/notify");
+const { notifyGeneralManagers, notifySafely } = require("../lib/notify");
 const { receiptImageExists } = require("../lib/receiptStorage");
 const { EXPENSE_COLUMNS, classifyBir, normalizeBirFields, normalizeLineItems, computeQuantityFromLineItems } = require("../lib/receiptFields");
 const { assertProjectActive } = require("../lib/projectRules");
@@ -708,6 +708,21 @@ router.patch("/:id/resubmit", requireRole("Purchaser"), async (req, res, next) =
                 "UPDATE receiptallocations SET allocatedamount = $1 WHERE expenseid = $2",
                 [amount, req.params.id]
             );
+            // Tell the project's PM it is back for review (they rejected it, or a GM did).
+            const project = await client.query(
+                "SELECT name, projectManagerId FROM projects WHERE projectId = $1",
+                [existing.rows[0].projectid]
+            );
+            if (project.rows[0]) {
+                await notifySafely(client, {
+                    recipientIds: [project.rows[0].projectmanagerid],
+                    excludeUserId: req.user.id,
+                    type: "ExpenseResubmitted",
+                    entityType: "Expense",
+                    entityId: req.params.id,
+                    message: `${req.user.name} resubmitted an expense: ${vendorName} (₱${Number(amount).toLocaleString("en-PH")}) on ${project.rows[0].name}.`,
+                });
+            }
             return result.rows[0];
         });
 

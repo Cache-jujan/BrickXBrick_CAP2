@@ -723,6 +723,476 @@
       ]
     },
     {
+      "templateId": "residential-medium",
+      "projectType": "Residential Building",
+      "size": "medium",
+      "description": "Medium residential build such as a two-storey house or a small multi-unit dwelling.",
+      "offeredConditionalCodes": [
+        "COND-LOCATION",
+        "COND-BARANGAY",
+        "COND-TITLE",
+        "COND-TAX-DECLARATION",
+        "COND-GEODETIC",
+        "COND-AUTHORITY",
+        "COND-FSEC",
+        "COND-FENCE",
+        "COND-EXCAVATION",
+        "COND-DEMOLITION",
+        "COND-TEMP-UTILITY",
+        "COND-OCCUPANCY",
+        "COND-FSIC",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Project Setup and Permit Documents",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 21,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Confirm client, owner, site, and project scope",
+              "handledBy": "GM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 2
+            },
+            {
+              "sequence": 2,
+              "name": "Assign supervising architect or engineer",
+              "handledBy": "GM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 3,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 4,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 5,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 6,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 7,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 8,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 12
+            },
+            {
+              "sequence": 9,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 14
+            },
+            {
+              "sequence": 10,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 11,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 12,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 13,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 20
+            },
+            {
+              "sequence": 14,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 21
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Permits and Pre-Construction",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 51,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Location or zoning clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-LOCATION",
+              "defaultIncluded": false,
+              "hint": "When required by the city or municipality",
+              "dueOffsetDays": 23
+            },
+            {
+              "sequence": 2,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 25
+            },
+            {
+              "sequence": 3,
+              "name": "Certified true copy of title, deed of sale, or lease contract",
+              "handledBy": "GM",
+              "requirementCode": "COND-TITLE",
+              "defaultIncluded": false,
+              "hint": "Depending on ownership or authority to build",
+              "dueOffsetDays": 27
+            },
+            {
+              "sequence": 4,
+              "name": "Certified tax declaration and current tax clearance",
+              "handledBy": "GM",
+              "requirementCode": "COND-TAX-DECLARATION",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 29
+            },
+            {
+              "sequence": 5,
+              "name": "Geodetic survey or sketch plan",
+              "handledBy": "PM",
+              "requirementCode": "COND-GEODETIC",
+              "defaultIncluded": false,
+              "hint": "When required by the scope or local checklist",
+              "dueOffsetDays": 31
+            },
+            {
+              "sequence": 6,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 33
+            },
+            {
+              "sequence": 7,
+              "name": "Fire Safety Evaluation Clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-FSEC",
+              "defaultIncluded": false,
+              "hint": "When required by BFP and project classification",
+              "dueOffsetDays": 35
+            },
+            {
+              "sequence": 8,
+              "name": "Fencing permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-FENCE",
+              "defaultIncluded": false,
+              "hint": "When a new or modified perimeter fence is included",
+              "dueOffsetDays": 37
+            },
+            {
+              "sequence": 9,
+              "name": "Excavation and ground preparation permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-EXCAVATION",
+              "defaultIncluded": false,
+              "hint": "When excavation or ground preparation requires a separate permit",
+              "dueOffsetDays": 39
+            },
+            {
+              "sequence": 10,
+              "name": "Demolition permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-DEMOLITION",
+              "defaultIncluded": false,
+              "hint": "When demolition is part of the work",
+              "dueOffsetDays": 41
+            },
+            {
+              "sequence": 11,
+              "name": "Temporary service connection permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-TEMP-UTILITY",
+              "defaultIncluded": false,
+              "hint": "When temporary electrical or water service is needed",
+              "dueOffsetDays": 43
+            },
+            {
+              "sequence": 12,
+              "name": "Submit building and ancillary permit application",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 45
+            },
+            {
+              "sequence": 13,
+              "name": "Resolve permit corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 47
+            },
+            {
+              "sequence": 14,
+              "name": "Receive approved permits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 49
+            },
+            {
+              "sequence": 15,
+              "name": "Conduct site turnover and safety orientation",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 51
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Earthworks and Foundations",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 36,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Set up site office, storage, safety controls, and project billboard",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 2,
+              "name": "Conduct pre-construction meeting and site turnover",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 3,
+              "name": "Complete survey and setting out",
+              "defaultIncluded": true,
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 4,
+              "name": "Complete excavation and earthworks",
+              "defaultIncluded": true,
+              "dueOffsetDays": 23
+            },
+            {
+              "sequence": 5,
+              "name": "Complete footings, foundations, waterproofing, and backfill",
+              "defaultIncluded": true,
+              "dueOffsetDays": 29
+            },
+            {
+              "sequence": 6,
+              "name": "Complete slabs and underground sleeves",
+              "defaultIncluded": true,
+              "dueOffsetDays": 36
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "Structural Frame and Building Envelope",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 79,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete lower-level structural works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 47
+            },
+            {
+              "sequence": 2,
+              "name": "Complete upper-level structural works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 57
+            },
+            {
+              "sequence": 3,
+              "name": "Complete roof structure and roofing",
+              "defaultIncluded": true,
+              "dueOffsetDays": 68
+            },
+            {
+              "sequence": 4,
+              "name": "Complete masonry, windows, doors, and waterproofing",
+              "defaultIncluded": true,
+              "dueOffsetDays": 79
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "MEP Rough-In and Interior Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 112,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete electrical rough-in and panel preparation",
+              "defaultIncluded": true,
+              "dueOffsetDays": 87
+            },
+            {
+              "sequence": 2,
+              "name": "Complete plumbing and sanitary rough-in",
+              "defaultIncluded": true,
+              "dueOffsetDays": 96
+            },
+            {
+              "sequence": 3,
+              "name": "Complete mechanical or special systems when applicable",
+              "defaultIncluded": true,
+              "dueOffsetDays": 104
+            },
+            {
+              "sequence": 4,
+              "name": "Complete ceilings, partitions, floors, cabinets, and finishes",
+              "defaultIncluded": true,
+              "dueOffsetDays": 112
+            }
+          ]
+        },
+        {
+          "sequence": 6,
+          "name": "External Works and Testing",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 134,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete drainage and utility connections",
+              "defaultIncluded": true,
+              "dueOffsetDays": 118
+            },
+            {
+              "sequence": 2,
+              "name": "Complete driveway, fence, landscaping, and external works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 123
+            },
+            {
+              "sequence": 3,
+              "name": "Test electrical, plumbing, sanitary, and other installed systems",
+              "defaultIncluded": true,
+              "dueOffsetDays": 129
+            },
+            {
+              "sequence": 4,
+              "name": "Resolve inspection findings",
+              "defaultIncluded": true,
+              "dueOffsetDays": 134
+            }
+          ]
+        },
+        {
+          "sequence": 7,
+          "name": "Closeout and Occupancy",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 149,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete final inspections",
+              "defaultIncluded": true,
+              "dueOffsetDays": 137
+            },
+            {
+              "sequence": 2,
+              "name": "Certificate of Occupancy and related completion documents",
+              "requirementCode": "COND-OCCUPANCY",
+              "defaultIncluded": false,
+              "hint": "When the completed structure will be occupied or used",
+              "dueOffsetDays": 140
+            },
+            {
+              "sequence": 3,
+              "name": "Fire Safety Inspection Certificate",
+              "requirementCode": "COND-FSIC",
+              "defaultIncluded": false,
+              "hint": "When required before occupancy or permit release",
+              "dueOffsetDays": 143
+            },
+            {
+              "sequence": 4,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 146
+            },
+            {
+              "sequence": 5,
+              "name": "Complete final punch list and client turnover",
+              "defaultIncluded": true,
+              "dueOffsetDays": 149
+            }
+          ]
+        }
+      ]
+    },
+    {
       "templateId": "residential-large",
       "projectType": "Residential Building",
       "size": "large",
@@ -1618,6 +2088,466 @@
       ]
     },
     {
+      "templateId": "commercial-medium",
+      "projectType": "Commercial Building",
+      "size": "medium",
+      "description": "Medium commercial building such as a small shop, office, or multi-tenant premises.",
+      "offeredConditionalCodes": [
+        "COND-LOCATION",
+        "COND-BARANGAY",
+        "COND-TITLE",
+        "COND-TAX-DECLARATION",
+        "COND-GEODETIC",
+        "COND-AUTHORITY",
+        "COND-FSEC",
+        "COND-DOLE-CSHP",
+        "COND-DPWH",
+        "COND-DENR",
+        "COND-FENCE",
+        "COND-EXCAVATION",
+        "COND-DEMOLITION",
+        "COND-TEMP-UTILITY",
+        "COND-SIDEWALK",
+        "COND-SIGN",
+        "COND-OCCUPANCY",
+        "COND-FSIC",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Commercial Scope and Permits",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 30,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Confirm business use, occupancy, site, and client requirements",
+              "handledBy": "GM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 2,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 2
+            },
+            {
+              "sequence": 3,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 4,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 5,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 6,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 7,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 7
+            },
+            {
+              "sequence": 8,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 9,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 10,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 11,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 12,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 12
+            },
+            {
+              "sequence": 13,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 14,
+              "name": "Location or zoning clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-LOCATION",
+              "defaultIncluded": false,
+              "hint": "When required by the city or municipality",
+              "dueOffsetDays": 14
+            },
+            {
+              "sequence": 15,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 16,
+              "name": "Certified true copy of title, deed of sale, or lease contract",
+              "handledBy": "GM",
+              "requirementCode": "COND-TITLE",
+              "defaultIncluded": false,
+              "hint": "Depending on ownership or authority to build",
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 17,
+              "name": "Certified tax declaration and current tax clearance",
+              "handledBy": "GM",
+              "requirementCode": "COND-TAX-DECLARATION",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 16
+            },
+            {
+              "sequence": 18,
+              "name": "Geodetic survey or sketch plan",
+              "handledBy": "PM",
+              "requirementCode": "COND-GEODETIC",
+              "defaultIncluded": false,
+              "hint": "When required by the scope or local checklist",
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 19,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 20,
+              "name": "Fire Safety Evaluation Clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-FSEC",
+              "defaultIncluded": false,
+              "hint": "When required by BFP and project classification",
+              "dueOffsetDays": 19
+            },
+            {
+              "sequence": 21,
+              "name": "Construction Safety and Health Program",
+              "handledBy": "PM",
+              "requirementCode": "COND-DOLE-CSHP",
+              "defaultIncluded": false,
+              "hint": "When required by project size, workforce, or DOLE rules",
+              "dueOffsetDays": 20
+            },
+            {
+              "sequence": 22,
+              "name": "DPWH clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DPWH",
+              "defaultIncluded": false,
+              "hint": "When the site or work is along a national highway or affects DPWH property",
+              "dueOffsetDays": 21
+            },
+            {
+              "sequence": 23,
+              "name": "DENR ECC/CNC or other environmental clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DENR",
+              "defaultIncluded": false,
+              "hint": "When required by the project location, scope, or environmental rules",
+              "dueOffsetDays": 22
+            },
+            {
+              "sequence": 24,
+              "name": "Fencing permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-FENCE",
+              "defaultIncluded": false,
+              "hint": "When a new or modified perimeter fence is included",
+              "dueOffsetDays": 23
+            },
+            {
+              "sequence": 25,
+              "name": "Excavation and ground preparation permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-EXCAVATION",
+              "defaultIncluded": false,
+              "hint": "When excavation or ground preparation requires a separate permit",
+              "dueOffsetDays": 24
+            },
+            {
+              "sequence": 26,
+              "name": "Demolition permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-DEMOLITION",
+              "defaultIncluded": false,
+              "hint": "When demolition is part of the work",
+              "dueOffsetDays": 25
+            },
+            {
+              "sequence": 27,
+              "name": "Temporary service connection permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-TEMP-UTILITY",
+              "defaultIncluded": false,
+              "hint": "When temporary electrical or water service is needed",
+              "dueOffsetDays": 26
+            },
+            {
+              "sequence": 28,
+              "name": "Sidewalk, sidewalk enclosure, or temporary occupancy permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-SIDEWALK",
+              "defaultIncluded": false,
+              "hint": "When public sidewalk or road space is occupied",
+              "dueOffsetDays": 27
+            },
+            {
+              "sequence": 29,
+              "name": "Sign permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-SIGN",
+              "defaultIncluded": false,
+              "hint": "When a regulated project sign or permanent sign is installed",
+              "dueOffsetDays": 28
+            },
+            {
+              "sequence": 30,
+              "name": "Submit permit applications and resolve corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 29
+            },
+            {
+              "sequence": 31,
+              "name": "Receive approved permits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 30
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Mobilization and Site Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 29,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Set up site facilities, safety controls, and project billboard",
+              "defaultIncluded": true,
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 2,
+              "name": "Complete survey, earthworks, excavation, and foundations",
+              "defaultIncluded": true,
+              "dueOffsetDays": 29
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Structure and Building Envelope",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 78,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete structural frame by level or zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 46
+            },
+            {
+              "sequence": 2,
+              "name": "Complete roof and waterproofing",
+              "defaultIncluded": true,
+              "dueOffsetDays": 62
+            },
+            {
+              "sequence": 3,
+              "name": "Complete walls, windows, doors, and external envelope",
+              "defaultIncluded": true,
+              "dueOffsetDays": 78
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "MEP, Fire Protection, and Interior Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 117,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete electrical and communications rough-in",
+              "defaultIncluded": true,
+              "dueOffsetDays": 88
+            },
+            {
+              "sequence": 2,
+              "name": "Complete plumbing and sanitary systems",
+              "defaultIncluded": true,
+              "dueOffsetDays": 98
+            },
+            {
+              "sequence": 3,
+              "name": "Complete mechanical and fire-protection systems when applicable",
+              "defaultIncluded": true,
+              "dueOffsetDays": 108
+            },
+            {
+              "sequence": 4,
+              "name": "Complete partitions, ceilings, floors, and finishes",
+              "defaultIncluded": true,
+              "dueOffsetDays": 117
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "Systems Testing and Regulatory Inspection",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 137,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Test and commission installed systems",
+              "defaultIncluded": true,
+              "dueOffsetDays": 124
+            },
+            {
+              "sequence": 2,
+              "name": "Conduct fire-safety inspection preparation",
+              "defaultIncluded": true,
+              "dueOffsetDays": 130
+            },
+            {
+              "sequence": 3,
+              "name": "Resolve technical and regulatory deficiencies",
+              "defaultIncluded": true,
+              "dueOffsetDays": 137
+            }
+          ]
+        },
+        {
+          "sequence": 6,
+          "name": "Occupancy and Handover",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 150,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Certificate of Occupancy and related completion documents",
+              "requirementCode": "COND-OCCUPANCY",
+              "defaultIncluded": false,
+              "hint": "When the completed structure will be occupied or used",
+              "dueOffsetDays": 139
+            },
+            {
+              "sequence": 2,
+              "name": "Fire Safety Inspection Certificate",
+              "requirementCode": "COND-FSIC",
+              "defaultIncluded": false,
+              "hint": "When required before occupancy or permit release",
+              "dueOffsetDays": 141
+            },
+            {
+              "sequence": 3,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 144
+            },
+            {
+              "sequence": 4,
+              "name": "Complete final punch list",
+              "defaultIncluded": true,
+              "dueOffsetDays": 146
+            },
+            {
+              "sequence": 5,
+              "name": "Deliver operations, warranty, and closeout records",
+              "defaultIncluded": true,
+              "dueOffsetDays": 149
+            },
+            {
+              "sequence": 6,
+              "name": "Turn over the completed commercial building",
+              "defaultIncluded": true,
+              "dueOffsetDays": 150
+            }
+          ]
+        }
+      ]
+    },
+    {
       "templateId": "commercial-large",
       "projectType": "Commercial Building",
       "size": "large",
@@ -2406,6 +3336,366 @@
       ]
     },
     {
+      "templateId": "fitout-renovation-medium",
+      "projectType": "Fit-out / Renovation",
+      "size": "medium",
+      "description": "Medium renovation or fit-out covering several rooms or a full floor.",
+      "offeredConditionalCodes": [
+        "COND-BARANGAY",
+        "COND-TITLE",
+        "COND-AUTHORITY",
+        "COND-FSEC",
+        "COND-FENCE",
+        "COND-DEMOLITION",
+        "COND-TEMP-UTILITY",
+        "COND-SIGN",
+        "COND-OCCUPANCY",
+        "COND-FSIC",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Existing Condition and Permit Review",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 21,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Inspect and document existing conditions",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 2,
+              "name": "Confirm scope, occupancy, and work boundaries",
+              "handledBy": "GM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 2
+            },
+            {
+              "sequence": 3,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 4,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 5,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 6,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 7,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 8,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 7
+            },
+            {
+              "sequence": 9,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 10,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 11,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 12,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 13,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 14,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 12
+            },
+            {
+              "sequence": 15,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 16,
+              "name": "Certified true copy of title, deed of sale, or lease contract",
+              "handledBy": "GM",
+              "requirementCode": "COND-TITLE",
+              "defaultIncluded": false,
+              "hint": "Depending on ownership or authority to build",
+              "dueOffsetDays": 14
+            },
+            {
+              "sequence": 17,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 18,
+              "name": "Fire Safety Evaluation Clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-FSEC",
+              "defaultIncluded": false,
+              "hint": "When required by BFP and project classification",
+              "dueOffsetDays": 16
+            },
+            {
+              "sequence": 19,
+              "name": "Fencing permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-FENCE",
+              "defaultIncluded": false,
+              "hint": "When a new or modified perimeter fence is included",
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 20,
+              "name": "Demolition permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-DEMOLITION",
+              "defaultIncluded": false,
+              "hint": "When demolition is part of the work",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 21,
+              "name": "Temporary service connection permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-TEMP-UTILITY",
+              "defaultIncluded": false,
+              "hint": "When temporary electrical or water service is needed",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 22,
+              "name": "Sign permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-SIGN",
+              "defaultIncluded": false,
+              "hint": "When a regulated project sign or permanent sign is installed",
+              "dueOffsetDays": 19
+            },
+            {
+              "sequence": 23,
+              "name": "Submit permit applications and resolve corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 20
+            },
+            {
+              "sequence": 24,
+              "name": "Receive approved permits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 21
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Phased Mobilization and Protection",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 10,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Prepare phased work zones and access controls",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 2,
+              "name": "Set up safety, dust, noise, and temporary-utility controls",
+              "defaultIncluded": true,
+              "dueOffsetDays": 7
+            },
+            {
+              "sequence": 3,
+              "name": "Conduct pre-work inspection and client turnover of work areas",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Demolition and Structural Alterations",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 36,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete approved demolition by zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 19
+            },
+            {
+              "sequence": 2,
+              "name": "Complete structural strengthening or alterations when applicable",
+              "defaultIncluded": true,
+              "dueOffsetDays": 27
+            },
+            {
+              "sequence": 3,
+              "name": "Complete disposal, protection, and inspection of exposed conditions",
+              "defaultIncluded": true,
+              "dueOffsetDays": 36
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "Building Systems and Fit-Out",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 69,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete electrical and communications works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 47
+            },
+            {
+              "sequence": 2,
+              "name": "Complete plumbing, sanitary, mechanical, and fire-safety works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 58
+            },
+            {
+              "sequence": 3,
+              "name": "Complete partitions, ceilings, floors, finishes, and fixtures by zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 69
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "Testing, Corrections, and Closeout",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 89,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Test and commission all affected systems",
+              "defaultIncluded": true,
+              "dueOffsetDays": 72
+            },
+            {
+              "sequence": 2,
+              "name": "Complete authority and client inspections",
+              "defaultIncluded": true,
+              "dueOffsetDays": 75
+            },
+            {
+              "sequence": 3,
+              "name": "Resolve punch-list and compliance findings",
+              "defaultIncluded": true,
+              "dueOffsetDays": 79
+            },
+            {
+              "sequence": 4,
+              "name": "Certificate of Occupancy and related completion documents",
+              "requirementCode": "COND-OCCUPANCY",
+              "defaultIncluded": false,
+              "hint": "When the completed structure will be occupied or used",
+              "dueOffsetDays": 82
+            },
+            {
+              "sequence": 5,
+              "name": "Fire Safety Inspection Certificate",
+              "requirementCode": "COND-FSIC",
+              "defaultIncluded": false,
+              "hint": "When required before occupancy or permit release",
+              "dueOffsetDays": 85
+            },
+            {
+              "sequence": 6,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 89
+            }
+          ]
+        }
+      ]
+    },
+    {
       "templateId": "fitout-renovation-large",
       "projectType": "Fit-out / Renovation",
       "size": "large",
@@ -3088,6 +4378,351 @@
               "name": "Hand over the site",
               "defaultIncluded": true,
               "dueOffsetDays": 56
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "templateId": "civil-works-medium",
+      "projectType": "Civil Works",
+      "size": "medium",
+      "description": "Medium civil works such as site development or concrete works across several areas.",
+      "offeredConditionalCodes": [
+        "COND-LOCATION",
+        "COND-BARANGAY",
+        "COND-GEODETIC",
+        "COND-AUTHORITY",
+        "COND-DPWH",
+        "COND-DENR",
+        "COND-FENCE",
+        "COND-EXCAVATION",
+        "COND-SIDEWALK",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Survey, Design, and Clearances",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 21,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Confirm site limits, scope, and affected public areas",
+              "handledBy": "GM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 2,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 2
+            },
+            {
+              "sequence": 3,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 4,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 5,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 6,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 7,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 8,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 7
+            },
+            {
+              "sequence": 9,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 10,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 11,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 12,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 13,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 14,
+              "name": "Location or zoning clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-LOCATION",
+              "defaultIncluded": false,
+              "hint": "When required by the city or municipality",
+              "dueOffsetDays": 12
+            },
+            {
+              "sequence": 15,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 16,
+              "name": "Geodetic survey or sketch plan",
+              "handledBy": "PM",
+              "requirementCode": "COND-GEODETIC",
+              "defaultIncluded": false,
+              "hint": "When required by the scope or local checklist",
+              "dueOffsetDays": 14
+            },
+            {
+              "sequence": 17,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 18,
+              "name": "DPWH clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DPWH",
+              "defaultIncluded": false,
+              "hint": "When the site or work is along a national highway or affects DPWH property",
+              "dueOffsetDays": 16
+            },
+            {
+              "sequence": 19,
+              "name": "DENR ECC/CNC or other environmental clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DENR",
+              "defaultIncluded": false,
+              "hint": "When required by the project location, scope, or environmental rules",
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 20,
+              "name": "Fencing permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-FENCE",
+              "defaultIncluded": false,
+              "hint": "When a new or modified perimeter fence is included",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 21,
+              "name": "Excavation and ground preparation permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-EXCAVATION",
+              "defaultIncluded": false,
+              "hint": "When excavation or ground preparation requires a separate permit",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 22,
+              "name": "Sidewalk, sidewalk enclosure, or temporary occupancy permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-SIDEWALK",
+              "defaultIncluded": false,
+              "hint": "When public sidewalk or road space is occupied",
+              "dueOffsetDays": 19
+            },
+            {
+              "sequence": 23,
+              "name": "Submit permit applications and resolve corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 20
+            },
+            {
+              "sequence": 24,
+              "name": "Receive approved permits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 21
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Mobilization and Temporary Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 14,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Set up site facilities, safety controls, traffic controls, and project billboard",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 2,
+              "name": "Establish benchmarks, access, drainage protection, and temporary works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 3,
+              "name": "Conduct pre-construction meeting",
+              "defaultIncluded": true,
+              "dueOffsetDays": 14
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Earthworks and Substructure",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 46,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete clearing, demolition, excavation, and disposal",
+              "defaultIncluded": true,
+              "dueOffsetDays": 25
+            },
+            {
+              "sequence": 2,
+              "name": "Complete subgrade, embankment, backfill, and compaction",
+              "defaultIncluded": true,
+              "dueOffsetDays": 35
+            },
+            {
+              "sequence": 3,
+              "name": "Complete foundations, drainage, and underground works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 46
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "Main Civil Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 87,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete structural or concrete works by zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 59
+            },
+            {
+              "sequence": 2,
+              "name": "Complete utilities, drainage, curbs, pavement, or site structures",
+              "defaultIncluded": true,
+              "dueOffsetDays": 73
+            },
+            {
+              "sequence": 3,
+              "name": "Perform quality checks and required tests",
+              "defaultIncluded": true,
+              "dueOffsetDays": 87
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "Restoration, Inspection, and Handover",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 102,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete surface restoration and environmental controls",
+              "defaultIncluded": true,
+              "dueOffsetDays": 90
+            },
+            {
+              "sequence": 2,
+              "name": "Resolve authority and client inspection findings",
+              "defaultIncluded": true,
+              "dueOffsetDays": 95
+            },
+            {
+              "sequence": 3,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 98
+            },
+            {
+              "sequence": 4,
+              "name": "Turn over the completed civil works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 102
             }
           ]
         }
@@ -3782,6 +5417,339 @@
       ]
     },
     {
+      "templateId": "structural-retrofitting-medium",
+      "projectType": "Structural Retrofitting",
+      "size": "medium",
+      "description": "Medium structural repair or strengthening covering several members or areas.",
+      "offeredConditionalCodes": [
+        "COND-BARANGAY",
+        "COND-TITLE",
+        "COND-AUTHORITY",
+        "COND-FSEC",
+        "COND-DEMOLITION",
+        "COND-TEMP-UTILITY",
+        "COND-OCCUPANCY",
+        "COND-FSIC",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Assessment, Design, and Approval",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 28,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Inspect and document existing structural conditions",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 2,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 3,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 4,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 5,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 7
+            },
+            {
+              "sequence": 6,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 7,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 8,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 9,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 12
+            },
+            {
+              "sequence": 10,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 11,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 12,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 16
+            },
+            {
+              "sequence": 13,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 14,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 19
+            },
+            {
+              "sequence": 15,
+              "name": "Certified true copy of title, deed of sale, or lease contract",
+              "handledBy": "GM",
+              "requirementCode": "COND-TITLE",
+              "defaultIncluded": false,
+              "hint": "Depending on ownership or authority to build",
+              "dueOffsetDays": 20
+            },
+            {
+              "sequence": 16,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 21
+            },
+            {
+              "sequence": 17,
+              "name": "Fire Safety Evaluation Clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-FSEC",
+              "defaultIncluded": false,
+              "hint": "When required by BFP and project classification",
+              "dueOffsetDays": 23
+            },
+            {
+              "sequence": 18,
+              "name": "Demolition permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-DEMOLITION",
+              "defaultIncluded": false,
+              "hint": "When demolition is part of the work",
+              "dueOffsetDays": 24
+            },
+            {
+              "sequence": 19,
+              "name": "Temporary service connection permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-TEMP-UTILITY",
+              "defaultIncluded": false,
+              "hint": "When temporary electrical or water service is needed",
+              "dueOffsetDays": 25
+            },
+            {
+              "sequence": 20,
+              "name": "Submit permit applications and resolve corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 27
+            },
+            {
+              "sequence": 21,
+              "name": "Receive approved permits and professional sign-offs",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 28
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Phased Mobilization and Temporary Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 15,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Prepare work zones and occupant protection",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 2,
+              "name": "Install temporary supports and monitoring points",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 3,
+              "name": "Conduct pre-work inspection and approve the phase sequence",
+              "defaultIncluded": true,
+              "dueOffsetDays": 15
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Structural Strengthening by Zone",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 58,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete demolition and exposure works by zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 29
+            },
+            {
+              "sequence": 2,
+              "name": "Complete strengthening, repair, and connection works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 43
+            },
+            {
+              "sequence": 3,
+              "name": "Perform inspections and tests before closing each zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 58
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "Restoration and Systems Coordination",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 79,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Restore affected architectural finishes",
+              "defaultIncluded": true,
+              "dueOffsetDays": 65
+            },
+            {
+              "sequence": 2,
+              "name": "Reinstate electrical, plumbing, sanitary, and fire-safety systems",
+              "defaultIncluded": true,
+              "dueOffsetDays": 72
+            },
+            {
+              "sequence": 3,
+              "name": "Remove temporary works after engineer approval",
+              "defaultIncluded": true,
+              "dueOffsetDays": 79
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "Final Inspection and Handover",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 94,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete final structural inspection and documentation",
+              "defaultIncluded": true,
+              "dueOffsetDays": 82
+            },
+            {
+              "sequence": 2,
+              "name": "Resolve punch-list and authority findings",
+              "defaultIncluded": true,
+              "dueOffsetDays": 84
+            },
+            {
+              "sequence": 3,
+              "name": "Certificate of Occupancy and related completion documents",
+              "requirementCode": "COND-OCCUPANCY",
+              "defaultIncluded": false,
+              "hint": "When the completed structure will be occupied or used",
+              "dueOffsetDays": 87
+            },
+            {
+              "sequence": 4,
+              "name": "Fire Safety Inspection Certificate",
+              "requirementCode": "COND-FSIC",
+              "defaultIncluded": false,
+              "hint": "When required before occupancy or permit release",
+              "dueOffsetDays": 89
+            },
+            {
+              "sequence": 5,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 92
+            },
+            {
+              "sequence": 6,
+              "name": "Turn over the retrofitted structure",
+              "defaultIncluded": true,
+              "dueOffsetDays": 94
+            }
+          ]
+        }
+      ]
+    },
+    {
       "templateId": "structural-retrofitting-large",
       "projectType": "Structural Retrofitting",
       "size": "large",
@@ -4444,6 +6412,331 @@
       ]
     },
     {
+      "templateId": "drainage-flood-control-medium",
+      "projectType": "Drainage / Flood Control",
+      "size": "medium",
+      "description": "Medium drainage or flood-control work such as a canal section or several culverts.",
+      "offeredConditionalCodes": [
+        "COND-BARANGAY",
+        "COND-GEODETIC",
+        "COND-AUTHORITY",
+        "COND-DPWH",
+        "COND-DENR",
+        "COND-EXCAVATION",
+        "COND-SIDEWALK",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Survey, Hydrology, and Clearances",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 28,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Confirm catchment, flow path, affected properties, and work limits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 2,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 3,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 4,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 5,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 6,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 7,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 8,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 9,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 10,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 11,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 14
+            },
+            {
+              "sequence": 12,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 13,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 17
+            },
+            {
+              "sequence": 14,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 18
+            },
+            {
+              "sequence": 15,
+              "name": "Geodetic survey or sketch plan",
+              "handledBy": "PM",
+              "requirementCode": "COND-GEODETIC",
+              "defaultIncluded": false,
+              "hint": "When required by the scope or local checklist",
+              "dueOffsetDays": 19
+            },
+            {
+              "sequence": 16,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 20
+            },
+            {
+              "sequence": 17,
+              "name": "DPWH clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DPWH",
+              "defaultIncluded": false,
+              "hint": "When the site or work is along a national highway or affects DPWH property",
+              "dueOffsetDays": 22
+            },
+            {
+              "sequence": 18,
+              "name": "DENR ECC/CNC or other environmental clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DENR",
+              "defaultIncluded": false,
+              "hint": "When required by the project location, scope, or environmental rules",
+              "dueOffsetDays": 23
+            },
+            {
+              "sequence": 19,
+              "name": "Excavation and ground preparation permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-EXCAVATION",
+              "defaultIncluded": false,
+              "hint": "When excavation or ground preparation requires a separate permit",
+              "dueOffsetDays": 24
+            },
+            {
+              "sequence": 20,
+              "name": "Sidewalk, sidewalk enclosure, or temporary occupancy permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-SIDEWALK",
+              "defaultIncluded": false,
+              "hint": "When public sidewalk or road space is occupied",
+              "dueOffsetDays": 25
+            },
+            {
+              "sequence": 21,
+              "name": "Submit permit applications and resolve corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 27
+            },
+            {
+              "sequence": 22,
+              "name": "Receive approved permits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 28
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Mobilization and Temporary Water Management",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 15,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Set up safety, traffic, environmental, and community controls",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 2,
+              "name": "Install temporary diversion, bypass, dewatering, or protection works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 3,
+              "name": "Conduct pre-construction meeting and establish inspection points",
+              "defaultIncluded": true,
+              "dueOffsetDays": 15
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Earthworks and Main Drainage Structures",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 59,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete clearing, excavation, and foundation preparation by zone",
+              "defaultIncluded": true,
+              "dueOffsetDays": 30
+            },
+            {
+              "sequence": 2,
+              "name": "Construct canals, culverts, outfalls, retaining structures, or flood-control works",
+              "defaultIncluded": true,
+              "dueOffsetDays": 44
+            },
+            {
+              "sequence": 3,
+              "name": "Complete backfill, embankment, erosion protection, and utility interfaces",
+              "defaultIncluded": true,
+              "dueOffsetDays": 59
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "Testing, Restoration, and Environmental Compliance",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 80,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Test flow capacity and inspect structures",
+              "defaultIncluded": true,
+              "dueOffsetDays": 64
+            },
+            {
+              "sequence": 2,
+              "name": "Restore roads, sidewalks, properties, and affected utilities",
+              "defaultIncluded": true,
+              "dueOffsetDays": 70
+            },
+            {
+              "sequence": 3,
+              "name": "Complete environmental and safety closeout actions",
+              "defaultIncluded": true,
+              "dueOffsetDays": 75
+            },
+            {
+              "sequence": 4,
+              "name": "Resolve inspection findings",
+              "defaultIncluded": true,
+              "dueOffsetDays": 80
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "As-Built and Handover",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 90,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 84
+            },
+            {
+              "sequence": 2,
+              "name": "Document maintenance and operating requirements",
+              "defaultIncluded": true,
+              "dueOffsetDays": 87
+            },
+            {
+              "sequence": 3,
+              "name": "Complete final inspection and turn over the system",
+              "defaultIncluded": true,
+              "dueOffsetDays": 90
+            }
+          ]
+        }
+      ]
+    },
+    {
       "templateId": "drainage-flood-control-large",
       "projectType": "Drainage / Flood Control",
       "size": "large",
@@ -5088,6 +7381,311 @@
               "name": "Remove temporary controls and reopen the road",
               "defaultIncluded": true,
               "dueOffsetDays": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "templateId": "road-maintenance-medium",
+      "projectType": "Road Maintenance",
+      "size": "medium",
+      "description": "Medium road maintenance covering several road sections.",
+      "offeredConditionalCodes": [
+        "COND-BARANGAY",
+        "COND-AUTHORITY",
+        "COND-DPWH",
+        "COND-DENR",
+        "COND-SIDEWALK",
+        "COND-AS-BUILT"
+      ],
+      "milestones": [
+        {
+          "sequence": 1,
+          "name": "Survey, Traffic Plan, and Clearances",
+          "phase": "Planning",
+          "anchor": "developmentStart",
+          "dueOffsetDays": 14,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Inspect pavement condition and confirm repair limits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 2,
+              "name": "Unified Application Form for Building Permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-UAF",
+              "defaultIncluded": true,
+              "dueOffsetDays": 1
+            },
+            {
+              "sequence": 3,
+              "name": "Architectural permit/plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-ARCH",
+              "defaultIncluded": true,
+              "dueOffsetDays": 2
+            },
+            {
+              "sequence": 4,
+              "name": "Civil/structural permit or structural plans",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 5,
+              "name": "Electrical permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-ELEC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 6,
+              "name": "Sanitary permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-SAN",
+              "defaultIncluded": true,
+              "dueOffsetDays": 4
+            },
+            {
+              "sequence": 7,
+              "name": "Plumbing permit",
+              "handledBy": "PM",
+              "requirementCode": "BP-PLUMB",
+              "defaultIncluded": true,
+              "dueOffsetDays": 5
+            },
+            {
+              "sequence": 8,
+              "name": "Certificate of supervising architect/engineer",
+              "handledBy": "PM",
+              "requirementCode": "BP-SUPERVISOR",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 9,
+              "name": "Bill of Materials",
+              "handledBy": "GM",
+              "requirementCode": "BP-BOM",
+              "defaultIncluded": true,
+              "hint": "Tracks the BOM as a task only. The project BOM stays a separate client-signed record and is not created or filled by this task.",
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 10,
+              "name": "Construction specifications",
+              "handledBy": "PM",
+              "requirementCode": "BP-SPECS",
+              "defaultIncluded": true,
+              "dueOffsetDays": 7
+            },
+            {
+              "sequence": 11,
+              "name": "Structural design analysis (when applicable)",
+              "handledBy": "PM",
+              "requirementCode": "BP-STRUCT-ANALYSIS",
+              "defaultIncluded": true,
+              "hint": "Applicable when the structure requires a design analysis. Uncheck if it does not.",
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 12,
+              "name": "Signed and sealed plans from the responsible professionals",
+              "handledBy": "PM",
+              "requirementCode": "BP-SIGNED-SEALED",
+              "defaultIncluded": true,
+              "dueOffsetDays": 8
+            },
+            {
+              "sequence": 13,
+              "name": "Professional licenses and PTR copies",
+              "handledBy": "PM",
+              "requirementCode": "BP-PTR-PRC",
+              "defaultIncluded": true,
+              "dueOffsetDays": 9
+            },
+            {
+              "sequence": 14,
+              "name": "Barangay clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-BARANGAY",
+              "defaultIncluded": false,
+              "hint": "When required by the local checklist",
+              "dueOffsetDays": 10
+            },
+            {
+              "sequence": 15,
+              "name": "Authorization letter, SPA, or secretary's certificate",
+              "handledBy": "GM",
+              "requirementCode": "COND-AUTHORITY",
+              "defaultIncluded": false,
+              "hint": "When the filer is not the owner or the owner is a corporation",
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 16,
+              "name": "DPWH clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DPWH",
+              "defaultIncluded": false,
+              "hint": "When the site or work is along a national highway or affects DPWH property",
+              "dueOffsetDays": 11
+            },
+            {
+              "sequence": 17,
+              "name": "DENR ECC/CNC or other environmental clearance",
+              "handledBy": "PM",
+              "requirementCode": "COND-DENR",
+              "defaultIncluded": false,
+              "hint": "When required by the project location, scope, or environmental rules",
+              "dueOffsetDays": 12
+            },
+            {
+              "sequence": 18,
+              "name": "Sidewalk, sidewalk enclosure, or temporary occupancy permit",
+              "handledBy": "PM",
+              "requirementCode": "COND-SIDEWALK",
+              "defaultIncluded": false,
+              "hint": "When public sidewalk or road space is occupied",
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 19,
+              "name": "Submit permit applications and resolve corrections",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 13
+            },
+            {
+              "sequence": 20,
+              "name": "Receive approved permits",
+              "handledBy": "PM",
+              "defaultIncluded": true,
+              "dueOffsetDays": 14
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "name": "Traffic Management and Mobilization",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 9,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Prepare traffic management and public-safety controls",
+              "defaultIncluded": true,
+              "dueOffsetDays": 3
+            },
+            {
+              "sequence": 2,
+              "name": "Set up work zones, detours, signage, and project facilities",
+              "defaultIncluded": true,
+              "dueOffsetDays": 6
+            },
+            {
+              "sequence": 3,
+              "name": "Conduct pre-construction meeting",
+              "defaultIncluded": true,
+              "dueOffsetDays": 9
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "name": "Drainage, Subgrade, and Base Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 28,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete drainage repairs and utility coordination",
+              "defaultIncluded": true,
+              "dueOffsetDays": 15
+            },
+            {
+              "sequence": 2,
+              "name": "Complete milling, excavation, subgrade, and base preparation by section",
+              "defaultIncluded": true,
+              "dueOffsetDays": 22
+            },
+            {
+              "sequence": 3,
+              "name": "Perform required compaction and quality checks",
+              "defaultIncluded": true,
+              "dueOffsetDays": 28
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "name": "Pavement and Roadside Works",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 57,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete concrete, asphalt, patching, or resurfacing works by section",
+              "defaultIncluded": true,
+              "dueOffsetDays": 38
+            },
+            {
+              "sequence": 2,
+              "name": "Complete shoulders, curbs, sidewalks, markings, and roadside restoration",
+              "defaultIncluded": true,
+              "dueOffsetDays": 47
+            },
+            {
+              "sequence": 3,
+              "name": "Conduct staged inspections before opening sections",
+              "defaultIncluded": true,
+              "dueOffsetDays": 57
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "name": "Final Inspection and Handover",
+          "phase": "Construction",
+          "anchor": "constructionStart",
+          "dueOffsetDays": 66,
+          "tasks": [
+            {
+              "sequence": 1,
+              "name": "Complete final quality and safety inspection",
+              "defaultIncluded": true,
+              "dueOffsetDays": 59
+            },
+            {
+              "sequence": 2,
+              "name": "Resolve defects and authority findings",
+              "defaultIncluded": true,
+              "dueOffsetDays": 61
+            },
+            {
+              "sequence": 3,
+              "name": "As-built plans, construction logbook, and completed-structure photos",
+              "requirementCode": "COND-AS-BUILT",
+              "defaultIncluded": false,
+              "hint": "As applicable, especially when work differs from approved plans",
+              "dueOffsetDays": 64
+            },
+            {
+              "sequence": 4,
+              "name": "Remove temporary controls and turn over the road",
+              "defaultIncluded": true,
+              "dueOffsetDays": 66
             }
           ]
         }

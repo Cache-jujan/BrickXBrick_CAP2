@@ -762,15 +762,23 @@ function TicketRow({ ticket, onOpen, highlightId }) {
 function TicketModal({ ticket, onClose, cardProps }) {
   const { t: tr } = useLocale();
   const closeRef = useRef(null);
+  // The parent passes a new onClose on every render, and it re-renders on every
+  // keystroke in the budget box. Keep the latest one in a ref so the effects
+  // below run only once, when the modal opens: otherwise each keystroke moved
+  // focus to the close button and the PM had to click the field again.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     closeRef.current?.focus();
+  }, []);
+  useEffect(() => {
     const onKey = (e) => {
       // Escape closes this modal only when no other modal (reject, edit) is on top of it.
-      if (e.key === "Escape" && document.querySelectorAll(".modal-overlay").length === 1) onClose();
+      if (e.key === "Escape" && document.querySelectorAll(".modal-overlay").length === 1) onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
       <div className="modal ticket-modal" role="dialog" aria-modal="true" aria-label={ticket.subject} onClick={(e) => e.stopPropagation()}>
