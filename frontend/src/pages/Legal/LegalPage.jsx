@@ -5,7 +5,6 @@ import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
 import {
-  LegalDraftNotice,
   LegalHighlights,
   LegalReader,
   LegalSkeleton,
@@ -83,7 +82,6 @@ export function LegalPage() {
         {error && <Banner tone="error" title={error} />}
         {!error && !data && <LegalSkeleton />}
 
-        {data && <LegalDraftNotice review={data.review} />}
         {signedIn && acceptance?.accepted && (
           <p className="legal-accepted-note">
             {t("legal.accepted_on", {
