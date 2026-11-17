@@ -229,16 +229,27 @@ const GM = { id: "u1", name: "Test GM", role: "General Manager" };
 const chainDown = async () => { throw new Error("TIMEOUT"); };
 const chainUp = async () => ({ txHash: "0xfeed", blockNumber: 12, validatorNodeCount: 3 });
 
-test("PDF with the chain up: Confirmed header, log row written, tx printed in the footer", async () => {
-  state.me = GM; state.chain = chainUp; state.logs.length = 0;
+test("PDF never waits for the chain: Pending header, chain not called, then the anchor call secures it", async () => {
+  let chainCalls = 0;
+  state.me = GM; state.chain = async () => { chainCalls += 1; return chainUp(); }; state.logs.length = 0;
   const res = await post("/api/reports/pdf", PDF_BODY);
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get("x-report-anchor-status"), "Confirmed");
+  assert.equal(res.buffer.subarray(0, 5).toString(), "%PDF-");
+  assert.equal(res.headers.get("x-report-anchor-status"), "Pending");
+  assert.equal(chainCalls, 0);
+  assert.equal(state.logs.length, 0);
+  const id = res.headers.get("x-report-id");
+  assert.equal(state.stored.get(id).anchorstatus, "Pending");
+  // The page then asks for the anchor, as a separate request.
+  const anchored = await post(`/api/reports/${id}/anchor`, {});
+  assert.equal(anchored.status, 200);
+  assert.equal(anchored.body.anchorStatus, "Confirmed");
+  assert.equal(chainCalls, 1);
   assert.equal(state.logs.length, 1);
-  assert.equal(state.stored.get(res.headers.get("x-report-id")).anchorstatus, "Confirmed");
+  assert.equal(state.stored.get(id).anchorstatus, "Confirmed");
 });
 
-test("PDF with the chain down: still a PDF, status Pending, nothing logged", async () => {
+test("PDF with the chain down: still an instant PDF, status Pending, nothing logged", async () => {
   state.me = GM; state.chain = chainDown; state.logs.length = 0;
   const res = await post("/api/reports/pdf", PDF_BODY);
   assert.equal(res.status, 200);

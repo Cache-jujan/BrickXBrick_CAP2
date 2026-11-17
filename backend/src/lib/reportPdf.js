@@ -426,7 +426,7 @@ function buildReportDocDefinition(summary, options) {
           text:
             anchor.status === "Confirmed"
               ? `Blockchain anchor: Confirmed (tx ${anchor.txHash}, block ${anchor.blockNumber})`
-              : "Blockchain anchor: Pending (the network was unavailable; it will be secured on retry)",
+              : "Blockchain anchor: Pending (it is secured on the blockchain right after this download; the Reports page shows when it is Confirmed)",
         },
         { text: `Page ${page} of ${pages}`, alignment: "right" },
       ],

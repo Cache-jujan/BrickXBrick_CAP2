@@ -1,8 +1,8 @@
 // reports.js: F11 Financial Analytics and Reporting. General Manager only.
 //
 //   GET  /summary?projectIds=a,b&from=YYYY-MM-DD&to=YYYY-MM-DD
-//   POST /pdf     { projectIds, from, to }  ->  application/pdf
-//   POST /:id/anchor   retry securing a Pending report on the blockchain
+//   POST /pdf     { projectIds, from, to }  ->  application/pdf (always anchor "Pending")
+//   POST /:id/anchor   secure a Pending report on the blockchain
 //
 // The PDF route recomputes the summary itself and draws its own charts, so it
 // takes nothing from the browser but the filters.
@@ -70,9 +70,12 @@ router.post("/pdf", async (req, res, next) => {
       [row.reportid, row.generatedby, row.projectids, row.periodfrom, row.periodto, row.generatedat, JSON.stringify(summary), payloadHash]
     );
 
-    // Try to secure the hash on the chain. A chain problem never blocks the
-    // PDF: the report stays Pending and POST /:id/anchor can retry it.
-    const anchor = await anchorReport(row.reportid, req.user);
+    // The PDF does NOT wait for the blockchain: confirming a transaction can
+    // take up to 30 seconds, and nobody should wait that long for a download.
+    // The report is saved as Pending and the PDF says so in its footer; the
+    // Reports page calls POST /:id/anchor right after the download to secure it
+    // (that is a separate request, so Cloud Run keeps the CPU on for it).
+    const anchor = { status: "Pending" };
 
     const pdf = await renderPdf(
       buildReportDocDefinition(summary, {
