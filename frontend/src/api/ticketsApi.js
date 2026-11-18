@@ -5,6 +5,18 @@ export async function createTicket(payload) {
   return data;
 }
 
+// POST /api/tickets/photo, Site Manager only; the form field must be named "photo".
+// JPEG or PNG, up to 10 MB. Returns { photoUrl }: pass the URLs to createTicket as
+// photoUrls on a Report. Nothing is attached to a ticket until that create succeeds.
+export async function uploadTicketPhoto(file) {
+  const fd = new FormData();
+  fd.append("photo", file);
+  const { data } = await apiClient.post("/api/tickets/photo", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
 export async function listApprovedVendors() {
   const { data } = await apiClient.get("/api/tickets/vendors");
   return data;

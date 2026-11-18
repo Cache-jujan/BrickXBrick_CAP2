@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,12 +10,14 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import type { Href } from "expo-router";
 
 import { COLORS } from "@/constants/expense-flow-colors";
 import {
   createTicketsBatch,
+  uploadTicketPhoto,
   type BomItem,
   type Project,
   type Ticket,
@@ -59,7 +63,12 @@ type Card = {
   unit: string; // chosen unit (not-in-BOM / Work Item)
   neededBy: string; // optional "YYYY-MM-DD"
   reportText: string; // Report
+  photos: CardPhoto[]; // Report: up to MAX_PHOTOS, each uploaded as soon as it is taken
 };
+
+type CardPhoto = { id: string; uri: string; url: string | null };
+
+const MAX_PHOTOS = 3;
 
 function emptyCard(id: string): Card {
   return {
@@ -72,6 +81,7 @@ function emptyCard(id: string): Card {
     unit: "",
     neededBy: "",
     reportText: "",
+    photos: [],
   };
 }
 
@@ -100,6 +110,7 @@ function prefilledCard(id: string, t: Ticket): Card {
     unit: t.unit || "",
     neededBy: keepFutureDate(t.neededby),
     reportText: isReport ? (t.description || t.subject || "") : "",
+    photos: [],
   };
 }
 
@@ -210,6 +221,31 @@ export default function TicketRequestScreen() {
     setCards((prev) => (prev.length === 1 ? prev : prev.filter((c) => c.id !== id)));
   }
 
+  // Take a photo for a Report card and upload it straight away. Nothing is attached to
+  // a ticket until the ticket itself is sent with the returned URLs.
+  async function addPhoto(card: Card) {
+    if (card.photos.length >= MAX_PHOTOS) return;
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(t("mx.camera_needed_title"), t("ci.camera_body"));
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    const entry: CardPhoto = { id: `${card.id}:${asset.uri}`, uri: asset.uri, url: null };
+    updateCard(card.id, { photos: [...card.photos, entry] });
+    try {
+      const url = await uploadTicketPhoto({ uri: asset.uri, mimeType: asset.mimeType });
+      setCards((prev) => prev.map((c) => (c.id === card.id
+        ? { ...c, photos: c.photos.map((p) => (p.id === entry.id ? { ...p, url } : p)) }
+        : c)));
+    } catch (err) {
+      setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, photos: c.photos.filter((p) => p.id !== entry.id) } : c)));
+      Alert.alert(t("tr.photo_err_upload"), plainError(err));
+    }
+  }
+
   function bomUnitFor(card: Card): string | null {
     if (card.ticketType !== "Material Request" || !card.bomItemID || card.bomItemID === NOT_IN_BOM) return null;
     return bomItems.find((it) => it.bomItemId === card.bomItemID)?.unit ?? null;
@@ -223,6 +259,7 @@ export default function TicketRequestScreen() {
     const qtyMissing = !card.quantity || !Number.isFinite(qty) || qty <= 0;
     if (card.ticketType === "Report") {
       if (!card.reportText.trim()) problems.push(t("tr.v_describe"));
+      if (card.photos.some((p) => !p.url)) problems.push(t("tr.photo_err_wait"));
       return problems;
     }
     if (card.ticketType === "Work Item") {
@@ -255,6 +292,7 @@ export default function TicketRequestScreen() {
         ticketType: "Report",
         subject: cap100(card.reportText),
         description: card.reportText.trim(),
+        ...(card.photos.length > 0 ? { photoUrls: card.photos.map((p) => p.url as string) } : {}),
       };
     }
     if (card.ticketType === "Work Item") {
@@ -474,6 +512,31 @@ export default function TicketRequestScreen() {
                 multiline
                 maxLength={INPUT_LIMITS.description}
               />
+            )}
+
+            {isReport && (
+              <>
+                <Text style={styles.photosLabel}>{t("tr.photos_label")}</Text>
+                <View style={styles.photoRow}>
+                  {card.photos.map((photo) => (
+                    <View key={photo.id} style={styles.photoBox}>
+                      <Image source={{ uri: photo.uri }} style={[styles.photo, !photo.url && styles.photoPending]} />
+                      <Pressable
+                        onPress={() => updateCard(card.id, { photos: card.photos.filter((p) => p.id !== photo.id) })}
+                        style={styles.photoRemove}
+                        accessibilityLabel={t("tr.photo_remove")}
+                      >
+                        <Text style={styles.photoRemoveText}>×</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  {card.photos.length < MAX_PHOTOS && (
+                    <Pressable onPress={() => addPhoto(card)} style={[styles.photoBox, styles.photoAdd]} accessibilityLabel={t("tr.photo_add")}>
+                      <Text style={styles.photoAddText}>＋{"\n"}{t("ci.photo_add_short")}</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </>
             )}
 
             {isMR && (
@@ -738,6 +801,15 @@ const styles = StyleSheet.create({
   ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
   removeLink: { color: "#B42318", fontSize: 13, fontWeight: "700" },
+  photosLabel: { color: COLORS.heading, fontSize: 13, fontWeight: "700", marginTop: 12, marginBottom: 6 },
+  photoRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  photoBox: { width: 96, height: 96, borderRadius: 12, overflow: "hidden" },
+  photo: { width: 96, height: 96 },
+  photoPending: { opacity: 0.45 },
+  photoAdd: { borderWidth: 1.5, borderStyle: "dashed", borderColor: COLORS.primary, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
+  photoAddText: { color: COLORS.primaryTintText, fontWeight: "700", fontSize: 13, textAlign: "center" },
+  photoRemove: { position: "absolute", top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
+  photoRemoveText: { color: "#FFFFFF", fontSize: 18, lineHeight: 20 },
 
   qtyRow: { flexDirection: "row", gap: 12 },
   qtyCol: { flex: 1 },

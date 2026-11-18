@@ -21,8 +21,9 @@ function formatSize(bytes) {
 }
 
 // Documents for one Planning task. canEdit is false when the task is already
-// completed or the project is closed: the list is then read-only.
-export function TaskDocumentsDialog({ task, canEdit, onClose }) {
+// completed or the project is closed: the list is then read-only. With onComplete
+// the dialog also marks the task done, once at least one file is attached.
+export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete }) {
   const { t, formatDate } = useLocale();
   const [documents, setDocuments] = useState(null);
   const [error, setError] = useState("");
@@ -63,6 +64,18 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
     } catch (err) {
       setError(extractErrorMessage(err, t("docs.err_attach")));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleComplete() {
+    setBusy(true);
+    setError("");
+    try {
+      await onComplete(task);
+      onClose();
+    } catch (err) {
+      setError(extractErrorMessage(err, t("errors.complete_task")));
       setBusy(false);
     }
   }
@@ -148,7 +161,15 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
               {busy ? t("common.working") : t("docs.attach")}
             </Button>
           )}
+          {canEdit && onComplete && (
+            <Button onClick={handleComplete} disabled={busy || documents === null || documents.length === 0}>
+              {t("pd.mark_done")}
+            </Button>
+          )}
         </div>
+        {canEdit && onComplete && documents !== null && documents.length === 0 && (
+          <p className="task-docs-hint">{t("pd.mark_done_blocked")}</p>
+        )}
         {canEdit && <p className="task-docs-hint">{t("docs.hint")}</p>}
       </div>
     </div>

@@ -103,3 +103,10 @@
   font-size: var(--text-sm);
   color: var(--color-ink-soft);
 }
+
+.ticket-form-photos { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.ticket-form-photo-list { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.ticket-form-photo { position: relative; width: 72px; height: 72px; }
+.ticket-form-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm, 6px); }
+.ticket-form-photo img.is-uploading { opacity: 0.45; }
+.ticket-form-photo-remove { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: none; background: var(--color-ink); color: #fff; font-size: 14px; line-height: 1; cursor: pointer; }
