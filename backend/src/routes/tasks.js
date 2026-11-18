@@ -22,6 +22,7 @@ const {
 const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview, taskReviewNotice } = require("../lib/taskProgress");
 const { assertProjectNotOnHold, assertProjectNotTerminated } = require("../lib/projectHold");
 const { notify } = require("../lib/notify");
+const { GATE_CODE } = require("../lib/procurementGate");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -44,6 +45,13 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                     p.status AS projectstatus,
                     p.startDate AS projectstartdate,
                     p.endDate AS projectenddate,
+                    (m.phase = 'Construction'
+                     AND t.requirementCode IS DISTINCT FROM $2
+                     AND EXISTS (SELECT 1 FROM tasks g
+                                   JOIN milestones gm ON gm.milestoneId = g.milestoneId
+                                  WHERE gm.projectId = m.projectId
+                                    AND g.requirementCode = $2
+                                    AND g.status <> 'Completed')) AS procurementgateblocked,
                     pending.photoevidenceurl AS pendingphotoevidenceurl,
                     pending.createdat AS pendingsubmittedat,
                     pending.note AS pendingnote,
@@ -68,7 +76,7 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                ) latest ON TRUE
               WHERE t.assignedTo = $1
               ORDER BY t.dueDate ASC`,
-            [req.user.id]
+            [req.user.id, GATE_CODE]
         );
         res.json(result.rows);
     } catch (err) {

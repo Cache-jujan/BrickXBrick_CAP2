@@ -604,6 +604,12 @@ export function ProjectDetailPage() {
         <Banner key={w.code} tone="warning" title={w.message} />
       ))}
 
+      {project.procurementGateCompleted === false && (project.milestones || []).some((m) => m.phase === "Construction") && (
+        <Banner tone="warning" title={t("pd.gate_banner_title")}>
+          {t("pd.gate_banner_body", { name: t("pd.gate_task_name_default") })}
+        </Banner>
+      )}
+
       {project.description && <p className="pd-description">{project.description}</p>}
 
       <section className="pd-summary" aria-label={t("pd.summary")}>

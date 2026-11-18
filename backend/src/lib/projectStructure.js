@@ -13,6 +13,7 @@ const { isUUID } = require("./uuid");
 const { dateWindowWarning } = require("./scheduleWindows");
 const { deriveStatus } = require("./milestoneProgress");
 const { PROJECT_TYPES } = require("./projectRules");
+const { GATE_CODE } = require("./procurementGate");
 
 const MODES = ["blank", "template", "copy", "documents"];
 const MAX_IDS = 1000;
@@ -161,7 +162,8 @@ async function loadTemplateSource(run, templateId) {
         requirementCode: r.requirementcode || null,
         offset: Number(r.kdue),
         defaultIncluded: r.defaultincluded,
-        selectable: Boolean(r.requirementcode),
+        // Permit documents can be left out; the procurement gate cannot.
+        selectable: Boolean(r.requirementcode) && r.requirementcode !== GATE_CODE,
         hint: r.hint || null,
       });
     }
