@@ -8,6 +8,8 @@ type Props = {
   title: string;
   /** One short line under the title, e.g. "3 items · PHP 4,200". */
   subtitle?: string;
+  /** Colour of the subtitle, e.g. red when something needs fixing. Muted when left out. */
+  subtitleColor?: string;
   /** Tick state of everything inside. Leave out for a group that is only opened and closed. */
   state?: "all" | "some" | "none";
   open: boolean;
@@ -20,7 +22,7 @@ type Props = {
 // A project row that opens to show its items. Closed by default so a receipt that
 // touches several projects reads in one glance; the box on the left ticks the whole
 // project, the rest of the row opens it.
-export function ProjectGroup({ title, subtitle, state, open, onToggleOpen, onToggleTick, children }: Props) {
+export function ProjectGroup({ title, subtitle, subtitleColor, state, open, onToggleOpen, onToggleTick, children }: Props) {
   const ticked = state === "all" || state === "some";
   return (
     <View style={[styles.card, ticked && styles.cardOn]}>
@@ -48,7 +50,7 @@ export function ProjectGroup({ title, subtitle, state, open, onToggleOpen, onTog
         >
           <View style={styles.flex}>
             <Text style={styles.title} numberOfLines={2}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+            {subtitle ? <Text style={[styles.subtitle, subtitleColor ? { color: subtitleColor, fontFamily: FONT.bold } : null]} numberOfLines={2}>{subtitle}</Text> : null}
           </View>
           <IconSymbol name={open ? "chevron.down" : "chevron.right"} size={18} color={COLORS.muted} />
         </Pressable>

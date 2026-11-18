@@ -195,6 +195,31 @@ function parseLineTargets(value, lines) {
   return targets;
 }
 
+// quantityTargets: how much of a receipt line the Purchaser typed for each request,
+// { "<lineIndex>:<ticketID>": quantity }. Returns { lineIndex: { ticketID: quantityH } }.
+// A line with any entry is split exactly as typed (0 means "none for this request").
+function parseQuantityTargets(value, lines) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "quantityTargets must be an object of { \"lineIndex:ticketID\": quantity }");
+  }
+  const targets = {};
+  for (const [key, quantity] of Object.entries(value)) {
+    const [index, ticketID, ...rest] = key.split(":");
+    if (rest.length > 0 || !/^\d+$/.test(index || "") || Number(index) >= lines.length) {
+      throw httpError(400, `quantityTargets key ${key} is not a valid "lineIndex:ticketID"`);
+    }
+    if (lines[Number(index)].quantityH === 0) {
+      throw httpError(400, `quantityTargets can only split lines that have a quantity (line ${index} has none)`);
+    }
+    if (typeof ticketID !== "string" || !UUID_PATTERN.test(ticketID)) {
+      throw httpError(400, `quantityTargets[${key}] must name a valid ticket UUID`);
+    }
+    (targets[Number(index)] ||= {})[ticketID.toLowerCase()] = parseQuantityH(quantity, `quantityTargets[${key}]`);
+  }
+  return targets;
+}
+
 function validatePlanInput(body = {}) {
   const lines = parseAllocationLines(body.lineItems);
   return {
@@ -202,6 +227,7 @@ function validatePlanInput(body = {}) {
     excludeTicketIDs: parseExcludeTicketIDs(body.excludeTicketIDs),
     feeTargets: parseFeeTargets(body.feeTargets, lines),
     lineTargets: parseLineTargets(body.lineTargets, lines),
+    quantityTargets: parseQuantityTargets(body.quantityTargets, lines),
   };
 }
 

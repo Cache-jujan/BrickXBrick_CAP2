@@ -570,14 +570,53 @@ export type PlanPortion = {
   overAllowance: boolean;
   // Quantity bought beyond what every open request wanted (rides on this request).
   extraQuantity: number;
+  // What the request asked for, what it still needed before this receipt, and its approved budget.
+  requestedQuantity: number | null;
+  remainingBefore: number;
+  approvedBudget: string | null;
+  unit: string | null;
   lines: PlanLine[];
 };
 
+// One budget problem for one request in a split plan. The server sends the project and the amounts
+// as fields, so the app can say which project it is about, in the user's language. `message` is the
+// server's English text, kept as a fallback for older servers.
+export type BudgetIssue = {
+  ticketID: string;
+  code: "OVER_BUDGET" | "NO_APPROVED_BUDGET" | "UNDERSPEND_NOTE_REQUIRED";
+  message: string;
+  projectID?: string;
+  projectName?: string;
+  materialType?: string;
+  amount?: string;
+  // What is left to buy with on this request (the Purchaser's "Available for Purchase"); null = no limit set.
+  remaining?: string | null;
+  over?: string | null;
+  unused?: string | null;
+};
+
+export type PlanCandidate = {
+  ticketID: string;
+  projectID: string;
+  projectName: string;
+  materialType: string;
+  lineIndexes: number[];
+  requestedQuantity: number | null;
+  // How much of the request is still to buy: the most that can be typed for it.
+  remainingQuantity: number | null;
+  unit: string | null;
+  remainingBudget: string | null;
+};
+
 export type AllocationPlan = {
+  // Typed amounts that did not fit (more than the request wants, or than the receipt line has).
+  overruns?: { lineIndex: number; ticketID: string; kind: "request" | "receipt"; entered: number; max: number }[];
   ok: boolean;
   problems: string[];
   portions: PlanPortion[];
   uncovered: PlanLine[];
+  // Every open request that matches a receipt line, ticked or not, so each can be listed under its material.
+  candidates: PlanCandidate[];
   extras: (PlanLine & { ticketID: string })[];
   unmatched: PlanLine[];
   allocated: string;
@@ -585,11 +624,12 @@ export type AllocationPlan = {
   warnings: { type: string; ticketID: string; amount?: string; remainingBudget?: string; overAllowance?: boolean; quantity?: number }[];
   // Strict budget, from POST /allocations/preview: OVER_BUDGET and NO_APPROVED_BUDGET stop the
   // submit; UNDERSPEND_NOTE_REQUIRED asks for a note.
-  budgetIssues?: { ticketID: string; code: "OVER_BUDGET" | "NO_APPROVED_BUDGET" | "UNDERSPEND_NOTE_REQUIRED"; message: string }[];
+  budgetIssues?: BudgetIssue[];
 };
 
 // lineTargets: receipt lines the Purchaser matched to a request by hand, { lineIndex: ticketID }.
-export type PlanOptions = { excludeTicketIDs: string[]; feeTargets: Record<string, string>; lineTargets?: Record<string, string> };
+// quantityTargets: how much of a receipt line the Purchaser typed for each request, { "lineIndex:ticketID": quantity }.
+export type PlanOptions = { excludeTicketIDs: string[]; feeTargets: Record<string, string>; lineTargets?: Record<string, string>; quantityTargets?: Record<string, number> };
 
 export type AllocationSubmission = PlanOptions & {
   receiptImageURL: string;
@@ -617,6 +657,25 @@ export type AllocationResult = {
   warnings: AllocationPlan["warnings"];
   screening: Record<string, { flagTypes: string[] | null; error?: string }>;
 };
+
+// The next sequential Purchase Order number ("PO-2026-014"). The server only keeps the counter;
+// the PO itself is built on the phone.
+export async function fetchPoNumber(): Promise<string> {
+  const res = await apiFetch(`${API_URL}/api/purchase-orders/number`, { method: "POST", headers: authHeaders() });
+  const data = await readJson(res, "Failed to get a PO number");
+  return String(data.poNumber);
+}
+
+// A Purchaser blocked by a request's approved budget asks the Project Manager to raise it. `requestedAmount` is the
+// extra pesos needed; `reasonCode` is one of the reasons the Purchaser tapped. The purchase stays blocked until the PM approves.
+export async function requestBudgetAdjustment(input: { ticketID: string; requestedAmount: number; reasonCode: string; note?: string }): Promise<{ ticketID: string }> {
+  const res = await apiFetch(`${API_URL}/api/budget-adjustments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(input),
+  });
+  return readJson(res, "Failed to send the budget request");
+}
 
 export async function fetchOpenRequests(): Promise<OpenRequest[]> {
   const res = await apiFetch(`${API_URL}/api/allocations/open-requests`, { headers: authHeaders() });

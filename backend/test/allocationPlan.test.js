@@ -56,23 +56,72 @@ test("45 bags: Bravo is partly filled and stays open", () => {
   assert.equal(bravo.resolvesTicket, false);
 });
 
-test("excess: 70 bags still submit; the 10 extra bags (₱2,800) ride on the last request and are reported", () => {
+test("excess: 70 bags cannot submit; the 10 bags (₱2,800) no request wants are unmatched, never allocated", () => {
   const result = plan([cement(70, 19600)]);
-  assert.equal(result.ok, true);
-  assert.deepEqual(describePlanProblems(result), []);
-  assert.equal(result.extras.length, 1);
+  assert.equal(result.ok, false);
+  assert.equal(result.unmatched.length, 1);
   assert.deepEqual(
-    { quantityH: result.extras[0].quantityH, amountCents: result.extras[0].amountCents, ticketID: result.extras[0].ticketID },
-    { quantityH: 1000, amountCents: 280000, ticketID: CHARLIE }
+    { quantityH: result.unmatched[0].quantityH, amountCents: result.unmatched[0].amountCents },
+    { quantityH: 1000, amountCents: 280000 }
   );
-  // Money still adds up: every peso of the receipt sits on a portion.
-  assert.equal(result.allocatedCents, result.linesCents);
+  assert.match(describePlanProblems(result)[0], /No open request for 10 of/);
+  // The requests keep exactly what they asked for; the leftover is on no project.
+  assert.equal(result.allocatedCents + result.unmatched[0].amountCents, result.linesCents);
   const charlie = result.portions.find((p) => p.ticketID === CHARLIE);
-  assert.equal(charlie.quantityH, 2000); // 10 it wanted + 10 extra
-  assert.equal(charlie.extraH, 1000);
-  assert.equal(charlie.remainingAfterH, 0);
+  assert.equal(charlie.quantityH, 1000);
+  assert.equal(charlie.extraH, 0);
   assert.equal(charlie.resolvesTicket, true);
-  assert.deepEqual(result.warnings, [{ type: "OVER_QUANTITY", ticketID: CHARLIE, quantityH: 1000 }]);
+  assert.deepEqual(result.warnings, []);
+});
+
+test("candidates lists every open request for the material, even ones the split never reaches or that are unticked", () => {
+  const small = plan([cement(5, 1400)]);
+  assert.equal(small.portions.length, 1); // oldest request covers all 5 bags
+  assert.deepEqual(small.candidates.map((c) => c.ticketID).sort(), [ALPHA, BRAVO, CHARLIE].sort());
+  assert.ok(small.candidates.every((c) => c.lineIndexes.includes(0)));
+  const none = plan([cement(5, 1400)], cementTickets(), { excludeTicketIDs: [ALPHA, BRAVO, CHARLIE] });
+  assert.equal(none.portions.length, 0);
+  assert.equal(none.candidates.length, 3);
+});
+
+// Typed amounts (quantityTargets): { lineIndex: { ticketID: quantityH } }
+
+test("typed amounts: 5 + 15 of a 20-bag receipt go exactly where typed, priced pro rata", () => {
+  const result = plan([cement(20, 5600)], cementTickets(), { quantityTargets: { 0: { [ALPHA]: 500, [BRAVO]: 1500, [CHARLIE]: 0 } } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(summary(result), [
+    ["Project Alpha", 5, 140000, false],
+    ["Project Bravo", 15, 420000, false],
+  ]);
+  assert.equal(result.allocatedCents, result.linesCents);
+});
+
+test("typed amounts that add up to less than the line leave the rest unmatched and block", () => {
+  const result = plan([cement(20, 5600)], cementTickets(), { quantityTargets: { 0: { [ALPHA]: 500, [BRAVO]: 1000 } } });
+  assert.equal(result.ok, false);
+  assert.deepEqual({ q: result.unmatched[0].quantityH, a: result.unmatched[0].amountCents }, { q: 500, a: 140000 });
+});
+
+test("nothing typed yet: every request is listed and the whole line is unallocated", () => {
+  const result = plan([cement(20, 5600)], cementTickets(), { quantityTargets: { 0: { [ALPHA]: 0, [BRAVO]: 0, [CHARLIE]: 0 } } });
+  assert.equal(result.ok, false);
+  assert.equal(result.portions.length, 0);
+  assert.equal(result.unmatched[0].quantityH, 2000);
+  assert.equal(result.candidates.length, 3);
+});
+
+test("typing more than a request still wants is reported and blocks", () => {
+  const result = plan([cement(20, 5600)], cementTickets(), { quantityTargets: { 0: { [CHARLIE]: 1500, [ALPHA]: 500 } } });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.overruns.map((o) => [o.ticketID, o.kind, o.enteredH, o.maxH]), [[CHARLIE, "request", 1500, 1000]]);
+  assert.ok(describePlanProblems(result).some((p) => /Project Charlie asked for only 10 of cement, but 15 was entered/.test(p)));
+});
+
+test("typing more than the receipt has is reported and blocks", () => {
+  const result = plan([cement(20, 5600)], cementTickets(), { quantityTargets: { 0: { [ALPHA]: 1500, [BRAVO]: 1500 } } });
+  assert.equal(result.ok, false);
+  assert.equal(result.overruns[0].kind, "receipt");
+  assert.equal(summary(result).reduce((n, row) => n + row[1], 0), 20); // never allocates past the line
 });
 
 test("a receipt that matches no request at all still cannot be submitted", () => {
@@ -241,12 +290,14 @@ test("a line matched by hand goes to that request even when the words do not mat
   assert.equal(result.portions[0].lines[0].manual, true);
 });
 
-test("a hand match is capped by what the request still wants; the rest is an extra on it", () => {
+test("a hand match is capped by what the request still wants; the rest is unmatched and blocks", () => {
   const result = plan([{ description: "Mystery bags", quantity: 12, amount: 1200 }], cementTickets(), { lineTargets: { 0: CHARLIE } });
+  assert.equal(result.ok, false);
   assert.equal(result.portions.length, 1);
-  assert.equal(result.portions[0].quantityH, 1200);
-  assert.equal(result.portions[0].extraH, 200);
+  assert.equal(result.portions[0].quantityH, 1000);
+  assert.equal(result.portions[0].extraH, 0);
   assert.equal(result.portions[0].resolvesTicket, true);
+  assert.deepEqual({ quantityH: result.unmatched[0].quantityH, amountCents: result.unmatched[0].amountCents }, { quantityH: 200, amountCents: 20000 });
 });
 
 test("a delivery fee alone can be matched to a request", () => {

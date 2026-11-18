@@ -216,22 +216,22 @@ function Rejected({ expense, onFix, t }: { expense: MyExpense; onFix: (e: MyExpe
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.bg },
+  safeArea: { flex: 1, backgroundColor: COLORS.bgWarm },
 
-  header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
-  title: { fontSize: 26, fontFamily: FONT.extrabold, color: COLORS.heading },
-  subtitle: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+  header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 },
+  title: { fontSize: 28, fontFamily: FONT.extrabold, letterSpacing: -0.5, color: COLORS.heading },
+  subtitle: { fontSize: 15, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 6 },
 
-  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 20, marginBottom: 8 },
   pill: { minHeight: MIN_TAP, justifyContent: "center", paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
-  pillActive: { backgroundColor: COLORS.primaryTint, borderColor: COLORS.primary },
+  pillActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   pillText: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.muted },
-  pillTextActive: { color: COLORS.primaryTintText, fontFamily: FONT.bold },
+  pillTextActive: { color: "#FFFFFF", fontFamily: FONT.bold },
 
-  offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
-  stateWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, marginHorizontal: 20, marginBottom: 8, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
+  stateWrap: { paddingHorizontal: 20, paddingBottom: 8 },
 
-  list: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
+  list: { paddingHorizontal: 20, paddingBottom: 24, gap: 10 },
   dayHeading: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.muted, marginTop: 10, marginBottom: 2 },
 
   card: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14 },

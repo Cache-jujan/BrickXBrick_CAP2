@@ -267,3 +267,10 @@
 }
 .open-requests-item .open-requests-track,
 .open-requests-item .open-requests-fill { display: block; }
+
+/* The per-project Purchase order button sits at the end of the card header. */
+.open-requests-po-btn {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}

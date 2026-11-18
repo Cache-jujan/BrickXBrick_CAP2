@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PurchaseOrderModal } from "../../components/requests/PurchaseOrderModal";
 import { RequestDetailModal } from "../../components/requests/RequestDetailModal";
 import { Badge } from "../../components/ui/Badge";
 import { listOpenRequests } from "../../api/allocationsApi";
@@ -36,6 +37,9 @@ export function OpenRequestsPage() {
   const [vendorFilter, setVendorFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  // The Purchase order dialog: closed, or open with a project already ticked (null = every project).
+  const [poOpen, setPoOpen] = useState(false);
+  const [poProjectId, setPoProjectId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,6 +125,11 @@ export function OpenRequestsPage() {
           <Button type="button" variant="secondary" onClick={load} disabled={loading}>
             {loading ? t("common.checking") : t("open_requests.refresh")}
           </Button>
+          {requests.length > 0 && (
+            <Button type="button" onClick={() => { setPoProjectId(null); setPoOpen(true); }} aria-haspopup="dialog">
+              {t("po.button")}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -136,6 +145,19 @@ export function OpenRequestsPage() {
           <div className="open-requests-group-head">
             <h2>{group.title}</h2>
             <span className="open-requests-count">{countLabel(group.requests.length)}</span>
+            {/* In the project view each card is a project: its own Purchase order button, with it already ticked. */}
+            {view === "project" && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="open-requests-po-btn"
+                onClick={() => { setPoProjectId(group.key); setPoOpen(true); }}
+                aria-haspopup="dialog"
+                aria-label={t("po.for_project", { project: group.title })}
+              >
+                {t("po.button")}
+              </Button>
+            )}
           </div>
           <ul className="open-requests-list">
             {group.requests.map((request) => {
@@ -187,6 +209,7 @@ export function OpenRequestsPage() {
       </div>
 
       {selected && <RequestDetailModal request={selected} role={user.role} onClose={() => setSelectedId(null)} />}
+      {poOpen && <PurchaseOrderModal requests={requests} initialProjectId={poProjectId} onClose={() => setPoOpen(false)} />}
     </div>
   );
 }

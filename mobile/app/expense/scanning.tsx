@@ -125,9 +125,14 @@ export default function ScanningScreen() {
             <Text style={[styles.secondaryText, { color: RED }]}>{t("mx.discard_receipt")}</Text>
           </Pressable>
         ) : (
-          <Pressable style={[styles.button, styles.secondary]} onPress={() => router.replace("/")} accessibilityRole="button">
-            <Text style={styles.secondaryText}>{t("mx.back_keep_reading")}</Text>
-          </Pressable>
+          <>
+            <Pressable style={[styles.button, styles.secondary]} onPress={() => router.replace("/")} accessibilityRole="button">
+              <Text style={styles.secondaryText}>{t("mx.back_keep_reading")}</Text>
+            </Pressable>
+            <Pressable style={[styles.button, styles.secondary]} onPress={discard} accessibilityRole="button">
+              <Text style={[styles.secondaryText, { color: RED }]}>{t("common.cancel")}</Text>
+            </Pressable>
+          </>
         )}
       </View>
     </SafeAreaView>

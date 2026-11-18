@@ -19,12 +19,11 @@ import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { FilterButton } from "@/components/filter-button";
 import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
 import { RequestDetailsSheet } from "@/components/request-details-sheet";
-import { SnapRequestSheet } from "@/components/snap-request-sheet";
+import { PurchaseOrderSheet } from "@/components/purchase-order-sheet";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
 import { getPendingScans, getRejectedScans, removeQueuedScan } from "@/lib/sync/db";
 import { deleteQueuedPhoto } from "@/lib/sync/task-photo";
@@ -52,7 +51,9 @@ export function ToBuy() {
   // The request whose details sheet is open (tap a request to open it).
   const [detail, setDetail] = useState<OpenRequest | null>(null);
   // "Which request is this receipt for?" sheet, opened by the Snap receipt button.
-  const [snapPickerOpen, setSnapPickerOpen] = useState(false);
+  // "Purchase order" sheet: a printable list of what to buy, per project.
+  const [poOpen, setPoOpen] = useState(false);
+  const [poProjectId, setPoProjectId] = useState<string | null>(null);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // Site Manager only: receipts being read or ready to review, and ones saved on this phone offline.
   const [scans, setScans] = useState<ReceiptScan[]>([]);
@@ -157,21 +158,12 @@ export function ToBuy() {
     return ticket.projectname ?? projectsById[ticket.projectid]?.name ?? t("mr.unknown_project");
   }
 
-  // Opens the camera. No project is assumed here, not even from the list filter:
-  // the capture screen asks which project the receipt is for once the photo is taken
-  // (and picks it by itself only when there is exactly one).
-  function snapReceipt() {
+  // Straight to Add receipt. The Purchaser does not say which request or project the receipt is for:
+  // they scan it, and after it is read the app matches it to the open requests that have those materials.
+  function startSnap() {
     reset();
     startSplit(null);
     router.push("/expense/capture");
-  }
-
-  // One receipt for one request is the normal case, so the Purchaser says which request first.
-  // With a single open request there is nothing to choose; Site Managers keep snap-now.
-  function startSnap() {
-    if (isSiteManager || requests.length === 0) return snapReceipt();
-    if (requests.length === 1) return snapForRequest(requests[0]);
-    setSnapPickerOpen(true);
   }
 
   // "Snap receipt for this request" in the details sheet: the receipt goes to this
@@ -206,6 +198,13 @@ export function ToBuy() {
     router.push("/expense/capture");
   }
 
+  // Opens the purchase order sheet. From a project's header that project is already ticked; from the
+  // button next to Snap receipt it starts with the project the list is filtered to (or all of them).
+  function openPurchaseOrder(projectId: string | null) {
+    setPoProjectId(projectId ?? activeFilter);
+    setPoOpen(true);
+  }
+
   const empty = !loading && sections.length === 0 && others.length === 0;
 
   return (
@@ -214,21 +213,8 @@ export function ToBuy() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { load(); loadScans(); }} />}
       >
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>{t("tb.title")}</Text>
-            <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
-          </View>
-          {projectChoices.length > 1 ? (
-            <FilterButton
-              label={t("tb.filter_project")}
-              allLabel={t("tb.all_projects")}
-              options={projectChoices.map((p) => ({ id: p.projectId, label: p.projectName }))}
-              value={activeFilter}
-              onChange={setProjectFilter}
-            />
-          ) : null}
-        </View>
+        <Text style={styles.title}>{t("tb.title")}</Text>
+        <Text style={styles.subtitle}>{t("tb.subtitle")}</Text>
 
         {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
@@ -237,6 +223,53 @@ export function ToBuy() {
               : t("ix.offline_last")}
           </Text>
         )}
+
+        {/* What is left to buy, at a glance (same orange card as the Site Manager's Tasks). */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTile}>
+            <IconSymbol name="list.clipboard.fill" size={34} color={COLORS.primary} />
+          </View>
+          <View style={styles.heroBody}>
+            <Text style={styles.heroLabel}>{t("tb.hero_label")}</Text>
+            <Text style={styles.heroValue}>
+              {loading && requests.length === 0
+                ? "…"
+                : `${t(requests.length === 1 ? "tb.items_one" : "tb.items_other", { count: requests.length })} · ${t(projectChoices.length === 1 ? "tb.projects_one" : "tb.projects_other", { count: projectChoices.length })}`}
+            </Text>
+          </View>
+        </View>
+
+        {/* The two things a buyer does: snap a receipt, or print what to buy. */}
+        <View style={styles.actionRow}>
+          <AppButton label={t("tb.snap")} onPress={startSnap} style={styles.actionPrimary} />
+          {requests.length > 0 ? (
+            <AppButton label={t("po.button")} variant="secondary" onPress={() => openPurchaseOrder(null)} style={styles.actionSecondary} />
+          ) : null}
+        </View>
+
+        {/* One project at a time suits a delivery run; "All projects" keeps the whole list. */}
+        {projectChoices.length > 1 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {[{ id: null as string | null, label: t("tb.all_projects"), count: requests.length },
+              ...projectChoices.map((p) => ({ id: p.projectId as string | null, label: p.projectName, count: p.count }))].map((option) => {
+              const active = activeFilter === option.id;
+              return (
+                <Pressable
+                  key={option.id ?? "all"}
+                  onPress={() => setProjectFilter(option.id)}
+                  style={[styles.chip, active && styles.chipActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>{option.label}</Text>
+                  <View style={[styles.chipCount, active && styles.chipCountActive]}>
+                    <Text style={[styles.chipCountText, active && styles.chipTextActive]}>{option.count}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         {isSiteManager ? (
           <ScannedReceipts
@@ -252,16 +285,6 @@ export function ToBuy() {
 
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 
-        {sections.length > 0 && activeFilter === null ? (
-          <View style={styles.allBanner} accessibilityRole="header">
-            <IconSymbol name="folder.fill" size={20} color={SOFT.text} />
-            <Text style={styles.allBannerTitle} numberOfLines={1}>{t("tb.all_projects")}</Text>
-            <Text style={styles.allBannerCount}>
-              {t(filtered.length === 1 ? "tb.items_one" : "tb.items_other", { count: filtered.length })}
-            </Text>
-          </View>
-        ) : null}
-
         {sections.map((group) => (
           <View key={group.key} style={styles.group}>
             <View style={styles.groupHeader}>
@@ -269,6 +292,15 @@ export function ToBuy() {
               <View style={styles.groupCountPill}>
                 <Text style={styles.groupCount}>{t(group.requests.length === 1 ? "tb.items_one" : "tb.items_other", { count: group.requests.length })}</Text>
               </View>
+              <Pressable
+                onPress={() => openPurchaseOrder(group.key)}
+                style={({ pressed }) => [styles.groupPoButton, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel={t("po.for_project", { project: group.title })}
+                hitSlop={6}
+              >
+                <IconSymbol name="list.clipboard.fill" size={20} color={COLORS.primary} />
+              </Pressable>
             </View>
 
             {group.requests.map((request) => {
@@ -289,7 +321,7 @@ export function ToBuy() {
                     <IconSymbol name="chevron.right" size={20} color={COLORS.muted} />
                   </View>
                   <Text style={styles.requestMeta} numberOfLines={1}>
-                    {t("tb.need_line", { quantity: formatQty(request.requestedQuantity), material: unit, project: request.projectName })}
+                    {t("tb.need_line_plain", { quantity: formatQty(request.requestedQuantity), material: unit })}
                   </Text>
                   {progress.started ? (
                     <>
@@ -299,7 +331,7 @@ export function ToBuy() {
                       <Text style={styles.progressText}>
                         {t("tb.progress_qty", { bought: formatQty(progress.bought), total: formatQty(progress.requested) })}
                         {progress.spent != null && progress.budget != null
-                          ? ` · ${t("ck.given_spent", { budget: formatPeso(progress.budget), spent: formatPeso(progress.spent) })}`
+                          ? ` · ${t("tb.spent_of", { spent: formatPeso(progress.spent), budget: formatPeso(progress.budget) })}`
                           : ""}
                       </Text>
                     </>
@@ -307,7 +339,6 @@ export function ToBuy() {
                 </Pressable>
               );
             })}
-
           </View>
         ))}
 
@@ -337,59 +368,60 @@ export function ToBuy() {
       {/* Site Managers see the details too; filing a receipt for one request stays the Purchaser's. */}
       <RequestDetailsSheet request={detail} canSnap onSnap={snapForRequest} onClose={() => setDetail(null)} />
 
-      <SnapRequestSheet
-        visible={snapPickerOpen}
+      <PurchaseOrderSheet
+        visible={poOpen}
         requests={requests}
-        onPick={(request) => { setSnapPickerOpen(false); snapForRequest(request); }}
-        onSeveral={() => { setSnapPickerOpen(false); snapReceipt(); }}
-        onClose={() => setSnapPickerOpen(false)}
+        initialProjectId={poProjectId}
+        onClose={() => setPoOpen(false)}
       />
-
-      {/* Always in reach, just above the tab bar. */}
-      <View style={styles.pinned}>
-        <View style={styles.pinnedRow}>
-          <View style={styles.pinnedMain}><AppButton label={t("tb.snap")} onPress={startSnap} /></View>
-        </View>
-      </View>
     </SafeAreaView>
   );
 }
 
-// Labels stay soft; only the action buttons (AppButton) carry the strong brand color.
-const SOFT = { band: "#FBF5EE", edge: "#E6C9AE", text: "#7A5236", fill: "#E9BD97" };
+// The Site Manager's look: warm page, white cards with a 16px radius, one orange accent.
+const CARD = { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1 } as const;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, gap: 14, paddingBottom: 32 },
+  safeArea: { flex: 1, backgroundColor: COLORS.bgWarm },
+  content: { paddingHorizontal: 20, paddingBottom: 28, gap: 14 },
 
-  header: { paddingTop: 0, paddingBottom: 2, flexDirection: "row", alignItems: "center", gap: 12 },
-  headerText: { flex: 1 },
-  title: { fontSize: 26, fontFamily: FONT.extrabold, color: COLORS.heading },
-  subtitle: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+  title: { color: COLORS.heading, fontSize: 28, fontFamily: FONT.extrabold, letterSpacing: -0.5, marginTop: 14 },
+  subtitle: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 15, marginTop: -8 },
+  offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, padding: 12, borderRadius: 12, fontSize: 13, lineHeight: 18, fontFamily: FONT.regular },
 
-  offlineNote: { color: COLORS.amberBannerText, backgroundColor: COLORS.amberBannerFill, padding: 10, borderRadius: 10, fontSize: 12, fontFamily: FONT.medium },
+  heroCard: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 24, flexDirection: "row", gap: 16, padding: 16 },
+  heroTile: { alignItems: "center", backgroundColor: COLORS.card, borderRadius: 18, height: 68, justifyContent: "center", width: 68 },
+  heroBody: { flex: 1 },
+  heroLabel: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: FONT.medium },
+  heroValue: { color: "#FFFFFF", fontSize: 21, fontFamily: FONT.extrabold, marginTop: 3 },
 
-  pinnedRow: { flexDirection: "row", gap: 10 },
-  pinnedMain: { flex: 3 },
-  pinned: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
+  actionRow: { flexDirection: "row", gap: 10 },
+  actionPrimary: { flex: 1.25 },
+  actionSecondary: { flex: 1 },
 
-  group: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, gap: 12 },
-  // Each store / project is a tinted band with an accent edge, so it stands out from the requests under it.
-  groupHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, backgroundColor: SOFT.band, borderLeftWidth: 5, borderLeftColor: SOFT.edge, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 },
-  groupTitle: { flex: 1, fontSize: 17, fontFamily: FONT.extrabold, color: SOFT.text },
-  groupCountPill: { backgroundColor: COLORS.card, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: SOFT.edge },
-  groupCount: { fontSize: 12, fontFamily: FONT.bold, color: SOFT.text },
-  // "All stores" / "All projects": a soft tinted band, slightly deeper than the group headers.
-  allBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: COLORS.primaryTint, borderWidth: 1, borderColor: SOFT.edge, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
-  allBannerTitle: { flex: 1, fontSize: 17, fontFamily: FONT.extrabold, color: SOFT.text },
-  allBannerCount: { fontSize: 13, fontFamily: FONT.bold, color: SOFT.text },
+  chipRow: { gap: 8, paddingRight: 4 },
+  chip: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 22, borderWidth: 1, flexDirection: "row", gap: 8, maxWidth: 240, minHeight: MIN_TAP, paddingHorizontal: 14 },
+  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipText: { color: COLORS.heading, flexShrink: 1, fontSize: 13, fontFamily: FONT.bold },
+  chipTextActive: { color: "#FFFFFF" },
+  chipCount: { backgroundColor: COLORS.primaryTint, borderRadius: 10, minWidth: 20, paddingHorizontal: 6, paddingVertical: 1 },
+  chipCountActive: { backgroundColor: "rgba(255,255,255,0.28)" },
+  chipCountText: { color: COLORS.primaryTintText, fontSize: 12, fontFamily: FONT.extrabold, textAlign: "center" },
 
-  request: { gap: 4, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, minHeight: MIN_TAP },
+  // One white card per project: its name, how many items, the Purchase order button, then its requests.
+  group: { ...CARD, padding: 14, gap: 12 },
+  groupHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  groupTitle: { flex: 1, fontSize: 17, fontFamily: FONT.extrabold, color: COLORS.heading },
+  groupCountPill: { backgroundColor: COLORS.primaryTint, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  groupCount: { fontSize: 12, fontFamily: FONT.extrabold, color: COLORS.primaryTintText },
+  groupPoButton: { width: MIN_TAP - 4, height: MIN_TAP - 4, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
+
+  request: { gap: 4, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 12, minHeight: MIN_TAP },
   requestHead: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   requestTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   requestTitleInRow: { flex: 1 },
-  requestMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
+  requestMeta: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted },
   track: { height: 6, borderRadius: 3, backgroundColor: COLORS.border, overflow: "hidden", marginTop: 4 },
-  fill: { height: 6, borderRadius: 3, backgroundColor: SOFT.fill },
-  progressText: { fontSize: 12, fontFamily: FONT.semibold, color: SOFT.text },
+  fill: { height: 6, borderRadius: 3, backgroundColor: COLORS.primary },
+  progressText: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
 });

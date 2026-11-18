@@ -93,3 +93,20 @@ test("split plan: a request with no approved budget (null) is flagged", () => {
   const plan = planAllocation([{ description: "Portland cement", quantity: 10, amount: 2800 }], [openCement("a", "20.00", null, "2026-10-01T08:00:00Z")], {}, fakeMatch);
   assert.deepEqual(budgetIssuesFor(plan.portions, "").map((i) => i.code), ["NO_APPROVED_BUDGET"]);
 });
+
+test("budgetIssuesFor names the project and material and gives over/unused amounts", () => {
+  const portions = [
+    { ticketID: "t1", projectID: "p1", projectName: "Dela Cruz Residence", materialType: "Cement", amountCents: 260000 + 30000, remainingBudgetCents: 260000, resolvesTicket: false },
+    { ticketID: "t2", projectID: "p2", projectName: "Proposed 2-Storey", materialType: "Cement", amountCents: 950000, remainingBudgetCents: 1000000, resolvesTicket: true },
+  ];
+  const [over, under] = budgetIssuesFor(portions, "");
+  assert.equal(over.code, "OVER_BUDGET");
+  assert.equal(over.projectName, "Dela Cruz Residence");
+  assert.equal(over.over, "300.00");
+  assert.equal(over.unused, null);
+  assert.equal(under.code, "UNDERSPEND_NOTE_REQUIRED");
+  assert.equal(under.projectName, "Proposed 2-Storey");
+  assert.equal(under.unused, "500.00");
+  assert.equal(under.over, null);
+  assert.match(over.message, /Over budget/); // old text kept for older app versions
+});

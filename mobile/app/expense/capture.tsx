@@ -9,11 +9,7 @@ import * as Crypto from "expo-crypto";
 import { FilePreview, type FileState } from "@/components/file-preview";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
-import { SnapProjectSheet } from "@/components/snap-project-sheet";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { loadOpenRequests } from "@/lib/cached-api";
-import type { OpenRequest } from "@/lib/api";
-import { groupByProject } from "@/lib/project-groups";
 import { useNetwork } from "@/lib/sync/network-context";
 import { useExpenseDraft, type DraftMode } from "@/lib/expense-draft-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -22,6 +18,7 @@ import { startScan } from "@/lib/receipt-scans";
 import { expediteNotificationChecks } from "@/lib/notification-events";
 import { PDF_MIME_TYPE, formatBytes, receiptFileProblem, receiptMimeType } from "@/lib/receipt-file";
 import { getSession } from "@/lib/auth";
+import { formatPeso } from "@/lib/money";
 import { useLocale } from "@/lib/i18n-context";
 import { queueScan } from "@/lib/sync/db";
 import { copyFileToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
@@ -30,7 +27,7 @@ type ProjectChoice = { id: string; name: string };
 
 export default function CaptureScreen() {
   const { t } = useLocale();
-  const { draft, setFile, setScanID, setScope, reset } = useExpenseDraft();
+  const { draft, setFile, setScanID, reset } = useExpenseDraft();
   const [file, setLocalFile] = useState<FileState>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -48,48 +45,9 @@ export default function CaptureScreen() {
   const isSiteManager = getSession()?.user.role === "Site Manager";
   const afterSnap = isSiteManager ? "/" : "/turn-in";
 
-  // Which project a receipt is for is never assumed. The person picks it here once the
-  // photo is taken; only when they have exactly one project is it filled in for them.
-  // A receipt opened from a request already has that request's project.
-  const needsProject = isSplit;
-  const [projects, setProjects] = useState<ProjectChoice[]>([]);
-  const [projectsReady, setProjectsReady] = useState(false);
-  // "unset" = not chosen yet, "multi" = more than one project, otherwise the project.
-  const [choice, setChoice] = useState<"unset" | "multi" | ProjectChoice>(
-    draft.scope?.projectIds.length === 1 ? { id: draft.scope.projectIds[0], name: draft.scope.projectNames[0] } : "unset"
-  );
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  // The user's projects are the ones their open requests belong to (works offline from the saved copy).
-  useEffect(() => {
-    if (!needsProject) return;
-    let live = true;
-    loadOpenRequests()
-      .then(({ data }) => {
-        if (!live) return;
-        const list = groupByProject(data, (r: OpenRequest) => ({ id: r.projectID, name: r.projectName, at: r.createdAt }))
-          .map((g) => ({ id: g.projectId, name: g.projectName }));
-        setProjects(list);
-        if (list.length === 1) setChoice(list[0]);
-      })
-      .catch(() => {})
-      .finally(() => { if (live) setProjectsReady(true); });
-    return () => { live = false; };
-  }, [needsProject]);
-
-  const mustChoose = needsProject && projects.length > 1 && choice === "unset";
-  // Hold the submit for the moment it takes to load the list, so it can't slip through unasked.
-  const loadingProjects = needsProject && !projectsReady;
-
-  function chooseProject(next: ProjectChoice | "multi") {
-    setChoice(next);
-    setScope(next === "multi" ? null : { projectIds: [next.id], projectNames: [next.name] });
-    setSheetOpen(false);
-  }
-
-  const scanScope = needsProject
-    ? (typeof choice === "object" ? { projectIds: [choice.id], projectNames: [choice.name] } : null)
-    : draft.scope;
+  // The Purchaser does not choose a project here. The receipt is scanned first and matched to the open
+  // requests (in every project they can see) once it has been read.
+  const scanScope = draft.scope;
 
   // What the app needs to pick this receipt up again, including the projects it was scanned for.
   function scanContext(picked: NonNullable<FileState>) {
@@ -157,12 +115,26 @@ export default function CaptureScreen() {
     pick({ type: "pdf", name: a.name, size: formatBytes(a.size), uri: a.uri, mimeType: PDF_MIME_TYPE });
   }
 
+  // The Purchaser may have a pile of receipts to scan, so after each one the app says it is on its way and
+  // asks: stay here and snap the next (the default; tapping outside does the same), or go to Scanned to review.
+  // Every receipt waits in Scanned in the order it was sent, so scanning several in a row queues them there.
+  function askSnapNextOrGo(title: string, body: string) {
+    Alert.alert(
+      title,
+      body,
+      [
+        { text: t("mx.go_scanned"), style: "cancel", onPress: () => { reset(); router.replace(afterSnap); } },
+        { text: t("mx.snap_another") },
+      ],
+      { cancelable: true }
+    );
+  }
+
   // Offline-first: reading a receipt (OCR) happens on the server, so with no
   // connection the file is kept on the phone and uploaded for reading on
   // reconnect (lib/sync/sync.js). It then shows under "Scanned receipts".
   async function saveForLater() {
-    if (!file || status === "uploading" || loadingProjects) return;
-    if (mustChoose) return setSheetOpen(true);
+    if (!file || status === "uploading") return;
     const session = getSession();
     if (!session) return;
     setStatus("uploading");
@@ -187,9 +159,14 @@ export default function CaptureScreen() {
       }
       refreshPendingCount();
       setStatus("idle");
+      // A receipt scanned with no request picked (the normal case) stays on this screen, ready for the next one.
+      if (isSplit) {
+        pick(null);
+        if (isSiteManager) Alert.alert(t("mx.saved_phone_title"), t("mx.saved_phone_body"));
+        else askSnapNextOrGo(t("mx.saved_phone_title"), t("mx.saved_phone_body"));
+        return;
+      }
       Alert.alert(t("mx.saved_phone_title"), t("mx.saved_phone_body"));
-      // A Site Manager stays on this capture screen, ready for the next receipt.
-      if (isSiteManager && isSplit) return pick(null);
       reset();
       router.replace(afterSnap);
     } catch (err) {
@@ -202,8 +179,7 @@ export default function CaptureScreen() {
   // Only the upload happens here. OCR runs on the server in the background,
   // so the user can leave the scanning screen or close the app.
   async function handleSubmit() {
-    if (!file || status === "uploading" || loadingProjects) return;
-    if (mustChoose) return setSheetOpen(true);
+    if (!file || status === "uploading") return;
     if (!isOnline) return saveForLater();
     setUnreachable(false);
     setStatus("uploading"); setErrorMessage(null);
@@ -218,9 +194,13 @@ export default function CaptureScreen() {
         return;
       }
       if (!isSiteManager) {
-        // Snap now, review later: the receipt goes to the Turn In tray and OCR runs there.
-        // The "Reading receipt" screen only shows if the Purchaser opens one that is still scanning.
-        // A receipt picked from one request keeps that request: it is in the scan context.
+        // Snap now, review later: the receipt goes to the Scanned list and OCR runs there.
+        // A receipt picked from one request keeps that request (it is in the scan context) and goes straight to Scanned.
+        if (isSplit) {
+          pick(null);
+          askSnapNextOrGo(t("mx.sent_title"), t("mx.sent_body_next"));
+          return;
+        }
         reset();
         router.replace(afterSnap);
         return;
@@ -249,13 +229,13 @@ export default function CaptureScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader
-        title={t("mx.add_receipt")}
-        caption={isSplit ? undefined : t("mx.step_n", { current: 1, total: 3 })}
-        step={isSplit ? undefined : { current: 1, total: 3 }}
+        title={!isSplit && draft.ticket?.subject ? draft.ticket.subject : t("ti.title")}
+        caption={t("mx.step_n", { current: 1, total: 3 })}
+        step={{ current: 1, total: 3 }}
       />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {!needsProject && isSplit && draft.scope && draft.scope.projectNames.length > 0 && (
+        {isSplit && draft.scope && draft.scope.projectNames.length > 0 && (
           <View style={styles.contextChip}>
             <Text style={styles.contextTitle} numberOfLines={2}>
               {t("mx.scoped_chip", { projects: draft.scope.projectNames.join(", ") })}
@@ -266,6 +246,9 @@ export default function CaptureScreen() {
           <View style={styles.contextChip}>
             <Text style={styles.contextTitle} numberOfLines={1}>{draft.ticket?.subject}</Text>
             <Text style={styles.contextMeta} numberOfLines={1}>{draft.ticket?.projectName}</Text>
+            {draft.ticket?.remaining != null ? (
+              <Text style={styles.contextMeta} numberOfLines={2}>{t("bd.left", { remaining: formatPeso(draft.ticket.remaining) })}</Text>
+            ) : null}
           </View>
         )}
 
@@ -305,43 +288,6 @@ export default function CaptureScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        {/* Which project the receipt is for: a big, labelled button right above the photo buttons
-            (thumb reach), visible before the photo is taken, never tucked at the top. */}
-        {needsProject && projectsReady && projects.length === 1 && (
-          <View style={styles.projectCard} accessibilityLabel={`${t("mx.project_only")}: ${projects[0].name}`}>
-            <View style={styles.projectIcon}>
-              <IconSymbol name="folder.fill" size={22} color={COLORS.primary} />
-            </View>
-            <View style={styles.projectText}>
-              <Text style={styles.projectLabel}>{t("mx.project_only")}</Text>
-              <Text style={styles.projectName} numberOfLines={2}>{projects[0].name}</Text>
-            </View>
-          </View>
-        )}
-        {needsProject && projectsReady && projects.length > 1 && (
-          <Pressable
-            onPress={() => setSheetOpen(true)}
-            style={({ pressed }) => [styles.projectCard, mustChoose && styles.projectCardRequired, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`${t("mx.project_label")}: ${choice === "unset" ? t("mx.project_choose") : choice === "multi" ? t("tb.multiple_projects") : choice.name}`}
-          >
-            <View style={[styles.projectIcon, mustChoose && styles.projectIconRequired]}>
-              <IconSymbol name="folder.fill" size={22} color={mustChoose ? "#FFFFFF" : COLORS.primary} />
-            </View>
-            <View style={styles.projectText}>
-              <Text style={styles.projectLabel}>{t("mx.project_label")}</Text>
-              <Text style={[styles.projectName, mustChoose && styles.projectNameRequired]} numberOfLines={2}>
-                {choice === "unset" ? t("mx.project_choose") : choice === "multi" ? t("tb.multiple_projects") : choice.name}
-              </Text>
-            </View>
-            {choice === "unset" ? (
-              <IconSymbol name="chevron.right" size={22} color={COLORS.primary} />
-            ) : (
-              <Text style={styles.projectChange}>{t("mx.project_change")}</Text>
-            )}
-          </Pressable>
-        )}
-
         {file && status === "error" && errorMessage ? (
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : file && !isOnline ? (
@@ -352,11 +298,11 @@ export default function CaptureScreen() {
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
             onPress={handleSubmit}
-            disabled={status === "uploading" || loadingProjects}
+            disabled={status === "uploading"}
             accessibilityRole="button"
           >
             <Text style={styles.primaryButtonText}>
-              {mustChoose ? t("mx.project_choose") : !isOnline ? t("mx.save_later") : status === "error" ? t("common.try_again") : t("mx.scan_receipt")}
+              {!isOnline ? t("mx.save_later") : status === "error" ? t("common.try_again") : t("mx.scan_receipt")}
             </Text>
           </Pressable>
         )}
@@ -393,14 +339,6 @@ export default function CaptureScreen() {
       </View>
 
       <LoadingOverlay visible={status === "uploading"} message={t("mx.uploading_receipt")} detail={t("mx.keep_open")} />
-
-      <SnapProjectSheet
-        visible={sheetOpen}
-        projects={projects}
-        onPick={chooseProject}
-        onMultiple={() => chooseProject("multi")}
-        onClose={() => setSheetOpen(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -411,15 +349,6 @@ const styles = StyleSheet.create({
   contextChip: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 },
   contextTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
   contextMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
-  projectCard: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
-  projectCardRequired: { borderColor: COLORS.primary, borderWidth: 2, backgroundColor: COLORS.primaryTint },
-  projectIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
-  projectIconRequired: { backgroundColor: COLORS.primary },
-  projectText: { flex: 1 },
-  projectLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
-  projectName: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 1 },
-  projectNameRequired: { color: COLORS.primaryTintText },
-  projectChange: { color: COLORS.primary, fontSize: 14, fontFamily: FONT.bold },
 
   dropArea: { minHeight: 220, alignItems: "center", justifyContent: "center", gap: 8, padding: 20, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
   dropAreaFilled: { borderStyle: "solid", borderColor: COLORS.border, padding: 8, minHeight: 280 },
