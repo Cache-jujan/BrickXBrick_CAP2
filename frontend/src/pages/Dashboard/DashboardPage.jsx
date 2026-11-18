@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listProjects } from "../../api/projectsApi";
 import { listExpenses } from "../../api/expensesApi";
@@ -13,6 +13,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Badge } from "../../components/ui/Badge";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { SpendChart } from "../../components/dashboard/SpendChart";
+import { DashboardBreakdown } from "../../components/dashboard/DashboardBreakdown";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./DashboardPage.css";
 
@@ -114,6 +115,10 @@ function ProjectsOverview({ role, name, userId }) {
   const [tamperedCount, setTamperedCount] = useState(null);
 
   const [range, setRange] = useState(6);
+  // Clicking a figure card opens its breakdown (?breakdown=projects|budget|spend),
+  // so the browser Back button closes it and the link can be shared.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const breakdownView = searchParams.get("breakdown");
 
   // PM "Needs your attention": tickets waiting to be assigned, progress
   // submissions waiting to be reviewed, and milestones that are At Risk /
@@ -281,18 +286,24 @@ function ProjectsOverview({ role, name, userId }) {
           label={t("dashboard.active_projects")}
           value={projectsLoading ? "—" : activeCount}
           note={projectsLoading ? null : t("dashboard.in_draft", { count: draftCount })}
+          to={projectsLoading ? null : { search: "?breakdown=projects" }}
+          hint={projectsLoading ? null : t("bd.view")}
         />
         <Kpi
           icon={<PesoIcon />}
           label={t("dashboard.open_budget")}
           value={projectsLoading ? "—" : PESO.format(openBudget)}
           note={t("dashboard.draft_active")}
+          to={projectsLoading ? null : { search: "?breakdown=budget" }}
+          hint={projectsLoading ? null : t("bd.view")}
         />
         <Kpi
           icon={<WalletIcon />}
           label={t("dashboard.approved_spending")}
           value={expensesLoading ? "—" : PESO.format(openApproved)}
           note={expensesLoading || !openBudget ? null : t("dashboard.open_budget_pct", { percent: usedPct })}
+          to={expensesLoading || projectsLoading ? null : { search: "?breakdown=spend" }}
+          hint={expensesLoading || projectsLoading ? null : t("bd.view")}
         />
         <Kpi
           icon={<ClipboardIcon />}
@@ -303,6 +314,18 @@ function ProjectsOverview({ role, name, userId }) {
           emphasis={pending.length > 0}
         />
       </section>
+
+      {["projects", "budget", "spend"].includes(breakdownView) && !projectsLoading && !expensesLoading && (
+        <DashboardBreakdown
+          view={breakdownView}
+          openProjects={openProjects}
+          approvedByProject={approvedByProject}
+          approvedExpenses={openApprovedExpenses}
+          projectNames={projectNames}
+          onView={(view) => setSearchParams({ breakdown: view }, { replace: true })}
+          onClose={() => setSearchParams({})}
+        />
+      )}
 
       <div className="dash-main">
         <div className="dash-col">
@@ -430,7 +453,7 @@ function ProjectsOverview({ role, name, userId }) {
   );
 }
 
-function Kpi({ icon, label, value, note, to, emphasis }) {
+function Kpi({ icon, label, value, note, hint, to, emphasis }) {
   const body = (
     <>
       <span className="dash-kpi-icon" aria-hidden="true">{icon}</span>
@@ -438,6 +461,7 @@ function Kpi({ icon, label, value, note, to, emphasis }) {
         <span className="dash-stat-label">{label}</span>
         <span className="dash-kpi-value">{value}</span>
         {note && <span className="dash-stat-note">{note}</span>}
+        {hint && <span className="dash-stat-note">{hint} →</span>}
       </span>
     </>
   );

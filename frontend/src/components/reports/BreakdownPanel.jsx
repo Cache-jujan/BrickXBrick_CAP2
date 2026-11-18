@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { PESO_EXACT } from "../../utils/plainLanguage";
 import { useLocale } from "../../i18n/LocaleProvider";
@@ -87,6 +88,7 @@ export function BreakdownPanel({ filters, tab: initialTab, projectId: initialPro
           )}
         </div>
 
+        <p className="bd-note">{t("bd.open_hint")}</p>
         {error && <p className="bd-error">{error}</p>}
         {!data && !error && <p className="bd-note">{t("bd.loading")}</p>}
         {data && tab === "spend" && <SpendTab projects={projects} period={data.period} multi={data.projects.length > 1} />}
@@ -112,12 +114,12 @@ function SpendTab({ projects, period, multi }) {
   const [type, setType] = useState("all");
   const [onlyPeriod, setOnlyPeriod] = useState(false);
 
-  const all = projects.flatMap((p) => p.expenses.map((e) => ({ ...e, projectName: p.name })));
+  const all = projects.flatMap((p) => p.expenses.map((e) => ({ ...e, projectName: p.name, projectId: p.projectId })));
   const inPeriod = all.filter((e) => e.inPeriod);
   const formal = inPeriod.filter((e) => e.birValidationStatus === FORMAL);
   const informal = inPeriod.filter((e) => e.birValidationStatus !== FORMAL);
   const periodTotal = sum(inPeriod);
-  const excluded = projects.flatMap((p) => p.excluded.map((x) => ({ ...x, projectName: p.name })));
+  const excluded = projects.flatMap((p) => p.excluded.map((x) => ({ ...x, projectName: p.name, projectId: p.projectId })));
 
   const needle = search.trim().toLowerCase();
   const shown = all.filter(
@@ -187,8 +189,8 @@ function SpendTab({ projects, period, multi }) {
             {shown.map((e) => (
               <tr key={e.expenseId}>
                 <td>{e.receiptDate}</td>
-                <td>{e.vendorName}</td>
-                {multi && <td>{e.projectName}</td>}
+                <td><Link to={`/expenses?focus=${e.expenseId}`}>{e.vendorName}</Link></td>
+                {multi && <td><Link to={`/projects/${e.projectId}#expenses`}>{e.projectName}</Link></td>}
                 <td>{e.birValidationStatus === FORMAL ? t("bd.formal") : t("bd.informal")}</td>
                 <td>{e.inPeriod ? t("bd.yes") : t("bd.before_period")}</td>
                 <td className="num">{PESO_EXACT.format(e.amount)}</td>
@@ -213,7 +215,7 @@ function SpendTab({ projects, period, multi }) {
           <ul className="bd-list">
             {excluded.map((x) => (
               <li key={x.expenseId}>
-                {x.receiptDate} · {x.vendorName}
+                {x.receiptDate} · <Link to={`/expenses?focus=${x.expenseId}`}>{x.vendorName}</Link>
                 {multi ? ` · ${x.projectName}` : ""} · {PESO_EXACT.format(x.amount)} ·{" "}
                 {x.status === "Pending" ? t("bd.pending") : x.status}
                 {x.fraudFlagged ? ` · ${t("bd.flagged")}` : ""}
@@ -236,7 +238,7 @@ function BudgetTab({ projects }) {
         const used = p.budget > 0 ? (spent / p.budget) * 100 : null;
         return (
           <section key={p.projectId} className="bd-block">
-            <h3 className="bd-h3">{p.name}</h3>
+            <h3 className="bd-h3"><Link to={`/projects/${p.projectId}`}>{p.name}</Link></h3>
             <Formula label={t("rep.net_pnl")}>
               {PESO_EXACT.format(p.budget)} − {PESO_EXACT.format(spent)} = <strong className={left < 0 ? "bd-neg" : ""}>{PESO_EXACT.format(left)}</strong>
             </Formula>
@@ -261,7 +263,7 @@ function WorkTab({ projects, asOf }) {
         const overdue = ms.filter((m) => m.overdue).length;
         return (
           <section key={p.projectId} className="bd-block">
-            <h3 className="bd-h3">{p.name}</h3>
+            <h3 className="bd-h3"><Link to={`/projects/${p.projectId}#milestones`}>{p.name}</Link></h3>
             {ms.length === 0 ? (
               <p className="bd-note">{t("rep.no_milestones")}</p>
             ) : (
@@ -285,7 +287,7 @@ function WorkTab({ projects, asOf }) {
                     <tbody>
                       {ms.map((m) => (
                         <tr key={`${m.name}-${m.dueDate}`} className={m.overdue ? "report-table-over" : ""}>
-                          <td>{m.name}</td>
+                          <td><Link to={`/projects/${p.projectId}#milestones`}>{m.name}</Link></td>
                           <td>{m.dueDate}</td>
                           <td className="num">{pct(m.completion)}</td>
                           <td>{m.completion >= 100 ? t("bd.done") : m.overdue ? t("bd.overdue") : t("bd.on_schedule")}</td>
