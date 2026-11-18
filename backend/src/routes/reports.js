@@ -1,6 +1,7 @@
 // reports.js: F11 Financial Analytics and Reporting. General Manager only.
 //
 //   GET  /summary?projectIds=a,b&from=YYYY-MM-DD&to=YYYY-MM-DD
+//   GET  /breakdown?projectIds=a,b&from=YYYY-MM-DD&to=YYYY-MM-DD  rows behind each figure
 //   POST /pdf     { projectIds, from, to }  ->  application/pdf (always anchor "Pending")
 //   POST /:id/anchor   secure a Pending report on the blockchain
 //
@@ -17,6 +18,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { validateReportFilters } = require("../lib/reportFilters");
 const { getReportSummary } = require("../lib/reportSummary");
+const { getReportBreakdown } = require("../lib/reportBreakdown");
 const { canonicalizeReport } = require("../lib/blockchainService");
 const { anchorReport } = require("../lib/reportAnchor");
 const { buildReportDocDefinition, renderPdf } = require("../lib/reportPdf");
@@ -37,6 +39,17 @@ router.get("/summary", async (req, res, next) => {
   try {
     const filters = validateReportFilters(req.query);
     res.json(await getReportSummary(query, filters));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// The expenses and milestones behind the figures, for "View breakdown".
+// Same filters and the same counting rules as /summary; read-only.
+router.get("/breakdown", async (req, res, next) => {
+  try {
+    const filters = validateReportFilters(req.query);
+    res.json(await getReportBreakdown(query, filters));
   } catch (error) {
     next(error);
   }

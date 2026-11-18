@@ -55,7 +55,9 @@ function figures(budgetCents, periodCents, cumulativeCents, birCents, progressPc
     periodSpend: toPesos(periodCents),
     cumulativeSpend: toPesos(cumulativeCents),
     birDeductibleSpend: toPesos(birCents),
-    // Net P&L = budget minus spend to date ("budget left"). Negative is an overrun.
+    // Budget left = budget minus spend to date. Negative is an overrun. The key
+    // keeps its old name (netPnL) so stored reports and their hashes still
+    // read; the real margin against the contract is in `contract` below.
     netPnL: toPesos(budgetCents - cumulativeCents),
     // Period spend minus budget. Kept so older readers of the JSON still find
     // it; the Reports page and the PDF no longer show it (a slice of a
@@ -126,8 +128,15 @@ function monthsBetween(from, to) {
  *              any status (drives the integrity warning)
  * now:         Date, the freshness stamp (generatedAt)
  * period:      { from, to } as YYYY-MM-DD, inclusive
+ * money:       optional { contracts, labor }
+ *              contracts: [{ projectId, contractAmount, collected }] one per project
+ *                         with a recorded contract; collected = live client
+ *                         payments received up to period.to
+ *              labor:     [{ projectId, budgetedLabor, laborIncluded }] from the
+ *                         APPROVED BOM; laborIncluded = some section has labor
+ *                         built into its item prices (cannot be separated)
  */
-function buildSummary(projects, spendRows, warningRows, now, period) {
+function buildSummary(projects, spendRows, warningRows, now, period, money = {}) {
   const { from, to } = period;
   const months = monthsBetween(from, to);
   const monthIndex = new Map(months.map((month, index) => [month, index]));
@@ -187,6 +196,8 @@ function buildSummary(projects, spendRows, warningRows, now, period) {
     totals.health = ahead ? "watch" : "ok";
   }
 
+  const contractOf = contractFigures(buckets, money);
+
   return {
     generatedAt: now.toISOString(),
     period: { from, to },
@@ -199,9 +210,87 @@ function buildSummary(projects, spendRows, warningRows, now, period) {
       name: bucket.project.name,
       ...figures(bucket.budgetCents, bucket.periodCents, bucket.cumulativeCents, bucket.birCents, bucket.progressPct),
       monthlySpend: bucket.monthCents.map(toPesos),
+      contract: contractOf.perProject.get(bucket.project.projectId) ?? null,
     })),
-    totals: { ...totals, monthlySpend: totalMonthCents.map(toPesos) },
+    totals: { ...totals, monthlySpend: totalMonthCents.map(toPesos), contract: contractOf.totals },
     warnings,
+  };
+}
+
+// Contract and margin (F2 contract -> F11). Revenue is the signed contract
+// amount; costs are the approved spend to date (the same figure as "Spent to
+// date"). Labor is not recorded as spend (expenses are receipts for materials),
+// so the BOM's planned labor is shown next to it instead of being guessed:
+//   marginBeforeLabor  = contract - spend to date
+//   marginAfterLabor   = contract - spend to date - planned labor (approved BOM)
+//   cashPosition       = collected from the client - spend to date
+// Materials still to be bought lower the margins further, so they are "so far"
+// figures, read next to Work done. A project with no recorded contract gets
+// contract: null. The totals cover only the projects that have a contract
+// (contractCount of projectCount says how many).
+function contractFigures(buckets, money) {
+  const contracts = new Map((money.contracts || []).map((row) => [row.projectId, row]));
+  const labor = new Map((money.labor || []).map((row) => [row.projectId, row]));
+  const perProject = new Map();
+  let contractCents = 0;
+  let collectedCents = 0;
+  let spendCents = 0;
+  let laborCents = 0;
+  let laborKnown = true;
+  let laborIncluded = false;
+  let contractCount = 0;
+
+  for (const bucket of buckets) {
+    const id = bucket.project.projectId;
+    const row = contracts.get(id);
+    if (!row) continue;
+    const amountCents = toCents(row.contractAmount, `contract amount of ${bucket.project.name}`);
+    const paidCents = row.collected === null || row.collected === undefined ? 0 : toCents(row.collected, "client payments");
+    const laborRow = labor.get(id);
+    const plannedLaborCents =
+      laborRow && laborRow.budgetedLabor !== null && laborRow.budgetedLabor !== undefined
+        ? toCents(laborRow.budgetedLabor, `planned labor of ${bucket.project.name}`)
+        : null;
+    const beforeLaborCents = amountCents - bucket.cumulativeCents;
+    perProject.set(id, {
+      contractAmount: toPesos(amountCents),
+      collected: toPesos(paidCents),
+      collectedPct: percent(paidCents, amountCents),
+      marginBeforeLabor: toPesos(beforeLaborCents),
+      budgetedLabor: plannedLaborCents === null ? null : toPesos(plannedLaborCents),
+      laborIncludedInPrices: Boolean(laborRow && laborRow.laborIncluded),
+      marginAfterLabor: plannedLaborCents === null ? null : toPesos(beforeLaborCents - plannedLaborCents),
+      marginAfterLaborPct: plannedLaborCents === null ? null : percent(beforeLaborCents - plannedLaborCents, amountCents),
+      cashPosition: toPesos(paidCents - bucket.cumulativeCents),
+    });
+    contractCount += 1;
+    contractCents += amountCents;
+    collectedCents += paidCents;
+    spendCents += bucket.cumulativeCents;
+    if (plannedLaborCents === null) laborKnown = false;
+    else laborCents += plannedLaborCents;
+    if (laborRow && laborRow.laborIncluded) laborIncluded = true;
+  }
+
+  if (contractCount === 0) {
+    return { perProject, totals: { contractCount: 0, projectCount: buckets.length } };
+  }
+  const beforeLabor = contractCents - spendCents;
+  return {
+    perProject,
+    totals: {
+      contractCount,
+      projectCount: buckets.length,
+      contractAmount: toPesos(contractCents),
+      collected: toPesos(collectedCents),
+      collectedPct: percent(collectedCents, contractCents),
+      marginBeforeLabor: toPesos(beforeLabor),
+      budgetedLabor: laborKnown ? toPesos(laborCents) : null,
+      laborIncludedInPrices: laborIncluded,
+      marginAfterLabor: laborKnown ? toPesos(beforeLabor - laborCents) : null,
+      marginAfterLaborPct: laborKnown ? percent(beforeLabor - laborCents, contractCents) : null,
+      cashPosition: toPesos(collectedCents - spendCents),
+    },
   };
 }
 
@@ -263,6 +352,50 @@ async function loadWarningRows(queryFn, { projectIds, from, to }) {
   return result.rows.filter((row) => row.status === "Pending" || row.fraudFlagged);
 }
 
+// The signed contract (routes/contract.js) and the client's live (not voided)
+// payments received up to the end date.
+async function loadContracts(queryFn, { projectIds, to }) {
+  const result = await queryFn(
+    `SELECT c.projectid AS "projectId",
+            c.contractamount::text AS "contractAmount",
+            (SELECT COALESCE(SUM(p.amount), 0)::text
+               FROM clientpayments p
+              WHERE p.contractid = c.contractid
+                AND p.voidedat IS NULL
+                AND p.receivedon <= $2::date) AS collected
+       FROM projectcontracts c
+      WHERE c.projectid = ANY($1::uuid[])`,
+    [projectIds, to]
+  );
+  return result.rows;
+}
+
+// Planned labor from the APPROVED BOM, the same rule as bomRules.sectionTotals:
+// labor built into the item prices -> cannot be separated (0, and flagged);
+// a rate -> materials x rate; a typed amount -> that amount.
+async function loadBudgetedLabor(queryFn, projectIds) {
+  const result = await queryFn(
+    `SELECT b.projectid AS "projectId",
+            COALESCE(SUM(
+              CASE WHEN s.laborincludedinitems THEN 0
+                   WHEN s.laborrate IS NOT NULL THEN ROUND(m.materials * s.laborrate, 2)
+                   WHEN s.laboramount IS NOT NULL THEN ROUND(s.laboramount, 2)
+                   ELSE 0 END), 0)::text AS "budgetedLabor",
+            COALESCE(BOOL_OR(s.laborincludedinitems), false) AS "laborIncluded"
+       FROM boms b
+       JOIN bomsections s ON s.bomid = b.bomid
+       CROSS JOIN LATERAL (
+         SELECT COALESCE(SUM(ROUND(i.quantity * i.unitcost, 2)), 0) AS materials
+           FROM bomitems i WHERE i.sectionid = s.sectionid
+       ) m
+      WHERE b.projectid = ANY($1::uuid[])
+        AND b.status = 'Approved'
+      GROUP BY b.projectid`,
+    [projectIds]
+  );
+  return result.rows;
+}
+
 // Load everything and build the summary. Shared by the JSON route and the
 // PDF route, so both always show the same numbers.
 async function getReportSummary(queryFn, { projectIds, from, to }, now = new Date()) {
@@ -276,11 +409,13 @@ async function getReportSummary(queryFn, { projectIds, from, to }, now = new Dat
   }
   // Keep the order the caller asked for.
   const ordered = projectIds.map((id) => projects.find((project) => project.projectId === id));
-  const [spendRows, warningRows] = await Promise.all([
+  const [spendRows, warningRows, contracts, labor] = await Promise.all([
     loadSpendRows(queryFn, { projectIds, to }),
     loadWarningRows(queryFn, { projectIds, from, to }),
+    loadContracts(queryFn, { projectIds, to }),
+    loadBudgetedLabor(queryFn, projectIds),
   ]);
-  return buildSummary(ordered, spendRows, warningRows, now, { from, to });
+  return buildSummary(ordered, spendRows, warningRows, now, { from, to }, { contracts, labor });
 }
 
 module.exports = {
@@ -289,6 +424,8 @@ module.exports = {
   loadProjects,
   loadSpendRows,
   loadWarningRows,
+  loadContracts,
+  loadBudgetedLabor,
   FORMAL,
   WATCH_GAP_POINTS,
 };

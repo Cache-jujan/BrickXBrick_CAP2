@@ -51,10 +51,10 @@ export function ReportFilters({
       <div className="report-filters-layout">
       <fieldset className="report-filters-projects">
         <legend>
-          {t("nav.projects")} <span className="report-filters-hint">{t("rep.choose_range", { max: MAX_PROJECTS })}</span>
+          {t("nav.projects")}
         </legend>
         <div className="report-filters-count">
-          <span>{t("rep.n_selected", { count: value.projectIds.length, max: MAX_PROJECTS })}</span>
+          <span>{t("rep.n_selected", { count: value.projectIds.length, total: projects.length })}</span>
           {activeCount > 0 && (
             <button type="button" className="report-filters-clear" onClick={onSelectActive}>
               {activeCount > MAX_PROJECTS ? t("rep.select_active_first", { max: MAX_PROJECTS }) : t("rep.select_active")}

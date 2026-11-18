@@ -12,6 +12,18 @@ export async function getReportSummary({ projectIds, from, to }) {
   return data;
 }
 
+// GET /api/reports/breakdown: General Manager only, same filters as the summary.
+// Returns { period, asOf, projects: [{ projectId, name, budget,
+//   expenses: [{ expenseId, receiptDate, vendorName, birValidationStatus, amount, inPeriod }],
+//   milestones: [{ name, dueDate, completion, overdue }],
+//   excluded: [{ expenseId, receiptDate, vendorName, amount, status, fraudFlagged }] }] }.
+export async function getReportBreakdown({ projectIds, from, to }) {
+  const { data } = await apiClient.get("/api/reports/breakdown", {
+    params: { projectIds: projectIds.join(","), from, to },
+  });
+  return data;
+}
+
 // Errors from a blob request arrive as a Blob, not JSON. Read the message out of
 // it so extractErrorMessage() works the same as for every other call.
 async function unwrapBlobError(error) {

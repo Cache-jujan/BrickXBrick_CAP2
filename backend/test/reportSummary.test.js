@@ -228,3 +228,65 @@ test("watch for all projects together compares work done with the budget used by
   assert.equal(summary.totals.progressPct, 50); // only P1 has milestones
   assert.equal(summary.totals.health, "ok"); // P1: 55% used vs 50% done
 });
+
+// Contract and margin (F2 contract -> F11).
+const withMoney = (projects, rows, money, period = PERIOD) =>
+  buildSummary(projects, rows, [], NOW, period, money);
+
+test("margin uses the contract as revenue and the BOM's planned labor", () => {
+  const summary = withMoney(
+    [project(P1, "2262702.75", "Santos")],
+    [spend(P1, "432038.00")],
+    {
+      contracts: [{ projectId: P1, contractAmount: "2800000.00", collected: "1120000.00" }],
+      labor: [{ projectId: P1, budgetedLabor: "600000.00", laborIncluded: false }],
+    }
+  );
+  const c = summary.projects[0].contract;
+  assert.equal(c.contractAmount, 2800000);
+  assert.equal(c.collected, 1120000);
+  assert.equal(c.collectedPct, 40);
+  assert.equal(c.marginBeforeLabor, 2367962); // 2,800,000 - 432,038
+  assert.equal(c.budgetedLabor, 600000);
+  assert.equal(c.marginAfterLabor, 1767962);
+  assert.equal(c.marginAfterLaborPct, 63.14);
+  assert.equal(c.cashPosition, 687962); // 1,120,000 - 432,038
+  assert.equal(summary.totals.contract.contractCount, 1);
+  assert.equal(summary.totals.contract.marginAfterLabor, 1767962);
+  // Budget left is unchanged by the contract.
+  assert.equal(summary.projects[0].netPnL, 1830664.75);
+});
+
+test("a project without a contract gets contract null and is left out of the contract totals", () => {
+  const summary = withMoney(
+    [project(P1, 10000), project(P2, 10000)],
+    [spend(P1, 1000), spend(P2, 2000)],
+    { contracts: [{ projectId: P1, contractAmount: "15000", collected: "0" }], labor: [] }
+  );
+  assert.equal(summary.projects[1].contract, null);
+  assert.equal(summary.totals.contract.contractCount, 1);
+  assert.equal(summary.totals.contract.projectCount, 2);
+  assert.equal(summary.totals.contract.marginBeforeLabor, 14000); // P2's spend not counted
+  assert.equal(summary.projects[0].contract.budgetedLabor, null); // no approved BOM
+  assert.equal(summary.projects[0].contract.marginAfterLabor, null);
+  assert.equal(summary.totals.contract.marginAfterLabor, null);
+});
+
+test("no contracts at all: totals say so and the old figures are untouched", () => {
+  const summary = build([project(P1, 10000)], [spend(P1, 2500)]);
+  assert.equal(summary.projects[0].contract, null);
+  assert.deepEqual(summary.totals.contract, { contractCount: 0, projectCount: 1 });
+  assert.equal(summary.totals.netPnL, 7500);
+});
+
+test("labor built into item prices is flagged, and spend above the contract gives a negative margin", () => {
+  const summary = withMoney([project(P1, 11000)], [spend(P1, 10500)], {
+    contracts: [{ projectId: P1, contractAmount: 10000, collected: null }],
+    labor: [{ projectId: P1, budgetedLabor: "0", laborIncluded: true }],
+  });
+  const c = summary.projects[0].contract;
+  assert.equal(c.laborIncludedInPrices, true);
+  assert.equal(c.marginBeforeLabor, -500);
+  assert.equal(c.cashPosition, -10500);
+  assert.equal(summary.totals.contract.laborIncludedInPrices, true);
+});
