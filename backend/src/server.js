@@ -117,7 +117,11 @@ const PG_INPUT_ERROR_CODES = new Set([
 app.use((err, req, res, next) => {
   if (!err.status && err.code) {
     if (PG_INPUT_ERROR_CODES.has(err.code)) {
-      return res.status(400).json({ error: "Invalid input value" });
+      // The client only gets a plain message. The real cause (which value, which query) stays in the server log.
+      console.warn(`Rejected input on ${req.method} ${req.originalUrl}: [${err.code}] ${err.message}${err.where ? ` | ${err.where}` : ""}`);
+      return res.status(400).json({
+        error: "One of the values sent was not in the expected format (for example a quantity, amount, date or ID). Check them and try again.",
+      });
     }
     // Any other raw Postgres error reaching here is a bug, not a bad
     // request: don't leak schema/column details in the response body.

@@ -18,6 +18,7 @@ import { Redirect, router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 
 import { FlowHeader } from "@/components/flow-header";
+import { ProjectPill } from "@/components/project-pill";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/requested-material-picker";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
@@ -147,6 +148,10 @@ export default function ReviewScreen() {
   if (!result) return <Redirect href="/" />;
 
   const isSplit = draft.mode === "split";
+  // Came from the global Snap receipt button: no request and no project picked yet.
+  // The header names the vendor instead of listing every open request.
+  const fromGlobalSnap = isSplit && !draft.scope && !draft.resubmit;
+  const scopedProject = isSplit && draft.scope?.projectNames.length ? draft.scope.projectNames.join(", ") : null;
   const autoFilled = result.autoFilled ?? [];
   // The BIR authority type isn't shown (the purchaser doesn't pick it), so
   // a disagreement on it isn't theirs to resolve.
@@ -294,6 +299,8 @@ export default function ReviewScreen() {
             </View>
           )}
 
+          {scopedProject ? <View style={styles.projectPill}><ProjectPill label={t("mx.project_label")} name={scopedProject} /></View> : null}
+
           {(file || forRequests.length > 0 || remainingCents !== null) && (
             <View style={styles.summary}>
               <View style={styles.summaryTop}>
@@ -312,7 +319,12 @@ export default function ReviewScreen() {
                   </Pressable>
                 )}
                 <View style={styles.flex}>
-                  {forRequests.length > 0 ? (
+                  {fromGlobalSnap && vendorName.trim() ? (
+                    <>
+                      <Text style={styles.summaryLabel}>{t("dashboard.vendor")}</Text>
+                      <Text style={styles.summaryTitle} numberOfLines={2}>{vendorName.trim()}</Text>
+                    </>
+                  ) : forRequests.length > 0 ? (
                     <>
                       <Text style={styles.summaryLabel}>{t("rv.for_title")}</Text>
                       <Text style={styles.summaryTitle} numberOfLines={2}>{forRequests.slice(0, 2).map((r) => r.subject).join(", ")}</Text>
@@ -463,7 +475,7 @@ export default function ReviewScreen() {
                   ) : null}
                   <View style={styles.itemRow}>
                     <View style={styles.itemQty}>
-                      <Text style={styles.miniLabel}>{t("split.col_qty")}{qtyBad ? <Text style={styles.requiredTag}> {t("mx.required_tag")}</Text> : null}</Text>
+                      <Text style={[styles.miniLabel, qtyBad && styles.miniLabelBad]} numberOfLines={1}>{t("split.col_qty")}{qtyBad ? " *" : ""}</Text>
                       <TextInput style={[styles.input, qtyBad && styles.inputError]} placeholder="0" placeholderTextColor={COLORS.muted} value={item.quantity} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "quantity", v)} />
                     </View>
                     <View style={styles.itemAmount}>
@@ -471,7 +483,7 @@ export default function ReviewScreen() {
                       <TextInput style={styles.input} placeholder={t("submit.calculated")} placeholderTextColor={COLORS.muted} value={item.unitPrice ?? ""} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "unitPrice", groupAmountLive(v))} onBlur={() => updateItem(item.id, { unitPrice: groupAmountText(item.unitPrice ?? "") })} />
                     </View>
                     <View style={styles.itemAmount}>
-                      <Text style={styles.miniLabel}>{t("rv.line_amount")}{amountBad ? <Text style={styles.requiredTag}> {t("mx.required_tag")}</Text> : null}</Text>
+                      <Text style={[styles.miniLabel, amountBad && styles.miniLabelBad]} numberOfLines={1}>{t("rv.line_amount")}{amountBad ? " *" : ""}</Text>
                       <TextInput style={[styles.input, amountBad && styles.inputError]} placeholder="0.00" placeholderTextColor={COLORS.muted} value={item.price} keyboardType="decimal-pad" onChangeText={(v) => editItem(item.id, "price", groupAmountLive(v))} onBlur={() => updateItem(item.id, { price: groupAmountText(item.price) })} />
                     </View>
                   </View>
@@ -618,6 +630,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   summary: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, marginBottom: 12, gap: 10 },
+  projectPill: { marginBottom: 12 },
   summaryTop: { flexDirection: "row", gap: 12, alignItems: "center" },
   summaryLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
   summaryTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, marginTop: 1 },
@@ -712,10 +725,13 @@ const styles = StyleSheet.create({
   itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   itemIndex: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted },
   removeText: { fontSize: 12, fontFamily: FONT.bold, color: RED },
-  itemRow: { flexDirection: "row", gap: 10 },
-  itemQty: { flex: 1 },
-  itemAmount: { flex: 2 },
+  // The label can wrap to two lines when it carries a "Required" tag. Bottom-align so the inputs stay on one line.
+  itemRow: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
+  itemQty: { flex: 1, minWidth: 0 },
+  itemAmount: { flex: 1.4, minWidth: 0 },
+  // One line always (a wrapped label pushed its input down). A missing value shows as a red label with "*" and a red border.
   miniLabel: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginBottom: 4 },
+  miniLabelBad: { color: RED, fontFamily: FONT.bold },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   totalsLine: { fontSize: 13, fontFamily: FONT.bold, textAlign: "center" },
   pressed: { opacity: 0.85 },

@@ -166,6 +166,14 @@ export function ToBuy() {
     router.push("/expense/capture");
   }
 
+  // A project's header on To Buy: the Purchaser already knows the receipt is for this project, so it is
+  // scanned against this project's requests only and the project is not asked about again.
+  function startSnapForProject(projectId: string, projectName: string) {
+    reset();
+    startSplit({ projectIds: [projectId], projectNames: [projectName] });
+    router.push("/expense/capture");
+  }
+
   // "Snap receipt for this request" in the details sheet: the receipt goes to this
   // one request (single mode), the same way an item under "Other" works.
   function snapForRequest(request: OpenRequest) {
@@ -288,7 +296,18 @@ export function ToBuy() {
         {sections.map((group) => (
           <View key={group.key} style={styles.group}>
             <View style={styles.groupHeader}>
-              <Text style={styles.groupTitle} numberOfLines={2}>{group.title}</Text>
+              {/* The title is the Snap receipt button for this project. */}
+              <Pressable
+                onPress={() => startSnapForProject(group.key, group.title)}
+                style={({ pressed }) => [styles.groupSnap, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${t("tb.snap_project")}: ${group.title}`}
+              >
+                <View style={styles.groupSnapIcon}>
+                  <IconSymbol name="camera.fill" size={18} color="#FFFFFF" />
+                </View>
+                <Text style={styles.groupTitle} numberOfLines={2}>{group.title}</Text>
+              </Pressable>
               <View style={styles.groupCountPill}>
                 <Text style={styles.groupCount}>{t(group.requests.length === 1 ? "tb.items_one" : "tb.items_other", { count: group.requests.length })}</Text>
               </View>
@@ -411,7 +430,10 @@ const styles = StyleSheet.create({
   // One white card per project: its name, how many items, the Purchase order button, then its requests.
   group: { ...CARD, padding: 14, gap: 12 },
   groupHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  groupTitle: { flex: 1, fontSize: 17, fontFamily: FONT.extrabold, color: COLORS.heading },
+  // minWidth 0 + flexShrink on the title: a long project name wraps (2 lines, then cuts off) instead of pushing the count and purchase-order buttons out of the card.
+  groupSnap: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 10, minHeight: MIN_TAP - 4 },
+  groupSnapIcon: { width: 30, height: 30, flexShrink: 0, borderRadius: 10, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
+  groupTitle: { flexShrink: 1, minWidth: 0, fontSize: 17, fontFamily: FONT.extrabold, color: COLORS.heading },
   groupCountPill: { backgroundColor: COLORS.primaryTint, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
   groupCount: { fontSize: 12, fontFamily: FONT.extrabold, color: COLORS.primaryTintText },
   groupPoButton: { width: MIN_TAP - 4, height: MIN_TAP - 4, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
