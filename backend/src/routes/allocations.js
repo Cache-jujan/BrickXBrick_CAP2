@@ -133,6 +133,7 @@ router.post("/preview", requireRole(...ALLOCATION_ROLES), async (req, res, next)
       excludeTicketIDs: input.excludeTicketIDs,
       feeTargets: input.feeTargets,
       lineTargets: input.lineTargets,
+      quantityTargets: input.quantityTargets,
     });
     // budgetIssues: what would stop the save (over budget, no approved budget) or ask for a
     // note (finishing under budget), so the app can say so before the Purchaser submits.
@@ -189,6 +190,7 @@ router.post("/", requireRole(...ALLOCATION_ROLES), async (req, res, next) => {
         excludeTicketIDs: body.excludeTicketIDs,
         feeTargets: body.feeTargets,
         lineTargets: body.lineTargets,
+        quantityTargets: body.quantityTargets,
       });
       if (!plan.ok) throw planError(plan);
 

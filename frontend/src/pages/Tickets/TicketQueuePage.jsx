@@ -9,6 +9,7 @@ import {
   updateTicket,
   rejectTicket,
 } from "../../api/ticketsApi";
+import { approveBudgetAdjustment, rejectBudgetAdjustment } from "../../api/budgetAdjustmentsApi";
 import { extractErrorMessage } from "../../api/client";
 import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
@@ -32,6 +33,7 @@ const TYPE_META = {
   "Material Request": { key: "material" },
   "Work Item": { key: "work" },
   Report: { key: "report" },
+  "Budget Adjustment": { key: "adjust" },
 };
 
 // The three status views the PM moves a ticket through.
@@ -41,7 +43,7 @@ const TABS = [
   { key: "History", labelKey: "tq.tab_history" },
 ];
 
-const TYPE_FILTERS = ["All", "Material Request", "Work Item", "Report"];
+const TYPE_FILTERS = ["All", "Material Request", "Work Item", "Report", "Budget Adjustment"];
 
 const UNIT_OPTIONS = [
   "pcs", "set", "lot", "unit",
@@ -237,7 +239,7 @@ export function TicketQueuePage() {
   // set still applies). Reports in the group are left for the single Resolve.
   // A ticket that can't go is marked on its own card; the rest still go.
   async function handleAssignAll(group) {
-    const actionable = group.filter((t) => t.tickettype !== "Report");
+    const actionable = group.filter((t) => t.tickettype !== "Report" && t.tickettype !== "Budget Adjustment");
     const missing = actionable.filter((t) => !assignments[t.ticketid]);
     if (missing.length > 0) {
       for (const t of missing) setCardError(t.ticketid, tr("tq.err_choose_purchaser"));
@@ -274,6 +276,13 @@ export function TicketQueuePage() {
     setSubmittingId(ticket.ticketid);
     clearCardError(ticket.ticketid);
     try {
+      if (ticket.tickettype === "Budget Adjustment") {
+        // Approving raises the request's approved budget; the Purchaser is told it can buy now.
+        await approveBudgetAdjustment(ticket.ticketid);
+        removeFromView(ticket.ticketid);
+        toast.success(tr("tq.toast_adjust_approved", { subject: ticket.subject }));
+        return;
+      }
       await resolveTicket(ticket.ticketid);
       removeFromView(ticket.ticketid);
       toast.success(tr("tq.toast_resolved", { subject: ticket.subject }));
@@ -312,7 +321,8 @@ export function TicketQueuePage() {
     setRejectBusy(true);
     setRejectError("");
     try {
-      await rejectTicket(reject.ticket.ticketid, reason);
+      if (reject.ticket.tickettype === "Budget Adjustment") await rejectBudgetAdjustment(reject.ticket.ticketid, reason);
+      else await rejectTicket(reject.ticket.ticketid, reason);
       removeFromView(reject.ticket.ticketid);
       clearCardError(reject.ticket.ticketid);
       toast.success(tr("tq.toast_rejected", { subject: reject.ticket.subject }));
@@ -799,6 +809,7 @@ function TicketCard(props) {
   const { t: tr, tv, formatDate } = useLocale();
   const meta = TYPE_META[ticket.tickettype] || { key: "work" };
   const isReport = ticket.tickettype === "Report";
+  const isAdjustment = ticket.tickettype === "Budget Adjustment";
   const busy = submittingId === ticket.ticketid || (typeof submittingId === "string" && submittingId.startsWith("batch:"));
   const focus = String(ticket.ticketid) === String(highlightId);
   const cardError = cardErrors?.[ticket.ticketid] || "";
@@ -832,7 +843,7 @@ function TicketCard(props) {
         </div>
         <div className="ticket-card-head-side">
           <time className="ticket-card-date" dateTime={ticket.createdat}>{formatDate(ticket.createdat, DATETIME_OPTIONS)}</time>
-          {activeTab === "Pending" && (
+          {activeTab === "Pending" && !isAdjustment && (
             <button type="button" className="ticket-card-edit" onClick={() => onEdit(ticket)} disabled={busy}>{tr("tq.edit")}</button>
           )}
         </div>
@@ -846,7 +857,7 @@ function TicketCard(props) {
 
       {ticket.description && <p className="ticket-card-description">{ticket.description}</p>}
 
-      {!isReport && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
+      {!isReport && !isAdjustment && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
         <dl className="ticket-card-facts">
           <div><dt>{tr("tq.material")}</dt><dd>{ticket.materialtype || "—"}</dd></div>
           <div><dt>{tr("bom.aria_quantity")}</dt><dd>{ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
@@ -859,7 +870,17 @@ function TicketCard(props) {
 
       {/* Action area depends on the tab. */}
       {activeTab === "Pending" && (
-        isReport ? (
+        isAdjustment ? (
+          <div className="ticket-card-foot ticket-card-foot-report">
+            <p className="ticket-card-context">{tr("tq.adjust_note")}</p>
+            <div className="ticket-card-actions">
+              <Button type="button" disabled={busy} onClick={() => onResolve(ticket)}>
+                {busy ? tr("tq.approving") : tr("tq.approve_adjustment")}
+              </Button>
+              <button type="button" className="ticket-reject-link" onClick={() => onReject(ticket)} disabled={busy}>{tr("expenses.reject")}</button>
+            </div>
+          </div>
+        ) : isReport ? (
           <div className="ticket-card-foot ticket-card-foot-report">
             <p className="ticket-card-context">{tr("tq.report_note")}</p>
             <div className="ticket-card-actions">
@@ -950,7 +971,7 @@ function BatchBlock(props) {
   const { tickets, purchasers, setAssignments, submittingId, onAssignAll } = props;
   const { t: tr, formatDate } = useLocale();
   const first = tickets[0];
-  const actionable = tickets.filter((t) => t.tickettype !== "Report");
+  const actionable = tickets.filter((t) => t.tickettype !== "Report" && t.tickettype !== "Budget Adjustment");
   const busy = submittingId === `batch:${groupKey(first)}`;
   const [batchPurchaser, setBatchPurchaser] = useState("");
 

@@ -46,7 +46,12 @@ function checkBudget({ amountCents, remainingBudgetCents, completesRequest, note
  * Budget problems for every portion of a split plan.
  * @param {{ ticketID: string, materialType: string, amountCents: number,
  *           remainingBudgetCents: number|null, resolvesTicket: boolean }[]} portions
- * @returns {{ ticketID: string, code: string, message: string }[]}
+ * @returns {{ ticketID: string, code: string, message: string,
+ *             projectID?: string, projectName?: string, materialType?: string,
+ *             amount: string, remaining: string|null, over: string|null, unused: string|null }[]}
+ *   The extra fields let the app say WHICH project and material an issue is about, in the
+ *   user's language, without parsing `message`. `message` stays for older app versions.
+ *   `remaining` is the request-level limit left (what the Purchaser already sees), never the project budget.
  */
 function budgetIssuesFor(portions, note) {
   const issues = [];
@@ -58,7 +63,19 @@ function budgetIssuesFor(portions, note) {
       note,
       label: portion.materialType || "This request",
     });
-    if (issue) issues.push({ ticketID: portion.ticketID, ...issue });
+    if (!issue) continue;
+    const hasLimit = portion.remainingBudgetCents !== null && portion.remainingBudgetCents !== undefined;
+    issues.push({
+      ticketID: portion.ticketID,
+      ...issue,
+      projectID: portion.projectID,
+      projectName: portion.projectName,
+      materialType: portion.materialType,
+      amount: formatMoney(portion.amountCents),
+      remaining: hasLimit ? formatMoney(portion.remainingBudgetCents) : null,
+      over: issue.code === "OVER_BUDGET" ? formatMoney(portion.amountCents - portion.remainingBudgetCents) : null,
+      unused: issue.code === "UNDERSPEND_NOTE_REQUIRED" ? formatMoney(portion.remainingBudgetCents - portion.amountCents) : null,
+    });
   }
   return issues;
 }

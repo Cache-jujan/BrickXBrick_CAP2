@@ -14,6 +14,17 @@ const { LIMITS, text, amount, quantity: cleanQuantity, uuid, collect } = require
 const router = express.Router();
 router.use(requireAuth);
 
+// A Budget Adjustment ticket is decided through /api/budget-adjustments (approve or reject), never through
+// the Material Request actions below.
+function refuseBudgetAdjustment(ticket) {
+    if (ticket.tickettype === "Budget Adjustment") {
+        const err = new Error("Budget adjustments are approved or rejected from the budget adjustment actions, not here");
+        err.status = 400;
+        throw err;
+    }
+}
+
+
 // After a Site Manager creates one or more tickets, tell the managing PM of
 // each project. One notification per (project) per request, so a batch of
 // several requests to the same project is a single "N new requests" notice
@@ -766,6 +777,7 @@ router.get("/submitted", async (req, res, next) => {
 router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        refuseBudgetAdjustment(ticket);
         await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         if (ticket.projectmanagerid !== req.user.id) {
@@ -872,6 +884,7 @@ router.patch("/:id/acknowledge", requireRole("Project Manager"), async (req, res
 router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        refuseBudgetAdjustment(ticket);
         await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         if (ticket.tickettype === "Report") {
@@ -945,6 +958,7 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site M
 router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
+        refuseBudgetAdjustment(ticket);
         await assertProjectNotTerminated(query, { projectId: ticket.projectid });
 
         const reasonText = typeof req.body.reason === "string" ? req.body.reason.trim() : "";

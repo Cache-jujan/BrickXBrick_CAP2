@@ -14,9 +14,9 @@ import { setRejectedBadge, useRejectedBadge } from "@/lib/history-badge";
 import { setTurnInBadge, useTurnInBadge } from "@/lib/turnin-badge";
 import { useLocale } from "@/lib/i18n-context";
 
-// The Purchaser gets To Buy / Turn In / History tabs. A Site Manager landing
-// here keeps the single screen with no tab bar. Settings (and logout) open from
-// the avatar in the header.
+// The Purchaser gets To Buy / Turn In / History; a Site Manager landing here gets the Receipt screen.
+// Both use the same floating bottom bar (SmBottomBar), so the native tab bar is hidden.
+// Settings (and logout) open from the avatar in the header.
 // The (tabs) folder name is kept because index.tsx, login.tsx and the OAuth
 // callback all redirect to "/(tabs)".
 export default function TabLayout() {
@@ -50,9 +50,11 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: isPurchaser
-            ? { backgroundColor: COLORS.card, borderTopColor: COLORS.border, minHeight: 56 }
-            : { display: "none" },
+          // Our own bar replaces the native one. All three tabs are built up front and kept (not rebuilt on every
+          // visit), and a tab you left stops re-rendering, so switching is instant.
+          lazy: false,
+          freezeOnBlur: true,
+          tabBarStyle: { display: "none" },
           tabBarActiveTintColor: COLORS.primary,
           tabBarInactiveTintColor: COLORS.muted,
           tabBarLabelStyle: { fontFamily: FONT.semibold, fontSize: 12 },
@@ -86,8 +88,8 @@ export default function TabLayout() {
         {/* Not a tab any more: Settings opens from the header. */}
         <Tabs.Screen name="account" options={{ href: null }} />
       </Tabs>
-      {/* Site Manager: the same bottom bar as Tasks / Requests / Settings. */}
-      {isPurchaser ? null : <SmBottomBar />}
+      {/* One bottom bar for both roles, the Site Manager's design. */}
+      <SmBottomBar />
     </View>
   );
 }
