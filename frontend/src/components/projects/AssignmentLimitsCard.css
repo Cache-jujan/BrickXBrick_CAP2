@@ -15,18 +15,18 @@
 }
 
 .limits-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
   margin: 0;
   font-size: var(--text-sm);
   color: var(--color-ink-soft);
 }
 
-.limits-text strong {
-  color: var(--color-ink);
-}
-
 .limits-label {
-  display: inline-block;
-  margin-right: var(--space-3);
+  padding-right: var(--space-5);
+  border-right: 1px solid var(--color-border);
   font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -34,9 +34,20 @@
   color: var(--color-ink-faint);
 }
 
-.limits-sep {
-  margin: 0 var(--space-2);
+/* Each person-type reads the same way: role, the number, then "at a time". */
+.limits-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.limits-role {
   color: var(--color-ink-faint);
+}
+
+.limits-item strong {
+  color: var(--color-ink);
+  font-weight: 600;
 }
 
 .limits-form {
