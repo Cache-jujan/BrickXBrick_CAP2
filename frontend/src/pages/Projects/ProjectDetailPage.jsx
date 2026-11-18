@@ -513,6 +513,10 @@ export function ProjectDetailPage() {
     },
     // The signed contract is recorded after the BOM price is agreed (only the GM and PM can see it).
     ...(canReview ? [{ label: t("pd.check_contract"), done: Boolean(contract) }] : []),
+    // The down payment is the go signal to start work. A 0% down payment has nothing to wait for.
+    ...(canReview && !(contract && Number(contract.downPaymentPercent) === 0)
+      ? [{ label: t("pd.check_down_payment"), done: (contractSummary?.receivedByKind?.["Down Payment"] ?? 0) > 0 }]
+      : []),
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
 

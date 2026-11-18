@@ -512,9 +512,23 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
       }
       // The signed contract is recorded before work starts (routes/contract.js).
       // It is not the budget: the budget stays the approved BOM total plus escalation.
-      const contract = await client.query("SELECT 1 FROM projectcontracts WHERE projectid = $1::uuid", [existing.projectid]);
+      const contract = await client.query(
+        "SELECT contractid, downpaymentpercent FROM projectcontracts WHERE projectid = $1::uuid",
+        [existing.projectid]
+      );
       if (contract.rowCount === 0) {
         throw httpError(409, "Record the signed contract before activating");
+      }
+      // The down payment is the go signal to start work (pilot contractor). A contract
+      // with a 0% down payment has nothing to wait for.
+      if (Number(contract.rows[0].downpaymentpercent) > 0) {
+        const down = await client.query(
+          "SELECT 1 FROM clientpayments WHERE contractid = $1::uuid AND kind = 'Down Payment' AND voidedat IS NULL",
+          [contract.rows[0].contractid]
+        );
+        if (down.rowCount === 0) {
+          throw httpError(409, "Record the down payment before activating");
+        }
       }
 
       const result = await client.query(
