@@ -101,6 +101,12 @@ export async function resumeProject(projectId) {
   return data;
 }
 
+// What is still open before completing (shown as a warning only): { openTickets, pendingExpenses }.
+export async function getCompletionCheck(projectId) {
+  const { data } = await apiClient.get(`/api/projects/${projectId}/completion-check`);
+  return data;
+}
+
 export async function completeProject(projectId, actualCompletionDate) {
   const { data } = await apiClient.patch(`/api/projects/${projectId}/complete`, { actualCompletionDate });
   return data;

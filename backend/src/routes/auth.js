@@ -19,7 +19,9 @@ const ROLE_DASHBOARDS = {
 };
 
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  // Emails are not case-sensitive: "CarlReyt@gmail.com" is the same account as "carlreyt@gmail.com".
+  const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
   if (!email || !password) {
     return res.status(400).json({ error: "email and password are required" });
   }
@@ -27,7 +29,7 @@ router.post("/login", async (req, res) => {
   try {
     const userResult = await query(
       `SELECT userid, name, username, email, role, status, lockoutuntil, avatarurl
-       FROM users WHERE email = $1`,
+       FROM users WHERE LOWER(email) = $1`,
       [email]
     );
  
@@ -47,7 +49,7 @@ router.post("/login", async (req, res) => {
     // A deactivated account only hears so after proving it knows the password,
     // so this route cannot be used to find out which emails are deactivated.
     if (user.status !== "Active") {
-      const { error: inactiveError } = await supabaseAnon.auth.signInWithPassword({ email, password });
+      const { error: inactiveError } = await supabaseAnon.auth.signInWithPassword({ email: user.email, password });
       if (inactiveError) return genericFail();
       return res.status(403).json({ error: "This account has been deactivated. Contact your System Administrator." });
     }
@@ -59,7 +61,7 @@ router.post("/login", async (req, res) => {
       });
     }
  
-    const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({ email: user.email, password });
  
     if (error) {
       // Counted in one atomic UPDATE (see lib/loginLockout.js).
