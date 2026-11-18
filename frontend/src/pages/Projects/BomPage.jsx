@@ -13,6 +13,7 @@ import { BudgetJustification } from "../../components/bom/BudgetJustification";
 import { BomDropZone } from "../../components/bom/BomDropZone";
 import { COST_CATEGORIES, DEFAULT_COST_CATEGORY, MAX_ESCALATION_PCT } from "../../utils/costCategories";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./BomPage.css";
 
 // F2: the project's Bill of Materials.
@@ -717,8 +718,8 @@ export function BomPage() {
                                     onChange={(e) => setItem(si, ii, { unit: e.target.value })} />
                                 </td>
                                 <td className="num">
-                                  <input className={"bom-input num" + (fieldErr(`${ip}.unitCost`) ? " bom-input-error" : "")} type="number" min="0" step="any" inputMode="decimal" value={it.unitCost} aria-label={t("bom.col_unit_cost")}
-                                    onChange={(e) => setItem(si, ii, { unitCost: e.target.value })} />
+                                  <input className={"bom-input num" + (fieldErr(`${ip}.unitCost`) ? " bom-input-error" : "")} inputMode="decimal" placeholder="0.00" maxLength={14} value={formatAmountInput(it.unitCost)} aria-label={t("bom.col_unit_cost")}
+                                    onChange={(e) => setItem(si, ii, { unitCost: parseAmountInput(e.target.value) })} />
                                 </td>
                               </>
                             ) : (
@@ -776,8 +777,8 @@ export function BomPage() {
                                 )}
                                 {s.laborMode === "amount" && (
                                   <span className="bom-labor-input">
-                                    ₱<input className={"bom-input num" + (fieldErr(`${p}.laborAmount`) ? " bom-input-error" : "")} type="number" min="0" step="any" value={s.laborAmount} aria-label={t("bom.labor_amount_aria")}
-                                      onChange={(e) => setSection(si, { laborAmount: e.target.value })} />
+                                    ₱<input className={"bom-input num" + (fieldErr(`${p}.laborAmount`) ? " bom-input-error" : "")} inputMode="decimal" placeholder="0.00" maxLength={18} value={formatAmountInput(s.laborAmount)} aria-label={t("bom.labor_amount_aria")}
+                                      onChange={(e) => setSection(si, { laborAmount: parseAmountInput(e.target.value) })} />
                                   </span>
                                 )}
                               </>
