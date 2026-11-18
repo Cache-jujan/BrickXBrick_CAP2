@@ -35,6 +35,7 @@ const {
   hideBudgetFrom,
 } = require("../lib/projectRules");
 const { assertDatesUnlocked } = require("../lib/projectDateLock");
+const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
@@ -78,6 +79,13 @@ function trimOrNull(value) {
   if (value === undefined || value === null) return null;
   const s = String(value).trim();
   return s.length ? s : null;
+}
+
+// Two people saving the same name at the same moment would both pass the check below.
+// Inside a transaction, this takes a lock keyed on the name (released at commit), so the
+// second one waits, then sees the first one's project and is refused.
+async function lockProjectName(client, name) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`project-name:${String(name).trim().toLowerCase()}`]);
 }
 
 // Name must be unique among projects that are still in play (UC-02-01 E1).
@@ -203,6 +211,8 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
     await assertUniqueName(query, fields.name);
 
     const { project, structure, source } = await withTransaction(async (client) => {
+      await lockProjectName(client, fields.name);
+      await assertUniqueName(client, fields.name);
       await assertManagerAvailable(client, { userId: projectManagerId, role: "Project Manager", settings });
       if (siteManagerId) {
         await assertManagerAvailable(client, { userId: siteManagerId, role: "Site Manager", settings });
@@ -421,6 +431,8 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
       // Once the project is active the target dates of development and of
       // construction are fixed, for everyone (the completion date can still move).
       assertDatesUnlocked(existing, fields);
+      // The client and the project type are fixed too once the project is active.
+      assertIdentityUnlocked(existing, fields);
       // Client: the price given to the client is the BOM total, so once the
       // BOM is approved the budget follows it (reopen the BOM to change it).
       if (Math.abs(Number(fields.budget) - Number(existing.budget)) > 0.005) {
@@ -430,6 +442,7 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
         }
       }
       if (fields.name.toLowerCase() !== String(existing.name).trim().toLowerCase()) {
+        await lockProjectName(client, fields.name);
         await assertUniqueName(client, fields.name, existing.projectid);
       }
 
