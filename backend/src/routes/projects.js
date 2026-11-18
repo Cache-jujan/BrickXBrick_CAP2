@@ -38,7 +38,6 @@ const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
-const { GATE_CODE } = require("../lib/procurementGate");
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
 
 const router = express.Router();
@@ -996,11 +995,7 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
       flagged: reviewByMilestone[m.milestoneid]?.flagged || 0,
     }));
 
-    // The Site Manager's procurement gate: true when the project has none or it is Completed.
-    const gate = tasks.find((t) => t.requirementcode === GATE_CODE);
-    const procurementGateCompleted = !gate || gate.status === "Completed";
-
-    res.json({ ...project, procurementGateCompleted, milestones: milestonesWithTasks });
+    res.json({ ...project, milestones: milestonesWithTasks });
   } catch (err) {
     sendError(res, err);
   }

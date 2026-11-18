@@ -1,9 +1,26 @@
-.progress-breakdown { max-width: 560px; max-height: 80vh; overflow-y: auto; }
-.progress-breakdown-milestone { margin-bottom: var(--space-4); }
-.progress-breakdown-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-2); font-size: var(--text-base, 1rem); }
-.progress-breakdown-chip { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; background: var(--color-surface-sunken, rgba(0, 0, 0, 0.06)); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
-.progress-breakdown-section { margin: var(--space-2) 0 var(--space-1); font-size: var(--text-sm); font-weight: 600; color: var(--color-ink-soft); }
-.progress-breakdown-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
-.progress-breakdown-list li { display: flex; flex-direction: column; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08)); }
-.progress-breakdown-meta { font-size: var(--text-sm); color: var(--color-ink-soft); }
-.progress-breakdown-note { margin-top: 2px; font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.progress-breakdown { max-width: 600px; max-height: 85vh; overflow-y: auto; }
+.pb-summary { display: flex; align-items: center; gap: var(--space-5, 20px); padding: var(--space-4); margin-bottom: var(--space-4); border-radius: 14px; background: var(--color-surface-sunken, rgba(0, 0, 0, 0.04)); }
+.pb-ring { --pb-pct: 0; flex-shrink: 0; width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--color-primary, #2563eb) calc(var(--pb-pct) * 1%), rgba(0, 0, 0, 0.1) 0); position: relative; }
+.pb-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--color-surface, #fff); }
+.pb-ring span { position: relative; font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); flex: 1; }
+.pb-stat { display: flex; flex-direction: column; gap: 2px; padding-left: var(--space-3); border-left: 3px solid var(--color-border, rgba(0, 0, 0, 0.15)); }
+.pb-stat b { font-size: 1.5rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.pb-stat span { font-size: var(--text-sm); color: var(--color-ink-soft); }
+.pb-stat.is-done { border-color: #16a34a; }
+.pb-stat.is-active { border-color: #d97706; }
+.pb-milestone { margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1)); border-radius: 12px; }
+.pb-milestone-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.pb-milestone-head h3 { margin: 0; font-size: 1rem; }
+.pb-chip { padding: 2px 10px; border-radius: 999px; background: var(--color-primary, #2563eb); color: #fff; font-size: var(--text-sm); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pb-bar { height: 6px; margin: var(--space-2) 0 var(--space-3); border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+.pb-bar span { display: block; height: 100%; border-radius: inherit; background: var(--color-primary, #2563eb); }
+.pb-tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.pb-task { display: flex; gap: var(--space-3); align-items: flex-start; }
+.pb-dot { flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; border: 2px solid rgba(0, 0, 0, 0.25); display: grid; place-items: center; font-size: 12px; color: #fff; }
+.pb-task.is-done .pb-dot { background: #16a34a; border-color: #16a34a; }
+.pb-task.is-active .pb-dot { border-color: #d97706; background: linear-gradient(90deg, #d97706 50%, transparent 50%); }
+.pb-task-body { display: flex; flex-direction: column; min-width: 0; }
+.pb-meta { font-size: var(--text-sm); color: var(--color-ink-soft); }
+.pb-note { margin-top: 2px; font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .pb-summary { flex-direction: column; align-items: stretch; } .pb-ring { align-self: center; } }

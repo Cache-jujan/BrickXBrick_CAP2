@@ -8,14 +8,14 @@ const SM = { id: "sm-1" };
 const TASK_ID = "task-1";
 const CSID = "csid-1";
 
-function makeDeps({ task = { taskid: TASK_ID, assignedto: SM.id, status: "Pending" }, existing = null, insertError = null, pending = false, pendingUnderLock = false, notifyError = null, gateOpen = false, phase = "Construction", requirementcode = null } = {}) {
+function makeDeps({ task = { taskid: TASK_ID, assignedto: SM.id, status: "Pending" }, existing = null, insertError = null, pending = false, pendingUnderLock = false, notifyError = null, preOpen = false, phase = "Construction" } = {}) {
   const calls = { writes: [], uploads: 0, pendingChecks: 0, notifications: [], savepoints: [] };
   let locked = false;
   const run = async (sql, params = []) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
     if (text.startsWith("select * from tasks")) return task ? { rowCount: 1, rows: [task] } : { rowCount: 0, rows: [] };
-    if (text.startsWith("select m.phase, t.requirementcode")) {
-      return { rowCount: 1, rows: [{ phase, requirementcode, gateopen: gateOpen }] };
+    if (text.startsWith("select m.phase, exists")) {
+      return { rowCount: 1, rows: [{ phase, preopen: preOpen }] };
     }
     if (text.startsWith("select * from task_progress_log")) return existing ? { rowCount: 1, rows: [existing] } : { rowCount: 0, rows: [] };
     if (text.startsWith("select taskid from tasks") && text.includes("for update")) {
@@ -204,18 +204,17 @@ test("review notice: flagged carries the PM's reason", () => {
   assert.equal(n.message, 'Your photo for "Gather stone" was flagged: Photo is blurry. Please submit a new photo.');
 });
 
-test("procurement gate: other Construction work is refused with 409 PROCUREMENT_GATE while the gate is open, before any upload", async () => {
-  const { deps, calls, uploadPhoto } = makeDeps({ gateOpen: true });
-  await rejects(submitTaskProgress(input({ uploadPhoto }), deps), 409, "PROCUREMENT_GATE");
+test("pre-construction: Construction work is refused with 409 PRECONSTRUCTION_OPEN while a Pre-construction task is open, before any upload", async () => {
+  const { deps, calls, uploadPhoto } = makeDeps({ preOpen: true });
+  await rejects(submitTaskProgress(input({ uploadPhoto }), deps), 409, "PRECONSTRUCTION_OPEN");
   assert.equal(calls.uploads, 0);
   assert.deepEqual(calls.writes, []);
 });
 
-test("procurement gate: the gate task itself, a Planning task, or a done gate are not blocked", async () => {
+test("pre-construction: a Planning task, or Construction once Pre-construction is done, is not blocked", async () => {
   for (const extra of [
-    { gateOpen: true, requirementcode: "GATE-PROC-RECEIVED" },
-    { gateOpen: true, phase: "Planning" },
-    { gateOpen: false },
+    { preOpen: true, phase: "Planning" },
+    { preOpen: false },
   ]) {
     const { deps, uploadPhoto } = makeDeps(extra);
     const { log } = await submitTaskProgress(input({ uploadPhoto }), deps);

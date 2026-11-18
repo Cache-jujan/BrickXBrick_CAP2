@@ -13,14 +13,14 @@ import {
 } from "react-native";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
-import { Redirect, Stack, router, useFocusEffect, type Href } from "expo-router";
+import { Redirect, Stack, router, useFocusEffect, useLocalSearchParams, type Href } from "expo-router";
 
 import { AppButton } from "@/components/app-button";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
-import { type AssignedTask, type CheckinSlotName, type CheckinsToday } from "@/lib/api";
+import { type CheckinSlotName, type CheckinsToday } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { loadAssignedTasks, loadCheckinsToday } from "@/lib/cached-api";
 import { useOnNewNotifications } from "@/lib/notification-events";
@@ -81,13 +81,49 @@ const SLOT_KEY: Record<string, string> = {
   EndOfDay: "ci.slot_end_of_day",
 };
 
+const DEFAULT_WINDOWS: Record<CheckinSlotName, string> = { Morning: "05:00-10:00", Midday: "10:00-14:00", EndOfDay: "14:00-21:00" };
+const SLOT_FULL: Record<CheckinSlotName, string> = { Morning: "Morning", Midday: "Midday", EndOfDay: "End of day" };
+
+// Offline and the check-in screen was never opened online: build the choices from the
+// projects on the Site Manager's saved task list, with the standard time windows. The
+// server still decides on sending whether the check-in is on time.
+async function checkinsFromSavedProjects(): Promise<CheckinsToday | null> {
+  const saved = await loadAssignedTasks();
+  const byId = new Map<string, string>();
+  for (const task of saved.data) {
+    if (task.projectid && !byId.has(task.projectid)) byId.set(task.projectid, task.projectname || "Project");
+  }
+  if (byId.size === 0) return null;
+  const now = new Date();
+  const minutes = ((now.getUTCHours() + 8) % 24) * 60 + now.getUTCMinutes();
+  const suggestedSlot: CheckinSlotName = minutes < 10 * 60 ? "Morning" : minutes < 14 * 60 ? "Midday" : "EndOfDay";
+  return {
+    today: manilaDate(now),
+    now: now.toISOString(),
+    suggestedSlot,
+    windows: DEFAULT_WINDOWS,
+    projects: [...byId].map(([projectId, name]) => ({
+      projectId,
+      name,
+      slots: SLOTS.map((slot) => ({
+        slot: slot as CheckinSlotName,
+        label: SLOT_FULL[slot as CheckinSlotName],
+        window: DEFAULT_WINDOWS[slot as CheckinSlotName],
+        state: "Open" as const,
+        checkinId: null,
+      })),
+    })),
+  };
+}
+
 export default function SiteManagerCheckinScreen() {
   const { t, intlLocale } = useLocale();
   const session = getSession();
+  // Opened from a project (or with a project picked on the dashboard): no need to ask which one.
+  const { projectId: paramProjectId } = useLocalSearchParams<{ projectId?: string }>();
   const { isOnline, refreshPendingCount, syncNow, pendingCount, lastSync } = useNetwork();
 
   const [today, setToday] = useState<CheckinsToday | null>(null);
-  const [tasks, setTasks] = useState<AssignedTask[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,13 +131,12 @@ export default function SiteManagerCheckinScreen() {
   const [pendingSlots, setPendingSlots] = useState<{ client_id: string; project_id: string; slot: string }[]>([]);
   const [rejected, setRejected] = useState<RejectedCheckin[]>([]);
 
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(paramProjectId ?? null);
   const [slot, setSlot] = useState<CheckinSlotName | null>(null);
   const [siteStatus, setSiteStatus] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
   const [issues, setIssues] = useState("");
   const [needsPmAction, setNeedsPmAction] = useState(false);
-  const [taskIds, setTaskIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -130,12 +165,18 @@ export default function SiteManagerCheckinScreen() {
         setToday(result.data);
         setProjectId((current) => current ?? (result.data.projects.length === 1 ? result.data.projects[0].projectId : null));
         if (!slotChosenRef.current) setSlot(result.data.suggestedSlot);
-        // The tasks are optional: a failure here must not block the check-in.
-        loadAssignedTasks()
-          .then((r) => setTasks(r.data))
-          .catch(() => {});
       } catch (err) {
-        if (!todayRef.current) {
+        let fallback: CheckinsToday | null = null;
+        if (!todayRef.current && !onlineRef.current) {
+          fallback = await checkinsFromSavedProjects().catch(() => null);
+        }
+        if (fallback) {
+          todayRef.current = fallback;
+          setToday(fallback);
+          setSavedAt(new Date().toISOString());
+          setProjectId((current) => current ?? (fallback.projects.length === 1 ? fallback.projects[0].projectId : null));
+          if (!slotChosenRef.current) setSlot(fallback.suggestedSlot);
+        } else if (!todayRef.current) {
           setLoadError(
             onlineRef.current
               ? describeLoadError(err, true) ?? t("ci.err_load")
@@ -171,12 +212,9 @@ export default function SiteManagerCheckinScreen() {
     () => (project ? slotStates(project.slots, pendingSlots, project.projectId) : []),
     [project, pendingSlots]
   );
+  const locked = !!paramProjectId && !!project;
   const chosen = slots.find((s) => s.slot === slot) ?? null;
   const slotTaken = !!chosen && (chosen.state === "Submitted" || chosen.state === "Queued");
-  const projectTasks = useMemo(
-    () => tasks.filter((t) => t.projectid === projectId && t.status !== "Completed"),
-    [tasks, projectId]
-  );
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
@@ -188,7 +226,7 @@ export default function SiteManagerCheckinScreen() {
     summary,
     issues,
     needsPmAction,
-    taskIds,
+    taskIds: [],
     photoCount: photos.length,
   }, t);
   const blocked = [
@@ -207,10 +245,6 @@ export default function SiteManagerCheckinScreen() {
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (!result.canceled) setPhotos((current) => [...current, result.assets[0]].slice(0, MAX_PHOTOS));
-  }
-
-  function toggleTask(id: string) {
-    setTaskIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
   }
 
   // Always save on the phone first, then send. One path whether or not there is
@@ -237,7 +271,7 @@ export default function SiteManagerCheckinScreen() {
         summary: summary.trim(),
         issues: issues.trim() || null,
         needsPmAction,
-        taskIds,
+        taskIds: [],
         photoPaths: copied,
       });
       if (!result.queued) {
@@ -251,7 +285,6 @@ export default function SiteManagerCheckinScreen() {
       setSummary("");
       setIssues("");
       setNeedsPmAction(false);
-      setTaskIds([]);
       setPhotos([]);
       setSiteStatus(null);
       setTriedSubmit(false);
@@ -332,14 +365,14 @@ export default function SiteManagerCheckinScreen() {
             </View>
           ))}
 
-          <Text style={styles.label}>{t(today.projects.length === 1 ? "ci.checking_in_for_label" : "ci.project_label")}</Text>
-          {today.projects.length === 1 && (
+          <Text style={styles.label}>{t(locked || today.projects.length === 1 ? "ci.checking_in_for_label" : "ci.project_label")}</Text>
+          {(locked || today.projects.length === 1) && (
             <View style={styles.projectCard}>
-              <Text style={styles.projectName}>{today.projects[0].name}</Text>
-              <Text style={styles.hint}>{t("ci.only_project")}</Text>
+              <Text style={styles.projectName}>{(project ?? today.projects[0]).name}</Text>
+              {today.projects.length === 1 && <Text style={styles.hint}>{t("ci.only_project")}</Text>}
             </View>
           )}
-          <View style={[styles.chipRow, today.projects.length === 1 && { display: "none" }]}>
+          <View style={[styles.chipRow, (locked || today.projects.length === 1) && { display: "none" }]}>
             {today.projects.map((p) => (
               <Pressable
                 key={p.projectId}
@@ -352,7 +385,7 @@ export default function SiteManagerCheckinScreen() {
               </Pressable>
             ))}
           </View>
-          {today.projects.length > 1 && (
+          {today.projects.length > 1 && !locked && (
             <Text style={projectId ? styles.hint : styles.fieldError}>
               {projectId ? t("ci.checking_in_for", { name: project?.name ?? "" }) : t("ci.choose_project")}
             </Text>
@@ -425,16 +458,6 @@ export default function SiteManagerCheckinScreen() {
                 style={[styles.input, styles.multiline, triedSubmit && !summary.trim() && fieldErrorStyle]}
               />
 
-              <Text style={styles.label}>{t("ci.issues")}</Text>
-              <TextInput
-                value={issues}
-                onChangeText={setIssues}
-                placeholder={t("ci.issues_ph")}
-                placeholderTextColor={COLORS.muted}
-                multiline
-                maxLength={2000}
-                style={[styles.input, styles.multiline, triedSubmit && needsPmAction && !issues.trim() && fieldErrorStyle]}
-              />
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.switchTitle}>{t("ci.needs_pm")}</Text>
@@ -447,29 +470,32 @@ export default function SiteManagerCheckinScreen() {
                   accessibilityLabel={t("ci.needs_pm_aria")}
                 />
               </View>
-
-              {projectTasks.length > 0 && (
+              {needsPmAction ? (
+                <View style={styles.needsPmBox}>
+                  <Text style={styles.needsPmLabel}>{t("ci.issue_required")}</Text>
+                  <TextInput
+                    value={issues}
+                    onChangeText={setIssues}
+                    placeholder={t("ci.issue_required_ph")}
+                    placeholderTextColor={COLORS.muted}
+                    multiline
+                    maxLength={2000}
+                    autoFocus
+                    style={[styles.input, styles.multiline, triedSubmit && !issues.trim() && fieldErrorStyle]}
+                  />
+                </View>
+              ) : (
                 <>
-                  <Text style={styles.label}>{t("ci.tasks_label")}</Text>
-                  <View style={styles.chipRow}>
-                    {projectTasks.map((t) => {
-                      const on = taskIds.includes(t.taskid);
-                      return (
-                        <Pressable
-                          key={t.taskid}
-                          onPress={() => toggleTask(t.taskid)}
-                          style={[styles.chip, on && styles.chipOn]}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: on }}
-                        >
-                          <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>
-                            {t.taskname}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <Text style={styles.hint}>{t("ci.tasks_hint")}</Text>
+                <Text style={styles.label}>{t("ci.issues")}</Text>
+                <TextInput
+                  value={issues}
+                  onChangeText={setIssues}
+                  placeholder={t("ci.issues_ph")}
+                  placeholderTextColor={COLORS.muted}
+                  multiline
+                  maxLength={2000}
+                  style={[styles.input, styles.multiline, triedSubmit && needsPmAction && !issues.trim() && fieldErrorStyle]}
+                />
                 </>
               )}
 
@@ -548,6 +574,8 @@ const styles = StyleSheet.create({
   slotState: { color: COLORS.muted, fontFamily: FONT.semibold, fontSize: 12 },
   input: { backgroundColor: COLORS.card, borderColor: COLORS.inputBorder, borderWidth: 1, borderRadius: 12, padding: 12, color: COLORS.heading, fontFamily: FONT.regular, fontSize: 15 },
   multiline: { minHeight: 96, textAlignVertical: "top" },
+  needsPmBox: { backgroundColor: COLORS.errorFill, borderColor: COLORS.errorBorder, borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 },
+  needsPmLabel: { color: COLORS.errorText, fontFamily: FONT.bold, fontSize: 14 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, minHeight: MIN_TAP },
   switchTitle: { color: COLORS.heading, fontFamily: FONT.semibold, fontSize: 14 },
   photoRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },

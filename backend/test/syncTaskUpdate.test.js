@@ -46,7 +46,7 @@ async function run(sql, params = []) {
     const t = state.tasks.get(params[0]);
     return t ? { rowCount: 1, rows: [t] } : { rowCount: 0, rows: [] };
   }
-  if (text.startsWith("select m.phase, t.requirementcode")) return { rowCount: 1, rows: [{ phase: "Construction", requirementcode: null, gateopen: false }] };
+  if (text.startsWith("select m.phase, exists")) return { rowCount: 1, rows: [{ phase: "Construction", preopen: false }] };
   if (text.startsWith("select * from task_progress_log where clientsubmissionid")) {
     const l = state.logs.find((x) => x.clientsubmissionid === params[0]);
     return l ? { rowCount: 1, rows: [l] } : { rowCount: 0, rows: [] };

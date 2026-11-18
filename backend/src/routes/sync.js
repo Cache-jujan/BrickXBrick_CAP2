@@ -242,7 +242,7 @@ const TASK_REJECT_CODE = {
   TASK_CLOSED: "TASK_CLOSED",
   SUPERSEDED: "SUPERSEDED",
   AWAITING_REVIEW: "SUPERSEDED", // a submission is already waiting for review
-  PROCUREMENT_GATE: "PROCUREMENT_GATE", // the procurement gate task is not done yet
+  PRECONSTRUCTION_OPEN: "PRECONSTRUCTION_OPEN", // Pre-construction is not finished yet
   CLIENT_ID_IN_USE: "DUPLICATE_UUID",
 };
 

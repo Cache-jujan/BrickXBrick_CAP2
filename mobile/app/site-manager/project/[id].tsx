@@ -154,7 +154,7 @@ export default function SiteManagerProjectScreen() {
       <AppButton
         label={t("sm.proj_checkin")}
         variant="secondary"
-        onPress={() => router.push("/site-manager/checkin" as Href)}
+        onPress={() => router.push({ pathname: "/site-manager/checkin", params: { projectId: project.projectid } } as Href)}
         style={styles.footerSecondary}
       />
     </View>

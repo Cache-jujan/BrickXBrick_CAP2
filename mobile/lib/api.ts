@@ -105,9 +105,6 @@ export type AssignedTask = {
   completionpercentage: number | string;
   photoevidenceurl?: string | null;
   pendingphotoevidenceurl?: string | null;
-  // True while the project's "Receive all initial procurement on site" gate task is open and
-  // this is some other Construction task: progress can't be sent yet.
-  procurementgateblocked?: boolean | null;
   // When the submission now waiting for the PM's review was made, and its note.
   pendingsubmittedat?: string | null;
   pendingnote?: string | null;
