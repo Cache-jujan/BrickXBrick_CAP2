@@ -307,6 +307,9 @@ export function ProjectForm({
             disabled={budgetLocked || form.budgetLater}
             onChange={(e) => updateField("budget", parseAmountInput(e.target.value))}
           />
+          <p className="field-hint">
+            {budgetLocked ? t("form.budget_locked") : t("form.budget_auto")}
+          </p>
           {!budgetLocked && (
             <label className="pf-budget-later">
               <input
@@ -317,9 +320,6 @@ export function ProjectForm({
               {t("form.budget_later")}
             </label>
           )}
-          <p className="field-hint">
-            {budgetLocked ? t("form.budget_locked") : t("form.budget_auto")}
-          </p>
 
           </section>
 
