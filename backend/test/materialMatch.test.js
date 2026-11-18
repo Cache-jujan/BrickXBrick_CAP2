@@ -50,3 +50,21 @@ test("empty description doesn't match a real material", () => {
   assert.equal(matchesMaterial("", "cement"), false);
   assert.equal(matchesMaterial(undefined, "cement"), false);
 });
+
+test("a line with no size matches a request that has one", () => {
+  assert.equal(matchesMaterial("Portland cement", "Portland cement 40kg"), true);
+});
+
+test("a line with a different size does not match", () => {
+  assert.equal(matchesMaterial("Portland cement 50kg", "Portland cement 40kg"), false);
+  assert.equal(matchesMaterial("Rebar 12mm", "Rebar 10mm"), false);
+});
+
+test("the same size written with a space still matches", () => {
+  assert.equal(matchesMaterial("Portland cement 40 kg", "Portland cement 40kg"), true);
+  assert.equal(matchesMaterial("Rebar 10 mm", "rebar 10mm"), true);
+});
+
+test("a missing size never rescues a missing name word", () => {
+  assert.equal(matchesMaterial("Cement", "Portland cement 40kg"), false);
+});

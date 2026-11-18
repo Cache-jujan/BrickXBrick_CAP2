@@ -18,9 +18,10 @@ import { Redirect, router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 
 import { FlowHeader } from "@/components/flow-header";
-import { ProjectPill } from "@/components/project-pill";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/requested-material-picker";
+import { matchesMaterial } from "@/lib/request-search";
+import { LineStatusButton, LineStatusDialog, type LineStatusKind } from "@/components/line-status";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
@@ -83,8 +84,11 @@ export default function ReviewScreen() {
   // Materials from the Site Managers' requests, for naming line items.
   const [materials, setMaterials] = useState<RequestedMaterial[]>([]);
   const [pickingItemId, setPickingItemId] = useState<string | null>(null);
+  // The line whose status popup is open.
+  const [statusItemId, setStatusItemId] = useState<string | null>(null);
+  // The material names of the requests a split receipt can fill (null until loaded), to tell which lines will match one.
+  const [matchable, setMatchable] = useState<{ name: string }[] | null>(null);
   // What is left in the budgets of the requests this receipt can fill (centavos), for a split receipt.
-  const [splitLeftCents, setSplitLeftCents] = useState<number | null>(null);
   // The requests this receipt is for, shown at the top of the review ("This receipt is for").
   const [forRequests, setForRequests] = useState<{ key: string; subject: string; project: string; left: number | null }[]>([]);
 
@@ -97,12 +101,11 @@ export default function ReviewScreen() {
       .then(({ data: requests }) => {
         if (cancelled) return;
         const mine = ticketId ? requests.filter((r) => r.ticketID === ticketId) : requests;
-        // A split receipt can never cost more than every request it may fill has left (limited to the chosen project, if any).
+        // Which requests a split receipt may fill (limited to the chosen project, if any). The budget is checked per request on the Allocate step.
         const scopeIds = draft.scope?.projectIds ?? [];
         const reachable = ticketId ? [] : requests.filter((r) => scopeIds.length === 0 || scopeIds.includes(r.projectID));
-        const budgeted = reachable.filter((r) => r.remainingBudget != null);
         setForRequests((ticketId ? mine : reachable).map((r) => ({ key: r.ticketID, subject: r.subject, project: r.projectName, left: r.remainingBudget })));
-        setSplitLeftCents(budgeted.length > 0 ? budgeted.reduce((sum, r) => sum + Math.round(Number(r.remainingBudget) * 100), 0) : null);
+        setMatchable(ticketId ? null : reachable.map((r) => ({ name: r.materialType })));
         setMaterials(
           mine.map((r) => ({
             key: r.ticketID,
@@ -151,11 +154,24 @@ export default function ReviewScreen() {
   // Came from the global Snap receipt button: no request and no project picked yet.
   // The header names the vendor instead of listing every open request.
   const fromGlobalSnap = isSplit && !draft.scope && !draft.resubmit;
-  const scopedProject = isSplit && draft.scope?.projectNames.length ? draft.scope.projectNames.join(", ") : null;
   const autoFilled = result.autoFilled ?? [];
   // The BIR authority type isn't shown (the purchaser doesn't pick it), so
   // a disagreement on it isn't theirs to resolve.
   const conflicts = (result.vendorConflicts ?? []).filter((c) => c.field !== "birPermitType");
+
+  // What the icon beside a line's name says. A split receipt's line is allocated only to a request it matches by
+  // name, or one the Purchaser picked; so "not matched" comes first, then "the scan was unsure", then "matched".
+  function lineStatus(item: (typeof items)[number]): { kind: LineStatusKind | null; requestName?: string; alsoCheck: boolean } {
+    const named = item.name.trim().length > 0;
+    const checkMatch = isSplit && matchable !== null && named && (toHundredths(item.quantity) ?? 0) > 0 && !item.matchedTicketID;
+    const auto = checkMatch ? matchable!.find((m) => matchesMaterial(item.name, m.name)) : undefined;
+    const picked = item.matchedTicketID ? materials.find((m) => m.key === item.matchedTicketID) : undefined;
+    const alsoCheck = !!item.ocr;
+    if (checkMatch && !auto) return { kind: "unmatched", alsoCheck };
+    if (item.ocr) return { kind: "check", alsoCheck };
+    if (auto || picked) return { kind: "matched", requestName: auto?.name ?? picked?.name, alsoCheck };
+    return { kind: null, alsoCheck };
+  }
 
   function edit(field: string, setter: (v: string) => void) {
     return (value: string) => {
@@ -183,12 +199,10 @@ export default function ReviewScreen() {
   const linesCents = namedItems.reduce((sum, it) => sum + (toCents(it.price) ?? 0), 0);
   const totalsMatch = totalCents !== null && linesCents === totalCents;
   // The strict budget (every role): the receipt can be under what is left, never over.
-  // A split receipt is capped by the combined budget left on the requests it can fill; the exact split is checked on the next screen.
-  const remainingCents = draft.resubmit
+  // Only a receipt for one request has a real limit here. A split receipt is checked request by request on the Allocate step.
+  const remainingCents = draft.resubmit || isSplit
     ? null
-    : !isSplit
-      ? (draft.ticket?.remaining != null ? toCents(draft.ticket.remaining) : null)
-      : splitLeftCents;
+    : (draft.ticket?.remaining != null ? toCents(draft.ticket.remaining) : null);
   const overCents = remainingCents !== null && totalCents !== null && totalCents > remainingCents ? totalCents - remainingCents : 0;
   const dateProblem = receiptDateProblem(receiptDate, t);
   const vendorMissing = vendorName.trim().length === 0;
@@ -299,8 +313,6 @@ export default function ReviewScreen() {
             </View>
           )}
 
-          {scopedProject ? <View style={styles.projectPill}><ProjectPill label={t("mx.project_label")} name={scopedProject} /></View> : null}
-
           {(file || forRequests.length > 0 || remainingCents !== null) && (
             <View style={styles.summary}>
               <View style={styles.summaryTop}>
@@ -341,12 +353,9 @@ export default function ReviewScreen() {
                   {file ? <Text style={styles.summaryHint}>{t("rv.tap_open")}</Text> : null}
                 </View>
               </View>
-              {remainingCents !== null ? (
-                <View style={[styles.summaryBudget, overCents > 0 && styles.summaryBudgetOver]}>
-                  <Text style={[styles.summaryBudgetLeft, overCents > 0 && styles.budgetTextOver]}>{t("bd.left", { remaining: formatPesoCents(remainingCents) })}</Text>
-                  <Text style={[styles.summaryBudgetHint, overCents > 0 && styles.budgetTextOver]} numberOfLines={2}>
-                    {overCents > 0 ? t("bd.over_inline", { over: formatPesoCents(overCents) }) : t("bd.under_inline")}
-                  </Text>
+              {overCents > 0 ? (
+                <View style={styles.summaryBudgetOver} accessibilityRole="alert">
+                  <Text style={styles.summaryBudgetOverText} numberOfLines={2}>{t("bd.over_inline", { over: formatPesoCents(overCents) })}</Text>
                 </View>
               ) : null}
             </View>
@@ -436,18 +445,30 @@ export default function ReviewScreen() {
               const qtyBad = named && toHundredths(item.quantity) === null;
               const amountBad = named && toCents(item.price) === null;
               const needName = namedItems.length === 0 && index === 0;
+              const status = lineStatus(item);
+              const unmatched = status.kind === "unmatched";
               return (
                 <View key={item.id} style={[styles.lineBlock, index > 0 && styles.lineBlockDivider]}>
                   <View style={styles.lineNameRow}>
-                    <TextInput style={[styles.input, styles.flex, needName && styles.inputRequired]} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} accessibilityLabel={t("submit.item_n", { n: index + 1 })} />
+                    <View style={styles.nameField}>
+                      <TextInput style={[styles.input, needName && styles.inputRequired, status.kind && styles.inputWithStatus]} placeholder={t("rv.item_name_ph")} placeholderTextColor={COLORS.muted} value={item.name} onChangeText={(v) => updateItem(item.id, { name: v, bomItemID: null, matchedTicketID: null })} accessibilityLabel={t("submit.item_n", { n: index + 1 })} />
+                      {status.kind ? (
+                        <View style={styles.nameStatus} pointerEvents="box-none">
+                          <LineStatusButton
+                            kind={status.kind}
+                            label={t(status.kind === "unmatched" ? "rv.status_unmatched_aria" : status.kind === "check" ? "rv.status_check_aria" : "rv.status_matched_aria", { n: index + 1 })}
+                            onPress={() => setStatusItemId(item.id)}
+                          />
+                        </View>
+                      ) : null}
+                    </View>
                     <Pressable onPress={() => removeItem(item.id)} hitSlop={6} style={styles.removeButton} accessibilityRole="button" accessibilityLabel={t("submit.remove_item_n", { n: index + 1 })}>
                       <Text style={styles.removeX}>×</Text>
                     </Pressable>
                   </View>
-                  {(needName || item.ocr) && (
+                  {needName && (
                     <View style={styles.tagRow}>
-                      {needName && <Text style={styles.requiredTag}>{t("mx.required_tag")}</Text>}
-                      {item.ocr && <Text style={styles.checkTag}>{t("rv.check_tag")}</Text>}
+                      <Text style={styles.requiredTag}>{t("mx.required_tag")}</Text>
                     </View>
                   )}
                   {item.scanned && simpleText(item.scanned) !== simpleText(item.name) && (
@@ -468,9 +489,9 @@ export default function ReviewScreen() {
                       </Pressable>
                     </View>
                   ) : materials.length > 0 ? (
-                    <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.matchLink, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
-                      <IconSymbol name="list.clipboard.fill" size={18} color={COLORS.primary} />
-                      <Text style={styles.matchLinkText}>{t("rv.match_material")}</Text>
+                    <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.matchLink, unmatched && styles.matchLinkWarn, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
+                      <IconSymbol name="list.clipboard.fill" size={18} color={unmatched ? "#FFFFFF" : COLORS.primary} />
+                      <Text style={[styles.matchLinkText, unmatched && styles.matchLinkWarnText]}>{t("rv.match_material")}</Text>
                     </Pressable>
                   ) : null}
                   <View style={styles.itemRow}>
@@ -539,6 +560,22 @@ export default function ReviewScreen() {
           </Pressable>
         </View>
       </KeyboardAvoider>
+
+      {(() => {
+        const it = items.find((i) => i.id === statusItemId);
+        const s = it ? lineStatus(it) : null;
+        return (
+          <LineStatusDialog
+            kind={it && s ? s.kind : null}
+            lineName={it?.name.trim() || it?.scanned || ""}
+            requestName={s?.requestName}
+            alsoCheck={s?.alsoCheck}
+            hasRequests={materials.length > 0}
+            onMatch={() => { setPickingItemId(statusItemId); setStatusItemId(null); }}
+            onClose={() => setStatusItemId(null)}
+          />
+        );
+      })()}
 
       <RequestedMaterialPicker
         visible={pickingItemId !== null}
@@ -630,23 +667,26 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   summary: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, marginBottom: 12, gap: 10 },
-  projectPill: { marginBottom: 12 },
   summaryTop: { flexDirection: "row", gap: 12, alignItems: "center" },
   summaryLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
   summaryTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, marginTop: 1 },
   summaryMeta: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 1 },
   summaryHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.primary, marginTop: 6 },
-  summaryBudget: { backgroundColor: COLORS.successBg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, gap: 1 },
-  summaryBudgetOver: { backgroundColor: COLORS.errorFill },
-  summaryBudgetLeft: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.success },
-  summaryBudgetHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.success },
+  summaryBudgetOver: { backgroundColor: COLORS.errorFill, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  summaryBudgetOverText: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.errorText },
   lineBlock: { gap: 8, paddingVertical: 4 },
   lineBlockDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.border, paddingTop: 14, marginTop: 6 },
   lineNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  // The status icon sits inside the name field, at its right end; the text keeps clear of it.
+  nameField: { flex: 1, justifyContent: "center" },
+  inputWithStatus: { paddingRight: 44 },
+  nameStatus: { position: "absolute", right: 8, top: 0, bottom: 0, justifyContent: "center" },
   tagRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   // An action button: a clear outlined button across the card, not a small link.
   matchLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: MIN_TAP, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12, backgroundColor: COLORS.card, paddingHorizontal: 14 },
   matchLinkText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.primary },
+  matchLinkWarn: { backgroundColor: COLORS.primary },
+  matchLinkWarnText: { color: "#FFFFFF" },
   removeX: { fontSize: 24, lineHeight: 26, fontFamily: FONT.regular, color: COLORS.muted },
   thumbRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 10, marginBottom: 10 },
   thumb: { width: 64, height: 84, borderRadius: 10, backgroundColor: COLORS.bg },
@@ -705,7 +745,6 @@ const styles = StyleSheet.create({
   budgetBoxOver: { backgroundColor: COLORS.errorFill },
   budgetLeft: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.success },
   budgetHint: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.success },
-  budgetTextOver: { color: COLORS.errorText },
   matchedChip: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, backgroundColor: COLORS.successBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   matchedChipText: { flex: 1, fontSize: 12, fontFamily: FONT.semibold, color: COLORS.success },
   matchedChipRemove: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.muted, textDecorationLine: "underline" },

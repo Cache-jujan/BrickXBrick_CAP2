@@ -42,6 +42,8 @@ export const NOTIFICATION_META = {
   ProjectSuspended:    { Icon: ClockAlertGlyph,  bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.default" },
   ProjectResumed:      { Icon: RocketGlyph,      bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.default" },
   ProjectTerminated:   { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.default" },
+  ProjectCompleted:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.default" },
+  ProjectUnassigned:   { Icon: FolderIcon,       bg: "#F1F5F9", fg: "#64748B", fallbackKey: "notif.fallback.default" },
 };
 
 // Types whose wording the app writes itself, in the user's language, instead of showing the

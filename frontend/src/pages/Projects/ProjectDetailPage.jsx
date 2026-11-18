@@ -6,6 +6,7 @@ import {
   suspendProject,
   resumeProject,
   completeProject,
+  getCompletionCheck,
   getEligibleSiteManagers,
   getProjectOverview,
   updateProjectSiteManager,
@@ -85,6 +86,8 @@ export function ProjectDetailPage() {
   const [statusDialog, setStatusDialog] = useState(null);
   // Completing below 100% progress needs the GM to confirm the work is finished (a warning, not a block).
   const [finishConfirmed, setFinishConfirmed] = useState(false);
+  // Open requests and Pending expenses shown before completing (a warning, not a block); null until loaded.
+  const [openItems, setOpenItems] = useState(null);
   // Activating a project that has no milestones yet needs the GM to confirm (a warning, not a block).
   const [noPlanConfirmed, setNoPlanConfirmed] = useState(false);
   const [statusInput, setStatusInput] = useState("");
@@ -415,7 +418,12 @@ export function ProjectDetailPage() {
     setResumeDate("");
     setFinishConfirmed(false);
     setNoPlanConfirmed(false);
+    setOpenItems(null);
     setStatusDialog({ kind });
+    if (kind === "complete") {
+      // A failed check only hides the warning; completing still works.
+      getCompletionCheck(id).then(setOpenItems).catch(() => setOpenItems(null));
+    }
   }
 
   function closeStatusDialog() {
@@ -1004,6 +1012,14 @@ export function ProjectDetailPage() {
                   value={statusInput}
                   onChange={(ev) => setStatusInput(ev.target.value)}
                 />
+                {openItems && (openItems.openTickets > 0 || openItems.pendingExpenses > 0) && (
+                  <Banner
+                    tone="warning"
+                    title={t("pd.complete_open_items", { tickets: openItems.openTickets, expenses: openItems.pendingExpenses })}
+                  >
+                    {t("pd.complete_open_items_body")}
+                  </Banner>
+                )}
                 {progressPct < 100 && (
                   <>
                     <Banner tone="warning" title={t("pd.complete_warn", { pct: progressPct })} />

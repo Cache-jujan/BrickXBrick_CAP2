@@ -31,6 +31,20 @@ export function withChecked(selection, task, checked) {
   return { ...selection, included, excluded };
 }
 
+// A blank project's list starts with nothing ticked: every document that would be ticked by
+// default is excluded, so the GM adds only what the project needs.
+export function noneTicked(source) {
+  const excluded = new Set();
+  for (const m of source.milestones) for (const t of m.tasks) if (t.selectable && t.defaultIncluded) excluded.add(t.id);
+  return { ...EMPTY_SELECTION, excluded };
+}
+
+// How many documents will be created: ticked ones plus the ones typed under "Others".
+export function countTicked(source, selection) {
+  const ticked = source.milestones.flatMap((m) => m.tasks).filter((t) => t.selectable && isChecked(t, selection)).length;
+  return ticked + (selection.others || []).length;
+}
+
 // The part of the create/preview request that carries the GM's choices.
 export function selectionToStart(base, selection) {
   const out = { ...base, excludeTaskIds: [...selection.excluded] };
@@ -114,8 +128,11 @@ export function DocumentChecklist({ source, selection, onChange }) {
     <section className="dc" aria-labelledby="dc-title">
       <h2 id="dc-title" className="dc-title">Documents to include</h2>
       <p className="dc-sub">
-        Each ticked document becomes a task with its own due date. Untick the ones this project doesn't need;
-        you can add a task later from the project page. {onCount} selected.
+        Each ticked document becomes a task with its own due date.{" "}
+        {source.kind === "documents"
+          ? "Nothing is added until you tick it: choose only the documents this project needs."
+          : "Untick the ones this project doesn't need."}{" "}
+        You can add a task later from the project page. {onCount} selected.
         {fixedCount > 0 && ` ${fixedCount} other ${fixedCount === 1 ? "task" : "tasks"} from the template ${fixedCount === 1 ? "is" : "are"} always included.`}
       </p>
 

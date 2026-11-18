@@ -10,9 +10,11 @@ import "./UserManagementPage.css"; // the table, toolbar and action-link styles 
 import "./VendorMasterListPage.css";
 
 const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
+// Same rule as the server: typed freely, but 7 to 15 digits.
+const validPhone = (value) => /^[0-9+()\-\s]+$/.test(value) && value.replace(/\D/g, "").length >= 7 && value.replace(/\D/g, "").length <= 15;
 
 const blankForm = () => ({
-  vendorName: "", location: "", tin: "", birPermitType: "", birPermitNumber: "",
+  vendorName: "", location: "", phone: "", tin: "", birPermitType: "", birPermitNumber: "",
 });
 
 export function VendorMasterListPage() {
@@ -46,7 +48,7 @@ export function VendorMasterListPage() {
     const q = search.trim().toLowerCase();
     return vendors.filter((v) => {
       if (!q) return true;
-      return [v.vendorName, v.location, v.tin, v.birPermitNumber].some((x) => (x || "").toLowerCase().includes(q));
+      return [v.vendorName, v.location, v.phone, v.tin, v.birPermitNumber].some((x) => (x || "").toLowerCase().includes(q));
     });
   }, [vendors, search]);
 
@@ -107,6 +109,7 @@ export function VendorMasterListPage() {
                       <td className="vendors-name-cell">
                         <span className="vendors-name">{v.vendorName}</span>
                         {v.location && <span className="vendors-location">{v.location}</span>}
+                        {v.phone && <span className="vendors-location">{v.phone}</span>}
                       </td>
                       <td data-label={t("vm.col_tin")}>{v.tin ? <span className="vendors-code">{v.tin}</span> : <span className="users-not-locked">—</span>}</td>
                       <td data-label={t("vm.col_permit")}>
@@ -177,6 +180,7 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
   const [form, setForm] = useState(() => (vendor ? {
     vendorName: vendor.vendorName ?? "",
     location: vendor.location ?? "",
+    phone: vendor.phone ?? "",
     tin: vendor.tin ?? "",
     birPermitType: vendor.birPermitType ?? "",
     birPermitNumber: vendor.birPermitNumber ?? "",
@@ -195,6 +199,7 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
     setError("");
     const found = {};
     if (!form.vendorName.trim()) found.vendorName = t("vm.err_name");
+    if (form.phone.trim() && !validPhone(form.phone.trim())) found.phone = t("vm.err_phone");
     if (form.tin.trim() && !TIN_RE.test(form.tin.trim())) found.tin = t("vm.err_tin");
     if (form.birPermitNumber.trim() && !form.birPermitType) found.birPermitType = t("vm.err_permit_type");
     setErrors(found);
@@ -203,6 +208,7 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
     const payload = {
       vendorName: form.vendorName.trim(),
       location: form.location.trim() || null,
+      phone: form.phone.trim() || null,
       tin: form.tin.trim() || null,
       birPermitType: form.birPermitType || null,
       birPermitNumber: form.birPermitNumber.trim() || null,
@@ -230,6 +236,8 @@ function VendorFormDialog({ vendor, onClose, onDone }) {
             value={form.vendorName} error={errors.vendorName} onChange={(e) => update("vendorName", e.target.value)} autoFocus />
           <Field className="vendors-span-2" label={t("vm.f_location")} maxLength={200}
             value={form.location} error={errors.location} onChange={(e) => update("location", e.target.value)} />
+          <Field className="vendors-span-2" label={t("vm.f_phone")} placeholder="+63 917 555 0101" maxLength={30} inputMode="tel"
+            value={form.phone} error={errors.phone} onChange={(e) => update("phone", e.target.value)} />
           <Field label={t("vm.f_tin")} placeholder="123-456-789-00000" maxLength={20} inputMode="numeric"
             value={form.tin} error={errors.tin} onChange={(e) => update("tin", e.target.value)} />
           <label className="field">

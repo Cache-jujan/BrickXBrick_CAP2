@@ -38,6 +38,8 @@ const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
+const { findOpenItems, notifyProjectCompleted } = require("../lib/projectCompletion");        
+const { notifyRemovedManager } = require("../lib/managerChangeNotice");      
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
 
 const router = express.Router();
@@ -500,8 +502,20 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
           message: `You are now the Project Manager of "${row.name}".`,
         });
       }
-      return { row, fields };
+      return { row, fields, previousPmId: pmChanged ? existing.projectmanagerid : null };
     });
+
+    // The Project Manager taken off is told after the change is saved.
+    if (updated.previousPmId) {
+      const named = await query("SELECT name FROM users WHERE userid = $1", [updated.row.projectmanagerid]).catch(() => null);
+      await notifyRemovedManager(query, {
+        previousId: updated.previousPmId,
+        newId: updated.row.projectmanagerid,
+        role: "Project Manager",
+        project: updated.row,
+        newManagerName: named?.rows?.[0]?.name || null,
+      });
+    }
 
     res.json({ ...updated.row, warnings: buildProjectWarnings(updated.fields, settings) });
   } catch (err) {
@@ -745,8 +759,21 @@ router.get("/:id/status-history", requireRole(...PROJECT_MANAGEMENT_ROLES), asyn
   }
 });
 
+// GET /:id/completion-check, GM. What is still open before completing: open
+// material requests and Pending expenses. Only shown as a warning; completing
+// never waits for them (a Pending expense can still be approved afterwards).
+router.get("/:id/completion-check", requireRole("General Manager"), async (req, res) => {
+  try {
+    const project = await getProjectRow(query, req.params.id);
+    res.json(await findOpenItems(query, project.projectid));
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 // PATCH /:id/complete, GM. Active -> Completed, recording the actual
-// completion / turnover date (defaults to today).
+// completion / turnover date (defaults to today). The PM, SM and Purchasers are
+// told after it is saved; a notice that fails never undoes the completion.
 router.patch("/:id/complete", requireRole("General Manager"), async (req, res) => {
   try {
     const completionDate = req.body.actualCompletionDate || new Date().toISOString().slice(0, 10);
@@ -767,6 +794,7 @@ router.patch("/:id/complete", requireRole("General Manager"), async (req, res) =
       );
       return result.rows[0];
     });
+    await notifyProjectCompleted(query, project, completionDate);
     res.json(project);
   } catch (err) {
     sendError(res, err);
@@ -846,10 +874,20 @@ router.patch("/:id/site-manager", requireRole("General Manager", "Project Manage
           });
         }
       }
-      return row;
+      return { ...row, previousSiteManagerId: changed ? project.sitemanagerid : null };
     });
 
-    res.json(result);
+    // The Site Manager taken off is told after the change is saved.
+    const { previousSiteManagerId, ...saved } = result;
+    await notifyRemovedManager(query, {
+      previousId: previousSiteManagerId,
+      newId: saved.sitemanagerid,
+      role: "Site Manager",
+      project: saved,
+      newManagerName: saved.sitemanagername || null,
+    });
+
+    res.json(saved);
   } catch (err) {
     sendError(res, err);
   }

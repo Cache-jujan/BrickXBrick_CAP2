@@ -31,7 +31,6 @@ import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { ProjectGroup } from "@/components/project-group";
-import { ProjectPill } from "@/components/project-pill";
 import { StatusChip } from "@/components/status-chip";
 import { groupByProject, outOfScopeTicketIDs } from "@/lib/project-groups";
 import { loadOpenRequests } from "@/lib/cached-api";
@@ -498,9 +497,20 @@ export default function AllocateScreen() {
 
   // One request inside an opened project: what it asked for, a field for how much of the receipt goes to it,
   // and whether that amount fits its budget.
-  const renderRequest = ({ id, key, portion }: (typeof rows)[number]) => {
+  const renderRequest = ({ id, key, line, portion }: (typeof rows)[number]) => {
     const info = known[id];
     const typed = amounts[key] ?? "";
+    // "Allocate all": what is left of this receipt line after the other requests on it, capped by what this request still needs.
+    const typedQty = (text: string | undefined) => Number((text ?? "").replace(",", ".")) || 0;
+    const sameLine = rows.filter((row) => row.line === line);
+    const takenByOthers = sameLine.filter((row) => row.key !== key).reduce((sum, row) => sum + typedQty(amounts[row.key]), 0);
+    const stillNeeded = info?.remainingQuantity ?? Infinity;
+    const fillQty = Math.max(0, Math.round(Math.min((lineItems[line]?.quantity ?? 0) - takenByOthers, stillNeeded) * 100) / 100);
+    const canFill = fillQty > 0 && typedQty(typed) !== fillQty;
+    const fill = () => {
+      setAmount(key, String(fillQty));
+      setSentAmounts((prev) => ({ ...prev, [key]: String(fillQty) }));
+    };
     const issue = portion ? issueOf(id) : undefined;
     const over = overrunOf(id);
     const overBudget = issue?.code === "OVER_BUDGET";
@@ -530,6 +540,18 @@ export default function AllocateScreen() {
           />
           {unit ? <Text style={styles.amountUnit}>{unit}</Text> : null}
         </View>
+        <Pressable
+          onPress={fill}
+          disabled={!canFill}
+          style={({ pressed }) => [styles.fillButton, !canFill && styles.fillButtonOff, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canFill }}
+          accessibilityLabel={`${t(sameLine.length === 1 ? "ck.allocate_all" : "ck.allocate_rest")}: ${info?.materialType ?? ""}`}
+        >
+          <Text style={[styles.fillButtonText, !canFill && styles.fillButtonTextOff]}>
+            {t(sameLine.length === 1 ? "ck.allocate_all" : "ck.allocate_rest")}
+          </Text>
+        </Pressable>
         {over ? (
           <Text style={styles.statusBad}>
             {t(over.kind === "request" ? "ck.over_request" : "ck.over_receipt", { max: qtyText(over.max, unit) })}
@@ -639,7 +661,6 @@ export default function AllocateScreen() {
           </View>
         ) : null}
 
-        {lockedProject ? <ProjectPill label={t("mx.project_label")} name={lockedProject} /> : null}
         <Text style={styles.help}>{t("ck.select_intro")}</Text>
 
         {/* Something is over the limit: say which project and open it, so the fix is one tap away. */}
@@ -831,6 +852,10 @@ const styles = StyleSheet.create({
   amountInput: { width: 96, minHeight: MIN_TAP, borderWidth: 1.5, borderColor: COLORS.inputBorder, borderRadius: 10, backgroundColor: COLORS.card, paddingHorizontal: 10, fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading, textAlign: "right" },
   amountInputBad: { borderColor: RED, backgroundColor: RED_BG },
   amountUnit: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.muted, minWidth: 28 },
+  fillButton: { alignSelf: "flex-end", minHeight: MIN_TAP, justifyContent: "center", paddingHorizontal: 16, borderRadius: 10, backgroundColor: COLORS.primaryTint },
+  fillButtonOff: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
+  fillButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.primaryTintText },
+  fillButtonTextOff: { color: COLORS.muted },
   matQty: { fontSize: 15, fontFamily: FONT.extrabold, color: COLORS.heading },
   matCaption: { flexShrink: 1, fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },

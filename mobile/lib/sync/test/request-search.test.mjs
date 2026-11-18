@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { searchRequests, suggestRequests, words } from "../../request-search.js";
+import { matchesMaterial, searchRequests, suggestRequests, words } from "../../request-search.js";
 
 const req = (id, materialType, over = {}) => ({
   ticketID: id,
@@ -63,4 +63,17 @@ test("suggestions and search can read the name and text from another shape (the 
   const items = [{ key: "a", name: "Cement", projectName: "Annex" }, { key: "b", name: "Deformed bar 16mm", projectName: "Building" }];
   assert.deepEqual(suggestRequests("deformed bar", items, (m) => m.name).requests.map((m) => m.key), ["b"]);
   assert.deepEqual(searchRequests("annex", items, (m) => `${m.name} ${m.projectName}`).map((m) => m.key), ["a"]);
+});
+
+test("matchesMaterial: a line without a size matches a request that has one", () => {
+  assert.equal(matchesMaterial("Portland cement", "Portland cement 40kg"), true);
+});
+
+test("matchesMaterial: a different size, or a missing name word, does not match", () => {
+  assert.equal(matchesMaterial("Portland cement 50kg", "Portland cement 40kg"), false);
+  assert.equal(matchesMaterial("Cement", "Portland cement 40kg"), false);
+});
+
+test("matchesMaterial: 40 kg and 40kg are the same size", () => {
+  assert.equal(matchesMaterial("Portland cement 40 kg", "Portland cement 40kg"), true);
 });

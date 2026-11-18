@@ -14,6 +14,29 @@ export function words(text) {
     .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
 }
 
+// "40 kg" -> "40kg", so a size written with a space still equals the request's.
+function matchWords(text) {
+  return words(
+    String(text ?? "")
+      .toLowerCase()
+      .replace(/(\d)\s+(kgs?|mm|cm|ml|pcs?|g|m|l)\b/g, "$1$2")
+  );
+}
+
+/**
+ * Whether a receipt line is matched to a request by name, the same rule as the server
+ * (backend/src/lib/materialMatch.js): every word of the request's material is on the line.
+ * A size in the request ("40kg") is needed only when the line gives a size of its own.
+ */
+export function matchesMaterial(description, materialType) {
+  const wanted = matchWords(materialType);
+  if (wanted.length === 0) return false;
+  const have = new Set(matchWords(description));
+  const hasDigit = (w) => /\d/.test(w);
+  const lineGivesSize = [...have].some(hasDigit);
+  return wanted.every((w) => have.has(w) || (hasDigit(w) && !lineGivesSize));
+}
+
 /**
  * Requests that share words with a scanned line, best first (most shared words, then oldest).
  * Falls back to every request when none share a word, so the list is never empty by itself.
