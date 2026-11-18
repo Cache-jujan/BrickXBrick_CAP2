@@ -396,7 +396,7 @@ export function TicketQueuePage() {
       setEditing(null);
       setEditForm(null);
     } catch (err) {
-      setEditError(extractErrorMessage(err, tr("errors.save_changes")));
+      setEditError(err?.response?.status === 409 ? tr("tq.cannot_edit_bought") : extractErrorMessage(err, tr("errors.save_changes")));
     } finally {
       setEditBusy(false);
     }
@@ -816,6 +816,8 @@ function TicketCard(props) {
   // Editing this card's fields clears its error: the PM is fixing it.
   const edited = () => onClearError?.(ticket.ticketid);
   const budgetHint = budgetHintFor(ticket, tr);
+  // The PM can still fix or cancel a request until something has been bought against it.
+  const canAmend = !isAdjustment && (activeTab === "Pending" || (activeTab === "Acknowledged" && !ticket.hasReceipts));
 
   return (
     <article
@@ -843,7 +845,7 @@ function TicketCard(props) {
         </div>
         <div className="ticket-card-head-side">
           <time className="ticket-card-date" dateTime={ticket.createdat}>{formatDate(ticket.createdat, DATETIME_OPTIONS)}</time>
-          {activeTab === "Pending" && !isAdjustment && (
+          {canAmend && (
             <button type="button" className="ticket-card-edit" onClick={() => onEdit(ticket)} disabled={busy}>{tr("tq.edit")}</button>
           )}
         </div>
@@ -947,6 +949,9 @@ function TicketCard(props) {
         <div className="ticket-card-foot ticket-card-foot-info">
           <span className="ticket-assigned-to">{tr("tq.with", { name: ticket.assignedtoname || tr("tq.a_purchaser") })}</span>
           {ticket.approvedbudget != null && <span className="ticket-approved-budget">{tr("tq.budget", { amount: PESO.format(Number(ticket.approvedbudget)) })}</span>}
+          {canAmend && (
+            <button type="button" className="ticket-reject-link" onClick={() => onReject(ticket)} disabled={busy}>{tr("expenses.reject")}</button>
+          )}
         </div>
       )}
 

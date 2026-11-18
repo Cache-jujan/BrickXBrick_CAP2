@@ -83,6 +83,33 @@ async function getTicket(ticketId) {
     return result.rows[0];
 }
 
+// A request counts as "bought" once any non-Rejected expense points at it. The PM
+// can still edit or cancel it until then. Takes the transaction's client so the
+// check runs under the ticket row lock that expense entry also takes.
+async function lockTicketUnbought(client, ticketId, verb) {
+    const locked = await client.query("SELECT status FROM tickets WHERE ticketId = $1 FOR UPDATE", [ticketId]);
+    const status = locked.rows[0] && locked.rows[0].status;
+    if (status !== "Pending" && status !== "Acknowledged") {
+        const err = new Error(`Only pending or acknowledged tickets can be ${verb}; this one is ${status}`);
+        err.status = 409;
+        throw err;
+    }
+    const bought = await client.query(
+        "SELECT 1 FROM expenses WHERE ticketId = $1 AND status <> 'Rejected' LIMIT 1",
+        [ticketId]
+    );
+    if (bought.rowCount > 0) {
+        const err = new Error(
+            verb === "edited"
+                ? "This request already has a receipt, so it can't be edited."
+                : "This request already has a receipt, so it can't be cancelled."
+        );
+        err.status = 409;
+        throw err;
+    }
+    return status;
+}
+
 // POST /: create a ticket.
 //
 // Two creators:
@@ -672,6 +699,7 @@ router.get("/managed", requireRole("Project Manager"), async (req, res, next) =>
                     orig.subject         AS "resubmitOfSubject",
                     orig.rejectionReason AS "resubmitOfReason",
                     EXISTS (SELECT 1 FROM tickets n WHERE n.resubmittedFromId = t.ticketId) AS "wasResubmitted",
+                    EXISTS (SELECT 1 FROM expenses e WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected') AS "hasReceipts",
                     bi.quantity AS "bomQuantity",
                     bi.unitCost AS "bomUnitCost",
                     bi.unit     AS "bomUnit",
@@ -954,7 +982,8 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site M
     }
 });
 
-// PATCH /:id/reject, PM (Pending only) or assigned Purchaser (Acknowledged only).
+// PATCH /:id/reject, PM (Pending, or Acknowledged while nothing has been bought)
+// or assigned Purchaser (Acknowledged only).
 router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
@@ -969,8 +998,8 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
                 err.status = 403;
                 throw err;
             }
-            if (ticket.status !== "Pending") {
-                const err = new Error("Project Manager may only reject a ticket while it is Pending");
+            if (ticket.status !== "Pending" && ticket.status !== "Acknowledged") {
+                const err = new Error("Project Manager may only reject a ticket while it is Pending or Acknowledged");
                 err.status = 409;
                 throw err;
             }
@@ -1001,14 +1030,23 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
 
         assertLegalTransition(ticket.status, "Rejected");
 
+        // A PM cancelling an Acknowledged request: the reason is stored with a prefix so
+        // history tells it apart from a Purchaser's rejection.
+        const storedReason = req.user.role === "Project Manager" && ticket.status === "Acknowledged"
+            ? `Cancelled by PM: ${reasonText}`
+            : reasonText || null;
+
         const updated = await withTransaction(async (client) => {
+            if (req.user.role === "Project Manager" && ticket.status === "Acknowledged") {
+                await lockTicketUnbought(client, req.params.id, "cancelled");
+            }
             const updateResult = await client.query(
                 `UPDATE tickets
                     SET status = 'Rejected', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW(),
                         rejectionReason = $4
                   WHERE ticketId = $2 AND status = $3
                   RETURNING *`,
-                [req.user.id, req.params.id, ticket.status, reasonText || null]
+                [req.user.id, req.params.id, ticket.status, storedReason]
             );
 
             if (updateResult.rowCount === 0) {
@@ -1038,7 +1076,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
 // Declared after the specific /:id/* routes so it only matches a bare id.
 //
 // Scope: PM-only, on a project they manage, and only while the ticket is still
-// Pending. Editable fields depend on the ticket's shape; the BOM linkage itself
+// Pending, or Acknowledged with nothing bought against it yet. Editable fields depend on the ticket's shape; the BOM linkage itself
 // (which BOM item, or on-BOM vs not-in-BOM) is NOT editable here, an on-BOM
 // Material Request keeps its BOM-derived materialType and unit locked.
 router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
@@ -1051,8 +1089,8 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
             err.status = 403;
             throw err;
         }
-        if (ticket.status !== "Pending") {
-            const err = new Error(`Only pending tickets can be edited; this one is ${ticket.status}`);
+        if (ticket.status !== "Pending" && ticket.status !== "Acknowledged") {
+            const err = new Error(`Only pending or acknowledged tickets can be edited; this one is ${ticket.status}`);
             err.status = 409;
             throw err;
         }
@@ -1091,14 +1129,17 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
         }
 
         // isReport falls through with just subject + description updated.
-        const result = await query(
-            `UPDATE tickets SET ${sets.join(", ")}, updatedAt = NOW()
-              WHERE ticketId = $${p + 1} AND status = 'Pending'
-              RETURNING *`,
-            [...vals, req.params.id]
-        );
+        const result = await withTransaction(async (client) => {
+            const lockedStatus = await lockTicketUnbought(client, req.params.id, "edited");
+            return client.query(
+                `UPDATE tickets SET ${sets.join(", ")}, updatedAt = NOW()
+                  WHERE ticketId = $${p + 1} AND status = $${p + 2}
+                  RETURNING *`,
+                [...vals, req.params.id, lockedStatus]
+            );
+        });
         if (result.rowCount === 0) {
-            const err = new Error("This ticket is no longer pending");
+            const err = new Error("This ticket is no longer open");
             err.status = 409;
             throw err;
         }
