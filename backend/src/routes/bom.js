@@ -174,7 +174,7 @@ function warningsFor(bom, sections, project) {
 // BOM is a draft: that is when approving it would set the agreed price.
 async function contractWarnings(target, project, bom, contractPrice) {
   if (bom.status === "Approved") return [];
-  const found = await target.query(
+  const found = await runnerOf(target)(
     "SELECT contractamount::text AS contractamount FROM projectcontracts WHERE projectid = $1::uuid",
     [project.projectid]
   );
