@@ -27,7 +27,7 @@ router.use(requireAuth);
 const VALID_CATEGORIES = ["Materials", "Equipment", "Other"];
 
 // Roles that may read any expense. Everyone else is scoped to their own.
-const EXPENSE_READ_ALL_ROLES = ["General Manager", "Project Manager", "System Administrator"];
+const EXPENSE_READ_ALL_ROLES = ["General Manager", "Project Manager"];
 
 // Vendor name and amount, checked the same way on submit and resubmit.
 // Zero stays allowed (a fully discounted receipt); negatives, NaN, strings
