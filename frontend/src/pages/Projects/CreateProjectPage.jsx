@@ -4,6 +4,7 @@ import { createProject } from "../../api/projectsApi";
 import { contractBodyFromReading, saveContract } from "../../api/contractApi";
 import {
   getCopySource,
+  getDocumentsChecklist,
   getProjectTemplate,
   listCopySources,
   listProjectTemplates,
@@ -44,6 +45,11 @@ export function CreateProjectPage() {
   const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [loadingChecklist, setLoadingChecklist] = useState(false);
 
+  // Blank project: the permit documents of the chosen project type, ticked by default.
+  // { type, data } so a list is only used for the type it was loaded for.
+  const [blankType, setBlankType] = useState("");
+  const [docsChecklist, setDocsChecklist] = useState(null);
+
   const [saved, setSaved] = useState(null); // { payload, form }
   const [preview, setPreview] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -73,6 +79,23 @@ export function CreateProjectPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setDocsChecklist(null);
+    setSelection(EMPTY_SELECTION);
+    if (choice || !blankType) return undefined;
+    let cancelled = false;
+    getDocumentsChecklist(blankType)
+      .then((data) => {
+        if (!cancelled) setDocsChecklist({ type: blankType, data });
+      })
+      .catch(() => {
+        // No list: the project is created blank, as before.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [blankType, choice]);
 
   const base = useMemo(() => {
     if (!choice) return null;
@@ -146,8 +169,14 @@ export function CreateProjectPage() {
   async function handleBasics(payload, form) {
     setSaved({ payload, form });
     if (!choice) {
-      // Blank sheet: nothing to review.
-      await createWithContract(payload);
+      // Blank sheet: nothing to review. With a document list for this type, it starts with
+      // the ticked documents only; the PM adds the milestones.
+      const hasList = docsChecklist?.type === payload.projectType && docsChecklist.data.milestones.length > 0;
+      await createWithContract(
+        hasList
+          ? { ...payload, start: selectionToStart({ mode: "documents", projectType: payload.projectType }, selection) }
+          : payload
+      );
       return;
     }
     const result = await previewProjectStructure({
@@ -250,8 +279,13 @@ export function CreateProjectPage() {
             lockProjectType={choice?.mode === "template"}
             siteManagerRequired={Boolean(choice)}
             contractDurationDays={reading?.proposal?.durationWorkingDays || null}
+            onProjectTypeChange={choice ? null : setBlankType}
             extraSection={
-              checklist ? <DocumentChecklist source={checklist} selection={selection} onChange={setSelection} /> : null
+              checklist ? (
+                <DocumentChecklist source={checklist} selection={selection} onChange={setSelection} />
+              ) : !choice && docsChecklist?.type === blankType && docsChecklist.data.milestones.length > 0 ? (
+                <DocumentChecklist source={docsChecklist.data} selection={selection} onChange={setSelection} />
+              ) : null
             }
           />
         </div>

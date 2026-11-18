@@ -259,9 +259,11 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
 
       // One summary line instead of a notification per task.
       const startNote = built.counts.tasks
-        ? ` It starts with ${built.counts.milestones} milestones and ${built.counts.tasks} tasks from ${
-            startRequest.mode === "template" ? `the "${sourceRows.name}" template` : `"${sourceRows.name}"`
-          }; review the dates and owners.`
+        ? startRequest.mode === "documents"
+          ? ` It starts with ${built.counts.tasks} document tasks; add the milestones and review the dates and owners.`
+          : ` It starts with ${built.counts.milestones} milestones and ${built.counts.tasks} tasks from ${
+              startRequest.mode === "template" ? `the "${sourceRows.name}" template` : `"${sourceRows.name}"`
+            }; review the dates and owners.`
         : "";
       await notifyProject(client, {
         recipientId: projectManagerId,

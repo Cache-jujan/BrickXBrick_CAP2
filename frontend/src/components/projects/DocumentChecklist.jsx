@@ -34,7 +34,7 @@ export function withChecked(selection, task, checked) {
 // The part of the create/preview request that carries the GM's choices.
 export function selectionToStart(base, selection) {
   const out = { ...base, excludeTaskIds: [...selection.excluded] };
-  if (base.mode === "template") {
+  if (base.mode === "template" || base.mode === "documents") {
     out.includeTaskIds = [...selection.included];
     out.otherDocuments = selection.others || [];
   }

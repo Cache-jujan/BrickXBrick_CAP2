@@ -12,8 +12,9 @@
 const { isUUID } = require("./uuid");
 const { dateWindowWarning } = require("./scheduleWindows");
 const { deriveStatus } = require("./milestoneProgress");
+const { PROJECT_TYPES } = require("./projectRules");
 
-const MODES = ["blank", "template", "copy"];
+const MODES = ["blank", "template", "copy", "documents"];
 const MAX_IDS = 1000;
 
 function httpError(status, message, details) {
@@ -87,6 +88,8 @@ function nameList(value, field) {
  *   { mode: "blank" }
  *   { mode: "template", templateId, includeTaskIds?, excludeTaskIds?, otherDocuments? }
  *   { mode: "copy", sourceProjectId, excludeTaskIds? }
+ *   { mode: "documents", projectType, includeTaskIds?, excludeTaskIds?, otherDocuments? }
+ *       a blank sheet that starts with only the permit documents of that project type
  */
 function parseStartRequest(start) {
   if (start === undefined || start === null) return { mode: "blank" };
@@ -95,6 +98,16 @@ function parseStartRequest(start) {
   if (start.mode === "blank") return { mode: "blank" };
 
   const excludeTaskIds = new Set(idList(start.excludeTaskIds, "excludeTaskIds"));
+  if (start.mode === "documents") {
+    if (!PROJECT_TYPES.includes(start.projectType)) throw httpError(400, "Choose the project type for the documents list");
+    return {
+      mode: "documents",
+      projectType: start.projectType,
+      includeTaskIds: new Set(idList(start.includeTaskIds, "includeTaskIds")),
+      excludeTaskIds,
+      otherDocuments: nameList(start.otherDocuments, "otherDocuments"),
+    };
+  }
   if (start.mode === "template") {
     if (!isUUID(start.templateId)) throw httpError(400, "Choose a template");
     return {
@@ -202,7 +215,32 @@ async function loadCopySource(run, projectId) {
   return { kind: "copy", id: projectId, name: src.name, milestones };
 }
 
+// Keeps only the permit documents of a template: the milestones' other tasks are
+// dropped and a milestone left with no documents disappears. Pure.
+function documentsOnly(source, label) {
+  const milestones = source.milestones
+    .map((m) => ({ ...m, tasks: m.tasks.filter((t) => t.selectable) }))
+    .filter((m) => m.tasks.length > 0);
+  return { ...source, kind: "documents", name: label, milestones };
+}
+
+// The document list of a project type, taken from that type's template (the medium
+// one when there are several sizes). A type with no template has no list.
+async function loadDocumentsSource(run, projectType) {
+  const t = await run(
+    `SELECT templateId FROM project_templates
+      WHERE isActive AND projectType = $1
+      ORDER BY CASE size WHEN 'medium' THEN 0 WHEN 'small' THEN 1 WHEN 'large' THEN 2 ELSE 3 END, name
+      LIMIT 1`,
+    [projectType]
+  );
+  const label = `${projectType} documents`;
+  if (t.rowCount === 0) return { kind: "documents", id: null, name: label, milestones: [] };
+  return documentsOnly(await loadTemplateSource(run, t.rows[0].templateid), label);
+}
+
 async function loadSource(run, request) {
+  if (request.mode === "documents") return loadDocumentsSource(run, request.projectType);
   if (request.mode === "template") return loadTemplateSource(run, request.templateId);
   if (request.mode === "copy") return loadCopySource(run, request.sourceProjectId);
   return null;
@@ -343,6 +381,8 @@ module.exports = {
   parseStartRequest,
   loadSource,
   loadTemplateSource,
+  loadDocumentsSource,
+  documentsOnly,
   loadCopySource,
   buildStructure,
   insertStructure,
