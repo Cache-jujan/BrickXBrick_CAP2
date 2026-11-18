@@ -64,6 +64,43 @@ function previewSchedule(form) {
   return { total, down, retention, billings: round2(total - down - retention) };
 }
 
+// Expected, received and still-to-receive for one kind of payment (from the server's summary).
+function kindFigures(summary, kind) {
+  const expected =
+    kind === "Down Payment" ? summary.downPaymentAmount
+    : kind === "Retention" ? summary.retentionAmount
+    : summary.progressBillingsAmount;
+  const received = summary.receivedByKind?.[kind] ?? 0;
+  return { expected, received, remaining: Math.max(round2(expected - received), 0) };
+}
+
+// What a payment's amount starts as. Progress billings follow the work done, so there is no fixed amount.
+function startingAmount(summary, kind) {
+  if (kind === "Progress Billing") return "";
+  const { remaining } = kindFigures(summary, kind);
+  return remaining > 0 ? String(remaining) : "";
+}
+
+function kindStatus(figures, kind, projectStatus) {
+  if (figures.remaining <= 0.005) return "paid";
+  if (kind === "Retention" && projectStatus !== "Completed") return "locked";
+  return figures.received > 0 ? "partial" : "not_yet";
+}
+
+// The history reads like a ledger: oldest first, with what had been received after each payment
+// and what was left of the contract. A voided payment stays listed but does not count.
+function buildLedger(payments, contractAmount) {
+  const ordered = [...payments].sort(
+    (a, b) => a.receivedOn.localeCompare(b.receivedOn) || String(a.recordedAt).localeCompare(String(b.recordedAt))
+  );
+  let running = 0;
+  return ordered.map((p) => {
+    if (p.voidedAt) return { p, running: null, balance: null };
+    running = round2(running + p.amount);
+    return { p, running, balance: round2(contractAmount - running) };
+  });
+}
+
 export function ContractPage() {
   const { id } = useParams();
   const { t, tv, formatDate, formatPeso } = useLocale();
@@ -191,7 +228,7 @@ export function ContractPage() {
     setFieldErrors({});
     setPayForm({
       kind,
-      amount: kind === "Down Payment" ? String(summary.downPaymentAmount) : "",
+      amount: startingAmount(summary, kind),
       receivedOn: manilaToday(),
       referenceNo: "",
       workDonePercent: summary.workDonePercent === null ? "" : String(summary.workDonePercent),
@@ -201,11 +238,7 @@ export function ContractPage() {
   }
 
   function changeKind(kind) {
-    setPayForm((p) => ({
-      ...p,
-      kind,
-      amount: kind === "Down Payment" && !p.amount ? String(data.summary.downPaymentAmount) : p.amount,
-    }));
+    setPayForm((p) => ({ ...p, kind, amount: startingAmount(data.summary, kind) }));
   }
 
   async function handlePayment() {
@@ -264,7 +297,15 @@ export function ContractPage() {
   const closed = data.projectStatus === "Cancelled";
   const preview = previewSchedule(form);
   const hasLiveRetention = (payments || []).some((p) => !p.voidedAt && p.kind === "Retention");
-  const kindOptions = PAYMENT_KINDS.filter((k) => k !== "Retention" || data.projectStatus === "Completed");
+  const hasLiveDown = (payments || []).some((p) => !p.voidedAt && p.kind === "Down Payment");
+  const scheduleRows = summary
+    ? PAYMENT_KINDS.map((kind) => {
+        const figures = kindFigures(summary, kind);
+        return { kind, ...figures, status: kindStatus(figures, kind, data.projectStatus) };
+      })
+    : [];
+  const ledger = summary ? buildLedger(payments, summary.contractAmount) : [];
+  const payFigures = summary && dialog === "payment" ? kindFigures(summary, payForm.kind) : null;
 
   const dropText = {
     title: t("contract.drop_title"),
@@ -534,7 +575,62 @@ export function ContractPage() {
             </section>
           )}
 
-          {payments.length === 0 ? (
+          <div className="section-head">
+            <h2>{t("contract.schedule_title")}</h2>
+          </div>
+          <section className="contract-card" aria-label={t("contract.schedule_title")}>
+            <div
+              className="contract-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.min(summary.receivedPercent, 100)}
+              aria-label={t("contract.bar_label", { received: peso(summary.receivedTotal), total: peso(summary.contractAmount), pct: summary.receivedPercent })}
+            >
+              <div className="contract-bar-fill" style={{ width: `${Math.min(summary.receivedPercent, 100)}%` }} />
+            </div>
+            <p className="contract-bar-text">
+              {t("contract.bar_label", { received: peso(summary.receivedTotal), total: peso(summary.contractAmount), pct: summary.receivedPercent })}
+            </p>
+            <div className="table-scroll">
+              <table className="bom-table">
+                <thead>
+                  <tr>
+                    <th>{t("contract.table_type")}</th>
+                    <th className="num">{t("contract.col_expected")}</th>
+                    <th className="num">{t("contract.col_received")}</th>
+                    <th className="num">{t("contract.col_remaining")}</th>
+                    <th>{t("contract.col_status")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduleRows.map((r) => (
+                    <tr key={r.kind}>
+                      <td>{tv("contract.kind", r.kind)}</td>
+                      <td className="num">{peso(r.expected)}</td>
+                      <td className="num">{peso(r.received)}</td>
+                      <td className="num">{peso(r.remaining)}</td>
+                      <td><span className={`contract-status contract-status-${r.status}`}>{t(`contract.status_${r.status}`)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>{t("contract.schedule_total")}</td>
+                    <td className="num">{peso(summary.contractAmount)}</td>
+                    <td className="num">{peso(summary.receivedTotal)}</td>
+                    <td className="num">{peso(summary.remainingToCollect)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+
+          <div className="section-head">
+            <h2>{t("contract.history_title")}</h2>
+          </div>
+          {ledger.length === 0 ? (
             <p className="bom-status-line">{t("contract.no_payments")}</p>
           ) : (
             <div className="table-scroll">
@@ -544,6 +640,8 @@ export function ContractPage() {
                     <th>{t("contract.table_date")}</th>
                     <th>{t("contract.table_type")}</th>
                     <th className="num">{t("contract.table_amount")}</th>
+                    <th className="num">{t("contract.table_running")}</th>
+                    <th className="num">{t("contract.table_balance")}</th>
                     <th className="num">{t("contract.table_work")}</th>
                     <th>{t("contract.table_ref")}</th>
                     <th>{t("contract.table_by")}</th>
@@ -551,7 +649,7 @@ export function ContractPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p) => (
+                  {ledger.map(({ p, running, balance }) => (
                     <tr key={p.paymentId} className={p.voidedAt ? "contract-voided" : ""}>
                       <td>{formatDate(`${p.receivedOn}T00:00:00`, { dateStyle: "medium" })}</td>
                       <td>
@@ -563,7 +661,9 @@ export function ContractPage() {
                           </span>
                         )}
                       </td>
-                      <td className="num">{peso(p.amount)}</td>
+                      <td className="num contract-amount">{peso(p.amount)}</td>
+                      <td className="num">{running === null ? "—" : peso(running)}</td>
+                      <td className="num">{balance === null ? "—" : peso(balance)}</td>
                       <td className="num">{p.workDonePercent === null ? "" : `${p.workDonePercent}%`}</td>
                       <td>{p.referenceNo || ""}</td>
                       <td>{p.recordedByName}</td>
@@ -585,20 +685,43 @@ export function ContractPage() {
       {/* ---- Dialogs ---- */}
       {dialog && (
         <div className="modal-overlay" role="presentation" onClick={() => !busy && setDialog(null)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="contract-dialog-title" onClick={(e) => e.stopPropagation()}>
-            {dialog === "payment" && (
+          <div className="modal contract-modal" role="dialog" aria-modal="true" aria-labelledby="contract-dialog-title" onClick={(e) => e.stopPropagation()}>
+            {dialog === "payment" && payFigures && (
               <>
                 <h2 id="contract-dialog-title" className="modal-title">{t("contract.payment_title")}</h2>
-                <div className="contract-dialog-fields">
-                  <label className="field">
-                    <span className="field-label">{t("contract.pay_type")}<span className="field-required"> *</span></span>
-                    <select className="field-control" value={payForm.kind} onChange={(e) => changeKind(e.target.value)}>
-                      {kindOptions.map((k) => <option key={k} value={k}>{tv("contract.kind", k)}</option>)}
-                    </select>
-                    {data.projectStatus !== "Completed" && !hasLiveRetention && (
-                      <span className="contract-hint">{t("contract.retention_locked")}</span>
-                    )}
-                  </label>
+                <span className="field-label contract-kinds-label" id="contract-kind-label">{t("contract.pay_type")}</span>
+                <div className="contract-kinds" role="radiogroup" aria-labelledby="contract-kind-label">
+                  {PAYMENT_KINDS.map((k) => {
+                    const lockedRetention = k === "Retention" && data.projectStatus !== "Completed" && !hasLiveRetention;
+                    const recorded = (k === "Down Payment" && hasLiveDown) || (k === "Retention" && hasLiveRetention);
+                    const disabled = lockedRetention || recorded;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        role="radio"
+                        aria-checked={payForm.kind === k}
+                        disabled={disabled}
+                        title={lockedRetention ? t("contract.retention_locked") : undefined}
+                        className={`contract-kind ${payForm.kind === k ? "contract-kind-on" : ""}`}
+                        onClick={() => changeKind(k)}
+                      >
+                        {tv("contract.kind", k)}
+                        {lockedRetention && <small>{t("contract.status_locked")}</small>}
+                        {recorded && <small>{t("contract.already_recorded")}</small>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="contract-expect">
+                  {t("contract.expected_line", {
+                    expected: peso(payFigures.expected),
+                    received: peso(payFigures.received),
+                    remaining: peso(payFigures.remaining),
+                  })}
+                  {payForm.kind === "Progress Billing" && <span>{t("contract.progress_hint")}</span>}
+                </p>
+                <div className="contract-dialog-grid">
                   <Field
                     label={t("contract.pay_amount")}
                     required
@@ -640,14 +763,17 @@ export function ContractPage() {
                       onChange={(e) => setPayForm((p) => ({ ...p, workDonePercent: e.target.value }))}
                     />
                   )}
-                  <Field
-                    label={t("contract.pay_note")}
-                    as="textarea"
-                    maxLength={500}
-                    value={payForm.note}
-                    error={fieldErrors.note}
-                    onChange={(e) => setPayForm((p) => ({ ...p, note: e.target.value }))}
-                  />
+                  <div className="contract-span">
+                    <Field
+                      label={t("contract.pay_note")}
+                      as="textarea"
+                      rows={2}
+                      maxLength={500}
+                      value={payForm.note}
+                      error={fieldErrors.note}
+                      onChange={(e) => setPayForm((p) => ({ ...p, note: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </>
             )}
