@@ -62,7 +62,7 @@ export function ContractIntake({ reading, onRead, onClear }) {
           {warnings.map((f) => (
             <Banner key={f.message} tone="warning" title={f.message} />
           ))}
-          <div className="create-project-actions">
+          <div className="cp-contract-actions">
             <Button type="button" variant="secondary" onClick={() => fileInput.current?.click()} disabled={busy}>
               {busy ? t("cp.contract_reading") : t("cp.contract_replace")}
             </Button>
@@ -72,7 +72,7 @@ export function ContractIntake({ reading, onRead, onClear }) {
           </div>
         </>
       ) : (
-        <div className="create-project-actions">
+        <div className="cp-contract-actions">
           <Button type="button" variant="secondary" onClick={() => fileInput.current?.click()} disabled={busy}>
             {busy ? t("cp.contract_reading") : t("cp.contract_choose")}
           </Button>

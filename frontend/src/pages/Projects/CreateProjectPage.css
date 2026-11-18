@@ -205,3 +205,21 @@ button.back-link { font-family: inherit; cursor: pointer; }
   font-size: var(--text-sm);
   font-weight: 600;
 }
+
+/* Optional "start from a signed contract" box on the Details step. It is a plain
+   block, not the sticky bottom bar. */
+.cp-contract {
+  margin-bottom: var(--space-5);
+}
+.cp-contract .create-project-title {
+  margin-bottom: var(--space-2);
+}
+.cp-contract .create-project-hint {
+  margin: 0 0 var(--space-3);
+}
+.cp-contract-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
