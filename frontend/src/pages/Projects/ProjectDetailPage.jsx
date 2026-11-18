@@ -618,7 +618,7 @@ export function ProjectDetailPage() {
         <div className="pd-group">
           <h2 className="pd-group-title">{t("projects.budget")}</h2>
           <dl>
-            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{PESO.format(budget)}</dd></div>
+            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{budget > 0 ? PESO.format(budget) : <span className="pd-dd-note">{t("projects.budget_not_set")}</span>}</dd></div>
             <div>
               <dt>{t("dashboard.approved_spending")}</dt>
               <dd className="num-left">
