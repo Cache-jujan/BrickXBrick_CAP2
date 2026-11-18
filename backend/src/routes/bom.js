@@ -600,4 +600,15 @@ router.get("/items", requireRole(GM, PM, "Site Manager", "Purchaser"), async (re
   }
 });
 
+// The price agreed with the client for a project's BOM: the signed total, or the
+// computed BOM total. The contract amount defaults to it (routes/contract.js).
+// Returns { price, approved } or null when the project has no BOM. Read only.
+async function agreedPrice(target, projectId) {
+  const bom = await loadBomRow(target, projectId);
+  if (!bom) return null;
+  const sections = await loadSections(target, bom.bomid);
+  return { price: budgetBreakdown(bom, sections).contractPrice, approved: bom.status === "Approved" };
+}
+
 module.exports = router;
+module.exports.agreedPrice = agreedPrice;
