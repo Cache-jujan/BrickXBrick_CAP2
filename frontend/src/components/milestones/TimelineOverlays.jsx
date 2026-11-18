@@ -91,16 +91,19 @@ export function MilestonePopover({ milestone, canManage, onAddTask, onCompleteTa
         ) : (
           milestone.tasks.map((task) => {
             const done = task.status === "Completed";
+            const showDone = canManage && isPlanning && !done;
+            // Mark Done opens the documents dialog (a file is needed as evidence), so Documents only shows when it isn't offered.
+            const showDocs = isPlanning && onOpenDocuments && !showDone;
             return (
               <div className={`timeline-popover-task${done ? " timeline-popover-task-done" : ""}`} key={task.taskid || task.taskname}>
                 <strong>{done ? "✓ " : ""}{task.taskname}</strong>
                 <span>
                   {done ? tv("status", "Completed") : tv("status", task.status || "Pending")} · {t("ms.due", { date: formatDue(task, formatDate, DATE_OPTIONS) })} · {assigneeLabel(task, t)}
                 </span>
-                {((canManage && isPlanning && !done) || (isPlanning && onOpenDocuments)) && (
+                {(showDone || showDocs) && (
                   <div className="timeline-task-actions">
-                    {canManage && isPlanning && !done && <button type="button" className="timeline-task-action" onClick={() => onCompleteTask?.(task)}>{t("pd.mark_done")}</button>}
-                    {isPlanning && onOpenDocuments && <button type="button" className="timeline-task-action" onClick={() => onOpenDocuments(task)}>{t("tl.documents")}</button>}
+                    {showDone && <button type="button" className="timeline-task-action" onClick={() => (onOpenDocuments || onCompleteTask)?.(task)}>{t("pd.mark_done")}</button>}
+                    {showDocs && <button type="button" className="timeline-task-action" onClick={() => onOpenDocuments(task)}>{t("tl.documents")}</button>}
                   </div>
                 )}
               </div>

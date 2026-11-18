@@ -356,7 +356,8 @@ async function getTaskForCompletion(taskId) {
 
 // PATCH /:id/complete, PM marks a Planning-phase task done. There's no SM
 // photo-submission/review flow for Planning work (#5), it's "Handled by:
-// GM/PM" and only the owning PM can close it out, optionally with a note.
+// GM/PM" and only the owning PM can close it out, with at least one attached
+// document as evidence (and optionally a note, which the web no longer sends).
 // Construction tasks keep going through POST /:id/progress + the PM
 // Acknowledge/Flag review above; this route refuses them.
 router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, next) => {
@@ -383,6 +384,16 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
         }
 
         const updated = await withTransaction(async (client) => {
+            // A Planning task is closed on evidence: at least one attached, non-deleted document.
+            const docs = await client.query(
+                "SELECT COUNT(*)::int AS n FROM task_documents WHERE taskId = $1 AND deletedAt IS NULL",
+                [req.params.id]
+            );
+            if (docs.rows[0].n === 0) {
+                const err = new Error("Attach at least one document or photo as evidence before marking this task done.");
+                err.status = 409;
+                throw err;
+            }
             const taskUpdate = await client.query(
                 `UPDATE tasks
                     SET status = 'Completed'::varchar,

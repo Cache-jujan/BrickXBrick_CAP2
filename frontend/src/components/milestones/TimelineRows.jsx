@@ -90,7 +90,8 @@ function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHove
   const done = task.status === "Completed";
   const isPlanning = milestone.phase === "Planning";
   const showDone = canManage && isPlanning && !done;
-  const showDocs = isPlanning && onOpenDocuments;
+  // Mark Done opens the documents dialog: finishing a Planning task needs a file as evidence.
+  const showDocs = isPlanning && onOpenDocuments && !showDone;
   const tappable = !canHover && (showDone || showDocs);
   // A file dragged onto a Planning task is attached straight away. A completed task's documents are locked.
   const { isOver, dropProps } = useTaskFileDrop({
@@ -121,7 +122,7 @@ function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHove
       </div>
       {tappable && actionsOpen && (
         <div className="tl-strip" id={stripId}>
-          {showDone && <button type="button" className="tl-action" onClick={() => onCompleteTask?.(task)}>{t("pd.mark_done")}</button>}
+          {showDone && <button type="button" className="tl-action" onClick={() => (onOpenDocuments || onCompleteTask)?.(task)}>{t("pd.mark_done")}</button>}
           {showDocs && <button type="button" className="tl-action" onClick={() => onOpenDocuments(task)}>{t("tl.documents")}</button>}
         </div>
       )}
