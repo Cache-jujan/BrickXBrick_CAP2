@@ -84,6 +84,8 @@ export function ProjectDetailPage() {
   const [statusDialog, setStatusDialog] = useState(null);
   // Completing below 100% progress needs the GM to confirm the work is finished (a warning, not a block).
   const [finishConfirmed, setFinishConfirmed] = useState(false);
+  // Activating a project that has no milestones yet needs the GM to confirm (a warning, not a block).
+  const [noPlanConfirmed, setNoPlanConfirmed] = useState(false);
   const [statusInput, setStatusInput] = useState("");
   const [resumeDate, setResumeDate] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
@@ -424,6 +426,7 @@ export function ProjectDetailPage() {
     setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
     setResumeDate("");
     setFinishConfirmed(false);
+    setNoPlanConfirmed(false);
     setStatusDialog({ kind });
   }
 
@@ -537,6 +540,7 @@ export function ProjectDetailPage() {
       : []),
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
+  const hasNoMilestones = !(Array.isArray(project.milestones) && project.milestones.length > 0);
   const stepsDone = activationChecks.filter((c) => c.done).length;
 
   function goToStep(action) {
@@ -991,6 +995,15 @@ export function ProjectDetailPage() {
                 <p className="modal-body">
                   {readyToActivate ? t("pd.activate_body") : t("pd.complete_missing")}
                 </p>
+                {readyToActivate && hasNoMilestones && (
+                  <>
+                    <Banner tone="warning" title={t("pd.activate_no_plan")} />
+                    <label className="pd-confirm-check">
+                      <input type="checkbox" checked={noPlanConfirmed} onChange={(ev) => setNoPlanConfirmed(ev.target.checked)} />
+                      {t("pd.activate_no_plan_confirm")}
+                    </label>
+                  </>
+                )}
               </>
             )}
             {statusDialog.kind === "complete" && (
@@ -1065,7 +1078,7 @@ export function ProjectDetailPage() {
                 disabled={
                   statusBusy ||
                   (statusDialog.kind === "activate"
-                    ? !readyToActivate
+                    ? !readyToActivate || (hasNoMilestones && !noPlanConfirmed)
                     : statusDialog.kind === "resume"
                       ? false
                       : statusDialog.kind === "complete"
