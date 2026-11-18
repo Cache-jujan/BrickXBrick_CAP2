@@ -101,11 +101,12 @@ async function receiptImageExists(url) {
 
 /** Delete a stored receipt file (one this module wrote). Never throws: it is cleanup. */
 async function deleteReceiptImage(url) {
+  const key = r2.keyFromPublicUrl(url);
   try {
-    const key = r2.keyFromPublicUrl(url);
     if (key && RECEIPT_KEY_RE.test(key)) await r2.deleteObject(key);
   } catch (err) {
-    console.error("Could not delete a rejected upload:", err.message);
+    // scripts/db-tools/cleanup_orphan_receipts.js removes what this leaves behind
+    console.error(`[r2] orphan receipt may remain in bucket: key=${key} reason=${err.message}`);
   }
 }
 
