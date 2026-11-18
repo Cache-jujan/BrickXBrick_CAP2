@@ -14,24 +14,25 @@ import type { Href } from "expo-router";
 import { COLORS } from "@/constants/expense-flow-colors";
 import {
   createTicketsBatch,
-  type ApprovedVendor,
   type BomItem,
   type Project,
   type Ticket,
   type TicketInput,
 } from "@/lib/api";
-import { loadActiveProjects, loadApprovedVendors, loadAssignedTickets, loadBomItems } from "@/lib/cached-api";
+import { loadActiveProjects, loadAssignedTickets, loadBomItems } from "@/lib/cached-api";
 import { savedAtLabel } from "@/lib/sync/offline-cache";
 import { getSession } from "@/lib/auth";
 import { plainError } from "@/lib/sync/messages";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { DateField } from "@/components/date-field";
+import INPUT_LIMITS from "../../shared/input-limits.json";
 import { parseNeededBy, toDateText } from "@/lib/needed-by";
 import { FlowHeader } from "@/components/flow-header";
 import { KeyboardScreen } from "@/components/screen";
 import { AppButton } from "@/components/app-button";
 import type { Cached } from "@/lib/cached-api";
 import { useLocale } from "@/lib/i18n-context";
+import { searchRequests } from "@/lib/request-search";
 
 type TicketType = "Material Request" | "Work Item" | "Report";
 const TICKET_TYPES: TicketType[] = ["Material Request", "Work Item", "Report"];
@@ -46,6 +47,8 @@ const UNIT_OPTIONS = [
   "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
 ];
 
+// No vendor and no budget: only the Project Manager sets those
+// (post-consultation fix, Nov 2026).
 type Card = {
   id: string;
   ticketType: TicketType;
@@ -54,8 +57,6 @@ type Card = {
   notInBomReason: string;
   quantity: string;
   unit: string; // chosen unit (not-in-BOM / Work Item)
-  vendorName: string; // optional
-  requestedBudget: string;
   neededBy: string; // optional "YYYY-MM-DD"
   reportText: string; // Report
 };
@@ -69,8 +70,6 @@ function emptyCard(id: string): Card {
     notInBomReason: "",
     quantity: "",
     unit: "",
-    vendorName: "",
-    requestedBudget: "",
     neededBy: "",
     reportText: "",
   };
@@ -99,8 +98,6 @@ function prefilledCard(id: string, t: Ticket): Card {
     notInBomReason: t.notinbomreason || "",
     quantity: t.quantity == null ? "" : String(t.quantity),
     unit: t.unit || "",
-    vendorName: t.vendorname || "",
-    requestedBudget: t.requestedbudget == null ? "" : String(t.requestedbudget),
     neededBy: keepFutureDate(t.neededby),
     reportText: isReport ? (t.description || t.subject || "") : "",
   };
@@ -110,16 +107,17 @@ export default function TicketRequestScreen() {
   const { t, tv, intlLocale } = useLocale();
   const session = getSession();
   // Optional query param: when present, this screen is in "fix & resubmit"
-  // mode — one card prefilled from the rejected ticket, project locked,
+  // mode: one card prefilled from the rejected ticket, project locked,
   // "+ Add another" hidden, and the ticket id sent back as resubmittedFromId.
-  const { resubmitFrom } = useLocalSearchParams<{ resubmitFrom?: string }>();
+  // projectId (from the project summary) picks that project up front.
+  const { resubmitFrom, projectId } = useLocalSearchParams<{ resubmitFrom?: string; projectId?: string }>();
   const resubmitId = typeof resubmitFrom === "string" ? resubmitFrom : null;
+  const presetProjectId = typeof projectId === "string" ? projectId : null;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [vendors, setVendors] = useState<ApprovedVendor[]>([]);
   // The rejected ticket we're resubmitting (null in the ordinary flow).
   const [resubmitOf, setResubmitOf] = useState<Ticket | null>(null);
 
@@ -145,19 +143,16 @@ export default function TicketRequestScreen() {
     if (!session || session.user.role !== "Site Manager") return;
     // Every list comes from the server when it can be reached, otherwise from
     // the copy saved on this phone, so the form still opens offline.
-    const loads: Promise<unknown>[] = [loadActiveProjects(), loadApprovedVendors()];
+    const loads: Promise<unknown>[] = [loadActiveProjects()];
     if (resubmitId) loads.push(loadAssignedTickets("Site Manager"));
     Promise.all(loads)
       .then((results) => {
         const projectResult = results[0] as Cached<Project[]>;
-        const vendorResult = results[1] as Cached<ApprovedVendor[]>;
         const projectList = projectResult.data;
-        const vendorList = vendorResult.data;
         setProjects(projectList);
-        setVendors(vendorList);
-        noteSaved(projectResult, vendorResult);
+        noteSaved(projectResult);
         if (resubmitId) {
-          const orig = (results[2] as Cached<Ticket[]>).data.find((t) => t.ticketid === resubmitId);
+          const orig = (results[1] as Cached<Ticket[]>).data.find((t) => t.ticketid === resubmitId);
           if (!orig) {
             setError(t("tr.err_resubmit_gone"));
             return;
@@ -174,6 +169,10 @@ export default function TicketRequestScreen() {
         } else if (projectList.length === 1) {
           // Auto-route: exactly one project → skip the chooser.
           setProject(projectList[0]);
+        } else {
+          // Came from a project summary: that project is already chosen.
+          const preset = presetProjectId ? projectList.find((p) => p.projectid === presetProjectId) : null;
+          if (preset) setProject(preset);
         }
       })
       .catch((err) => setError(plainError(err, t("errors.load_options"), t)))
@@ -216,32 +215,31 @@ export default function TicketRequestScreen() {
     return bomItems.find((it) => it.bomItemId === card.bomItemID)?.unit ?? null;
   }
 
-  // Returns an error string for a card, or null if it's valid.
-  function validateCard(card: Card): string | null {
+  // Every problem on a card, in the order the fields appear on screen, so the
+  // user sees all of what's missing at once (an empty list means it's valid).
+  function validateCard(card: Card): string[] {
+    const problems: string[] = [];
     const qty = Number(card.quantity);
+    const qtyMissing = !card.quantity || !Number.isFinite(qty) || qty <= 0;
     if (card.ticketType === "Report") {
-      if (!card.reportText.trim()) return t("tr.v_describe");
-      return null;
+      if (!card.reportText.trim()) problems.push(t("tr.v_describe"));
+      return problems;
     }
-    // Material Request / Work Item share quantity.
-    if (!card.quantity || !Number.isFinite(qty) || qty <= 0) return t("tf.err_quantity");
-
     if (card.ticketType === "Work Item") {
-      if (!card.materialType.trim()) return t("tr.v_needed");
-      if (!card.unit.trim()) return t("tq.err_unit");
-      return null;
+      if (!card.materialType.trim()) problems.push(t("tr.v_needed"));
+      if (qtyMissing) problems.push(t("tf.err_quantity"));
+      if (!card.unit.trim()) problems.push(t("tq.err_unit"));
+      return problems;
     }
     // Material Request
-    if (!card.bomItemID) return t("tf.err_bom_item");
+    if (!card.bomItemID) problems.push(t("tf.err_bom_item"));
     if (card.bomItemID === NOT_IN_BOM) {
-      if (!card.materialType.trim()) return t("tr.v_material");
-      if (!card.unit.trim()) return t("tq.err_unit");
-      if (!card.notInBomReason.trim()) return t("tr.v_reason");
+      if (!card.materialType.trim()) problems.push(t("tr.v_material"));
+      if (!card.notInBomReason.trim()) problems.push(t("tr.v_reason"));
     }
-    if (card.requestedBudget === "" || !Number.isFinite(Number(card.requestedBudget)) || Number(card.requestedBudget) < 0) {
-      return t("tf.err_requested_budget");
-    }
-    return null;
+    if (qtyMissing) problems.push(t("tf.err_quantity"));
+    if (card.bomItemID === NOT_IN_BOM && !card.unit.trim()) problems.push(t("tq.err_unit"));
+    return problems;
   }
 
   function cap100(text: string) {
@@ -250,7 +248,6 @@ export default function TicketRequestScreen() {
   }
 
   function buildPayload(card: Card): TicketInput {
-    const vendorName = card.vendorName.trim() || undefined;
     const neededBy = card.neededBy || undefined;
     if (card.ticketType === "Report") {
       return {
@@ -268,7 +265,6 @@ export default function TicketRequestScreen() {
         materialType: card.materialType.trim(),
         quantity: Number(card.quantity),
         unit: card.unit,
-        vendorName,
         neededBy,
       };
     }
@@ -282,9 +278,7 @@ export default function TicketRequestScreen() {
       ticketType: "Material Request",
       subject: cap100(bomDesc),
       quantity: Number(card.quantity),
-      vendorName,
       neededBy,
-      requestedBudget: Number(card.requestedBudget),
     };
     if (notInBom) {
       base.notInBom = true;
@@ -306,12 +300,14 @@ export default function TicketRequestScreen() {
   }
 
   const cardErrors = cards.map(validateCard);
-  const canSubmit = cardErrors.every((e) => e === null) && !submitting && !!project;
-  // The button stays tappable while the form is incomplete: tapping it shows
-  // what's missing (list above the button, red outline on each ticket).
+  const canSubmit = cardErrors.every((list) => list.length === 0) && !submitting && !!project;
+  // The button stays tappable while the form is incomplete. Everything that is missing
+  // is listed above it; tapping the button adds the red outline on each ticket.
   const blockedReasons = [
     !project && t("tr.choose_project"),
-    ...cardErrors.map((e, i) => e && (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
+    ...cardErrors.flatMap((list, i) =>
+      list.map((e) => (cards.length > 1 ? t("tr.ticket_n_error", { n: i + 1, error: e }) : e)),
+    ),
   ];
 
   async function handleSubmit() {
@@ -331,7 +327,7 @@ export default function TicketRequestScreen() {
     }
   }
 
-  // ---- Render states ----------------------------------------------------
+  // Render states
   // The confirmation is a screen, not a pop-up: it can't be dismissed by
   // accident, and the form is gone so the same tickets can't be sent twice.
   if (sent) {
@@ -444,7 +440,7 @@ export default function TicketRequestScreen() {
         const k = (field: string) => `${card.id}:${field}`;
 
         return (
-          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index] && fieldErrorStyle]}>
+          <View key={card.id} style={[styles.ticketCard, triedSubmit && cardErrors[index].length > 0 && fieldErrorStyle]}>
             <View style={styles.ticketCardHead}>
               <Text style={styles.ticketCardTitle}>{t("tr.ticket_card", { n: index + 1 })}</Text>
               {cards.length > 1 && (
@@ -453,9 +449,9 @@ export default function TicketRequestScreen() {
                 </Pressable>
               )}
             </View>
-            {triedSubmit && cardErrors[index] ? (
-              <Text style={styles.cardError}>{cardErrors[index]}</Text>
-            ) : null}
+            {triedSubmit && cardErrors[index].length > 0
+              ? cardErrors[index].map((e) => <Text key={e} style={styles.cardError}>{e}</Text>)
+              : null}
 
             <Dropdown
               label={t("tr.type")}
@@ -476,6 +472,7 @@ export default function TicketRequestScreen() {
                 onChangeText={(v) => updateCard(card.id, { reportText: v })}
                 placeholder={t("tr.issue_ph")}
                 multiline
+                maxLength={INPUT_LIMITS.description}
               />
             )}
 
@@ -491,15 +488,24 @@ export default function TicketRequestScreen() {
                 }
                 open={openKey === k("bom")}
                 onToggle={() => setOpenKey(openKey === k("bom") ? null : k("bom"))}
+                search={{
+                  label: t("tf.bom_search_label"),
+                  placeholder: t("tf.bom_search_ph"),
+                  clear: t("tf.bom_search_clear"),
+                  noMatch: (query) => t("tf.bom_no_match", { query }),
+                }}
                 options={[
                   ...bomItems.map((it) => ({
                     key: it.bomItemId,
                     label: `${it.description} (${it.unit})`,
+                    // Search the name and the section it sits in (no item code exists).
+                    searchText: `${it.description} ${it.section ?? ""}`,
                     onPress: () => { updateCard(card.id, { bomItemID: it.bomItemId }); setOpenKey(null); },
                   })),
                   {
                     key: NOT_IN_BOM,
                     label: t("tf.not_in_bom"),
+                    pinned: true, // stays at the bottom whatever is searched
                     onPress: () => { updateCard(card.id, { bomItemID: NOT_IN_BOM }); setOpenKey(null); },
                   },
                 ]}
@@ -512,6 +518,7 @@ export default function TicketRequestScreen() {
                 value={card.materialType}
                 onChangeText={(v) => updateCard(card.id, { materialType: v })}
                 placeholder={isWork ? t("tf.material_type_ph_cement") : t("tf.material_type_ph_light")}
+                maxLength={INPUT_LIMITS.materialType}
               />
             )}
 
@@ -522,6 +529,7 @@ export default function TicketRequestScreen() {
                 onChangeText={(v) => updateCard(card.id, { notInBomReason: v })}
                 placeholder={t("tf.not_in_bom_reason_ph")}
                 multiline
+                maxLength={INPUT_LIMITS.reason}
               />
             )}
 
@@ -534,6 +542,7 @@ export default function TicketRequestScreen() {
                     onChangeText={(v) => updateCard(card.id, { quantity: v })}
                     placeholder="0"
                     keyboardType="decimal-pad"
+                    maxLength={12}
                   />
                 </View>
                 <View style={styles.unitCol}>
@@ -561,39 +570,11 @@ export default function TicketRequestScreen() {
             )}
 
             {!isReport && (
-              <Dropdown
-                label={t("tr.vendor_optional")}
-                placeholder={!card.vendorName}
-                value={card.vendorName || t("tr.not_sure")}
-                open={openKey === k("vendor")}
-                onToggle={() => setOpenKey(openKey === k("vendor") ? null : k("vendor"))}
-                options={[
-                  { key: "__none__", label: t("tr.not_sure"), onPress: () => { updateCard(card.id, { vendorName: "" }); setOpenKey(null); } },
-                  ...vendors.map((v) => ({
-                    key: v.vendorID,
-                    label: v.vendorName,
-                    onPress: () => { updateCard(card.id, { vendorName: v.vendorName }); setOpenKey(null); },
-                  })),
-                ]}
-              />
-            )}
-
-            {!isReport && (
               <DateField
                 label={t("tq.needed_by_opt")}
                 value={card.neededBy}
                 onChange={(v) => updateCard(card.id, { neededBy: v })}
                 hint={t("tr.date_hint")}
-              />
-            )}
-
-            {isMR && (
-              <Field
-                label={t("tr.requested_budget")}
-                value={card.requestedBudget}
-                onChangeText={(v) => updateCard(card.id, { requestedBudget: v })}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
               />
             )}
           </View>
@@ -606,7 +587,12 @@ export default function TicketRequestScreen() {
         </Pressable>
       )}
 
-      {triedSubmit && <BlockedReasons reasons={blockedReasons} />}
+      {/* Own gap so the box doesn't touch "Add another ticket" (the shared box has no top margin). */}
+      {blockedReasons.some(Boolean) && (
+        <View style={styles.blockedGap}>
+          <BlockedReasons title={t("gap.title")} reasons={blockedReasons} />
+        </View>
+      )}
       <Pressable onPress={handleSubmit} disabled={submitting} style={[styles.submitButton, !canSubmit && styles.disabled]}>
         <Text style={styles.submitText}>
           {submitting
@@ -634,8 +620,39 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = false, onToggle, options }: { label: string; value: string; open: boolean; disabled?: boolean; placeholder?: boolean; onToggle: () => void; options: { key: string; label: string; onPress: () => void }[] }) {
+type DropdownOption = {
+  key: string;
+  label: string;
+  onPress: () => void;
+  // Text the search looks in. Defaults to the label.
+  searchText?: string;
+  // Always shown, last, whatever is typed in the search (e.g. "Not in the BOM").
+  pinned?: boolean;
+};
+
+// Turns a Dropdown into a searchable one: a search box on top of the open menu.
+// The texts come from the caller so this component stays generic.
+type DropdownSearch = { label: string; placeholder: string; clear: string; noMatch: (query: string) => string };
+
+function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = false, onToggle, options, search }: { label: string; value: string; open: boolean; disabled?: boolean; placeholder?: boolean; onToggle: () => void; options: DropdownOption[]; search?: DropdownSearch }) {
   const { t } = useLocale();
+  const [query, setQuery] = useState("");
+  // Closing the menu, or picking an item, starts the next search from scratch.
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  // Filter in memory: the list is already loaded (and cached for offline), so
+  // typing never calls the server. The options array itself is not changed.
+  const typed = query.trim();
+  const choices = options.filter((option) => !option.pinned);
+  const pinned = options.filter((option) => option.pinned);
+  const matches = search && typed
+    ? (searchRequests(typed, choices, (option: DropdownOption) => option.searchText ?? option.label) as DropdownOption[])
+    : choices;
+  const shown = [...matches, ...pinned];
+  const noMatch = !!search && typed !== "" && matches.length === 0;
+
   return (
     <View style={styles.dropdownWrap}>
       <Text style={styles.label}>{label}</Text>
@@ -644,11 +661,34 @@ function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = f
         <Text style={styles.chevron}>{open ? "⌃" : "⌄"}</Text>
       </Pressable>
       {open && (
-        // A ScrollView, because the BOM can have far more items than fit in
-        // 260px. nestedScrollEnabled lets Android scroll it inside the page.
         <View style={styles.dropdownMenu}>
-          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-            {options.length === 0 ? <Text style={styles.noOptions}>{t("tr.no_options")}</Text> : options.map((option) => (
+          {search ? (
+            // Outside the ScrollView, so the search box stays put while the list scrolls.
+            <View style={styles.searchRow}>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={search.placeholder}
+                placeholderTextColor="#A79E8C"
+                accessibilityLabel={search.label}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                style={styles.searchInput}
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery("")} hitSlop={8} style={styles.searchClear} accessibilityRole="button" accessibilityLabel={search.clear}>
+                  <Text style={styles.searchClearText}>×</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {/* A ScrollView, because the BOM can have far more items than fit in
+              the menu. nestedScrollEnabled lets Android scroll it inside the page. */}
+          <ScrollView style={search ? styles.dropdownList : undefined} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+            {options.length === 0 ? <Text style={styles.noOptions}>{t("tr.no_options")}</Text> : null}
+            {noMatch && search ? <Text style={styles.noOptions}>{search.noMatch(typed)}</Text> : null}
+            {shown.map((option) => (
               <Pressable key={option.key} onPress={option.onPress} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{option.label}</Text></Pressable>
             ))}
           </ScrollView>
@@ -658,32 +698,32 @@ function Dropdown({ label, value, open, disabled, placeholder: isPlaceholder = f
   );
 }
 
-function Field({ label, value, onChangeText, placeholder, multiline, keyboardType }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean; keyboardType?: "default" | "decimal-pad" }) {
+function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, maxLength }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean; keyboardType?: "default" | "decimal-pad"; maxLength?: number }) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#A79E8C" multiline={multiline} keyboardType={keyboardType} style={[styles.input, multiline && styles.multilineInput]} />
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#A79E8C" multiline={multiline} keyboardType={keyboardType} maxLength={maxLength} style={[styles.input, multiline && styles.multilineInput]} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F1E8" },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 20, paddingBottom: 48 },
-  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  eyebrow: { color: COLORS.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1.5 },
   title: { color: COLORS.heading, fontSize: 27, fontWeight: "800", marginTop: 7 },
   subtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 6 },
   errorText: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 12, borderWidth: 1, color: "#B42318", lineHeight: 19, marginTop: 14, padding: 12 },
   offlineNote: { backgroundColor: "#FFF4E5", borderColor: "#F5D6A8", borderRadius: 12, borderWidth: 1, color: "#7A4B00", fontSize: 13, lineHeight: 18, marginTop: 14, padding: 12 },
   rejectionBanner: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 14 },
-  rejectionBannerLabel: { color: "#B42318", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
+  rejectionBannerLabel: { color: "#B42318", fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4, textTransform: "uppercase" },
   rejectionBannerReason: { color: COLORS.heading, fontSize: 14, fontWeight: "600", lineHeight: 20 },
   rejectionBannerHint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  loadingCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, gap: 10, marginTop: 18, padding: 24 },
+  loadingCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, gap: 10, marginTop: 18, padding: 24 },
   muted: { color: COLORS.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
 
   // Project gate
-  projectChoice: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 16, paddingVertical: 18 },
+  projectChoice: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 16, paddingVertical: 18 },
   projectChoiceName: { color: COLORS.heading, flex: 1, fontSize: 15, fontWeight: "700" },
 
   // Selected-project bar
@@ -693,7 +733,8 @@ const styles = StyleSheet.create({
 
   // Ticket card
   cardError: { color: "#B42318", fontSize: 13, fontWeight: "700", marginBottom: 6 },
-  ticketCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
+  blockedGap: { marginTop: 16 },
+  ticketCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 16 },
   ticketCardHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   ticketCardTitle: { color: COLORS.heading, fontSize: 15, fontWeight: "800" },
   removeLink: { color: "#B42318", fontSize: 13, fontWeight: "700" },
@@ -701,25 +742,32 @@ const styles = StyleSheet.create({
   qtyRow: { flexDirection: "row", gap: 12 },
   qtyCol: { flex: 1 },
   unitCol: { width: 120 },
-  readonlyBox: { backgroundColor: "#F1E9DD", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, justifyContent: "center", minHeight: 47, paddingHorizontal: 12, marginTop: 0 },
+  readonlyBox: { backgroundColor: "#F1E9DD", borderColor: COLORS.border, borderRadius: 12, borderWidth: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 12, marginTop: 0 },
   readonlyText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
 
-  label: { color: COLORS.muted, fontSize: 12, fontWeight: "700", marginBottom: 7, marginTop: 12 },
+  label: { color: COLORS.heading, fontSize: 13, fontWeight: "700", marginBottom: 6, marginTop: 14 },
   dropdownWrap: { zIndex: 2 },
-  dropdownButton: { alignItems: "center", backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 47, paddingHorizontal: 12 },
+  dropdownButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: COLORS.inputBorder, borderRadius: 12, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 48, paddingHorizontal: 12 },
   dropdownDisabled: { opacity: 0.55 },
-  dropdownValue: { color: COLORS.muted, flex: 1, fontSize: 14 },
+  dropdownValue: { color: COLORS.muted, flex: 1, fontSize: 15 },
   dropdownValueSelected: { color: COLORS.heading, fontWeight: "600" },
   chevron: { color: COLORS.primary, fontSize: 19, fontWeight: "800", marginLeft: 8 },
-  dropdownMenu: { backgroundColor: "#FFFDFA", borderColor: "#D8CDBD", borderRadius: 12, borderWidth: 1, elevation: 5, marginTop: 5, maxHeight: 260, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 6 },
+  dropdownMenu: { backgroundColor: "#FFFFFF", borderColor: "#D8CDBD", borderRadius: 12, borderWidth: 1, elevation: 5, marginTop: 5, maxHeight: 260, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 6 },
   dropdownOption: { borderBottomColor: "#EFE7DC", borderBottomWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
   dropdownOptionText: { color: COLORS.heading, fontSize: 14, fontWeight: "600" },
   noOptions: { color: COLORS.muted, fontSize: 13, padding: 13 },
+  // Search box inside a searchable dropdown. The list under it gets a shorter
+  // max height so the box and the list together still fit the 260px menu.
+  searchRow: { alignItems: "center", borderBottomColor: "#EFE7DC", borderBottomWidth: 1, flexDirection: "row", minHeight: 48, paddingHorizontal: 6 },
+  searchInput: { color: COLORS.heading, flex: 1, fontSize: 14, minHeight: 44, paddingHorizontal: 8 },
+  searchClear: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  searchClearText: { color: COLORS.muted, fontSize: 22, lineHeight: 24 },
+  dropdownList: { maxHeight: 210 },
   field: { marginTop: 2 },
-  input: { backgroundColor: "#FFFDFA", borderColor: "#E7DDCF", borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11 },
+  input: { backgroundColor: "#FFFFFF", borderColor: COLORS.inputBorder, borderRadius: 12, borderWidth: 1, color: COLORS.heading, fontSize: 15, minHeight: 48, paddingHorizontal: 12, paddingVertical: 11 },
   multilineInput: { minHeight: 84, textAlignVertical: "top" },
 
-  sentCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 20, borderWidth: 1, gap: 8, marginTop: 18, paddingHorizontal: 24, paddingVertical: 32 },
+  sentCard: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 20, borderWidth: 1, gap: 8, marginTop: 18, paddingHorizontal: 24, paddingVertical: 32 },
   sentIcon: { alignItems: "center", backgroundColor: COLORS.successBg, borderRadius: 32, height: 64, justifyContent: "center", width: 64 },
   sentIconText: { color: COLORS.success, fontSize: 32, fontWeight: "800" },
   sentTitle: { color: COLORS.heading, fontSize: 21, fontWeight: "800", marginTop: 6, textAlign: "center" },

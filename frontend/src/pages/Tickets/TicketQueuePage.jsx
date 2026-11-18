@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   listManagedTickets,
@@ -14,8 +14,11 @@ import { Badge } from "../../components/ui/Badge";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { TicketForm } from "../../components/tickets/TicketForm";
+import { useToast } from "../../components/ui/Toast";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./TicketQueuePage.css";
 
 const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
@@ -47,7 +50,7 @@ const UNIT_OPTIONS = [
   "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
 ];
 
-// Quick-pick reasons for rejecting — keeps the reason the SM sees consistent
+// Quick-pick reasons for rejecting: keeps the reason the SM sees consistent
 // and readable. The PM can still add a note (or write a note alone).
 const REJECT_REASONS = ["tq.reason_qty", "tq.reason_dup", "tq.reason_wrong", "tq.reason_phase"];
 
@@ -60,6 +63,7 @@ function groupKey(t) {
 export function TicketQueuePage() {
   // `t` is used as a loop variable for tickets throughout this file, so the translate function is `tr`.
   const { t: tr, tv } = useLocale();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState("Pending");
   const [tickets, setTickets] = useState([]);
   const [purchasers, setPurchasers] = useState([]);
@@ -77,6 +81,9 @@ export function TicketQueuePage() {
   // Needed-by dates the PM changed, by ticket id. A ticket not in here keeps
   // the date the Site Manager gave (or none).
   const [neededByDates, setNeededByDates] = useState({});
+  // A problem with one ticket's action, by ticket id. Shown on that card (where
+  // the PM is looking), not in the page banner at the top, which may be off screen.
+  const [cardErrors, setCardErrors] = useState({});
 
   // Edit modal.
   const [editing, setEditing] = useState(null);
@@ -92,10 +99,13 @@ export function TicketQueuePage() {
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get("focus");
   const [highlightId, setHighlightId] = useState(null);
+  // The ticket whose summary and actions are open in a modal (a list row was clicked, or a notification linked here).
+  const [openId, setOpenId] = useState(null);
 
   async function loadTab(tab, { keepError = false } = {}) {
     setLoading(true);
     if (!keepError) setError("");
+    setCardErrors({});
     try {
       const [rows, availablePurchasers, approvedVendors] = await Promise.all([
         listManagedTickets(tab),
@@ -105,9 +115,10 @@ export function TicketQueuePage() {
       setTickets(rows);
       setPurchasers(availablePurchasers);
       setVendors(approvedVendors);
-      // Seed the approved-budget inputs: prefer the BOM figure (qty × unit
-      // cost) for on-BOM Material Requests, else the SM's requested budget.
-      // Purchaser select starts empty — no silent default.
+      // Seed the approved-budget inputs with the BOM figure (qty × unit cost)
+      // for on-BOM Material Requests; otherwise the PM types it. Site Managers
+      // no longer give a budget (post-consultation fix, Nov 2026).
+      // Purchaser select starts empty: no silent default.
       setApprovedBudgets((current) => {
         const next = { ...current };
         for (const t of rows) {
@@ -116,9 +127,7 @@ export function TicketQueuePage() {
               const bom = t.bomUnitCost != null && t.quantity != null
                 ? Number(t.bomUnitCost) * Number(t.quantity)
                 : null;
-              next[t.ticketid] = bom != null
-                ? String(Math.round(bom * 100) / 100)
-                : (t.requestedbudget == null ? "" : String(t.requestedbudget));
+              next[t.ticketid] = bom != null ? String(Math.round(bom * 100) / 100) : "";
             }
           }
         }
@@ -165,6 +174,7 @@ export function TicketQueuePage() {
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     setHighlightId(focusId);
+    setOpenId(focusId);
     const timer = setTimeout(() => setHighlightId(null), 2500);
     return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
   }, [focusId, loading, tickets, activeTab]);
@@ -173,25 +183,50 @@ export function TicketQueuePage() {
     setTickets((cur) => cur.filter((t) => t.ticketid !== ticketId));
   }
 
+  function setCardError(ticketId, message) {
+    setCardErrors((cur) => ({ ...cur, [ticketId]: message }));
+  }
+  function clearCardError(ticketId) {
+    setCardErrors((cur) => {
+      if (!cur[ticketId]) return cur;
+      const next = { ...cur };
+      delete next[ticketId];
+      return next;
+    });
+  }
+
+  function buyerName(userId) {
+    return purchasers.find((p) => p.userid === userId)?.name || tr("tq.a_purchaser");
+  }
+
+  // The approved budget for an acknowledge, or null when a Material Request's
+  // budget is missing or invalid. Other ticket types carry no budget.
+  function budgetFor(ticket) {
+    if (ticket.tickettype !== "Material Request") return undefined;
+    const text = approvedBudgets[ticket.ticketid] ?? "";
+    const amount = Number(text);
+    return text === "" || !Number.isFinite(amount) || amount < 0 ? null : amount;
+  }
+
   async function handleAcknowledge(ticket) {
     const assignedTo = assignments[ticket.ticketid];
     if (!assignedTo) {
-      setError(tr("tq.err_choose_purchaser"));
+      setCardError(ticket.ticketid, tr("tq.err_choose_purchaser"));
       return;
     }
-    const budgetText = approvedBudgets[ticket.ticketid] ?? "";
-    const approvedBudget = ticket.tickettype === "Material Request" ? Number(budgetText) : undefined;
-    if (ticket.tickettype === "Material Request" && (budgetText === "" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
-      setError(tr("tq.err_budget"));
+    const approvedBudget = budgetFor(ticket);
+    if (approvedBudget === null) {
+      setCardError(ticket.ticketid, tr("tq.err_budget"));
       return;
     }
     setSubmittingId(ticket.ticketid);
-    setError("");
+    clearCardError(ticket.ticketid);
     try {
       await acknowledgeTicket(ticket.ticketid, assignedTo, approvedBudget, neededByDates[ticket.ticketid]);
       removeFromView(ticket.ticketid);
+      toast.success(tr("tq.toast_assigned", { subject: ticket.subject, name: buyerName(assignedTo) }));
     } catch (err) {
-      setError(extractErrorMessage(err, tr("errors.ack_failed")));
+      setCardError(ticket.ticketid, extractErrorMessage(err, tr("errors.ack_failed")));
     } finally {
       setSubmittingId(null);
     }
@@ -200,43 +235,50 @@ export function TicketQueuePage() {
   // "Assign all" for a batch group: acknowledge each MR/Work Item in turn,
   // using each card's own purchaser + budget (so a per-ticket override the PM
   // set still applies). Reports in the group are left for the single Resolve.
+  // A ticket that can't go is marked on its own card; the rest still go.
   async function handleAssignAll(group) {
     const actionable = group.filter((t) => t.tickettype !== "Report");
     const missing = actionable.filter((t) => !assignments[t.ticketid]);
     if (missing.length > 0) {
-      setError(tr("tq.err_batch_purchaser"));
+      for (const t of missing) setCardError(t.ticketid, tr("tq.err_choose_purchaser"));
       return;
     }
-    setError("");
     setSubmittingId(`batch:${groupKey(group[0])}`);
-    const failures = [];
+    let assigned = 0;
     for (const t of actionable) {
-      const budgetText = approvedBudgets[t.ticketid] ?? "";
-      const approvedBudget = t.tickettype === "Material Request" ? Number(budgetText) : undefined;
-      if (t.tickettype === "Material Request" && (budgetText === "" || !Number.isFinite(approvedBudget) || approvedBudget < 0)) {
-        failures.push(tr("tq.batch_budget_fail", { subject: t.subject }));
+      const approvedBudget = budgetFor(t);
+      if (approvedBudget === null) {
+        setCardError(t.ticketid, tr("tq.err_budget"));
         continue;
       }
       try {
         // eslint-disable-next-line no-await-in-loop
         await acknowledgeTicket(t.ticketid, assignments[t.ticketid], approvedBudget, neededByDates[t.ticketid]);
         removeFromView(t.ticketid);
+        clearCardError(t.ticketid);
+        assigned += 1;
       } catch (err) {
-        failures.push(`${t.subject}: ${extractErrorMessage(err, tr("tq.failed"))}`);
+        setCardError(t.ticketid, extractErrorMessage(err, tr("errors.ack_failed")));
       }
     }
     setSubmittingId(null);
-    if (failures.length > 0) setError(tr("tq.batch_failures", { list: failures.join("; ") }));
+    if (assigned === actionable.length) {
+      toast.success(tr("tq.toast_assigned_many", { count: assigned }));
+    } else if (assigned > 0) {
+      toast.info(tr("tq.toast_batch_partial", { done: assigned, total: actionable.length }));
+    }
+    // None assigned: each card already says why in red.
   }
 
   async function handleResolve(ticket) {
     setSubmittingId(ticket.ticketid);
-    setError("");
+    clearCardError(ticket.ticketid);
     try {
       await resolveTicket(ticket.ticketid);
       removeFromView(ticket.ticketid);
+      toast.success(tr("tq.toast_resolved", { subject: ticket.subject }));
     } catch (err) {
-      setError(extractErrorMessage(err, tr("errors.resolve_failed")));
+      setCardError(ticket.ticketid, extractErrorMessage(err, tr("errors.resolve_failed")));
     } finally {
       setSubmittingId(null);
     }
@@ -272,6 +314,8 @@ export function TicketQueuePage() {
     try {
       await rejectTicket(reject.ticket.ticketid, reason);
       removeFromView(reject.ticket.ticketid);
+      clearCardError(reject.ticket.ticketid);
+      toast.success(tr("tq.toast_rejected", { subject: reject.ticket.subject }));
       setReject(null);
     } catch (err) {
       setRejectError(extractErrorMessage(err, tr("errors.reject_failed")));
@@ -281,7 +325,7 @@ export function TicketQueuePage() {
   }
 
   function handleCreated() {
-    // A PM-created ticket is born Acknowledged — refresh whichever tab is open.
+    // A PM-created ticket is born Acknowledged: refresh whichever tab is open.
     loadTab(activeTab);
   }
 
@@ -294,7 +338,6 @@ export function TicketQueuePage() {
       unit: ticket.unit || "",
       materialType: ticket.materialtype || "",
       vendorName: ticket.vendorname || "",
-      requestedBudget: ticket.requestedbudget == null ? "" : String(ticket.requestedbudget),
       notInBomReason: ticket.notinbomreason || "",
     });
     setEditing({ ticket });
@@ -323,11 +366,6 @@ export function TicketQueuePage() {
       payload.quantity = q;
       payload.vendorName = editForm.vendorName;
     }
-    if (isMR) {
-      const b = Number(editForm.requestedBudget);
-      if (!Number.isFinite(b) || b < 0) { setEditError(tr("tf.err_requested_budget")); return; }
-      payload.requestedBudget = b;
-    }
     if ((isMR && !onBom) || isWork) {
       if (!editForm.materialType.trim()) { setEditError(tr("tq.err_material")); return; }
       if (!editForm.unit.trim()) { setEditError(tr("tq.err_unit")); return; }
@@ -344,7 +382,7 @@ export function TicketQueuePage() {
     try {
       const updated = await updateTicket(t.ticketid, payload);
       setTickets((cur) => cur.map((item) => (item.ticketid === t.ticketid ? { ...item, ...updated } : item)));
-      setApprovedBudgets((cur) => ({ ...cur, [t.ticketid]: updated.requestedbudget == null ? (cur[t.ticketid] ?? "") : String(updated.requestedbudget) }));
+      toast.success(tr("tq.toast_saved"));
       setEditing(null);
       setEditForm(null);
     } catch (err) {
@@ -405,6 +443,14 @@ export function TicketQueuePage() {
     return out;
   }, [visibleTickets, activeTab]);
 
+  const openTicket = openId ? tickets.find((t) => String(t.ticketid) === String(openId)) : null;
+  const cardProps = {
+    purchasers, assignments, setAssignments, approvedBudgets, setApprovedBudgets,
+    neededByDates, setNeededByDates, submittingId, cardErrors, onClearError: clearCardError,
+    highlightId, activeTab, onAcknowledge: handleAcknowledge, onResolve: handleResolve,
+    onReject: openReject, onEdit: openEdit, onOpen: (t) => setOpenId(t.ticketid),
+  };
+
   return (
     <div className="ticket-queue">
       <div className="ticket-queue-header">
@@ -460,15 +506,21 @@ export function TicketQueuePage() {
           </div>
 
           {projects.length > 1 && (
-            <label className="ticket-project-filter">
+            <div className="ticket-project-filter">
               <span>{tr("nav.project")}</span>
-              <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-                <option value="All">{tr("tq.all_projects")}</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </label>
+              <SearchableSelect
+                inline
+                value={projectFilter}
+                onChange={setProjectFilter}
+                options={[
+                  { value: "All", label: tr("tq.all_projects"), pinned: true },
+                  ...projects.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+                placeholder={tr("tq.all_projects")}
+                searchPlaceholder={tr("ss.search_ph")}
+                noMatchText={tr("ss.no_match", { query: "{query}" })}
+              />
+            </div>
           )}
         </div>
       )}
@@ -499,44 +551,18 @@ export function TicketQueuePage() {
               <BatchBlock
                 key={block.key}
                 tickets={block.tickets}
-                purchasers={purchasers}
-                assignments={assignments}
-                setAssignments={setAssignments}
-                approvedBudgets={approvedBudgets}
-                setApprovedBudgets={setApprovedBudgets}
-                neededByDates={neededByDates}
-                setNeededByDates={setNeededByDates}
-                submittingId={submittingId}
-                highlightId={highlightId}
-                activeTab={activeTab}
-                onAcknowledge={handleAcknowledge}
-                onResolve={handleResolve}
-                onReject={openReject}
-                onEdit={openEdit}
+                {...cardProps}
                 onAssignAll={handleAssignAll}
               />
             ) : (
-              <TicketCard
-                key={block.ticket.ticketid}
-                ticket={block.ticket}
-                purchasers={purchasers}
-                assignments={assignments}
-                setAssignments={setAssignments}
-                approvedBudgets={approvedBudgets}
-                setApprovedBudgets={setApprovedBudgets}
-                neededByDates={neededByDates}
-                setNeededByDates={setNeededByDates}
-                submittingId={submittingId}
-                highlightId={highlightId}
-                activeTab={activeTab}
-                onAcknowledge={handleAcknowledge}
-                onResolve={handleResolve}
-                onReject={openReject}
-                onEdit={openEdit}
-              />
+              <TicketRow key={block.ticket.ticketid} ticket={block.ticket} {...cardProps} />
             )
           )}
         </div>
+      )}
+
+      {openTicket && (
+        <TicketModal ticket={openTicket} onClose={() => setOpenId(null)} cardProps={cardProps} />
       )}
 
       {reject && (
@@ -566,7 +592,7 @@ export function TicketQueuePage() {
 
       {createOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-create-title">
-          <div className="modal modal-ticket">
+          <div className="modal modal-ticket modal-ticket-wide">
             <div className="modal-head">
               <h2 id="ticket-create-title" className="modal-title">{tr("nav.new_ticket")}</h2>
               <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} aria-label={tr("pd.close")}>×</button>
@@ -579,10 +605,58 @@ export function TicketQueuePage() {
   );
 }
 
-// ---- BOM context strip (on-BOM Material Requests) ----
+// BOM context (on-BOM Material Requests)
+
+// Pesos rounded to the centavo, so 493 × 300.1 doesn't print float noise.
+function centavos(amount) {
+  return Math.round(amount * 100) / 100;
+}
+
+// The BOM numbers behind one Material Request, or null when it isn't linked
+// to a BOM item (Not in BOM, Work Item, Report).
+//   over > 0  -> this request takes the item past what the BOM plans
+//   over <= 0 -> -over is what is left of the BOM quantity after this request
+function bomFigures(ticket) {
+  if (ticket.tickettype !== "Material Request" || ticket.bomitemid == null || ticket.bomUnitCost == null) return null;
+  const bomQty = Number(ticket.bomQuantity);
+  const unitCost = Number(ticket.bomUnitCost);
+  const already = Number(ticket.bomAlreadyRequested || 0); // other non-rejected requests for this item
+  const thisQty = Number(ticket.quantity || 0);
+  return {
+    bomQty,
+    unitCost,
+    already,
+    thisQty,
+    over: already + thisQty - bomQty,
+    unit: ticket.bomUnit || ticket.unit || "",
+  };
+}
+
+function qtyWithUnit(qty, unit) {
+  return `${QTY.format(qty)} ${unit}`.trim();
+}
+
+// Under the approved-budget box: what this request costs at the BOM price,
+// and what the BOM plans for the item when the request goes past it.
+function budgetHintFor(ticket, tr) {
+  const bom = bomFigures(ticket);
+  if (!bom) return "";
+  const values = {
+    qty: qtyWithUnit(bom.thisQty, bom.unit),
+    price: PESO.format(bom.unitCost),
+    total: PESO.format(centavos(bom.thisQty * bom.unitCost)),
+  };
+  return bom.over > 0
+    ? tr("tq.budget_hint_over", { ...values, bomTotal: PESO.format(centavos(bom.bomQty * bom.unitCost)) })
+    : tr("tq.budget_hint", values);
+}
+
+// Labeled values, in the same style as the Material / Quantity row above:
+// BOM plan | Requested before | This request | After this request.
 function BomStrip({ ticket }) {
   const { t: tr } = useLocale();
-  if (ticket.tickettype !== "Material Request" || ticket.bomitemid == null || ticket.bomUnitCost == null) {
+  const bom = bomFigures(ticket);
+  if (!bom) {
     if (ticket.tickettype === "Material Request" && ticket.notinbom) {
       return (
         <div className="bom-strip bom-strip-off">
@@ -593,25 +667,44 @@ function BomStrip({ ticket }) {
     }
     return null;
   }
-  const bomQty = Number(ticket.bomQuantity);
-  const unitCost = Number(ticket.bomUnitCost);
-  const already = Number(ticket.bomAlreadyRequested || 0);
-  const thisQty = Number(ticket.quantity || 0);
-  const projected = already + thisQty;
-  const over = projected - bomQty;
-  const unit = ticket.bomUnit || ticket.unit || "";
+  const over = bom.over > 0;
   return (
-    <div className={"bom-strip" + (over > 0 ? " bom-strip-over" : "")}>
+    <div className={"bom-strip bom-strip-grid-wrap" + (over ? " bom-strip-over" : "")}>
       <span className="bom-strip-tag">{tr("tq.bom_tag")}</span>
-      <span className="bom-strip-fact">{tr("tq.bom_fact", { qty: QTY.format(bomQty), unit, price: PESO.format(unitCost) })}</span>
-      <span className="bom-strip-sep">·</span>
-      <span className="bom-strip-fact">{tr("tq.already", { qty: QTY.format(already) })}</span>
-      <span className="bom-strip-sep">·</span>
-      <span className="bom-strip-fact">{tr("tq.this_request", { qty: QTY.format(thisQty) })}</span>
-      <span className="bom-strip-arrow">→</span>
-      {over > 0
-        ? <span className="bom-strip-flag">{tr("tq.over_bom", { qty: QTY.format(over), unit })}</span>
-        : <span className="bom-strip-ok">{tr("tq.left", { qty: QTY.format(bomQty - projected), unit })}</span>}
+      <dl className="bom-strip-grid">
+        <div>
+          <dt>{tr("tq.bom_plan")}</dt>
+          <dd>
+            {tr("tq.bom_plan_value", {
+              qty: qtyWithUnit(bom.bomQty, bom.unit),
+              price: PESO.format(bom.unitCost),
+              total: PESO.format(centavos(bom.bomQty * bom.unitCost)),
+            })}
+          </dd>
+        </div>
+        <div>
+          <dt>{tr("tq.requested_before")}</dt>
+          <dd>{qtyWithUnit(bom.already, bom.unit)}</dd>
+        </div>
+        <div>
+          <dt>{tr("tq.this_request_label")}</dt>
+          <dd>{qtyWithUnit(bom.thisQty, bom.unit)}</dd>
+        </div>
+        <div>
+          <dt>{tr("tq.after_request")}</dt>
+          {over ? (
+            <dd className="bom-strip-flag">
+              {tr("tq.over_bom_by", {
+                qty: qtyWithUnit(bom.over, bom.unit),
+                amount: PESO.format(centavos(bom.over * bom.unitCost)),
+              })}
+            </dd>
+          ) : (
+            // bomQty - (already + this), not -over: -0 would print as "-0".
+            <dd className="bom-strip-ok">{tr("tq.left_after", { qty: qtyWithUnit(bom.bomQty - bom.already - bom.thisQty, bom.unit) })}</dd>
+          )}
+        </div>
+      </dl>
     </div>
   );
 }
@@ -628,26 +721,104 @@ function todayInputValue() {
   return toInputDate(new Date().toISOString());
 }
 
-// ---- A single ticket card ----
+// A compact row: enough to recognise the ticket, click it to see everything
+function TicketRow({ ticket, onOpen, highlightId }) {
+  const { t: tr, tv, formatDate } = useLocale();
+  const meta = TYPE_META[ticket.tickettype] || { key: "work" };
+  const isReport = ticket.tickettype === "Report";
+  const focus = String(ticket.ticketid) === String(highlightId);
+  const qty = ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "";
+  return (
+    <button
+      type="button"
+      id={`ticket-${ticket.ticketid}`}
+      className={`ticket-row ticket-row-${meta.key}` + (focus ? " ticket-row-focus" : "")}
+      onClick={() => onOpen(ticket)}
+      aria-haspopup="dialog"
+    >
+      <span className="ticket-row-main">
+        <span className="ticket-card-tags">
+          <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{tv("tickettype", ticket.tickettype)}</span>
+          <Badge status={ticket.status} />
+          {ticket.resubmittedfromid && <span className="ticket-resubmit-pill">{tr("tq.resubmission")}</span>}
+        </span>
+        <strong className="ticket-row-subject">{ticket.subject}</strong>
+        <span className="ticket-row-context">
+          {tr("tq.submitted_by", { project: ticket.projectname || ticket.projectName, name: ticket.submittedbyname || "Site Manager" })}
+        </span>
+      </span>
+      <span className="ticket-row-side">
+        {!isReport && (qty || ticket.materialtype) && (
+          <span className="ticket-row-qty">{[qty, ticket.materialtype].filter(Boolean).join(" · ")}</span>
+        )}
+        <time className="ticket-row-date" dateTime={ticket.createdat}>{formatDate(ticket.createdat, DATETIME_OPTIONS)}</time>
+      </span>
+      <span className="ticket-row-chevron" aria-hidden="true">›</span>
+    </button>
+  );
+}
+
+// The ticket in a modal: the full card, with every action it already had
+function TicketModal({ ticket, onClose, cardProps }) {
+  const { t: tr } = useLocale();
+  const closeRef = useRef(null);
+  // The parent passes a new onClose on every render, and it re-renders on every
+  // keystroke in the budget box. Keep the latest one in a ref so the effects
+  // below run only once, when the modal opens: otherwise each keystroke moved
+  // focus to the close button and the PM had to click the field again.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      // Escape closes this modal only when no other modal (reject, edit) is on top of it.
+      if (e.key === "Escape" && document.querySelectorAll(".modal-overlay").length === 1) onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <div className="modal-overlay" role="presentation" onClick={onClose}>
+      <div className="modal ticket-modal" role="dialog" aria-modal="true" aria-label={ticket.subject} onClick={(e) => e.stopPropagation()}>
+        <button ref={closeRef} type="button" className="modal-close ticket-modal-close" onClick={onClose} aria-label={tr("pd.close")}>×</button>
+        <TicketCard {...cardProps} ticket={ticket} inModal />
+      </div>
+    </div>
+  );
+}
+
+// A single ticket card
 function TicketCard(props) {
   const {
     ticket, purchasers, assignments, setAssignments, approvedBudgets, setApprovedBudgets,
     neededByDates, setNeededByDates,
-    submittingId, highlightId, activeTab, onAcknowledge, onResolve, onReject, onEdit, inBatch,
+    submittingId, cardErrors, onClearError, highlightId, activeTab, onAcknowledge, onResolve, onReject, onEdit, inBatch, inModal,
   } = props;
   const { t: tr, tv, formatDate } = useLocale();
   const meta = TYPE_META[ticket.tickettype] || { key: "work" };
   const isReport = ticket.tickettype === "Report";
   const busy = submittingId === ticket.ticketid || (typeof submittingId === "string" && submittingId.startsWith("batch:"));
   const focus = String(ticket.ticketid) === String(highlightId);
+  const cardError = cardErrors?.[ticket.ticketid] || "";
+  // Editing this card's fields clears its error: the PM is fixing it.
+  const edited = () => onClearError?.(ticket.ticketid);
+  const budgetHint = budgetHintFor(ticket, tr);
 
   return (
     <article
       id={`ticket-${ticket.ticketid}`}
-      className={`ticket-card ticket-card-${meta.key}` + (focus ? " ticket-card-focus" : "") + (inBatch ? " ticket-card-in-batch" : "")}
+      className={
+        `ticket-card ticket-card-${meta.key}` +
+        (focus ? " ticket-card-focus" : "") +
+        (inBatch ? " ticket-card-in-batch" : "") +
+        (cardError ? " ticket-card-has-error" : "")
+      }
     >
       <div className="ticket-card-head">
         <div className="ticket-card-head-main">
+          {inModal && <p className="ticket-card-ref">{tr("rq.id")} #{String(ticket.ticketid).split("-")[0].toUpperCase()}</p>}
           <div className="ticket-card-tags">
             <span className={`ticket-type-pill ticket-type-pill-${meta.key}`}>{tv("tickettype", ticket.tickettype)}</span>
             <Badge status={ticket.status} />
@@ -681,9 +852,6 @@ function TicketCard(props) {
           <div><dt>{tr("bom.aria_quantity")}</dt><dd>{ticket.quantity != null ? `${QTY.format(ticket.quantity)}${ticket.unit ? ` ${ticket.unit}` : ""}` : "—"}</dd></div>
           <div><dt>{tr("tq.pref_vendor")}</dt><dd>{ticket.vendorname || "—"}</dd></div>
           <div><dt>{tr("tq.needed_by")}</dt><dd>{ticket.neededby ? formatDate(ticket.neededby, DAY_OPTIONS) : tr("tq.not_given")}</dd></div>
-          {ticket.tickettype === "Material Request" && (
-            <div><dt>{tr("tq.sm_requested")}</dt><dd>{ticket.requestedbudget == null ? tr("tq.not_provided") : PESO.format(Number(ticket.requestedbudget))}</dd></div>
-          )}
         </dl>
       )}
 
@@ -709,7 +877,7 @@ function TicketCard(props) {
                 as="select"
                 value={assignments[ticket.ticketid] || ""}
                 disabled={busy || purchasers.length === 0}
-                onChange={(e) => setAssignments((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
+                onChange={(e) => { edited(); setAssignments((cur) => ({ ...cur, [ticket.ticketid]: e.target.value })); }}
               >
                 <option value="">{tr("tf.select_purchaser")}</option>
                 {purchasers.map((p) => (
@@ -722,18 +890,22 @@ function TicketCard(props) {
                 min={todayInputValue()}
                 value={neededByDates[ticket.ticketid] ?? toInputDate(ticket.neededby)}
                 disabled={busy}
-                onChange={(e) => setNeededByDates((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
+                onChange={(e) => { edited(); setNeededByDates((cur) => ({ ...cur, [ticket.ticketid]: e.target.value })); }}
               />
               {ticket.tickettype === "Material Request" && (
-                <Field
-                  label={tr("tq.approved_budget")}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={approvedBudgets[ticket.ticketid] ?? ""}
-                  disabled={busy}
-                  onChange={(e) => setApprovedBudgets((cur) => ({ ...cur, [ticket.ticketid]: e.target.value }))}
-                />
+                <div className="ticket-budget-cell">
+                  {/* Text box (not type=number) so the amount can show thousands commas;
+                      the state keeps the plain number ("150000"), the box shows "150,000". */}
+                  <Field
+                    label={tr("tq.approved_budget")}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formatAmountInput(approvedBudgets[ticket.ticketid] ?? "")}
+                    disabled={busy}
+                    onChange={(e) => { edited(); setApprovedBudgets((cur) => ({ ...cur, [ticket.ticketid]: parseAmountInput(e.target.value) })); }}
+                  />
+                  {budgetHint && <p className="field-hint">{budgetHint}</p>}
+                </div>
               )}
             </div>
             <div className="ticket-card-actions">
@@ -746,6 +918,9 @@ function TicketCard(props) {
           </div>
         )
       )}
+
+      {/* The reason the last action on this card didn't go through, right where the PM clicked. */}
+      {cardError && <p className="ticket-card-error" role="alert">{cardError}</p>}
 
       {activeTab === "Acknowledged" && (
         <div className="ticket-card-foot ticket-card-foot-info">
@@ -770,7 +945,7 @@ function TicketCard(props) {
   );
 }
 
-// ---- Batch block: a group of tickets submitted together ----
+// Batch block: a group of tickets submitted together
 function BatchBlock(props) {
   const { tickets, purchasers, setAssignments, submittingId, onAssignAll } = props;
   const { t: tr, formatDate } = useLocale();
@@ -799,30 +974,51 @@ function BatchBlock(props) {
           </span>
         </div>
         {actionable.length > 0 && (
-          <label className="ticket-batch-assign">
+          <div className="ticket-batch-assign">
             <span>{tr("tq.assign_all_to")}</span>
-            <select value={batchPurchaser} disabled={busy || purchasers.length === 0} onChange={(e) => applyToAll(e.target.value)}>
-              <option value="">{tr("tq.choose_purchaser")}</option>
-              {purchasers.map((p) => (<option key={p.userid} value={p.userid}>{p.name}</option>))}
-            </select>
+            <SearchableSelect
+              inline
+              value={batchPurchaser}
+              disabled={busy || purchasers.length === 0}
+              onChange={applyToAll}
+              options={[
+                { value: "", label: tr("tq.choose_purchaser"), pinned: true },
+                ...purchasers.map((p) => ({ value: p.userid, label: p.name })),
+              ]}
+              placeholder={tr("tq.choose_purchaser")}
+              searchPlaceholder={tr("ss.search_ph")}
+              noMatchText={tr("ss.no_match", { query: "{query}" })}
+            />
             <Button type="button" disabled={busy} onClick={() => onAssignAll(tickets)}>
               {busy ? tr("tq.assigning") : tr("tq.assign_all")}
             </Button>
-          </label>
+          </div>
         )}
       </header>
       <div className="ticket-batch-body">
         {tickets.map((t) => (
-          <TicketCard key={t.ticketid} {...props} ticket={t} inBatch />
+          <TicketRow key={t.ticketid} {...props} ticket={t} />
         ))}
       </div>
     </section>
   );
 }
 
-// ---- Reject modal ----
+// Escape runs the dialog's own cancel, which already ignores the key while a request is in flight.
+function useEscapeKey(handler) {
+  const ref = useRef(handler);
+  useEffect(() => { ref.current = handler; });
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") ref.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+// Reject modal
 function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSubmit }) {
   const { t: tr } = useLocale();
+  useEscapeKey(onCancel);
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticket-reject-title">
       <div className="modal modal-narrow">
@@ -867,8 +1063,9 @@ function RejectModal({ state, busy, error, onToggleChip, onNote, onCancel, onSub
   );
 }
 
-// ---- Edit modal ----
+// Edit modal
 function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendors, onCancel, onSave }) {
+  useEscapeKey(onCancel);
   const { t: tr } = useLocale();
   const t = editing.ticket;
   const isReport = t.tickettype === "Report";
@@ -915,9 +1112,6 @@ function EditModal({ editing, editForm, setEditForm, editBusy, editError, vendor
               <option value="">{tr("split.none")}</option>
               {vendors.map((v) => (<option key={v.vendorID} value={v.vendorName}>{v.vendorName}</option>))}
             </Field>
-          )}
-          {isMR && (
-            <Field label={tr("tq.sm_budget")} type="number" min="0" step="0.01" value={editForm.requestedBudget} onChange={upd("requestedBudget")} required />
           )}
           {isReport && <p className="modal-sub">{tr("tq.report_only")}</p>}
         </div>

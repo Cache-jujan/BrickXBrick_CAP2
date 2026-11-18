@@ -4,6 +4,7 @@
 // waited too long and tells the people who can act on it.
 const { query: defaultQuery } = require("./db");
 
+// How long an approved expense may wait for its blockchain copy before the people who can act on it are notified.
 const OVERDUE_HOURS = 72;
 
 function overdueMessage(expense) {

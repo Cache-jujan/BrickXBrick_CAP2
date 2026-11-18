@@ -16,8 +16,8 @@ export function CreateTicketPage() {
   const { t } = useLocale();
   const dashPath = user?.role === "Project Manager" ? "/dashboard/pm" : "/dashboard/sm";
 
-  // The form shows its own success step (with "Create another"); leaving it —
-  // via Done or Cancel — returns to the dashboard.
+  // The form shows its own success step (with "Create another"); leaving it,
+  // via Done or Cancel: returns to the dashboard.
   const toDashboard = () => navigate(dashPath);
 
   return (

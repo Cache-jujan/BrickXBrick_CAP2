@@ -131,7 +131,7 @@ export function UserManagementPage() {
             </div>
           ) : (
             <div className="table-scroll">
-              <table className="users-table">
+              <table className="users-table users-accounts">
                 <thead>
                   <tr>
                     <th>{t("users.name")}</th>
@@ -150,9 +150,9 @@ export function UserManagementPage() {
                       <tr key={u.userid}>
                         <td>{u.name}{isSelf && <span className="users-you">{t("users.you")}</span>}</td>
                         <td>{u.email}</td>
-                        <td>{u.role}</td>
+                        <td data-label={t("settings.role")}>{u.role}</td>
                         <td><Badge status={u.status} /></td>
-                        <td>
+                        <td data-label={t("users.lockout")}>
                           {isLocked ? (
                             <span className="users-locked">{t("users.locked_until", { time: formatDate(u.lockoutuntil, DATETIME_OPTIONS) })}</span>
                           ) : (

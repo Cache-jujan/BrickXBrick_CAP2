@@ -1,52 +1,34 @@
-# F12 Spike — Blockchain Notary (Proof of Concept)
+# BrickXBrick blockchain (F12): record protection
 
-Disposable spike proving the F12 mechanism: hash an approved expense,
-write the hash on-chain, later re-verify by recomputing and comparing.
+An approved expense is fingerprinted with SHA-256 and the fingerprint is written to a private
+3-node Clique Proof-of-Authority chain. Later, the expense is re-hashed from Postgres and
+compared with the first hash on the chain. A difference means the record was changed after
+approval. The chain **detects** tampering; it does not prevent it.
 
-## Setup
-1. `docker compose up -d` — starts a single `geth --dev` node on :8545
-2. `npm install`
-3. `cp .env.example .env`
+## Where things are
 
-## Scripts
-- `node connect.js` — sanity check: connect + print dev account balance
-- `node store.js` — hash a fake expense, write hash on-chain, save a
-  BlockchainLogs-shaped record to `data/blockchainLogs.json`
-- `data/blockchainLogs.json` fields (Table 38 BlockchainLogs):
-  logID, expenseID, actorID, txHash, blockNumber, eventType,
-  validatorNodeCount, consensusType, timestamp
-- `node verify.js <expenseID>` — recompute hash, compare to on-chain value,
-  print VERIFIED or TAMPERED
-- 
+| What | Where |
+|---|---|
+| How it runs, what is on the chain, failure modes, honest limits | [`aws/README.md`](aws/README.md) |
+| Node setup script (docker, signer key, genesis, peers, Caddy) | [`aws/setup-node.sh`](aws/setup-node.sh) |
+| Live tamper demo runbook | [`demo/TAMPER_DEMO.md`](demo/TAMPER_DEMO.md) |
+| Hashing, chain write, retry | `backend/src/lib/blockchainService.js` |
+| Integrity check and tamper alerts | `backend/src/lib/integrityCheck.js`, `backend/src/lib/tamperAlerts.js` |
+| Background jobs | `backend/src/server.js` |
+| Tables and guards | `infra/db/migrations/029_tamper_alert_integrity.sql` (`BlockchainLogs`, `tamper_alerts`) |
 
-## Tamper logging + queue/retry (Spike 3)
+## The design in short
 
-- `verify.js` now writes a permanent record to `data/tamperAlerts.json`
-  on every TAMPERED result (stand-in for the `tamper_alerts` table),
-  plus a console "SYSADMIN NOTIFIED" block (stand-in for a real
-  notification channel — not implemented here).
-- `store.js` now bounds `tx.wait()` to 15s. If it times out (fewer than
-  2 of 3 validator nodes online), the expense is queued to
-  `data/pendingQueue.json` instead of hanging or crashing.
-- `retry.js` drains that queue, retrying each entry against the chain.
-  Succeeded entries move to `blockchainLogs.json`; still-failing ones
-  stay queued.
-- Known shortcut: retry is a manual command in this spike. A real F12
-  build would run this automatically on a schedule or via a node-status
-  watcher, not require someone to type `node retry.js`.
+- **Chain:** 3 geth v1.13.15 nodes, Clique PoA, 15 s blocks, chain ID 31337. 2 of 3 signers must be online to seal blocks.
+- **Hosting:** three AWS EC2 t3.micro instances in three regions (Singapore, Tokyo, Mumbai), one AWS account, peering over the public internet with security-group rules. See `aws/README.md`.
+- **What goes on the chain:** only a 64-character SHA-256 hash, never names, amounts or images.
+- **Expense hash:** version 2 has 12 fields (version tag, expense ID, project ID, submitted by, approved by, vendor, amount, receipt date, category, BIR status, OR/SI number, TIN, quantity). Version 1 (9 fields) records still verify.
+- **Proof:** the first `ExpenseApproved` record in `BlockchainLogs` for an expense is the one checked; a later record cannot replace it.
+- **Write:** the approval is saved first, then the hash is sent to the chain (up to 30 s). If the chain doesn't answer, the expense stays Pending and a job retries every 60 s.
+- **Check:** the GM's "Check for changes" button, plus an automatic scan of every secured expense every 3 minutes. Results are Match, Mismatch (status `TamperDetected`, a `tamper_alerts` row, and a notification to System Administrators and General Managers), or Unreachable (the chain could not be reached; never reported as tampering).
+- **Tamper alerts and chain records** cannot be edited or deleted in the database (migration 029). If the guards are dropped, the next scan re-creates the alert, because the proof is on the chain.
 
-## Known gaps vs. real F12 (see code comments for exact locations)
-- Single node, not 3-node Clique PoA with 2-of-3 consensus
-- JSON file stand-in for the Postgres `BlockchainLogs` table
-- No custom Solidity contract — hash is written as raw tx calldata
-- Tamper notification is `console.warn`, not a real alert channel
-- A `tamper_alerts` table is referenced in UC-12-01's alternative course and
-  sequence diagrams but isn't in our current Data Dictionary excerpt — this
-  is a documentation gap to raise with the team, not something this spike
-  invents a schema for.
-- Starting multiple Clique nodes simultaneously can race: a node may try
-  to resolve a peer's Docker DNS name before that peer's container has
-  registered on the network, causing a fatal crash instead of a retry.
-  Mitigation used in this spike: start nodes with a short delay between
-  them (or restart any node that crashes this way — it succeeds once its
-  peers are already up).
+## Other folders
+
+- `cluster/`: the earlier local 3-node Docker Compose cluster (Clique), kept for running the chain on one machine.
+- `connect.js`, `store.js`, `verify.js`, `retry.js`, `docker-compose.yml`, `lib/`: the original single-node proof of concept. **The backend does not use them.** They are kept for reference and write to local JSON files, not Postgres.

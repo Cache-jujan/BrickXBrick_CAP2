@@ -7,10 +7,10 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { BudgetChart } from "../../components/reports/BudgetChart";
+import { MonthlySpendChart } from "../../components/reports/MonthlySpendChart";
 import { BudgetStands, ProjectHero } from "../../components/reports/ProjectReport";
 import { ProjectsTable } from "../../components/reports/ProjectsTable";
 import { SpendShare } from "../../components/reports/SpendShare";
-import { VarianceChart } from "../../components/reports/VarianceChart";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
 import { useLocale } from "../../i18n/LocaleProvider";
@@ -18,7 +18,7 @@ import "./ReportsPage.css";
 
 const STAMP_OPTIONS = { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" };
 
-// FUNCTION F11 — Financial Analytics and Reporting (General Manager only).
+// FUNCTION F11: Financial Analytics and Reporting (General Manager only).
 // Generate asks GET /api/reports/summary; the server does all the maths, this
 // page only shows it. The cards describe the filters that were GENERATED, not
 // whatever is currently typed in the form, so a half-edited date never makes
@@ -39,7 +39,6 @@ export function ReportsPage() {
   // What the cards and chart on screen were generated from. Export uses THESE,
   // not whatever is currently typed in the form.
   const [generated, setGenerated] = useState(null);
-  const chartRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   // After an export: { reportId, anchorStatus: "Confirmed" | "Pending", retrying, retryMessage }
   const [exportResult, setExportResult] = useState(null);
@@ -135,29 +134,34 @@ export function ReportsPage() {
     if (problems.length > 0) problemsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [problems.length, error, fieldErrors]);
 
+  // The server recomputes the figures and draws the PDF's charts itself.
+  // The PDF comes back at once with "Pending" in its footer; securing it on the
+  // blockchain (which can take up to 30 seconds) is a second request made right
+  // after the download, so nobody waits for the chain before the file arrives.
   async function exportPdf() {
-    const chartImage = chartRef.current?.getImage();
-    if (!generated || !chartImage) return;
+    if (!generated) return;
     setExporting(true);
     setExportError("");
     setExportResult(null);
+    let reportId = null;
     try {
-      const result = await downloadReportPdf({ ...generated, chartImage });
+      const result = await downloadReportPdf(generated);
       saveBlob(result.blob, result.filename);
-      setExportResult({ reportId: result.reportId, anchorStatus: result.anchorStatus, retrying: false, retryMessage: "" });
+      reportId = result.reportId;
+      setExportResult({ reportId, anchorStatus: result.anchorStatus, retrying: Boolean(reportId), retryMessage: "" });
     } catch (err) {
       setExportError(extractErrorMessage(err, t("errors.export_failed")));
     } finally {
       setExporting(false);
     }
+    if (reportId) await secureReport(reportId);
   }
 
-  // The PDF already downloaded with "Pending" in its footer; this only secures
-  // the stored report on the blockchain. It never makes a new PDF.
-  async function retryAnchor() {
-    setExportResult((r) => ({ ...r, retrying: true, retryMessage: "" }));
+  // Ask the server to put the stored report's hash on the blockchain. It never
+  // makes a new PDF; the PDF already downloaded.
+  async function secureReport(reportId) {
     try {
-      const result = await anchorReport(exportResult.reportId);
+      const result = await anchorReport(reportId);
       setExportResult((r) => ({
         ...r,
         retrying: false,
@@ -167,6 +171,12 @@ export function ReportsPage() {
     } catch (err) {
       setExportResult((r) => ({ ...r, retrying: false, retryMessage: extractErrorMessage(err, t("errors.anchor_failed")) }));
     }
+  }
+
+  // The "Try again" button: same call, for when the network was unavailable.
+  async function retryAnchor() {
+    setExportResult((r) => ({ ...r, retrying: true, retryMessage: "" }));
+    await secureReport(exportResult.reportId);
   }
 
   return (
@@ -274,7 +284,12 @@ export function ReportsPage() {
 
           {singleProject ? (
             <>
-              <ProjectHero project={summary.projects[0]} info={projects.find((p) => p.projectid === summary.projects[0].projectId)} period={summary.period} />
+              <ProjectHero
+                project={summary.projects[0]}
+                info={projects.find((p) => p.projectid === summary.projects[0].projectId)}
+                period={summary.period}
+                watchGapPoints={summary.watchGapPoints}
+              />
               <div className="reports-grid">
                 <Card>
                   <h3 className="reports-section-title">{t("rep.budget_stands")}</h3>
@@ -283,20 +298,27 @@ export function ReportsPage() {
                 </Card>
                 <Card>
                   <h3 className="reports-section-title">{t("rep.budget_used")}</h3>
-                  <p className="reports-chart-note">{t("rep.also_pdf")}</p>
-                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                  <p className="reports-chart-note">{t("rep.budget_used_note", { max: summary.watchGapPoints })}</p>
+                  <BudgetChart projects={summary.projects} />
                 </Card>
               </div>
+              {summary.months?.length > 0 && (
+                <Card>
+                  <h3 className="reports-section-title">{t("rep.monthly_title")}</h3>
+                  <p className="reports-chart-note">{t("rep.monthly_note")}</p>
+                  <MonthlySpendChart months={summary.months} projects={summary.projects} totals={summary.totals} />
+                </Card>
+              )}
             </>
           ) : (
             <>
-              <SummaryCards totals={summary.totals} periodTo={summary.period.to} />
+              <SummaryCards totals={summary.totals} projectCount={summary.projects.length} watchGapPoints={summary.watchGapPoints} />
 
               <div className="reports-grid">
                 <Card>
                   <h3 className="reports-section-title">{t("rep.budget_used")}</h3>
-                  <p className="reports-chart-note">{t("rep.budget_used_note")}</p>
-                  <BudgetChart ref={chartRef} projects={summary.projects} />
+                  <p className="reports-chart-note">{t("rep.budget_used_note", { max: summary.watchGapPoints })}</p>
+                  <BudgetChart projects={summary.projects} totals={summary.totals} />
                 </Card>
                 <Card>
                   <h3 className="reports-section-title">{t("rep.spend_went")}</h3>
@@ -305,11 +327,13 @@ export function ReportsPage() {
                 </Card>
               </div>
 
-              <Card>
-                <h3 className="reports-section-title">{t("rep.variance_title")}</h3>
-                <p className="reports-chart-note">{t("rep.variance_note")}</p>
-                <VarianceChart projects={summary.projects} />
-              </Card>
+              {summary.months?.length > 0 && (
+                <Card>
+                  <h3 className="reports-section-title">{t("rep.monthly_title")}</h3>
+                  <p className="reports-chart-note">{t("rep.monthly_note")}</p>
+                  <MonthlySpendChart months={summary.months} projects={summary.projects} totals={summary.totals} />
+                </Card>
+              )}
 
               <Card>
                 <h3 className="reports-section-title">{t("rep.breakdown")}</h3>
@@ -327,7 +351,13 @@ export function ReportsPage() {
             </Banner>
           )}
 
-          {exportResult && exportResult.anchorStatus !== "Confirmed" && (
+          {exportResult && exportResult.anchorStatus !== "Confirmed" && exportResult.retrying && !exportResult.retryMessage && (
+            <Banner tone="info" title={t("rep.securing_title")}>
+              {t("rep.securing_body")}
+            </Banner>
+          )}
+
+          {exportResult && exportResult.anchorStatus !== "Confirmed" && !(exportResult.retrying && !exportResult.retryMessage) && (
             <Banner
               tone="warning"
               title={t("rep.pending_title")}

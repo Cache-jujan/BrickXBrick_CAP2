@@ -26,6 +26,7 @@ import { MainHeader } from "@/components/main-header";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
+import { StatusChip } from "@/components/status-chip";
 import { useLocale } from "@/lib/i18n-context";
 
 type FilterKey = "Today" | "Upcoming" | "Past due" | "Completed";
@@ -122,6 +123,7 @@ type ProjectSummary = {
   done: number;
   pending: number;
   atRisk: boolean;
+  status: string | null; // the project's own status (Suspended shows "On hold" instead of "On Track")
 };
 
 export default function SiteManagerHomeScreen() {
@@ -179,7 +181,19 @@ export default function SiteManagerHomeScreen() {
 
   // open: not completed. recent: completed in the last 7 days. archived: older
   // (lib/sm-dashboard.js). Counts, progress and project cards use open + recent.
-  const { open, recent, archived } = useMemo(() => splitTasks(tasks), [tasks]);
+  // A terminated project takes no work, so its tasks leave the counts and lists;
+  // it stays on the dashboard as one "Terminated" card (closedProjects below).
+  const liveTasks = useMemo(() => tasks.filter((task) => task.projectstatus !== "Cancelled"), [tasks]);
+  const closedProjects = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>();
+    tasks.forEach((task) => {
+      if (task.projectstatus !== "Cancelled") return;
+      const id = task.projectid || task.projectname || "";
+      if (id && !byId.has(id)) byId.set(id, { id, name: task.projectname || "Project" });
+    });
+    return Array.from(byId.values());
+  }, [tasks]);
+  const { open, recent, archived } = useMemo(() => splitTasks(liveTasks), [liveTasks]);
   const activeTasks = useMemo(() => [...open, ...recent], [open, recent]);
 
   const counts = useMemo(() => {
@@ -189,6 +203,18 @@ export default function SiteManagerHomeScreen() {
     });
     return result;
   }, [open, recent, today]);
+
+  // Opening on an empty "Today" while tasks wait elsewhere looks like nothing is assigned,
+  // so until the person picks a tab themselves the first one with tasks is shown.
+  const pickedFilter = useRef(false);
+  const settledFilter = useRef(false);
+  useEffect(() => {
+    if (loading || settledFilter.current || tasks.length === 0) return;
+    settledFilter.current = true;
+    if (pickedFilter.current || counts[filter] > 0) return;
+    const next = (["Past due", "Today", "Upcoming"] as FilterKey[]).find((key) => counts[key] > 0);
+    if (next) setFilter(next);
+  }, [loading, tasks.length, counts, filter]);
 
   const dueToday = open.filter((task) => dueLabel(task.duedate).tone === "today").length;
   const overdue = open.filter((task) => dueLabel(task.duedate).tone === "late").length;
@@ -205,7 +231,7 @@ export default function SiteManagerHomeScreen() {
     const byName = new Map<string, ProjectSummary>();
     activeTasks.forEach((task) => {
       const name = task.projectname || "Other tasks";
-      if (!byName.has(name)) byName.set(name, { name, total: 0, done: 0, pending: 0, atRisk: false });
+      if (!byName.has(name)) byName.set(name, { name, total: 0, done: 0, pending: 0, atRisk: false, status: task.projectstatus ?? null });
       const project = byName.get(name)!;
       project.total += 1;
       if (isDone(task)) project.done += 1;
@@ -326,20 +352,22 @@ export default function SiteManagerHomeScreen() {
           ))}
         </View>
 
-        <AppButton
-          label={t("mobile.request_ticket")}
-          variant="primary"
-          onPress={() => router.push("/ticket-request")}
-          accessibilityLabel={t("mobile.request_ticket_accessibility")}
-          style={styles.ticketButton}
-        />
-        <AppButton
-          label="Progress check-in"
-          variant="secondary"
-          onPress={() => router.push("/site-manager/checkin" as Href)}
-          accessibilityLabel="Daily progress check-in"
-          style={styles.ticketButton}
-        />
+        <View style={styles.actionRow}>
+          <AppButton
+            label={t("mobile.request_ticket")}
+            variant="primary"
+            onPress={() => router.push("/ticket-request")}
+            accessibilityLabel={t("mobile.request_ticket_accessibility")}
+            style={styles.actionPrimary}
+          />
+          <AppButton
+            label={t("sm.proj_checkin")}
+            variant="secondary"
+            onPress={() => router.push("/site-manager/checkin" as Href)}
+            accessibilityLabel="Daily progress check-in"
+            style={styles.actionSecondary}
+          />
+        </View>
 
         {/* Filter tabs */}
         <View style={styles.filterBar}>
@@ -348,18 +376,18 @@ export default function SiteManagerHomeScreen() {
             return (
               <Pressable
                 key={key}
-                onPress={() => { setFilter(key); setShowAllTasks(false); }}
+                onPress={() => { pickedFilter.current = true; setFilter(key); setShowAllTasks(false); }}
                 style={[styles.filterItem, index > 0 && !active && styles.filterItemDivider, active && styles.filterItemActive]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
               >
-                <IconSymbol name={icon} size={22} color={active ? "#FFFFFF" : tint} />
-                <View style={styles.filterLabelRow}>
-                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.filterLabel, active && styles.filterLabelActive]}>{t(({ Today: "mobile.filter_today", Upcoming: "mobile.filter_upcoming", "Past due": "mobile.filter_past_due", Completed: "mobile.filter_completed" } as const)[key])}</Text>
+                <View style={styles.filterTop}>
+                  <IconSymbol name={icon} size={22} color={active ? "#FFFFFF" : tint} />
                   <View style={[styles.filterCount, { backgroundColor: active ? "rgba(255,255,255,0.28)" : countBg }]}>
                     <Text style={[styles.filterCountText, { color: active ? "#FFFFFF" : tint }]}>{counts[key]}</Text>
                   </View>
                 </View>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.filterLabel, active && styles.filterLabelActive]}>{t(({ Today: "mobile.filter_today", Upcoming: "mobile.filter_upcoming", "Past due": "mobile.filter_past_due", Completed: "mobile.filter_completed" } as const)[key])}</Text>
               </Pressable>
             );
           })}
@@ -380,7 +408,7 @@ export default function SiteManagerHomeScreen() {
         ) : (
           <>
             {/* Your projects */}
-            {projects.length > 0 && (
+            {(projects.length > 0 || closedProjects.length > 0) && (
               <>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>{t("mobile.your_projects")}</Text>
@@ -397,7 +425,10 @@ export default function SiteManagerHomeScreen() {
                     const pct = project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
                     const info = projectInfo.get(project.name);
                     const next = info?.next ? dueLabel(info.next.date, new Date(), t) : null;
-                    const tone = finished
+                    const onHold = project.status === "Suspended";
+                    const tone = onHold
+                      ? { label: "status.suspended", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
+                      : finished
                       ? { label: "common.done_status", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
                       : project.atRisk
                       ? { label: "common.at_risk", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
@@ -405,9 +436,14 @@ export default function SiteManagerHomeScreen() {
                     return (
                       <Pressable
                         key={project.name}
-                        onPress={() => { setProjectFilter(selected ? null : project.name); setShowAllTasks(false); }}
-                        style={[styles.projectCard, selected && styles.projectCardSelected]}
+                        onPress={() => {
+                          // Opens the project summary; a card with no project id keeps the old tap (filter the tasks below).
+                          if (info?.projectId && info.projectId !== project.name) router.push(`/site-manager/project/${info.projectId}` as Href);
+                          else { setProjectFilter(selected ? null : project.name); setShowAllTasks(false); }
+                        }}
+                        style={({ pressed }) => [styles.projectCard, selected && styles.projectCardSelected, pressed && styles.projectCardPressed]}
                         accessibilityRole="button"
+                        accessibilityHint={t("sm.proj_open_hint")}
                         accessibilityState={{ selected }}
                         accessibilityLabel={`${project.name}, ${project.pending} pending`}
                       >
@@ -415,9 +451,12 @@ export default function SiteManagerHomeScreen() {
                           <Text style={styles.projectIconText}>▦</Text>
                         </View>
                         <View style={styles.projectBody}>
-                          <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
-                          <View style={[styles.pill, styles.projectPill, { backgroundColor: tone.bg }]}>
-                          <Text style={[styles.pillText, { color: tone.fg }]}>{t(tone.label)}</Text>
+                          <View style={styles.projectTitleRow}>
+                            <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
+                            <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
+                          </View>
+                          <View style={styles.projectPill}>
+                            <StatusChip label={t(tone.label)} tone={onHold || (project.atRisk && !finished) ? "amber" : "success"} />
                           </View>
                           <View style={styles.projectProgressRow}>
                             <View style={styles.projectTrack}>
@@ -438,10 +477,45 @@ export default function SiteManagerHomeScreen() {
                               {t("mobile.nearest_deadline")} {info.next.label} · {next.text}
                             </Text>
                           )}
+                          {/* With several projects, the old tap is kept here: show only this project's tasks below. */}
+                          {projects.length > 1 && (
+                            <Pressable
+                              onPress={() => { setProjectFilter(selected ? null : project.name); setShowAllTasks(false); }}
+                              hitSlop={6}
+                              style={styles.filterLink}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected }}
+                            >
+                              <Text style={styles.filterLinkText}>{selected ? t("sm.proj_filter_clear") : t("sm.proj_filter")}</Text>
+                            </Pressable>
+                          )}
                         </View>
                       </Pressable>
                     );
                   })}
+                  {closedProjects.map((project) => (
+                    <Pressable
+                      key={project.id}
+                      onPress={() => router.push(`/site-manager/project/${project.id}` as Href)}
+                      style={({ pressed }) => [styles.projectCard, pressed && styles.projectCardPressed]}
+                      accessibilityRole="button"
+                      accessibilityHint={t("sm.proj_open_hint")}
+                      accessibilityLabel={`${project.name}, ${t("status.terminated")}`}
+                    >
+                      <View style={styles.projectIcon}>
+                        <Text style={styles.projectIconText}>▦</Text>
+                      </View>
+                      <View style={styles.projectBody}>
+                        <View style={styles.projectTitleRow}>
+                          <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
+                          <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
+                        </View>
+                        <View style={styles.projectPill}>
+                          <StatusChip label={t("status.terminated")} tone="error" />
+                        </View>
+                      </View>
+                    </Pressable>
+                  ))}
                 </View>
               </>
             )}
@@ -564,7 +638,7 @@ const DUE_TONE = StyleSheet.create({
   normal: {},
 });
 
-const CARD = { backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1 } as const;
+const CARD = { backgroundColor: "#FFFFFF", borderColor: COLORS.border, borderRadius: 16, borderWidth: 1 } as const;
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.bgWarm, flex: 1 },
@@ -587,7 +661,7 @@ const styles = StyleSheet.create({
   heroAlert: { color: "#FFFFFF", fontSize: 12, fontFamily: FONT.bold, marginTop: 8 },
 
   weekRow: { flexDirection: "row", gap: 6, marginTop: 14 },
-  weekDay: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#ECE6DC", borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, paddingVertical: 8 },
+  weekDay: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, paddingVertical: 8 },
   weekDayToday: { backgroundColor: COLORS.heading, borderColor: COLORS.heading },
   weekName: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
   weekNum: { color: COLORS.heading, fontSize: 15, fontFamily: FONT.extrabold },
@@ -600,18 +674,21 @@ const styles = StyleSheet.create({
   progressFill: { backgroundColor: "#FFFFFF", borderRadius: 4, height: 8 },
   
 
-  ticketButton: { marginTop: 12 },
+  actionRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  actionPrimary: { flex: 1.25 },
+  actionSecondary: { flex: 1 },
   stateWrap: { marginTop: 20 },
 
   filterBar: { ...CARD, flexDirection: "row", marginTop: 14, overflow: "hidden" },
-  filterItem: { alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingVertical: 12 },
-  filterItemDivider: { borderLeftColor: "#ECE6DC", borderLeftWidth: 1 },
+  filterItem: { alignItems: "center", flex: 1, gap: 6, justifyContent: "center", paddingHorizontal: 2, paddingVertical: 12 },
+  filterTop: { alignItems: "center", flexDirection: "row", gap: 5 },
+  filterItemDivider: { borderLeftColor: COLORS.border, borderLeftWidth: 1 },
   filterItemActive: { backgroundColor: COLORS.primary, borderRadius: 14, margin: 3 },
   filterLabelRow: { alignItems: "center", flexDirection: "row", gap: 4, maxWidth: "100%", paddingHorizontal: 2 },
-  filterLabel: { flexShrink: 1, color: COLORS.heading, fontSize: 11, fontFamily: FONT.bold },
+  filterLabel: { color: COLORS.heading, fontSize: 12, fontFamily: FONT.bold, maxWidth: "100%" },
   filterLabelActive: { color: "#FFFFFF" },
   filterCount: { borderRadius: 10, minWidth: 18, paddingHorizontal: 5, paddingVertical: 1 },
-  filterCountText: { fontSize: 11, fontFamily: FONT.extrabold, textAlign: "center" },
+  filterCountText: { fontSize: 12, fontFamily: FONT.extrabold, textAlign: "center" },
 
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 24 },
   sectionTitle: { color: COLORS.heading, fontSize: 19, fontFamily: FONT.extrabold },
@@ -627,23 +704,27 @@ const styles = StyleSheet.create({
   archiveMonth: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.extrabold, letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" },
 
   projectCard: { ...CARD, alignItems: "flex-start", flexDirection: "row", gap: 12, padding: 14 },
+  projectCardPressed: { backgroundColor: COLORS.bg },
+  projectTitleRow: { alignItems: "flex-start", flexDirection: "row", gap: 8, justifyContent: "space-between" },
+  filterLink: { alignSelf: "flex-start", justifyContent: "center", marginTop: 6, minHeight: 32 },
+  filterLinkText: { color: COLORS.primary, fontFamily: FONT.bold, fontSize: 13 },
   projectCardSelected: { backgroundColor: "#FFF6EE", borderColor: COLORS.primary },
-  projectIcon: { alignItems: "center", backgroundColor: "#E8F0FB", borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
-  projectIconText: { color: "#2F6FD0", fontSize: 22 },
+  projectIcon: { alignItems: "center", backgroundColor: COLORS.card, borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
+  projectIconText: { color: COLORS.primary, fontSize: 22 },
   projectBody: { flex: 1 },
-  projectName: { color: COLORS.heading, fontSize: 15, lineHeight: 20, fontFamily: FONT.extrabold },
+  projectName: { color: COLORS.heading, flex: 1, fontSize: 16, lineHeight: 21, fontFamily: FONT.extrabold },
   projectProgressRow: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 10 },
   projectTrack: { backgroundColor: "#E6E9EE", borderRadius: 4, flex: 1, height: 7, overflow: "hidden" },
   projectFill: { borderRadius: 4, height: 7 },
-  projectCount: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.semibold },
-  projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, marginTop: 6 },
-  projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  projectCount: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.semibold },
+  projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, marginTop: 6 },
+  projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 3 },
   projectChip: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 16, marginBottom: 10, maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 6 },
   projectChipText: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold },
 
   projectPill: { alignSelf: "flex-start", marginTop: 6 },
   pill: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { fontSize: 11, fontFamily: FONT.extrabold },
+  pillText: { fontSize: 12, fontFamily: FONT.extrabold },
 
   taskRow: { ...CARD, alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
   taskLead: { alignItems: "center", borderRadius: 16, borderWidth: 2.5, height: 32, justifyContent: "center", width: 32 },

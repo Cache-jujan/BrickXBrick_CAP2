@@ -43,6 +43,20 @@ test("the lock and the open-request query use the same scope", () => {
   assert.match(open.text, /ORDER BY t\.createdat, t\.ticketid/);
 });
 
+test("open requests carry what the request details sheet shows", () => {
+  const { text } = buildOpenRequestsQuery({ id: USER, role: "Purchaser" });
+  assert.match(text, /t\.unit\s+AS "unit"/);
+  // A plain date string, so the day can't shift with the time zone.
+  assert.match(text, /to_char\(t\.neededby, 'YYYY-MM-DD'\) AS "neededBy"/);
+  assert.match(text, /t\.description\s+AS "description"/);
+  assert.match(text, /rq\.name\s+AS "requestedByName"/);
+  assert.match(text, /ack\.name\s+AS "approvedByName"/);
+  // LEFT JOINs: a missing user never hides the request.
+  assert.match(text, /LEFT JOIN users rq\s+ON rq\.userid\s+= t\.submittedby/);
+  assert.match(text, /LEFT JOIN users ack ON ack\.userid = t\.acknowledgedby/);
+  assert.match(text, /GROUP BY t\.ticketid, t\.status, p\.name, p\.budgetallowancepct, rq\.name, ack\.name/);
+});
+
 test("loadOpenRequests uses the given client and converts DECIMAL strings", async () => {
   const calls = [];
   const client = {

@@ -33,6 +33,17 @@ export function notifyNotificationsChanged() {
   }
 }
 
+// This tab's own refresh functions (the Topbar's), so a change that starts HERE
+// (a receipt scan finishing) can also update this tab's bell, not only the others.
+const localRefreshers = new Set();
+
+// Call when something new may have arrived for this user: refreshes this tab's
+// bell now and tells the other tabs.
+export function requestNotificationsRefresh() {
+  localRefreshers.forEach((refresh) => refresh());
+  notifyNotificationsChanged();
+}
+
 // Calls refresh() when another tab changed notifications, and when this tab
 // becomes visible or focused again. Returns an unsubscribe function.
 export function subscribeNotificationsRefresh(refresh) {
@@ -51,11 +62,13 @@ export function subscribeNotificationsRefresh(refresh) {
     refresh();
   }
 
+  localRefreshers.add(refresh);
   ch?.addEventListener("message", onMessage);
   document.addEventListener("visibilitychange", onReturn);
   window.addEventListener("focus", onReturn);
 
   return () => {
+    localRefreshers.delete(refresh);
     ch?.removeEventListener("message", onMessage);
     document.removeEventListener("visibilitychange", onReturn);
     window.removeEventListener("focus", onReturn);

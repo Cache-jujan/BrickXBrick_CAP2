@@ -1,4 +1,4 @@
-// screenExpense.js — F9 shared helper. Runs every screening layer on one
+// screenExpense.js: F9 shared helper. Runs every screening layer on one
 // expense and writes FraudFlags for the PM review queue.
 //
 // ALWAYS call this AFTER COMMIT, never inside a transaction. It reads through
@@ -36,7 +36,7 @@ function adjustmentReason(lines) {
 async function screenExpense(expenseID, { query } = {}) {
   // Lazy require so unit tests can pass a fake query without a database.
   const runQuery = query || require("./db").query;
-  const { checkDuplicate, checkVendor, checkTicketMismatch } =
+  const { checkDuplicate, checkVendor, describeTicketMismatch } =
     createFraudScreening({ query: runQuery });
 
   // SELECT * gives lowercase keys, which is what the checks read.
@@ -68,16 +68,12 @@ async function screenExpense(expenseID, { query } = {}) {
   // Layer 2: Vendor Master List
   const vendorIssue = await checkVendor(expense);
   if (vendorIssue) {
-    const reason =
-      vendorIssue === "not_found"
-        ? "Vendor not found in VendorMasterList"
-        : "Vendor found in VendorMasterList but approvalStatus = 'Flagged'";
-    await addFlag("Vendor_Validation", reason);
+    await addFlag("Vendor_Validation", "Vendor not found in VendorMasterList");
   }
 
-  // Layer 3: ticket vs receipt. Today it returns true/false; after the
-  // Layer 3 rewrite it returns a reason string, which is stored as-is.
-  const mismatch = await checkTicketMismatch(expense);
+  // Layer 3: ticket vs receipt. Returns which parts differ (material,
+  // quantity, store) as the reason, or false when the expense matches.
+  const mismatch = await describeTicketMismatch(expense);
   if (mismatch) {
     const reason = typeof mismatch === "string" ? mismatch : TICKET_MISMATCH_REASON;
     await addFlag("Ticket_Mismatch", reason);
@@ -148,4 +144,33 @@ async function checkAgainstScan(expense, runQuery) {
   return reason ? { flagType: "Receipt_Edited", reason } : null;
 }
 
-module.exports = { screenExpense, adjustmentLines };
+const SCREENING_FAILED_REASON =
+  "Automatic fraud screening could not run for this expense. Review it manually before approving.";
+
+/**
+ * Run F9 screening on a saved expense without letting a screening failure
+ * undo it. The expense row is already committed, so a throw here used to make
+ * the client see a 500 (or, during sync, a rejection) for an expense that was in
+ * fact saved. If screening throws, a Screening_Failed flag is written instead, so
+ * the expense lands in the PM's flagged queue rather than looking clean.
+ * Used by POST /api/expenses and POST /api/sync.
+ */
+async function screenOrFlag(expenseID, { query, screen = screenExpense } = {}) {
+  try {
+    await screen(expenseID, { query });
+  } catch (err) {
+    console.error(`Expense ${expenseID} failed screening:`, err);
+    try {
+      const runQuery = query || require("./db").query;
+      await runQuery(
+        `INSERT INTO FraudFlags (expenseID, flagType, reason, flaggedBy, resolution)
+         VALUES ($1, 'Screening_Failed', $2, 'system', 'Pending')`,
+        [expenseID, SCREENING_FAILED_REASON]
+      );
+    } catch (flagErr) {
+      console.error(`Expense ${expenseID}: could not record the screening failure:`, flagErr);
+    }
+  }
+}
+
+module.exports = { screenExpense, screenOrFlag, adjustmentLines, SCREENING_FAILED_REASON };

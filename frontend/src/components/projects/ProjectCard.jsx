@@ -21,7 +21,7 @@ export function ProjectCard({ project }) {
         </div>
         <p className="project-card-client">{project.clientname}</p>
         <div className="project-card-meta">
-          <span>{PESO.format(project.budget)}</span>
+          <span>{Number(project.budget) > 0 ? PESO.format(project.budget) : t("projects.budget_not_set")}</span>
           <span aria-hidden="true">·</span>
           <span>
             {project.constructionstartdate

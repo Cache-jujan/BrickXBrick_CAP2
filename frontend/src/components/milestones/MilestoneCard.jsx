@@ -10,18 +10,18 @@ const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 const HANDLER_LABEL = { GM: "General Manager", PM: "Project Manager" };
 
 // A Construction task only ever moves Pending -> Completed through the F5
-// review flow (SM submits a photo on mobile, PM acknowledges) — nothing on
+// review flow (SM submits a photo on mobile, PM acknowledges), nothing on
 // this page can change its status, so it's shown as read-only: name, due
 // date, and its current Badge. No photo/review action here.
 //
-// #5: a Planning-phase milestone's tasks have no SM review flow at all —
+// #5: a Planning-phase milestone's tasks have no SM review flow at all,
 // they're "Handled by: GM/PM" and the owning PM closes them out directly
 // via onCompleteTask, which is the one action this card can trigger.
 export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask, onCompleteTask }) {
   const { t, formatDate } = useLocale();
   const isPlanning = milestone.phase === "Planning";
 
-  // #14: review state from /overview. Flagged takes priority over awaiting —
+  // #14: review state from /overview. Flagged takes priority over awaiting,
   // a flagged submission needs the Site Manager to resubmit before the PM can
   // act, so it's the more urgent signal. Planning milestones never have this
   // (no photo submissions), so the chip is Construction-only anyway.
@@ -113,7 +113,7 @@ export function MilestoneCard({ milestone, canManage, hasSiteManager, onAddTask,
             </button>
           ) : (
             // Backend 400s POST /:id/tasks on a Construction milestone when
-            // project.siteManagerId is null — catch it here instead of
+            // project.siteManagerId is null: catch it here instead of
             // letting the PM hit a dead end on the create-task page. A
             // Planning milestone has no such requirement (handled above).
             <p className="milestone-card-add-task-blocked">

@@ -30,7 +30,7 @@ async function main() {
   const adminToken = loginBody.token;
   console.log("Admin login OK.");
 
-  // 2. Create Purchaser B (skip if it already exists — treat 409 as fine)
+  // 2. Create Purchaser B (skip if it already exists: treat 409 as fine)
   const createRes = await fetch(`${BASE_URL}/api/admin/users`, {
     method: "POST",
     headers: {

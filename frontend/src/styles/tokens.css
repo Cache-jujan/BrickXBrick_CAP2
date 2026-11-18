@@ -26,18 +26,18 @@
   --color-ink-soft: #6b6355;
   --color-ink-faint: #9b806e;
 
-  /* Brand — Primary Orange, the dominant accent */
+  /* Brand: Primary Orange, the dominant accent */
   --color-brick: #bf4307;
   --color-brick-dark: #9e3505;
   --color-brick-darker: #7a2a04;
   --color-brick-light: #e8793f;
   --color-brick-tint: #fcebe0;
 
-  /* Warm off-white — soft highlight surface */
+  /* Warm off-white: soft highlight surface */
   --color-cream: #e6e4e0;
   --color-cream-ink: #44443b;
 
-  /* Secondary accent — deep terracotta, used for selected/secondary states */
+  /* Secondary accent: deep terracotta, used for selected/secondary states */
   --color-terracotta: #90462c;
   --color-terracotta-tint: #f3e2da;
 
@@ -66,11 +66,11 @@
 
   /* Type */
   --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8375rem;
-  --text-base: 0.9625rem;
-  --text-md: 1.0625rem;
-  --text-lg: 1.375rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.5rem;
   --text-xl: 1.75rem;
   --text-2xl: 2.25rem;
 
@@ -84,7 +84,7 @@
   --space-7: 3rem;
   --space-8: 4rem;
 
-  /* Shape — kept tight on purpose: this is a working tool, not a
+  /* Shape: kept tight on purpose: this is a working tool, not a
      marketing page. Pills (999px) are reserved for status badges. */
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -99,14 +99,13 @@
   --content-max: 1600px;
   --form-max: 600px;
   --sidebar-width: 268px;
-  --sidebar-width-collapsed: 84px;
 
   /* Motion */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --duration: 160ms;
 }
 
-/* Placeholder / pending-feature treatment — shared across the app so a
+/* Placeholder / pending-feature treatment: shared across the app so a
    "coming soon" panel always reads the same way instead of looking broken. */
 .pending-panel {
   border: 1px dashed var(--color-border-strong);

@@ -8,7 +8,7 @@ import {
 import { extractErrorMessage } from "../../api/client";
 import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
-import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
+import { metaFor, relativeTime, groupByDay, routeForNotification, notificationText } from "../../utils/notificationMeta";
 import { useAuth } from "../../context/AuthContext";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { Banner } from "../../components/ui/Banner";
@@ -142,7 +142,7 @@ export function NotificationsPage() {
               <p className="notifications-group-label">{tv("notifications.group", label)}</p>
               <ul className="notifications-list">
                 {rows.map((n) => {
-                  const { Icon, bg, fg, fallbackKey } = metaFor(n.type);
+                  const { Icon, bg, fg } = metaFor(n.type);
                   const clickable = !n.isread || routeForNotification(n, user?.role);
                   return (
                     <li
@@ -154,7 +154,7 @@ export function NotificationsPage() {
                         <Icon />
                       </span>
                       <span className="notifications-row-body">
-                        <p className="notifications-row-message">{humanizeNotification(n.message, t) || t(fallbackKey)}</p>
+                        <p className="notifications-row-message">{notificationText(n, t, humanizeNotification)}</p>
                         <p className="notifications-row-time">{relativeTime(n.createdat, t, formatDate)}</p>
                       </span>
                       {!n.isread && <span className="notifications-row-dot" aria-hidden="true" />}

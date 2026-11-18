@@ -1,7 +1,7 @@
 // F3 "Edit timeline" (timelineEdit.js): parsing the request, deciding what can
 // be saved, and applying it. No database: planTimelineChanges is pure, and
 // applyTimelineChanges runs against a small in-memory fake of the SQL it issues
-// (matched on fixed query prefixes — update the matchers if those queries change).
+// (matched on fixed query prefixes: update the matchers if those queries change).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
@@ -41,7 +41,7 @@ function baseCurrent(overrides = {}) {
 const plan = (changes, current = baseCurrent()) =>
   planTimelineChanges(current, parseTimelineChanges(changes));
 
-// ── parseTimelineChanges ─────────────────────────────────────────────────────
+// parseTimelineChanges
 
 test("parse: trims names and keeps only the fields that were sent", () => {
   const out = parseTimelineChanges({
@@ -76,7 +76,7 @@ test("parse: rejects bad input with a 400", () => {
   }
 });
 
-// ── planTimelineChanges ──────────────────────────────────────────────────────
+// planTimelineChanges
 
 test("plan: a rename and a new due date become updates", () => {
   const p = plan({
@@ -183,7 +183,7 @@ test("plan: ids that are not in this project are errors", () => {
   assert.match(p.errors[0].message, /not part of this project/);
 });
 
-// ── applyTimelineChanges (fake transaction client) ───────────────────────────
+// applyTimelineChanges (fake transaction client)
 
 function makeFakeClient({ current = baseCurrent(), lockedTasks = [] } = {}) {
   const state = {
@@ -338,7 +338,7 @@ test("apply: renaming a task alone triggers no recalculation and no warning", as
   assert.deepEqual(result.warnings, []);
 });
 
-// ── loadTimelineLocks ────────────────────────────────────────────────────────
+// loadTimelineLocks
 
 test("locks: progress outranks documents, and tasks with neither are absent", async () => {
   const run = async (sql) => {

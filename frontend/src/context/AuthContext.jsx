@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { login as loginRequest, fetchCurrentUser } from "../api/authApi";
-import { registerUnauthorizedHandler } from "../api/client";
+import { registerUnauthorizedHandler, saveSession, clearSession } from "../api/client";
 
 const AuthContext = createContext(null);
 
@@ -32,14 +32,14 @@ export function AuthProvider({ children }) {
         setStatus("authenticated");
       })
       .catch(() => {
-        localStorage.removeItem("bxb_token");
+        clearSession();
         setStatus("guest");
       });
   }, []);
 
   useEffect(() => {
     registerUnauthorizedHandler(() => {
-      localStorage.removeItem("bxb_token");
+      clearSession();
       setUser(null);
       setStatus("guest");
     });
@@ -47,7 +47,9 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const result = await loginRequest(email, password);
-    localStorage.setItem("bxb_token", result.token);
+    // The refresh token and expiry let api/client.js renew the sign-in quietly
+    // before the 1-hour access token ends.
+    saveSession({ token: result.token, refreshToken: result.refreshToken, expiresAt: result.expiresAt });
     setUser(result.user);
     setStatus("authenticated");
     return result;
@@ -64,14 +66,19 @@ export function AuthProvider({ children }) {
     setUser((current) => (current ? { ...current, username, name } : current));
   }
 
+  // Called after the user sets or removes their profile picture (pages/Account/AccountPage.jsx).
+  function markAvatarChanged(avatarUrl) {
+    setUser((current) => (current ? { ...current, avatarUrl } : current));
+  }
+
   function logout() {
-    localStorage.removeItem("bxb_token");
+    clearSession();
     setUser(null);
     setStatus("guest");
   }
 
   const value = useMemo(
-    () => ({ user, status, login, logout, markTermsAccepted, markUsernameChanged }),
+    () => ({ user, status, login, logout, markTermsAccepted, markUsernameChanged, markAvatarChanged }),
     [user, status]
   );
 

@@ -250,7 +250,7 @@ test("review keeps who, when and why; others are notified; can't be reviewed twi
   );
 });
 
-// ---- fingerprint version 2 (audit S4) -----------------------------------------
+// fingerprint version 2 (audit S4)
 const { canonicalizeExpenseV2 } = require("../src/lib/blockchainService");
 
 test("version 2 hash differs from version 1 for the same expense", () => {

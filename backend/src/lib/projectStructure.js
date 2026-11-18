@@ -1,4 +1,4 @@
-// projectStructure.js — F2: a project's starting milestones and tasks, taken
+// projectStructure.js (F2): a project's starting milestones and tasks, taken
 // from a template or copied from a past project.
 //
 // The structure is COPIED when the project is created. Nothing stays linked:
@@ -23,7 +23,7 @@ function httpError(status, message, details) {
   return err;
 }
 
-// ---- dates ------------------------------------------------------------------
+// dates
 
 // node-postgres returns a DATE as local midnight; read the local calendar day.
 function dateKey(value) {
@@ -56,7 +56,7 @@ function anchorFor(phase, project) {
   return phase === "Planning" ? start : construction || start;
 }
 
-// ---- request ----------------------------------------------------------------
+// request
 
 function idList(value, field) {
   if (value === undefined || value === null) return [];
@@ -109,7 +109,7 @@ function parseStartRequest(start) {
   return { mode: "copy", sourceProjectId: start.sourceProjectId, excludeTaskIds };
 }
 
-// ---- loading ----------------------------------------------------------------
+// loading
 
 // Normalised source: { kind, id, name, milestones: [{ id, name, phase, offset,
 // tasks: [{ id, name, handledBy, requirementCode, offset, defaultIncluded,
@@ -208,7 +208,7 @@ async function loadSource(run, request) {
   return null;
 }
 
-// ---- building ---------------------------------------------------------------
+// building
 
 function isTaskIncluded(task, request) {
   if (!task.selectable) return true;
@@ -302,7 +302,7 @@ function buildStructure(source, request, project) {
   };
 }
 
-// ---- writing ----------------------------------------------------------------
+// writing
 
 /**
  * Inserts the built structure inside the caller's transaction.

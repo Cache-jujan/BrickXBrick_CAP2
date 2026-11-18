@@ -1,4 +1,4 @@
-// F2 — "notify the PM and SM when a project is created" (adviser item 3).
+// F2: "notify the PM and SM when a project is created" (adviser item 3).
 //
 // Every path that gives someone a project must send exactly one
 // "ProjectAssigned" notification to that person, and clearing a manager

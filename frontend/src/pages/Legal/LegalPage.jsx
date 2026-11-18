@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getLegalDocuments } from "../../api/legalApi";
+import { getAcceptanceStatus, getLegalDocuments } from "../../api/legalApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
@@ -15,7 +15,7 @@ import { LegalBrand, ReadingProgress, readingMinutes } from "./LegalChrome";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./LegalPages.css";
 
-// /legal — Terms of Use and Privacy Notice, readable by anyone (linked from
+// /legal: Terms of Use and Privacy Notice, readable by anyone (linked from
 // the login page and from the user menu). ?doc=privacy opens the Privacy tab.
 export function LegalPage() {
   const { status } = useAuth();
@@ -25,6 +25,13 @@ export function LegalPage() {
   const [error, setError] = useState("");
   const docId = params.get("doc") === "privacy" ? "privacy" : "terms";
   const signedIn = status === "authenticated";
+  // The signed-in user's own record: which version they accepted and when.
+  const [acceptance, setAcceptance] = useState(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    getAcceptanceStatus().then(setAcceptance).catch(() => setAcceptance(null));
+  }, [signedIn]);
 
   useEffect(() => {
     getLegalDocuments()
@@ -74,6 +81,15 @@ export function LegalPage() {
 
         {error && <Banner tone="error" title={error} />}
         {!error && !data && <LegalSkeleton />}
+
+        {signedIn && acceptance?.accepted && (
+          <p className="legal-accepted-note">
+            {t("legal.accepted_on", {
+              version: acceptance.version,
+              date: formatDate(new Date(acceptance.acceptedAt), { year: "numeric", month: "long", day: "numeric" }),
+            })}
+          </p>
+        )}
 
         {data && (
           <>

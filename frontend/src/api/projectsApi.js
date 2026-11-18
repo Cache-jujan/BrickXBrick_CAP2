@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-// GET /api/projects — broadcast to all four roles; optional status filter.
+// GET /api/projects: broadcast to all four roles; optional status filter.
 export async function listProjects(status) {
   const { data } = await apiClient.get("/api/projects", {
     params: status ? { status } : undefined,
@@ -8,14 +8,14 @@ export async function listProjects(status) {
   return data;
 }
 
-// GET /api/projects/:id — GM (any project) or PM (owning project only).
-// A non-owning PM gets a 403 here — see assertProjectAccess in projects.js.
+// GET /api/projects/:id, GM (any project) or PM (owning project only).
+// A non-owning PM gets a 403 here: see assertProjectAccess in projects.js.
 export async function getProject(id) {
   const { data } = await apiClient.get(`/api/projects/${id}`);
   return data;
 }
 
-// GET /api/projects/:id/overview — same access rule as getProject, but
+// GET /api/projects/:id/overview, same access rule as getProject, but
 // returns { ...project, progress, milestones: [{ ...milestone, tasks: [] }] }
 // in one call instead of project + N milestone calls + N task calls.
 export async function getProjectOverview(id) {
@@ -23,7 +23,7 @@ export async function getProjectOverview(id) {
   return data;
 }
 
-// POST /api/projects — General Manager only. Creates a Draft project.
+// POST /api/projects: General Manager only. Creates a Draft project.
 // payload: { name, description, clientName, budget, projectType,
 //            municipality, province, siteAddress,
 //            startDate (target date of development),
@@ -36,7 +36,7 @@ export async function createProject(payload) {
   return data;
 }
 
-// GET /api/projects/eligible-managers — every active Project Manager with
+// GET /api/projects/eligible-managers: every active Project Manager with
 // { openProjects, openProjectCount, maxOpenProjects, available } (GM only).
 // Pass projectId when editing so that project doesn't count against its PM.
 export async function getEligibleManagers(projectId) {
@@ -46,7 +46,7 @@ export async function getEligibleManagers(projectId) {
   return data;
 }
 
-// GET /api/projects/eligible-site-managers — same shape, Site Managers (GM/PM)
+// GET /api/projects/eligible-site-managers: same shape, Site Managers (GM/PM)
 export async function getEligibleSiteManagers(projectId) {
   const { data } = await apiClient.get("/api/projects/eligible-site-managers", {
     params: projectId ? { projectId } : undefined,
@@ -54,27 +54,27 @@ export async function getEligibleSiteManagers(projectId) {
   return data;
 }
 
-// GET /api/projects/settings/limits — { pm, sm }: how many open projects a
+// GET /api/projects/settings/limits: { pm, sm }: how many open projects a
 // Project Manager / Site Manager may hold at once (GM)
 export async function getAssignmentLimits() {
   const { data } = await apiClient.get("/api/projects/settings/limits");
   return data;
 }
 
-// PATCH /api/projects/settings/limits — payload { pm?, sm? }, whole numbers 1–10 (GM).
+// PATCH /api/projects/settings/limits: payload { pm?, sm? }, whole numbers 1–10 (GM).
 // Lowering a limit never removes anyone from a project.
 export async function updateAssignmentLimits(payload) {
   const { data } = await apiClient.patch("/api/projects/settings/limits", payload);
   return data;
 }
 
-// GET /api/projects/options — project types, service area and limits (GM)
+// GET /api/projects/options: project types, service area and limits (GM)
 export async function getProjectOptions() {
   const { data } = await apiClient.get("/api/projects/options");
   return data;
 }
 
-// PATCH /api/projects/:id — GM edits details (any subset of the create fields)
+// PATCH /api/projects/:id, GM edits details (any subset of the create fields)
 export async function updateProject(projectId, payload) {
   const { data } = await apiClient.patch(`/api/projects/${projectId}`, payload);
   return data;
@@ -88,6 +88,16 @@ export async function activateProject(projectId) {
 
 export async function cancelProject(projectId, reason) {
   const { data } = await apiClient.patch(`/api/projects/${projectId}/cancel`, { reason });
+  return data;
+}
+
+export async function suspendProject(projectId, reason, expectedResumeDate) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/suspend`, { reason, expectedResumeDate });
+  return data;
+}
+
+export async function resumeProject(projectId) {
+  const { data } = await apiClient.patch(`/api/projects/${projectId}/resume`);
   return data;
 }
 

@@ -4,9 +4,8 @@ import { supabase } from "../../api/supabaseClient";
 import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
-import { Card } from "../../components/ui/Card";
+import { AuthShell } from "../../components/auth/AuthShell";
 import { useLocale } from "../../i18n/LocaleProvider";
-import "./AuthPages.css";
 
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
 
@@ -38,10 +37,9 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="auth-simple">
-      <Card className="auth-simple-card">
-        <h1>{t("auth.forgot_title")}</h1>
-        <p className="auth-simple-sub">{t("auth.forgot_sub")}</p>
+    <AuthShell>
+        <h2>{t("auth.forgot_title")}</h2>
+        <p className="auth-card-sub">{t("auth.forgot_sub")}</p>
 
         {sent ? (
           <Banner tone="info" title={t("auth.check_gmail_title")}>
@@ -57,8 +55,7 @@ export function ForgotPasswordPage() {
             </Button>
           </form>
         )}
-        <Link to="/login" className="auth-simple-back">{t("auth.back_to_sign_in")}</Link>
-      </Card>
-    </div>
+        <Link to="/login" className="auth-back">{t("auth.back_to_sign_in")}</Link>
+    </AuthShell>
   );
 }

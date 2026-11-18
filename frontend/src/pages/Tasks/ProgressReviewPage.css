@@ -150,3 +150,13 @@
 @media (prefers-reduced-motion: reduce) {
   .progress-review-card-focus { animation: none; }
 }
+/* Why Accept/Flag didn't go through on this card (missing reason, or the server said no). */
+.progress-review-card-error {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}

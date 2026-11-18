@@ -1,7 +1,7 @@
 /* Terms of Use / Privacy Notice reader (LegalReader.jsx).
    Same tokens as the rest of the app (styles/tokens.css). */
 
-/* ---------- At a glance ---------- */
+/* At a glance */
 .legal-glance {
   margin-bottom: var(--space-6);
 }
@@ -41,8 +41,8 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background: var(--color-brick-tint);
-  color: var(--color-brick-dark);
+  background: var(--color-surface);
+  color: var(--color-brick);
 }
 
 .legal-glance-card-title {
@@ -65,7 +65,7 @@
   color: var(--color-ink-faint);
 }
 
-/* ---------- Reader ---------- */
+/* Reader */
 .legal-reader {
   scroll-margin-top: 88px;
 }
@@ -328,7 +328,7 @@
   display: none;
 }
 
-/* ---------- Loading ---------- */
+/* Loading */
 .legal-skeleton-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

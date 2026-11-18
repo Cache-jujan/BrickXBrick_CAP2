@@ -146,7 +146,7 @@ test("an item the server left out of both lists (could not check) stays pending"
   assert.deepEqual(fs.deleted, []);
 });
 
-// ---- photo upload outcomes ----------------------------------------------------------------
+// photo upload outcomes
 
 test("photo refused for good (403/404/409/400): rejected without a batch call; error code is the plain one", async () => {
   const cases = [[403, "TASK_NOT_YOURS"], [404, "TASK_NOT_FOUND"], [409, "TASK_CLOSED"], [400, "MISSING_PHOTO"]];
@@ -205,7 +205,7 @@ test("an expired sign-in (401) on a task photo stops the sync and signs out; the
   assert.equal(q.getRejectedTaskUpdates().length, 0);
 });
 
-// ---- the sign-in refreshes itself ------------------------------------------------------------------
+// the sign-in refreshes itself
 
 test("a sync first makes sure the sign-in token is fresh", async () => {
   setup();
@@ -275,7 +275,7 @@ test("401 but the refresh could not be tried ('later'): NOT signed out, queue ke
   assert.equal(q.getPendingTaskUpdateCount(), 1);
 });
 
-// ---- who sends what ---------------------------------------------------------------------------------
+// who sends what
 
 test("Purchaser and Site Manager items go in ONE batch only when both are allowed; each role sends its own kind", async () => {
   setup(PURCHASER);
@@ -376,7 +376,7 @@ test("a fully sent batch has no postponedItems", async () => {
   assert.equal(result.tasks.synced, 1);
 });
 
-// ---- receipts saved offline --------------------------------------------------------
+// receipts saved offline
 
 function queueReceipt(userId = "sm-1", name = "r.jpg") {
   const scanId = uid();

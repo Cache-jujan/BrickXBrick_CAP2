@@ -5,6 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { httpError, notifyProject } = require("../lib/projectRules");
 const { parseBomWorkbook } = require("../lib/bomImport");
+const { bomContractWarning } = require("../lib/contractRules");
 const {
   laborModeOf,
   sectionTotals,
@@ -169,6 +170,19 @@ function warningsFor(bom, sections, project) {
   });
 }
 
+// A recorded contract whose amount is not this BOM's total. Only asked while the
+// BOM is a draft: that is when approving it would set the agreed price.
+async function contractWarnings(target, project, bom, contractPrice) {
+  if (bom.status === "Approved") return [];
+  const found = await runnerOf(target)(
+    "SELECT contractamount::text AS contractamount FROM projectcontracts WHERE projectid = $1::uuid",
+    [project.projectid]
+  );
+  if (found.rowCount === 0) return [];
+  const warning = bomContractWarning(Number(found.rows[0].contractamount), contractPrice);
+  return warning ? [warning] : [];
+}
+
 async function buildResponse(target, project) {
   const bom = await loadBomRow(target, project.projectid);
   const base = { projectId: project.projectid, projectStatus: project.status, projectBudget: n(project.budget) };
@@ -200,7 +214,10 @@ async function buildResponse(target, project) {
       // { contractPrice, escalationRate, escalationAllowance, targetBudget }
       budget,
       budgetOnApproval: budget.targetBudget,
-      warnings: warningsFor(bom, sections, project),
+      warnings: [
+        ...warningsFor(bom, sections, project),
+        ...(await contractWarnings(target, project, bom, budget.contractPrice)),
+      ],
     },
   };
 }
@@ -282,8 +299,6 @@ async function touch(client, bomId, userId) {
   await client.query(`UPDATE boms SET updatedby = $2::uuid, updatedat = NOW() WHERE bomid = $1::uuid`, [bomId, userId]);
 }
 
-// ---------------------------------------------------------------------------
-
 router.get("/", requireRole(GM, PM), async (req, res) => {
   try {
     const project = await loadProject(query, req.params.projectId);
@@ -301,7 +316,7 @@ router.get("/", requireRole(GM, PM), async (req, res) => {
   }
 });
 
-// POST /import — multipart field "file". Parses the company BOM layout and
+// POST /import: multipart field "file". Parses the company BOM layout and
 // replaces the whole Draft. The header block and the signatures are skipped.
 router.post("/import", requireRole(GM), (req, res, next) => {
   upload.single("file")(req, res, (err) => (err ? sendError(res, err) : next()));
@@ -346,7 +361,7 @@ router.post("/import", requireRole(GM), (req, res, next) => {
   }
 });
 
-// PUT / — save the GM's edits to the Draft, or start a BOM by hand.
+// PUT /: save the GM's edits to the Draft, or start a BOM by hand.
 // Sections and items keep their ids; ones left out are deleted unless a
 // Material Request already uses them. Figures "as written in the file" stay.
 router.put("/", requireRole(GM), async (req, res) => {
@@ -444,7 +459,7 @@ router.put("/", requireRole(GM), async (req, res) => {
   }
 });
 
-// PATCH /approve — body { confirmWarnings: true } when there are warnings.
+// PATCH /approve: body { confirmWarnings: true } when there are warnings.
 router.patch("/approve", requireRole(GM), async (req, res) => {
   try {
     // Adviser item 5: record when and with whom the client agreed (the agreement
@@ -466,7 +481,10 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
       const problems = approvalProblems(sections);
       if (problems.length) throw httpError(409, problems.join(" "));
 
-      const warnings = warningsFor(bom, sections, project).filter((w) => w.level === "warning");
+      const warnings = [
+        ...warningsFor(bom, sections, project),
+        ...(await contractWarnings(client, project, bom, budgetBreakdown(bom, sections).contractPrice)),
+      ].filter((w) => w.level === "warning");
       if (warnings.length && req.body?.confirmWarnings !== true) {
         const err = httpError(409, "Check the warnings against the signed BOM, then confirm to approve.");
         err.details = { code: "CONFIRM_WARNINGS", warnings };
@@ -509,7 +527,7 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
   }
 });
 
-// PATCH /reopen — body { reason }. Approved -> Draft so the GM can correct it.
+// PATCH /reopen: body { reason }. Approved -> Draft so the GM can correct it.
 router.patch("/reopen", requireRole(GM), async (req, res) => {
   try {
     const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
@@ -544,7 +562,7 @@ router.patch("/reopen", requireRole(GM), async (req, res) => {
   }
 });
 
-// DELETE / — remove a Draft BOM of a Draft project (e.g. the wrong file was uploaded).
+// DELETE /: remove a Draft BOM of a Draft project (e.g. the wrong file was uploaded).
 router.delete("/", requireRole(GM), async (req, res) => {
   try {
     await withTransaction(async (client) => {
@@ -562,7 +580,7 @@ router.delete("/", requireRole(GM), async (req, res) => {
   }
 });
 
-// GET /items?search= — items of the APPROVED BOM, for Material Requests.
+// GET /items?search=: items of the APPROVED BOM, for Material Requests.
 // GM and the owning PM see unit costs; the assigned SM and Purchasers don't.
 router.get("/items", requireRole(GM, PM, "Site Manager", "Purchaser"), async (req, res) => {
   try {
@@ -602,4 +620,15 @@ router.get("/items", requireRole(GM, PM, "Site Manager", "Purchaser"), async (re
   }
 });
 
+// The price agreed with the client for a project's BOM: the signed total, or the
+// computed BOM total. The contract amount defaults to it (routes/contract.js).
+// Returns { price, approved } or null when the project has no BOM. Read only.
+async function agreedPrice(target, projectId) {
+  const bom = await loadBomRow(target, projectId);
+  if (!bom) return null;
+  const sections = await loadSections(target, bom.bomid);
+  return { price: budgetBreakdown(bom, sections).contractPrice, approved: bom.status === "Approved" };
+}
+
 module.exports = router;
+module.exports.agreedPrice = agreedPrice;

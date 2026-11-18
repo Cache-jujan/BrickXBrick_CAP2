@@ -8,8 +8,8 @@ const SM = { id: "sm-1" };
 const TASK_ID = "task-1";
 const CSID = "csid-1";
 
-function makeDeps({ task = { taskid: TASK_ID, assignedto: SM.id, status: "Pending" }, existing = null, insertError = null, pending = false, pendingUnderLock = false } = {}) {
-  const calls = { writes: [], uploads: 0, pendingChecks: 0 };
+function makeDeps({ task = { taskid: TASK_ID, assignedto: SM.id, status: "Pending" }, existing = null, insertError = null, pending = false, pendingUnderLock = false, notifyError = null } = {}) {
+  const calls = { writes: [], uploads: 0, pendingChecks: 0, notifications: [], savepoints: [] };
   let locked = false;
   const run = async (sql, params = []) => {
     const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
@@ -34,6 +34,18 @@ function makeDeps({ task = { taskid: TASK_ID, assignedto: SM.id, status: "Pendin
       calls.writes.push("insert");
       const [taskid, submittedby, clientsubmissionid, photoevidenceurl, note] = params;
       return { rowCount: 1, rows: [{ taskid, submittedby, clientsubmissionid, photoevidenceurl, note, reviewstatus: "Pending Review" }] };
+    }
+    if (text.startsWith("select t.taskname")) {
+      return { rowCount: 1, rows: [{ taskname: "Pour slab", projectname: "Tower A", projectmanagerid: "pm-1" }] };
+    }
+    if (text.startsWith("savepoint") || text.startsWith("release savepoint") || text.startsWith("rollback to savepoint")) {
+      calls.savepoints.push(text.split(" ")[0] === "savepoint" ? "savepoint" : text.split(" ").slice(0, 2).join(" "));
+      return { rowCount: 0, rows: [] };
+    }
+    if (text.startsWith("insert into notifications")) {
+      if (notifyError) throw notifyError;
+      calls.notifications.push(params);
+      return { rowCount: 1, rows: [] };
     }
     throw new Error("unexpected query: " + text);
   };
@@ -62,6 +74,33 @@ test("online path: uploads once, then locks, re-checks and inserts Pending Revie
   assert.equal(t.calls.uploads, 1);
   assert.deepEqual(t.calls.writes, ["lock", "insert"]);
   assert.equal(t.calls.pendingChecks, 2); // before the upload, and again under the lock
+});
+
+test("the project's PM is told a photo is waiting for review, in the same transaction", async () => {
+  const t = makeDeps();
+  await submitTaskProgress(input({ user: { id: "sm-1", name: "Sam Site" }, uploadPhoto: t.uploadPhoto }), t.deps);
+  assert.equal(t.calls.notifications.length, 1);
+  const [recipient, type, entityType, entityId, message] = t.calls.notifications[0];
+  assert.equal(recipient, "pm-1");
+  assert.equal(type, "TaskSubmitted");
+  assert.equal(entityType, "Task");
+  assert.equal(entityId, TASK_ID);
+  assert.match(message, /Sam Site sent a photo for "Pour slab" \(Tower A\)/);
+});
+
+test("a failed notification (for example migration 060 not run yet) never fails the submission", async () => {
+  const t = makeDeps({ notifyError: new Error("violates check constraint notifications_type_check") });
+  const { log, replayed } = await submitTaskProgress(input({ uploadPhoto: t.uploadPhoto }), t.deps);
+  assert.equal(replayed, false);
+  assert.equal(log.reviewstatus, "Pending Review");
+  assert.deepEqual(t.calls.savepoints, ["savepoint", "rollback to"]);
+});
+
+test("a replay of a saved submission does not notify the PM again", async () => {
+  const original = { taskid: TASK_ID, submittedby: SM.id, clientsubmissionid: CSID, reviewstatus: "Pending Review" };
+  const t = makeDeps({ existing: original });
+  await submitTaskProgress(input({ uploadPhoto: t.uploadPhoto }), t.deps);
+  assert.equal(t.calls.notifications.length, 0);
 });
 
 test("sync path: a photoUrl that is already stored is used and nothing is uploaded", async () => {
@@ -125,7 +164,7 @@ test("the note is optional and stored as null", async () => {
   assert.equal(log.note, null);
 });
 
-// ---- one submission waits for review at a time (Site Manager) ------------------------
+// one submission waits for review at a time (Site Manager)
 
 test("a submission already waiting for review blocks a new one: 409 AWAITING_REVIEW, no upload, no write", async () => {
   const t = makeDeps({ pending: true });

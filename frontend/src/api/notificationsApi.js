@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 import { notifyNotificationsChanged } from "../utils/notificationSync";
 
-// opts: { unreadOnly, before, limit } — before/limit drive the /notifications
+// opts: { unreadOnly, before, limit }, before/limit drive the /notifications
 // page's "load more" (keyset paging on createdAt); the Topbar dropdown just
 // calls this with no opts for its first page.
 export async function listMyNotifications(opts) {

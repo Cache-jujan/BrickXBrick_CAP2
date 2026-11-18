@@ -19,6 +19,7 @@ import { useExpenseDraft, type DraftMode } from "@/lib/expense-draft-context";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { compressReceiptImage } from "@/lib/compress-image";
 import { startScan } from "@/lib/receipt-scans";
+import { expediteNotificationChecks } from "@/lib/notification-events";
 import { PDF_MIME_TYPE, formatBytes, receiptFileProblem, receiptMimeType } from "@/lib/receipt-file";
 import { getSession } from "@/lib/auth";
 import { useLocale } from "@/lib/i18n-context";
@@ -44,13 +45,13 @@ export default function CaptureScreen() {
   const mode: DraftMode = draft.ticket && draft.mode === "single" ? "single" : "split";
   const isSplit = mode === "split";
   // The Purchaser's receipts wait on Turn In; a Site Manager has no such tab and stays on their list.
-  const afterSnap = getSession()?.user.role === "Site Manager" ? "/" : "/turn-in";
+  const isSiteManager = getSession()?.user.role === "Site Manager";
+  const afterSnap = isSiteManager ? "/" : "/turn-in";
 
   // Which project a receipt is for is never assumed. The person picks it here once the
   // photo is taken; only when they have exactly one project is it filled in for them.
-  // A trip cost (gas, toll) has its own project step later, and a receipt opened from a
-  // request already has that request's project.
-  const needsProject = isSplit && draft.kind !== "trip";
+  // A receipt opened from a request already has that request's project.
+  const needsProject = isSplit;
   const [projects, setProjects] = useState<ProjectChoice[]>([]);
   const [projectsReady, setProjectsReady] = useState(false);
   // "unset" = not chosen yet, "multi" = more than one project, otherwise the project.
@@ -98,7 +99,6 @@ export default function CaptureScreen() {
       fileName: picked.name,
       fileType: picked.type,
       ...(isSplit && scanScope ? { projectIds: scanScope.projectIds, projectNames: scanScope.projectNames } : {}),
-      ...(isSplit && draft.kind === "trip" ? { kind: "trip" as const } : {}),
     };
   }
 
@@ -188,8 +188,10 @@ export default function CaptureScreen() {
       refreshPendingCount();
       setStatus("idle");
       Alert.alert(t("mx.saved_phone_title"), t("mx.saved_phone_body"));
+      // A Site Manager stays on this capture screen, ready for the next receipt.
+      if (isSiteManager && isSplit) return pick(null);
       reset();
-      router.replace(isSplit ? afterSnap : "/");
+      router.replace(afterSnap);
     } catch (err) {
       if (copied) await deleteQueuedPhoto(copied);
       setErrorMessage(t("mx.save_failed_retry"));
@@ -207,9 +209,18 @@ export default function CaptureScreen() {
     setStatus("uploading"); setErrorMessage(null);
     try {
       const scan = await startScan(file, scanContext(file));
+      expediteNotificationChecks(); // the "receipt ready" pop-up checks often for the next minute
       setStatus("idle");
-      if (isSplit) {
+      if (isSplit && isSiteManager) {
+        // A Site Manager stays on this capture screen, ready for the next receipt.
+        pick(null);
+        Alert.alert(t("mx.sent_title"), t("mx.sent_body"));
+        return;
+      }
+      if (!isSiteManager) {
         // Snap now, review later: the receipt goes to the Turn In tray and OCR runs there.
+        // The "Reading receipt" screen only shows if the Purchaser opens one that is still scanning.
+        // A receipt picked from one request keeps that request: it is in the scan context.
         reset();
         router.replace(afterSnap);
         return;
@@ -244,38 +255,11 @@ export default function CaptureScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {file && needsProject && projectsReady && projects.length === 1 && (
-          <View style={styles.contextChip}>
-            <Text style={styles.contextMeta}>{t("mx.project_only")}</Text>
-            <Text style={styles.contextTitle} numberOfLines={2}>{projects[0].name}</Text>
-          </View>
-        )}
-        {file && needsProject && projectsReady && projects.length > 1 && (
-          <Pressable
-            onPress={() => setSheetOpen(true)}
-            style={[styles.contextChip, styles.projectPicker, mustChoose && styles.projectPickerRequired]}
-            accessibilityRole="button"
-            accessibilityLabel={t("mx.project_label")}
-          >
-            <View style={styles.projectPickerText}>
-              <Text style={styles.contextMeta}>{t("mx.project_label")}</Text>
-              <Text style={[styles.contextTitle, mustChoose && styles.projectPickerPlaceholder]} numberOfLines={2}>
-                {choice === "unset" ? t("mx.project_choose") : choice === "multi" ? t("tb.multiple_projects") : choice.name}
-              </Text>
-            </View>
-            <Text style={styles.projectPickerAction}>{choice === "unset" ? "›" : t("mx.project_change")}</Text>
-          </Pressable>
-        )}
         {!needsProject && isSplit && draft.scope && draft.scope.projectNames.length > 0 && (
           <View style={styles.contextChip}>
             <Text style={styles.contextTitle} numberOfLines={2}>
               {t("mx.scoped_chip", { projects: draft.scope.projectNames.join(", ") })}
             </Text>
-          </View>
-        )}
-        {isSplit && draft.kind === "trip" && (
-          <View style={styles.contextChip}>
-            <Text style={styles.contextTitle} numberOfLines={1}>{t("mx.trip_chip")}</Text>
           </View>
         )}
         {!isSplit && (
@@ -295,6 +279,8 @@ export default function CaptureScreen() {
               </View>
               <Text style={styles.dropTitle}>{t("mx.drop_title")}</Text>
               <Text style={styles.dropBody}>{t("mx.drop_body")}</Text>
+              {/* What is accepted, before picking (same rule as lib/receipt-file.ts and the backend). */}
+              <Text style={styles.fileRules}>{t("mx.file_rules")}</Text>
             </>
           )}
         </View>
@@ -319,9 +305,44 @@ export default function CaptureScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        {file && mustChoose ? (
-          <Text style={styles.errorText}>{t("mx.project_required")}</Text>
-        ) : file && status === "error" && errorMessage ? (
+        {/* Which project the receipt is for: a big, labelled button right above the photo buttons
+            (thumb reach), visible before the photo is taken, never tucked at the top. */}
+        {needsProject && projectsReady && projects.length === 1 && (
+          <View style={styles.projectCard} accessibilityLabel={`${t("mx.project_only")}: ${projects[0].name}`}>
+            <View style={styles.projectIcon}>
+              <IconSymbol name="folder.fill" size={22} color={COLORS.primary} />
+            </View>
+            <View style={styles.projectText}>
+              <Text style={styles.projectLabel}>{t("mx.project_only")}</Text>
+              <Text style={styles.projectName} numberOfLines={2}>{projects[0].name}</Text>
+            </View>
+          </View>
+        )}
+        {needsProject && projectsReady && projects.length > 1 && (
+          <Pressable
+            onPress={() => setSheetOpen(true)}
+            style={({ pressed }) => [styles.projectCard, mustChoose && styles.projectCardRequired, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`${t("mx.project_label")}: ${choice === "unset" ? t("mx.project_choose") : choice === "multi" ? t("tb.multiple_projects") : choice.name}`}
+          >
+            <View style={[styles.projectIcon, mustChoose && styles.projectIconRequired]}>
+              <IconSymbol name="folder.fill" size={22} color={mustChoose ? "#FFFFFF" : COLORS.primary} />
+            </View>
+            <View style={styles.projectText}>
+              <Text style={styles.projectLabel}>{t("mx.project_label")}</Text>
+              <Text style={[styles.projectName, mustChoose && styles.projectNameRequired]} numberOfLines={2}>
+                {choice === "unset" ? t("mx.project_choose") : choice === "multi" ? t("tb.multiple_projects") : choice.name}
+              </Text>
+            </View>
+            {choice === "unset" ? (
+              <IconSymbol name="chevron.right" size={22} color={COLORS.primary} />
+            ) : (
+              <Text style={styles.projectChange}>{t("mx.project_change")}</Text>
+            )}
+          </Pressable>
+        )}
+
+        {file && status === "error" && errorMessage ? (
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : file && !isOnline ? (
           <Text style={styles.offlineText}>{t("mx.offline_note")}</Text>
@@ -329,13 +350,13 @@ export default function CaptureScreen() {
 
         {file && (
           <Pressable
-            style={({ pressed }) => [styles.primaryButton, mustChoose && styles.disabledButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
             onPress={handleSubmit}
-            disabled={status === "uploading" || mustChoose || loadingProjects}
+            disabled={status === "uploading" || loadingProjects}
             accessibilityRole="button"
           >
             <Text style={styles.primaryButtonText}>
-              {!isOnline ? t("mx.save_later") : status === "error" ? t("common.try_again") : t("mx.scan_receipt")}
+              {mustChoose ? t("mx.project_choose") : !isOnline ? t("mx.save_later") : status === "error" ? t("common.try_again") : t("mx.scan_receipt")}
             </Text>
           </Pressable>
         )}
@@ -390,18 +411,22 @@ const styles = StyleSheet.create({
   contextChip: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 },
   contextTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
   contextMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
-  projectPicker: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56 },
-  projectPickerRequired: { borderColor: COLORS.primary, borderWidth: 1.5, backgroundColor: COLORS.primaryTint },
-  projectPickerText: { flex: 1 },
-  projectPickerPlaceholder: { color: COLORS.primary },
-  projectPickerAction: { color: COLORS.primary, fontSize: 14, fontFamily: FONT.bold },
-  disabledButton: { opacity: 0.45 },
+  projectCard: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
+  projectCardRequired: { borderColor: COLORS.primary, borderWidth: 2, backgroundColor: COLORS.primaryTint },
+  projectIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
+  projectIconRequired: { backgroundColor: COLORS.primary },
+  projectText: { flex: 1 },
+  projectLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted },
+  projectName: { fontSize: 16, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 1 },
+  projectNameRequired: { color: COLORS.primaryTintText },
+  projectChange: { color: COLORS.primary, fontSize: 14, fontFamily: FONT.bold },
 
   dropArea: { minHeight: 220, alignItems: "center", justifyContent: "center", gap: 8, padding: 20, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: COLORS.inputBorder, backgroundColor: COLORS.card },
   dropAreaFilled: { borderStyle: "solid", borderColor: COLORS.border, padding: 8, minHeight: 280 },
-  dropIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primaryTint },
+  dropIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.card },
   dropTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading, textAlign: "center" },
   dropBody: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, textAlign: "center", lineHeight: 19 },
+  fileRules: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted, textAlign: "center", marginTop: 6 },
 
   errorBox: { marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.errorBorder, backgroundColor: COLORS.errorFill },
   errorBoxText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 18 },

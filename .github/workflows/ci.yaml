@@ -53,6 +53,35 @@ jobs:
       - name: Build
         run: npm run build
 
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (fails on new errors; known backlog in scripts/tsc-baseline.txt)
+        run: npm run typecheck
+
+      - name: Unit tests (offline sync engine)
+        run: npm test
+
+      - name: i18n catalog check
+        run: npm run i18n:check
+
+      - name: Bundle check (Expo export, Android)
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/expo-export"
+
   docker-build:
     runs-on: ubuntu-latest
     steps:

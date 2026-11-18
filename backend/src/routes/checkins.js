@@ -1,4 +1,4 @@
-// checkins.js — daily progress check-ins (Morning / Midday / End of day).
+// checkins.js: daily progress check-ins (Morning / Midday / End of day).
 //
 //   Site Manager
 //     GET   /today              the three slots for each Active project they run
@@ -52,7 +52,7 @@ router.get("/today", requireRole("Site Manager"), async (req, res, next) => {
   }
 });
 
-// GET /:id — one check-in the Site Manager sent, with the PM's review (if any).
+// GET /:id, one check-in the Site Manager sent, with the PM's review (if any).
 // A single-segment id never clashes with /today or /project/:projectId.
 router.get("/:id", requireRole("Site Manager"), async (req, res, next) => {
   try {
@@ -62,7 +62,7 @@ router.get("/:id", requireRole("Site Manager"), async (req, res, next) => {
   }
 });
 
-// POST /photo — multipart: field "photo" (JPEG/PNG, <=10MB) and text field
+// POST /photo: multipart: field "photo" (JPEG/PNG, <=10MB) and text field
 // "projectId". The phone uploads each photo first (also when replaying a queued
 // check-in), then sends only the URLs in the check-in itself.
 router.post("/photo", requireRole("Site Manager"), receivePhoto, async (req, res, next) => {

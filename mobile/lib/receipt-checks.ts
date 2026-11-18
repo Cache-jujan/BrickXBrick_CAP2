@@ -71,31 +71,3 @@ export function formatReceiptDate(text: string, intlLocale = "en-PH"): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text.trim())) return text;
   return isoToDate(text).toLocaleDateString(intlLocale, { month: "short", day: "numeric", year: "numeric" });
 }
-
-// The reconciliation line's name starts with this. The server flags any
-// expense carrying one for PM review (backend screenExpense.js, Layer 4).
-export const ADJUSTMENT_PREFIX = "Adjustment";
-
-export type ReconcileFix =
-  // Lines are short of the total: add a quantity-0 line for the gap.
-  | { kind: "add"; gapCents: number }
-  // Lines exceed the total (unlisted discount): take the gap off one line.
-  | { kind: "discount"; gapCents: number; itemId: string; itemName: string }
-  | null;
-
-// What one tap can do to make the lines add up to the receipt total.
-// Returns null when the totals already match or no single fix works.
-export function reconcileFix(
-  totalCents: number | null,
-  lines: { id: string; name: string; cents: number | null }[]
-): ReconcileFix {
-  if (totalCents === null || lines.some((l) => l.cents === null)) return null;
-  const linesCents = lines.reduce((sum, l) => sum + (l.cents ?? 0), 0);
-  const gap = totalCents - linesCents;
-  if (gap === 0) return null;
-  if (gap > 0) return { kind: "add", gapCents: gap };
-  // Discount: take it off the largest line, which can absorb it.
-  const largest = [...lines].sort((a, b) => (b.cents ?? 0) - (a.cents ?? 0))[0];
-  if (!largest || (largest.cents ?? 0) < -gap) return null;
-  return { kind: "discount", gapCents: -gap, itemId: largest.id, itemName: largest.name };
-}

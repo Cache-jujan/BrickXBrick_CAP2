@@ -46,3 +46,13 @@ test("an unsupported mimetype is always rejected", () => {
   const buffer = Buffer.from([0x47, 0x49, 0x46, 0x38]); // GIF signature
   assert.equal(hasValidMagicBytes(buffer, "image/gif"), false);
 });
+
+test("receipt files must really be a JPEG, PNG, WebP or PDF", () => {
+  const { hasValidReceiptSignature } = require("../src/lib/photoValidation");
+  assert.equal(hasValidReceiptSignature(Buffer.from("%PDF-1.7 body"), "application/pdf"), true);
+  assert.equal(hasValidReceiptSignature(Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 ")]), "image/webp"), true);
+  assert.equal(hasValidReceiptSignature(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), "image/jpeg"), true);
+  assert.equal(hasValidReceiptSignature(Buffer.from("<html>hi</html>"), "application/pdf"), false);
+  assert.equal(hasValidReceiptSignature(Buffer.from("PK zip file"), "image/png"), false);
+  assert.equal(hasValidReceiptSignature(Buffer.alloc(0), "image/jpeg"), false);
+});

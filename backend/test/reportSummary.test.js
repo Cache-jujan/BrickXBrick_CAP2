@@ -152,3 +152,79 @@ test("warnings count Pending and fraud-flagged expenses in the range", () => {
 test("a bad amount throws instead of producing NaN", () => {
   assert.throws(() => build([project(P1, 1000)], [spend(P1, "abc")]), /not a valid amount/);
 });
+
+test("budget left, % used and status all count spend to date, so spend before the period can make a project over budget", () => {
+  // The case that read "Within budget" next to "104% used": most of the money went before the chosen month.
+  const [row] = build([project(P1, 10000)], [spend(P1, 9000, "2026-09-20"), spend(P1, 1400)]).projects;
+  assert.equal(row.periodSpend, 1400);
+  assert.equal(row.cumulativeSpend, 10400);
+  assert.equal(row.netPnL, -400); // budget minus spend to date
+  assert.equal(row.cumulativeUtilizationPct, 104);
+  assert.equal(row.overrun, true);
+  assert.equal(row.health, "over");
+});
+
+test("work done comes from milestone progress; watch when budget used runs more than 10 points ahead of it", () => {
+  const summary = build(
+    [
+      { ...project(P1, 10000), progress: "40.00" }, // 60% used, 40% done: 20 points ahead
+      { ...project(P2, 10000), progress: 55 }, // 60% used, 55% done: 5 points, fine
+    ],
+    [spend(P1, 6000), spend(P2, 6000)]
+  );
+  const [a, b] = summary.projects;
+  assert.equal(a.progressPct, 40);
+  assert.equal(a.health, "watch");
+  assert.equal(b.progressPct, 55);
+  assert.equal(b.health, "ok");
+  assert.equal(summary.watchGapPoints, 10);
+});
+
+test("a project without milestones has no work-done figure and is never marked watch", () => {
+  const [row] = build([project(P1, 10000)], [spend(P1, 9000)]).projects;
+  assert.equal(row.progressPct, null);
+  assert.equal(row.health, "ok");
+});
+
+test("work done for several projects is weighted by budget and skips projects without milestones", () => {
+  const P3 = "33333333-3333-4333-8333-333333333333";
+  const summary = build(
+    [{ ...project(P1, 30000), progress: 20 }, { ...project(P2, 10000), progress: 100 }, project(P3, 50000)],
+    [spend(P1, 100)]
+  );
+  assert.equal(summary.totals.progressPct, 40); // (30000*20 + 10000*100) / 40000
+});
+
+test("monthly spend: one figure per month of the period, empty months are 0, spend before the period is left out", () => {
+  const summary = build(
+    [project(P1, 50000), project(P2, 50000)],
+    [
+      spend(P1, 900, "2026-07-31"), // before the period
+      spend(P1, 1000, "2026-08-03"),
+      spend(P2, 500, "2026-08-20"),
+      spend(P1, 2000, "2026-10-15"),
+    ],
+    [],
+    { from: "2026-08-01", to: "2026-10-31" }
+  );
+  assert.deepEqual(summary.months, ["2026-08", "2026-09", "2026-10"]);
+  assert.deepEqual(summary.projects[0].monthlySpend, [1000, 0, 2000]);
+  assert.deepEqual(summary.projects[1].monthlySpend, [500, 0, 0]);
+  assert.deepEqual(summary.totals.monthlySpend, [1500, 0, 2000]);
+});
+
+test("monthly spend across a new year", () => {
+  const summary = build([project(P1, 50000)], [spend(P1, 100, "2027-01-02")], [], { from: "2026-11-15", to: "2027-01-10" });
+  assert.deepEqual(summary.months, ["2026-11", "2026-12", "2027-01"]);
+  assert.deepEqual(summary.totals.monthlySpend, [0, 0, 100]);
+});
+
+test("watch for all projects together compares work done with the budget used by the projects that have milestones", () => {
+  const summary = build(
+    [{ ...project(P1, 10000), progress: 50 }, project(P2, 10000)], // P2 has no milestones but spent 90%
+    [spend(P1, 5500), spend(P2, 9000)]
+  );
+  assert.equal(summary.totals.cumulativeUtilizationPct, 72.5); // all projects
+  assert.equal(summary.totals.progressPct, 50); // only P1 has milestones
+  assert.equal(summary.totals.health, "ok"); // P1: 55% used vs 50% done
+});

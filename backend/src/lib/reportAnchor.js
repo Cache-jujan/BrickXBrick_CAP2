@@ -1,4 +1,4 @@
-// reportAnchor.js — F11: secure a report's hash on the blockchain.
+// reportAnchor.js (F11): secure a report's hash on the blockchain.
 //
 // A report starts as report_events.anchorStatus = 'Pending'. anchorReport()
 // sends the stored hash to the chain and, only on success, INSERTs the

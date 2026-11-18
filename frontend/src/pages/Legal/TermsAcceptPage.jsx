@@ -1,31 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { acceptTerms, getLegalDocuments } from "../../api/legalApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
-import {
-  LegalHighlights,
-  LegalReader,
-  LegalSkeleton,
-  formatEffectiveDate,
-} from "../../components/legal/LegalReader";
+import { LegalHighlights, LegalSkeleton, formatEffectiveDate } from "../../components/legal/LegalReader";
 import { ArrowRightIcon, CheckIcon } from "../../components/legal/LegalIcons";
 import { LegalBrand, ReadingProgress, readingMinutes } from "./LegalChrome";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./LegalPages.css";
+import "./TermsConsent.css";
 
 // Shown instead of the app (see ProtectedRoute) until the signed-in user has
 // accepted the CURRENT Terms of Use and Privacy Notice. Required by the
 // Data Privacy Act (RA 10173): people must be told how their data is used.
-// The acceptance (who, version, time, IP, device) is saved by the backend.
+// The acceptance (who, version, time, IP, device) is saved by the backend,
+// so this page only comes back when TERMS_VERSION is raised.
+//
+// How agreeing works (one straight scroll, nothing to figure out):
+//   - Both documents are shown one after the other, with jump links at the top.
+//   - One checkbox sits in the bar at the bottom of the screen, always in
+//     view, and covers both documents.
+//   - "Agree and continue" works once it is ticked. Pressing it early makes
+//     the box pulse.
+
+// "3. Your account" -> { num: "3", label: "Your account" }
+function splitHeading(heading) {
+  const m = /^(\d+)\.\s*(.*)$/.exec(heading);
+  return m ? { num: m[1], label: m[2] } : { num: "", label: heading };
+}
+
 export function TermsAcceptPage() {
   const { user, logout, markTermsAccepted } = useAuth();
   const { t, formatDate } = useLocale();
   const [data, setData] = useState(null);
-  const [docId, setDocId] = useState("terms");
   const [loadError, setLoadError] = useState("");
-  const [checked, setChecked] = useState(false);
+  // The one box in the bottom bar covers both documents.
+  const [agreed, setAgreed] = useState(false);
+  // Pulses the box after pressing "Agree" before ticking it
+  const [pulse, setPulse] = useState(false);
+  const pulseTimer = useRef(null);
+  const checkRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,8 +54,30 @@ export function TermsAcceptPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once; a language change must not refetch
   useEffect(load, []);
 
+  useEffect(() => () => clearTimeout(pulseTimer.current), []);
+
+  const docs = data?.documents || [];
+  const allAgreed = docs.length > 0 && agreed;
+
+  // "Agree and continue" before the box is ticked: it is right beside the
+  // button, so just draw the eye to it.
+  function handleAcceptClick() {
+    if (busy || !data) return;
+    if (!agreed) {
+      checkRef.current?.querySelector("input")?.focus({ preventScroll: true });
+      setPulse(true);
+      clearTimeout(pulseTimer.current);
+      pulseTimer.current = setTimeout(() => setPulse(false), 1600);
+      return;
+    }
+    handleAccept();
+  }
+
+  function jumpTo(id) {
+    document.getElementById(`legal-doc-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function handleAccept() {
-    if (!checked || !data) return;
     setBusy(true);
     setError("");
     try {
@@ -49,7 +86,7 @@ export function TermsAcceptPage() {
     } catch (err) {
       if (err?.response?.status === 409) {
         // The terms changed while this page was open: show the new version.
-        setChecked(false);
+        setAgreed(false);
         load();
       }
       setError(extractErrorMessage(err, t("legal.accept_error")));
@@ -84,8 +121,8 @@ export function TermsAcceptPage() {
           <p className="legal-eyebrow">{firstName ? t("legal.eyebrow_named", { name: firstName }) : t("legal.eyebrow")}</p>
           <h1>{t("legal.title")}</h1>
           <p className="legal-lede">
-            Brick x Brick holds company records and your personal data, so we need your agreement to the Terms of
-            Use and Privacy Notice first. You&apos;ll only be asked again if they change.
+            Brick x Brick holds company records and your personal data, so we need your agreement first. Read the
+            documents below, then agree at the bottom of the screen. You&apos;ll only be asked again if they change.
           </p>
           {data && (
             <p className="legal-meta">
@@ -94,6 +131,15 @@ export function TermsAcceptPage() {
               <span className="legal-meta-dot" aria-hidden="true">·</span>
               <span>{t("legal.read_minutes", { minutes: readingMinutes(data) })}</span>
             </p>
+          )}
+          {docs.length > 1 && (
+            <div className="legal-jump" aria-label="Jump to a document">
+              {docs.map((d) => (
+                <button key={d.id} type="button" className="legal-jump-btn" onClick={() => jumpTo(d.id)}>
+                  {d.title}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -113,7 +159,39 @@ export function TermsAcceptPage() {
         {data && (
           <>
             <LegalHighlights items={data.highlights} />
-            <LegalReader data={data} docId={docId} onDocChange={setDocId} />
+
+            {/* Both documents, one after the other, each ending with its own box. */}
+            <div className="legal-stack">
+              {docs.map((doc) => {
+                return (
+                  <article key={doc.id} id={`legal-doc-${doc.id}`} className="legal-article">
+                    <h2 className="legal-article-title">{doc.title}</h2>
+
+                    {doc.sections.map((s) => {
+                      const { num, label } = splitHeading(s.heading);
+                      return (
+                        <section key={s.heading} className="legal-section">
+                          <h3 className="legal-section-heading">
+                            {num && <span className="legal-section-num">{num}</span>}
+                            {label}
+                          </h3>
+                          {(s.paragraphs || []).map((p, j) => (
+                            <p key={j}>{p}</p>
+                          ))}
+                          {s.bullets?.length > 0 && (
+                            <ul>
+                              {s.bullets.map((b, j) => (
+                                <li key={j}>{b}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+                      );
+                    })}
+                  </article>
+                );
+              })}
+            </div>
           </>
         )}
       </main>
@@ -126,22 +204,35 @@ export function TermsAcceptPage() {
                 <Banner tone="error" title={error} />
               </div>
             )}
-            <label className={"legal-check" + (checked ? " is-checked" : "")}>
+            <label
+              ref={checkRef}
+              className={"legal-check" + (agreed ? " is-checked" : "") + (pulse ? " is-pulsing" : "")}
+            >
               <input
                 type="checkbox"
                 className="legal-check-input"
-                checked={checked}
-                onChange={(e) => setChecked(e.target.checked)}
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
               />
               <span className="legal-check-box" aria-hidden="true">
                 <CheckIcon />
               </span>
               <span className="legal-check-text">
-                I have read and agree to the <strong>Terms of Use</strong>, and I acknowledge the{" "}
-                <strong>Privacy Notice</strong>.
+                I have read and agree to the{" "}
+                {docs.map((d, i) => (
+                  <span key={d.id}>
+                    <strong>{d.title}</strong>
+                    {i < docs.length - 2 ? ", " : i === docs.length - 2 ? " and " : "."}
+                  </span>
+                ))}
               </span>
             </label>
-            <Button className="legal-consent-btn" onClick={handleAccept} disabled={!checked || busy}>
+            <Button
+              className={"legal-consent-btn" + (allAgreed ? "" : " is-incomplete")}
+              onClick={handleAcceptClick}
+              disabled={busy}
+              aria-disabled={!allAgreed || undefined}
+            >
               {busy ? (
                 t("common.saving")
               ) : (

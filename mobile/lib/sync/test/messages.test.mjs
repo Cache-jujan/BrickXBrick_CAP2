@@ -54,7 +54,7 @@ test("at most 3 reasons are listed, then 'and N more'", () => {
   assert.match(summary.message, /• and 2 more$/);
 });
 
-// ---- loading errors ----------------------------------------------------------------
+// loading errors
 
 test("offline: no error text at all (the banner already says offline)", () => {
   assert.equal(describeLoadError(new Error("Network request failed"), false), null);
@@ -76,7 +76,7 @@ test("online + a real server message: shown as is; no error: nothing", () => {
   assert.equal(isNetworkError(new Error("Project not found")), false);
 });
 
-// ---- the status strip -------------------------------------------------------------------
+// the status strip
 
 const NOW = 1_000_000;
 const strip = (over) => bannerState({ isOnline: true, pendingCount: 0, syncing: false, lastSync: null, now: NOW, ...over });

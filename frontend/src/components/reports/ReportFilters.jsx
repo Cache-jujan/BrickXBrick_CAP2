@@ -80,10 +80,10 @@ export function ReportFilters({
                 <label className={"report-filters-option" + (disabled ? " report-filters-option-disabled" : "")}>
                   <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggleProject(project.projectid)} />
                   <span className="report-filters-text">
-                    <span className="report-filters-name">{project.name}</span>
+                    <span className="report-filters-name" title={project.name}>{project.name}</span>
                     <span className="report-filters-dates-line">{spanText(project, t, formatDate)}</span>
+                    <Badge status={project.status} />
                   </span>
-                  <Badge status={project.status} />
                 </label>
               </li>
             );

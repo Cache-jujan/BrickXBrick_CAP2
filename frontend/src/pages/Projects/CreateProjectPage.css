@@ -71,7 +71,7 @@
   }
 }
 
-/* --- Two-column form (T1) ------------------------------------------------ */
+/* Two-column form (T1) */
 
 .pf-grid {
   display: grid;
@@ -195,3 +195,13 @@ button.back-link { font-family: inherit; cursor: pointer; }
 .cp-step-done + .cp-step::before, .cp-step-current + .cp-step::before { background: var(--color-border-strong); }
 .cp-step-done + .cp-step::before { background: var(--color-brick); }
 @media (max-width: 520px) { .cp-step-name { display: none; } .cp-step-current .cp-step-name { display: inline; } .cp-step + .cp-step::before { width: 20px; margin: 0 var(--space-2); } }
+
+/* "Set from the BOM later" choice under the budget box. */
+.pf-budget-later {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}

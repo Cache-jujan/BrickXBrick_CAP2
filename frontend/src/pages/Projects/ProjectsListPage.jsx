@@ -8,7 +8,7 @@ import { AssignmentLimitsCard } from "../../components/projects/AssignmentLimits
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectsListPage.css";
 
-const STATUS_FILTERS = ["All", "Draft", "Active", "Completed", "Cancelled", "Archived"];
+const STATUS_FILTERS = ["All", "Draft", "Active", "Suspended", "Completed", "Cancelled", "Archived"];
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 
@@ -138,7 +138,7 @@ export function ProjectsListPage() {
                       </Link>
                       <span className="projects-client">{p.clientname}</span>
                     </td>
-                    <td><Badge status={p.status} /></td>
+                    <td><Badge status={p.status}>{p.status === "Cancelled" && p.activatedat ? t("status.terminated") : undefined}</Badge></td>
                     <td>{p.projectmanagername || <span className="muted">—</span>}</td>
                     <td>{p.sitemanagername || <span className="muted">{t("projects.not_assigned")}</span>}</td>
                     <td>{p.municipality || <span className="muted">—</span>}</td>
@@ -153,7 +153,7 @@ export function ProjectsListPage() {
                         <span className="muted">{t("projects.not_set")}</span>
                       )}
                     </td>
-                    <td className="num">{PESO.format(p.budget)}</td>
+                    <td className="num">{Number(p.budget) > 0 ? PESO.format(p.budget) : <span className="muted">{t("projects.budget_not_set")}</span>}</td>
                   </tr>
                 );
               })}

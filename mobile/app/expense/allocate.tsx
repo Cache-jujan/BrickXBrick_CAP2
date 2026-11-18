@@ -1,11 +1,11 @@
-// allocate.tsx — "Check receipt": the last step for a receipt that is not tied to one request.
+// allocate.tsx: "Check receipt": the last step for a receipt that is not tied to one request.
 //
 // The Purchaser's job here is small: confirm which requests the receipt paid for (the app
 // has already ticked the ones that match) and, only when they spent past what the PM gave or
 // bought more than was requested, say why in a few words. The split maths stays on the
 // server; the Project Manager sees the reason and decides.
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import * as Crypto from "expo-crypto";
@@ -36,10 +36,12 @@ import { useLocale } from "@/lib/i18n-context";
 type KnownTicket = { ticketID: string; projectID: string; projectName: string; materialType: string };
 
 // The note is read by the Project Manager, so it is always saved in English.
+// Quick reasons are for finishing a request UNDER budget only.
 const REASONS = [
-  { key: "price", labelKey: "ck.reason_price", text: "Prices went up." },
-  { key: "delivery", labelKey: "ck.reason_delivery", text: "Delivery or gas." },
-  { key: "promo", labelKey: "ck.reason_promo", text: "The store gave extra." },
+  { key: "cheaper", labelKey: "ck.under_cheaper", text: "Prices were lower than expected." },
+  { key: "stock", labelKey: "ck.under_stock", text: "The store ran out of stock." },
+  { key: "less", labelKey: "ck.under_less", text: "Needed less than planned." },
+  { key: "alt", labelKey: "ck.under_alt", text: "Bought a cheaper alternative." },
 ] as const;
 
 const RED = COLORS.errorText;
@@ -63,6 +65,8 @@ export default function AllocateScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // True while a pull-down reload is running, so the pull spinner shows instead of the inline one.
+  const [pulling, setPulling] = useState(false);
   const { isOnline } = useNetwork();
   // Back online: run the preview again.
   const wasOnline = React.useRef(isOnline);
@@ -72,6 +76,7 @@ export default function AllocateScreen() {
   }, [isOnline]);
   const [reasonKey, setReasonKey] = useState<(typeof REASONS)[number]["key"] | null>(null);
   const [details, setDetails] = useState("");
+  const [overNote, setOverNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitProblems, setSubmitProblems] = useState<string[]>([]);
   const [result, setResult] = useState<AllocationResult | null>(null);
@@ -132,7 +137,10 @@ export default function AllocateScreen() {
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setPulling(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -149,13 +157,17 @@ export default function AllocateScreen() {
 
   // Anything that needs a few words from the Purchaser before the PM sees it.
   const extras = portions.filter((p) => p.extraQuantity > 0);
-  const overspent = portions.filter((p) => p.overAllowance);
-  const needsReason = extras.length > 0 || overspent.length > 0;
+  // Strict budget: over budget (or no approved budget) cannot be submitted; finishing a request
+  // under budget needs a few words.
+  const budgetIssues = plan?.budgetIssues ?? [];
+  const blockers = budgetIssues.filter((i) => i.code !== "UNDERSPEND_NOTE_REQUIRED");
+  const underspent = budgetIssues.filter((i) => i.code === "UNDERSPEND_NOTE_REQUIRED");
+  const needsReason = extras.length > 0 || underspent.length > 0;
   const reason = [REASONS.find((r) => r.key === reasonKey)?.text, details.trim()].filter(Boolean).join(" ");
   const reasonOk = !needsReason || reason.length > 0;
 
   const missing = [...(plan?.unmatched ?? [])];
-  const canSubmit = !!plan?.ok && reasonOk && !loading && !submitting;
+  const canSubmit = !!plan?.ok && blockers.length === 0 && reasonOk && !loading && !submitting;
 
   function toggle(ticketID: string, ticked: boolean) {
     setSubmitProblems([]);
@@ -195,7 +207,7 @@ export default function AllocateScreen() {
         feeTargets: {},
         lineTargets,
         commonReceiptID,
-        note: needsReason ? reason : undefined,
+        note: needsReason ? reason : overNote.trim() || undefined,
       });
       setResult(saved);
       // Submitted: take it off the Turn In list so it can't be sent twice.
@@ -220,6 +232,12 @@ export default function AllocateScreen() {
     setRefreshKey((k) => k + 1);
   }
 
+  // Leave without submitting: the receipt stays in the scanned list, ready to check once the request exists.
+  function backToBuy() {
+    router.replace("/");
+    reset();
+  }
+
   function finish() {
     router.replace("/turn-in");
     reset();
@@ -235,11 +253,13 @@ export default function AllocateScreen() {
           ? t("ck.nothing_ticked")
           : !plan.ok
             ? t("al.match_every")
-            : !reasonOk
+            : blockers.length > 0
+              ? t("bd.over_title")
+              : !reasonOk
               ? t("ck.need_reason")
               : t("al2.goes_to_pm");
 
-  // ---- After a successful submit -----------------------------------------
+  // After a successful submit
   if (result) {
     const name = (id: string) => known[id]?.projectName ?? t("split.request");
     const screening = Object.values(result.screening ?? {});
@@ -284,7 +304,7 @@ export default function AllocateScreen() {
     );
   }
 
-  // ---- Check receipt -----------------------------------------------------
+  // Check receipt
   const rows = [
     ...portions.map((p) => ({ id: p.ticketID, ticked: true, portion: p })),
     ...unticked.map((id) => ({ id, ticked: false, portion: undefined })),
@@ -301,7 +321,12 @@ export default function AllocateScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader title={t("ck.title")} />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => { setPulling(true); retryPreview(); }} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      >
         <View style={styles.summary}>
           <View style={styles.flex}>
             <Text style={styles.summaryVendor} numberOfLines={1}>{receipt.vendorName || t("mobile.receipt")}</Text>
@@ -316,7 +341,7 @@ export default function AllocateScreen() {
           <Text style={styles.help}>{t("ck.scope_note", { projects: scope.projectNames.join(", ") })}</Text>
         ) : null}
 
-        {loading && <ActivityIndicator color={COLORS.primary} />}
+        {loading && !pulling && <ActivityIndicator color={COLORS.primary} />}
         {!isOnline ? (
           <View style={[styles.notice, { backgroundColor: AMBER_BG }]}>
             <Text style={[styles.noticeText, { color: AMBER }]}>{t("al.offline_banner")}</Text>
@@ -378,17 +403,25 @@ export default function AllocateScreen() {
         })}
         {feeTarget ? <Text style={styles.help}>{t("ck.fees_note", { project: feeTarget })}</Text> : null}
 
-        {/* Nothing matches: the only way forward is a request, so say who can file it. */}
+        {/* Nothing matches: the only way forward is a request, and only the Site Manager can file it. */}
         {!loading && missing.length > 0 && (
-          <View style={styles.errorBox} accessibilityRole="alert">
+          <View style={styles.missingCard} accessibilityRole="alert">
+            <Text style={styles.missingTitle}>{t("al3.missing_title")}</Text>
             {missing.map((piece) => (
-              <Text key={piece.lineIndex} style={styles.errorBoxText}>
+              <Text key={piece.lineIndex} style={styles.missingItem}>
                 {t("al2.no_request", { description: piece.description, amount: formatPeso(piece.amount) })}
               </Text>
             ))}
-            <Text style={styles.errorBoxText}>{t("al2.no_request_help")}</Text>
-            <TouchableOpacity style={styles.checkButton} onPress={retryPreview} accessibilityRole="button">
-              <Text style={styles.checkButtonText}>{t("al.check_new")}</Text>
+            <View style={styles.contactBox}>
+              <IconSymbol name="person.crop.circle" size={24} color={COLORS.primary} />
+              <View style={styles.flex}>
+                <Text style={styles.contactTitle}>{t("al3.contact_title")}</Text>
+                <Text style={styles.contactBody}>{t("al2.no_request_help")}</Text>
+              </View>
+            </View>
+            <Text style={styles.missingNote}>{t("al3.reload_note")}</Text>
+            <TouchableOpacity style={styles.backButton} onPress={backToBuy} accessibilityRole="button">
+              <Text style={styles.backButtonText}>{t("al3.back_to_buy")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -401,6 +434,26 @@ export default function AllocateScreen() {
           </View>
         )}
 
+        {/* Over budget or no approved budget: the server refuses it, so say so in red before the tap. */}
+        {blockers.length > 0 && !loading && (
+          <View style={styles.overBox} accessibilityRole="alert">
+            <Text style={styles.overTitle}>{t("bd.over_title")}</Text>
+            <Text style={styles.errorBoxText}>{t("ck.over_auto")}</Text>
+            {blockers.map((issue, index) => (
+              <Text key={`budget-${index}`} style={styles.errorBoxText}>{issue.message}</Text>
+            ))}
+            <TextInput
+              style={[styles.input, styles.overInput]}
+              value={overNote}
+              onChangeText={setOverNote}
+              placeholder={t("ck.over_note_hint")}
+              placeholderTextColor={COLORS.muted}
+              maxLength={200}
+              multiline
+            />
+          </View>
+        )}
+
         {/* Only when something is out of the ordinary: say what, then ask for a few words. */}
         {needsReason && !loading && (
           <View style={[styles.notice, styles.reasonBox]}>
@@ -409,12 +462,11 @@ export default function AllocateScreen() {
                 {t("ck.extra", { qty: formatQty(p.extraQuantity), material: p.materialType, project: p.projectName })}
               </Text>
             ))}
-            {overspent.map((p) => (
-              <Text key={`over-${p.ticketID}`} style={[styles.noticeText, { color: AMBER }]}>
-                {t("ck.over_budget", { over: formatPeso(Number(p.amount) - Number(p.remainingBudget ?? 0)), project: p.projectName })}
-              </Text>
+            {underspent.map((issue, index) => (
+              <Text key={`under-${index}`} style={[styles.noticeText, { color: AMBER }]}>{issue.message}</Text>
             ))}
             <Text style={styles.reasonTitle}>{t("ck.reason_title")}</Text>
+            {underspent.length > 0 && (
             <View style={styles.chipRow}>
               {REASONS.map((r) => (
                 <TouchableOpacity
@@ -428,6 +480,7 @@ export default function AllocateScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            )}
             <TextInput
               style={styles.input}
               value={details}
@@ -491,10 +544,20 @@ const styles = StyleSheet.create({
 
   errorBox: { backgroundColor: COLORS.errorFill, borderWidth: 1, borderColor: COLORS.errorBorder, borderRadius: 14, padding: 12, gap: 8 },
   errorBoxText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 19 },
-  checkButton: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: COLORS.errorBorder, borderRadius: 12, backgroundColor: COLORS.card },
-  checkButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.errorText },
+  missingCard: { backgroundColor: AMBER_BG, borderLeftWidth: 5, borderLeftColor: AMBER, borderRadius: 14, padding: 14, gap: 10 },
+  missingTitle: { fontSize: 16, fontFamily: FONT.extrabold, color: COLORS.heading },
+  missingItem: { fontSize: 14, fontFamily: FONT.medium, color: COLORS.heading, lineHeight: 20 },
+  contactBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12, padding: 12 },
+  contactTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
+  contactBody: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.heading, lineHeight: 19, marginTop: 2 },
+  missingNote: { fontSize: 13, fontFamily: FONT.semibold, color: COLORS.muted, lineHeight: 19 },
+  backButton: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12, backgroundColor: COLORS.card },
+  backButtonText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.primary },
   notice: { borderRadius: 10, padding: 10 },
   noticeText: { fontSize: 13, fontFamily: FONT.medium, lineHeight: 19 },
+  overBox: { backgroundColor: RED_BG, borderWidth: 1.5, borderColor: RED, borderRadius: 14, padding: 14, gap: 8 },
+  overTitle: { fontSize: 15, fontFamily: FONT.bold, color: RED },
+  overInput: { borderColor: RED, backgroundColor: COLORS.card },
   reasonBox: { backgroundColor: AMBER_BG, gap: 8, padding: 14, borderRadius: 14 },
   reasonTitle: { fontSize: 13, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 4 },
   input: { minHeight: 56, borderWidth: 1, borderColor: COLORS.inputBorder, borderRadius: 12, backgroundColor: COLORS.card, padding: 10, fontSize: 14, fontFamily: FONT.regular, color: COLORS.heading, textAlignVertical: "top" },

@@ -2,6 +2,7 @@ import { useId } from "react";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { STATUS_META, formatDue, statusMeta } from "./milestoneUtils";
 import { DAY_MS, clamp } from "./timelineSchedule";
+import { useTaskFileDrop } from "./useTaskFileDrop";
 
 const SHORT_DATE = { month: "short", day: "numeric" };
 
@@ -83,7 +84,7 @@ export function PhaseRow({ label, count, open, bodyId, onToggle }) {
   );
 }
 
-function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHover, onLeave, onCompleteTask, onOpenDocuments, actionsOpen, onToggleActions }) {
+function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHover, onLeave, onCompleteTask, onOpenDocuments, onDropFiles, actionsOpen, onToggleActions }) {
   const { t, tv } = useLocale();
   const stripId = useId();
   const done = task.status === "Completed";
@@ -91,16 +92,23 @@ function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHove
   const showDone = canManage && isPlanning && !done;
   const showDocs = isPlanning && onOpenDocuments;
   const tappable = !canHover && (showDone || showDocs);
+  // A file dragged onto a Planning task is attached straight away. A completed task's documents are locked.
+  const { isOver, dropProps } = useTaskFileDrop({
+    enabled: isPlanning && Boolean(onDropFiles),
+    accepts: !done,
+    onFiles: (files) => onDropFiles(task, files),
+  });
   const name = task.taskname || t("tl.untitled");
   const label = (
     <>
       <i className="tl-bullet" aria-hidden="true" />
       <span className="tl-task-name">{name}</span>
       {done && <span className="tl-sr">{tv("status", "Completed")}</span>}
+      {isOver && <span className="file-drop-hint">{t("docs.drop_here")}</span>}
     </>
   );
   return (
-    <div className="tl-task">
+    <div className={`tl-task${isOver ? " is-file-over" : ""}`} {...dropProps}>
       <div className="tl-row tl-task-row">
         <div className="tl-label tl-task-label" title={name}>
           {tappable ? (
@@ -121,7 +129,7 @@ function TaskRow({ task, milestone, schedule, range, canHover, canManage, onHove
   );
 }
 
-export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onToggleTask, schedule, range, canHover, canManage, hasSiteManager, onHover, onLeave, onAddTask, onCompleteTask, onOpenDocuments }) {
+export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onToggleTask, schedule, range, canHover, canManage, hasSiteManager, onHover, onLeave, onAddTask, onCompleteTask, onOpenDocuments, onDropFiles }) {
   const { t, tv, formatDate } = useLocale();
   const uid = useId();
   const tasksId = `${uid}-tasks`;
@@ -177,6 +185,7 @@ export function MilestoneGroup({ milestone, expanded, onToggle, openTaskKey, onT
                 onLeave={onLeave}
                 onCompleteTask={onCompleteTask}
                 onOpenDocuments={onOpenDocuments}
+                onDropFiles={onDropFiles}
                 actionsOpen={openTaskKey === key}
                 onToggleActions={() => onToggleTask(key)}
               />

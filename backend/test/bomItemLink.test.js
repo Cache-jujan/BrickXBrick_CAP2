@@ -1,11 +1,11 @@
-// bomItemLink.test.js — T2c. A receipt line must keep the BOM item it was
+// bomItemLink.test.js: T2c. A receipt line must keep the BOM item it was
 // bought against, all the way from the phone to the stored jsonb.
 //
 // There are TWO paths and they do NOT share code:
 //   single receipt -> normalizeLineItems  (receiptFields.js)
 //   split receipt  -> parseAllocationLines (allocationValidation.js)
 // Both are covered here, because a fix to one silently leaves the other
-// dropping the field — which is exactly the bug this guards.
+// dropping the field: which is exactly the bug this guards.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -16,7 +16,7 @@ const { asUUIDOrNull } = require("../src/lib/uuid");
 
 const BOM_ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
-// ---- the shared shape check ------------------------------------------------
+// the shared shape check
 
 test("asUUIDOrNull keeps a well-formed id and rejects everything else", () => {
   assert.equal(asUUIDOrNull(BOM_ID), BOM_ID);
@@ -28,7 +28,7 @@ test("asUUIDOrNull keeps a well-formed id and rejects everything else", () => {
   assert.equal(asUUIDOrNull(""), null);
 });
 
-// ---- single receipt: POST /api/expenses, resubmit, sync --------------------
+// single receipt: POST /api/expenses, resubmit, sync
 
 test("single path: a saved line still carries its bomItemID", () => {
   const [line] = normalizeLineItems([
@@ -52,7 +52,7 @@ test("single path: a junk bomItemID is stored as null, not as-is", () => {
   assert.equal(line.bomItemID, null);
 });
 
-// ---- split receipt: POST /api/allocations ---------------------------------
+// split receipt: POST /api/allocations
 
 test("split path: a parsed line still carries its bomItemID", () => {
   const [line] = parseAllocationLines([
@@ -75,7 +75,7 @@ test("split path: a junk bomItemID is parsed to null, not as-is", () => {
   assert.equal(line.bomItemID, null);
 });
 
-// ---- the two paths must not drift -----------------------------------------
+// the two paths must not drift
 
 test("both paths agree on the same line", () => {
   const raw = { description: "Portland Cement 40kg", amount: 1400, quantity: 5, bomItemID: BOM_ID };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAdminOverview } from "../../api/adminApi";
+import { listTamperAlerts } from "../../api/blockchainApi";
 import { extractErrorMessage } from "../../api/client";
 import { AdminOverview } from "../../components/admin/AdminOverview";
 import { Banner } from "../../components/ui/Banner";
@@ -11,6 +12,7 @@ import "./AdminDashboardPage.css";
 export function AdminDashboardPage() {
   const { t } = useLocale();
   const [overview, setOverview] = useState(null);
+  const [alerts, setAlerts] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -18,6 +20,10 @@ export function AdminDashboardPage() {
     getAdminOverview()
       .then((data) => { if (!cancelled) setOverview(data); })
       .catch((err) => { if (!cancelled) setError(extractErrorMessage(err, t("admin_overview.load_error"))); });
+    // The alert list is a bonus: if it fails, the numbers above still show.
+    listTamperAlerts("open")
+      .then((rows) => { if (!cancelled) setAlerts(Array.isArray(rows) ? rows : []); })
+      .catch(() => {});
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
@@ -29,7 +35,7 @@ export function AdminDashboardPage() {
 
       {error && <Banner tone="error" title={error} />}
       {!error && !overview && <p className="dashboard-loading">{t("common.loading")}</p>}
-      {overview && <AdminOverview overview={overview} />}
+      {overview && <AdminOverview overview={overview} alerts={alerts} />}
     </div>
   );
 }

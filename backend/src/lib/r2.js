@@ -1,12 +1,12 @@
-// r2.js — thin S3-compatible upload helper for Cloudflare R2.
+// r2.js: thin S3-compatible upload helper for Cloudflare R2.
 //
 // Built for F5 (task photo evidence). F6's receipts.js never persists the
 // receipt image anywhere (it OCRs straight off the multer buffer), so there
-// was no existing helper to reuse — this is the first version. If F6 later
+// was no existing helper to reuse: this is the first version. If F6 later
 // needs to store receipt images too, extend this file rather than writing a
 // second one.
 
-const { S3Client, PutObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const crypto = require("crypto");
 
 const REQUIRED_ENV = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY", "R2_BUCKET", "R2_PUBLIC_BASE_URL"];
@@ -43,7 +43,7 @@ const EXT_BY_MIME = { "image/jpeg": "jpg", "image/png": "png" };
 // access (R2's public dev URL or a custom domain) and returns a plain URL.
 // R2 objects are private by default. If this bucket is NOT public, this
 // needs to return a signed GET URL instead (@aws-sdk/s3-request-presigner)
-// — confirm which setup is actually live before this goes past local
+// confirm which setup is actually live before this goes past local
 // testing.
 async function uploadBuffer(buffer, { contentType, keyPrefix = "uploads" }) {
     const ext = EXT_BY_MIME[contentType];
@@ -119,4 +119,9 @@ async function putObject(key, buffer, contentType) {
     return publicUrlForKey(key);
 }
 
-module.exports = { uploadBuffer, putObject, publicUrlForKey, keyFromPublicUrl, objectExists, getClient };
+// deleteObject(key): remove one object. Used to drop an upload that turned out not to be a receipt.
+async function deleteObject(key) {
+    await getClient().send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }));
+}
+
+module.exports = { uploadBuffer, putObject, deleteObject, publicUrlForKey, keyFromPublicUrl, objectExists, getClient };

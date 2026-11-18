@@ -127,7 +127,7 @@ async function call(method, url, { file, name, type } = {}) {
 
 const upload = (file, name, type) => call("POST", `/api/tasks/${TASK}/documents`, { file, name, type });
 
-// ---- pure rules ----
+// pure rules
 
 test("validateDocumentFile: accepts a real PDF, JPEG and PNG", () => {
   assert.deepEqual(docs.validateDocumentFile({ mimetype: "application/pdf", buffer: PDF }), { contentType: "application/pdf", ext: "pdf" });
@@ -169,7 +169,7 @@ test("sha256Hex: stable hex digest", () => {
   assert.equal(docs.sha256Hex(Buffer.from("abc")), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 });
 
-// ---- upload ----
+// upload
 
 test("upload: the owning PM attaches a PDF; it is stored under the task and recorded with its hash", async () => {
   resetState();
@@ -261,7 +261,7 @@ test("upload: unknown or malformed task id is 404", async () => {
   assert.equal(malformed.status, 404);
 });
 
-// ---- list / download / delete ----
+// list / download / delete
 
 test("list: GM and the owning PM can read; others cannot", async () => {
   resetState();

@@ -3,6 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import {
   activateProject,
   cancelProject,
+  suspendProject,
+  resumeProject,
   completeProject,
   getEligibleSiteManagers,
   getProjectOverview,
@@ -13,6 +15,7 @@ import { createTask, completeTask } from "../../api/tasksApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { getBom } from "../../api/bomApi";
+import { getContract } from "../../api/contractApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Badge } from "../../components/ui/Badge";
@@ -28,6 +31,7 @@ import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
 import { ExpenseProtection } from "../../components/blockchain/ExpenseProtection";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { useToast } from "../../components/ui/Toast";
 import "./ProjectDetailPage.css";
 
 const PESO_WHOLE = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
@@ -47,6 +51,7 @@ export function ProjectDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { t, tv, formatDate } = useLocale();
+  const toast = useToast();
   const fmtLong = (value) => (value ? formatDate(value, LONG_DATE) : t("projects.not_set"));
   const canReview = user.role === "General Manager" || user.role === "Project Manager";
   const canVerify = user.role === "General Manager"; // matches backend requireRole on /verify/:id
@@ -75,18 +80,23 @@ export function ProjectDetailPage() {
   const [siteManagers, setSiteManagers] = useState([]);
   const [siteManagersError, setSiteManagersError] = useState("");
   const [siteManagerSaving, setSiteManagerSaving] = useState(false);
-  // GM lifecycle actions: { kind: "activate" | "cancel" | "complete" } while a dialog is open.
+  // GM lifecycle actions: { kind: "activate" | "suspend" | "resume" | "cancel" | "complete" } while a dialog is open.
   const [statusDialog, setStatusDialog] = useState(null);
+  // Completing below 100% progress needs the GM to confirm the work is finished (a warning, not a block).
+  const [finishConfirmed, setFinishConfirmed] = useState(false);
   const [statusInput, setStatusInput] = useState("");
+  const [resumeDate, setResumeDate] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState("");
   // F2: the project's Bill of Materials summary (GM and owning PM).
   const [bomInfo, setBomInfo] = useState(null);
   const [bomError, setBomError] = useState("");
+  // F2: the signed contract and client payments summary (GM and owning PM).
+  const [contractInfo, setContractInfo] = useState(null);
   // F3: milestone/task creation happens in-place via modals (was a separate
   // page). taskDialog carries the milestone it targets so the title can name it.
   const [milestoneDialog, setMilestoneDialog] = useState(false);
-  // #5: phase picks how the milestone's tasks get owned — Planning tasks are
+  // #5: phase picks how the milestone's tasks get owned, Planning tasks are
   // "Handled by: GM/PM" with no Site Manager involved, Construction tasks
   // keep the existing SM-assignment flow. Defaults to Construction so this
   // form behaves exactly like before unless the PM changes it.
@@ -98,10 +108,10 @@ export function ProjectDetailPage() {
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState("");
   // #5: the backend never rejects an out-of-phase-window due date, it just
-  // flags it back — surfaced here as a dismissible info banner after a
+  // flags it back: surfaced here as a dismissible info banner after a
   // successful create, not inside the (by-then-closed) modal.
   const [scheduleWarning, setScheduleWarning] = useState("");
-  // #5: a Planning task has no SM review flow — the owning PM marks it done
+  // #5: a Planning task has no SM review flow, the owning PM marks it done
   // directly. { task } while a confirm dialog is open.
   // Planning-task documents dialog: the task whose files are open, or null.
   const [docsTask, setDocsTask] = useState(null);
@@ -126,7 +136,7 @@ export function ProjectDetailPage() {
       .catch((err) => {
         if (cancelled) return;
         // assertProjectAccess in projects.js 403s a Project Manager who
-        // isn't this project's projectmanagerid — a reachable, expected
+        // isn't this project's projectmanagerid: a reachable, expected
         // state rather than an actual error.
         if (err?.response?.status === 403) {
           setAccessDenied(true);
@@ -145,6 +155,8 @@ export function ProjectDetailPage() {
 
   const isGM = user.role === "General Manager";
   const isClosed = Boolean(project && CLOSED_STATUSES.includes(project.status));
+  // Cancelled after it had gone Active: shown as "terminated", with a close-out summary.
+  const terminated = Boolean(project && project.status === "Cancelled" && project.termination?.terminated);
   const canManageSiteManager = Boolean(
     project && !isClosed && (
       isGM ||
@@ -175,6 +187,16 @@ export function ProjectDetailPage() {
     return () => { cancelled = true; };
     // Reload when the project's BOM status changes (e.g. after activation).
   }, [id, project?.bomstatus, Boolean(project)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!canReview) return undefined;
+    let cancelled = false;
+    // A project manager who doesn't own this project gets a 403: the card just stays hidden.
+    getContract(id)
+      .then((data) => { if (!cancelled) setContractInfo(data); })
+      .catch(() => { if (!cancelled) setContractInfo(null); });
+    return () => { cancelled = true; };
+  }, [id, canReview, project?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -309,6 +331,7 @@ export function ProjectDetailPage() {
       setProject(await getProjectOverview(id));
       setMilestoneDialog(false);
       setScheduleWarning((created.warnings || [])[0] || "");
+      toast.success(t("pd.toast_milestone_added", { name: milestoneForm.name.trim() }));
     } catch (err) {
       setMilestoneError(extractErrorMessage(err, t("errors.create_milestone")));
     } finally {
@@ -345,6 +368,7 @@ export function ProjectDetailPage() {
       setProject(await getProjectOverview(id));
       setTaskDialog(null);
       setScheduleWarning((created.warnings || [])[0] || "");
+      toast.success(t("pd.toast_task_added", { name: taskForm.taskName.trim(), milestone: taskDialog.milestone.name }));
     } catch (err) {
       setTaskError(extractErrorMessage(err, t("errors.create_task")));
     } finally {
@@ -356,6 +380,7 @@ export function ProjectDetailPage() {
   // warning (if any), and reload the project so the timeline matches.
   async function handleTimelineSaved(result) {
     setTimelineDialog(false);
+    toast.success(t("pd.toast_timeline_saved"));
     const warnings = result.warnings || [];
     setScheduleWarning(
       warnings.length > 1 ? `${warnings[0]} (and ${warnings.length - 1} more)` : warnings[0] || ""
@@ -385,6 +410,7 @@ export function ProjectDetailPage() {
     try {
       await completeTask(completeDialog.task.taskid, { note: completeNote.trim() || undefined });
       setProject(await getProjectOverview(id));
+      toast.success(t("pd.toast_task_completed", { name: completeDialog.task.taskname }));
       setCompleteDialog(null);
     } catch (err) {
       setCompleteError(extractErrorMessage(err, t("errors.complete_task")));
@@ -396,6 +422,8 @@ export function ProjectDetailPage() {
   function openStatusDialog(kind) {
     setStatusError("");
     setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
+    setResumeDate("");
+    setFinishConfirmed(false);
     setStatusDialog({ kind });
   }
 
@@ -411,6 +439,8 @@ export function ProjectDetailPage() {
     setStatusError("");
     try {
       if (statusDialog.kind === "activate") await activateProject(id);
+      if (statusDialog.kind === "suspend") await suspendProject(id, statusInput.trim(), resumeDate || undefined);
+      if (statusDialog.kind === "resume") await resumeProject(id);
       if (statusDialog.kind === "cancel") await cancelProject(id, statusInput.trim());
       if (statusDialog.kind === "complete") await completeProject(id, statusInput);
       setProject(await getProjectOverview(id));
@@ -455,7 +485,7 @@ export function ProjectDetailPage() {
   const progressPct = Math.round(Number(project.progress || 0));
   const location = [project.siteaddress, project.municipality, project.province].filter(Boolean).join(", ");
 
-  // Only the owning Project Manager may add milestones/tasks — mirrors
+  // Only the owning Project Manager may add milestones/tasks, mirrors
   // getOwnedProject's check in backend/src/routes/milestones.js.
   const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
   // Planning-task documents: the GM (any project) or the owning PM may open
@@ -468,10 +498,19 @@ export function ProjectDetailPage() {
   const bom = bomInfo?.bom || null;
   const bomApproved = project.bomstatus === "Approved";
   const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
+  const contract = contractInfo?.contract || null;
+  const contractSummary = contractInfo?.summary || null;
+  const contractWarnings = (contractSummary?.warnings || []).filter((w) => w.level === "warning").length;
+  const bomPath = `/projects/${project.projectid}/bom`;
+  const contractPath = `/projects/${project.projectid}/contract`;
+  // Where each missing step is finished: the team section on this page, or the page that records it.
+  const goToTeam = { label: t("pd.action_assign"), scrollTo: "pd-team-title" };
   const activationChecks = [
-    { label: t("pd.check_pm"), done: Boolean(project.projectmanagerid) },
-    { label: t("pd.check_sm"), done: hasSiteManager },
+    { key: "pm", label: t("pd.check_pm"), done: Boolean(project.projectmanagerid), action: goToTeam },
+    { key: "sm", label: t("pd.check_sm"), done: hasSiteManager, action: goToTeam },
     {
+      key: "bom",
+      action: { label: bom ? t("pd.review_approve") : t("pd.add_bom"), to: bomPath },
       label:
         bomApproved && bom?.clientAgreedOn
           ? t(bom.clientAgreedBy ? "pd.check_bom_agreed_by" : "pd.check_bom_agreed", {
@@ -481,8 +520,29 @@ export function ProjectDetailPage() {
           : t("pd.check_bom"),
       done: bomApproved,
     },
+    // The signed contract is recorded after the BOM price is agreed (only the GM and PM can see it).
+    ...(canReview
+      ? [{ key: "contract", label: t("pd.check_contract"), done: Boolean(contract), action: { label: t("pd.add_contract"), to: contractPath } }]
+      : []),
+    // The down payment is the go signal to start work. A 0% down payment has nothing to wait for.
+    ...(canReview && !(contract && Number(contract.downPaymentPercent) === 0)
+      ? [{
+          key: "down",
+          label: t("pd.check_down_payment"),
+          done: (contractSummary?.receivedByKind?.["Down Payment"] ?? 0) > 0,
+          // Payments are recorded against the contract, so that comes first.
+          action: contract ? { label: t("contract.record_payment"), to: contractPath } : null,
+          note: contract ? null : t("pd.after_contract"),
+        }]
+      : []),
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
+  const stepsDone = activationChecks.filter((c) => c.done).length;
+
+  function goToStep(action) {
+    closeStatusDialog();
+    if (action.scrollTo) document.getElementById(action.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="project-detail">
@@ -492,7 +552,7 @@ export function ProjectDetailPage() {
         <div className="pd-header-text">
           <div className="pd-title-row">
             <h1>{project.name}</h1>
-            <Badge status={project.status} />
+            <Badge status={project.status}>{terminated ? t("status.terminated") : undefined}</Badge>
           </div>
           <p className="pd-meta">
             {[project.clientname, project.projecttype, project.municipality].filter(Boolean).join(" · ")}
@@ -504,13 +564,17 @@ export function ProjectDetailPage() {
               <Link to={`/projects/${project.projectid}/checkins`} className="btn btn-secondary">{t("pd.daily_checkins")}</Link>
             )}
             {isGM && !isClosed && (<>
-            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{t("pd.cancel_project")}</Button>
+            <Button variant="danger" onClick={() => openStatusDialog("cancel")}>{project.activatedat ? t("pd.terminate_project") : t("pd.cancel_project")}</Button>
             <Link to={`/projects/${project.projectid}/edit`} className="btn btn-secondary">{t("pd.edit_details")}</Link>
             {project.status === "Draft" && (
               <Button onClick={() => openStatusDialog("activate")}>{t("pd.activate")}</Button>
             )}
-            {project.status === "Active" && (
+            {project.status === "Active" && (<>
+              <Button variant="secondary" onClick={() => openStatusDialog("suspend")}>{t("pd.suspend_project")}</Button>
               <Button onClick={() => openStatusDialog("complete")}>{t("pd.mark_completed")}</Button>
+            </>)}
+            {project.status === "Suspended" && (
+              <Button onClick={() => openStatusDialog("resume")}>{t("pd.resume_project")}</Button>
             )}
             </>)}
           </div>
@@ -524,10 +588,24 @@ export function ProjectDetailPage() {
             ` ${t("pd.still_needed", { list: activationChecks.filter((c) => !c.done).map((c) => c.label).join(", ") })}`}
         </Banner>
       )}
+      {project.status === "Suspended" && (
+        <Banner tone="warning" title={t("pd.suspended_title")}>
+          {project.suspensionreason}
+          {project.suspendedat ? `. ${t("pd.suspended_since", { date: formatDate(project.suspendedat, LONG_DATE) })}` : ""}
+          {project.expectedresumedate ? ` ${t("pd.expected_resume", { date: formatDate(project.expectedresumedate, LONG_DATE) })}` : ""}
+          {` ${t("pd.suspended_note")}`}
+        </Banner>
+      )}
       {project.status === "Cancelled" && (
-        <Banner tone="warning" title={t("pd.cancelled_title")}>
+        <Banner tone="warning" title={terminated ? t("pd.terminated_title") : t("pd.cancelled_title")}>
           {project.cancellationreason}
           {project.cancelledat ? ` (${formatDate(project.cancelledat, DATETIME_OPTIONS)})` : ""}
+          {terminated && (
+            <dl className="pd-term-summary">
+              <div><dt>{t("pd.term_spent")}</dt><dd>{PESO.format(project.termination.spent)} / {PESO.format(project.budget)}</dd></div>
+              <div><dt>{t("pd.term_open")}</dt><dd>{project.termination.openRequests}</dd></div>
+            </dl>
+          )}
         </Banner>
       )}
       {(project.warnings || []).map((w) => (
@@ -540,7 +618,7 @@ export function ProjectDetailPage() {
         <div className="pd-group">
           <h2 className="pd-group-title">{t("projects.budget")}</h2>
           <dl>
-            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{PESO.format(budget)}</dd></div>
+            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{budget > 0 ? PESO.format(budget) : <span className="pd-dd-note">{t("projects.budget_not_set")}</span>}</dd></div>
             <div>
               <dt>{t("dashboard.approved_spending")}</dt>
               <dd className="num-left">
@@ -635,6 +713,41 @@ export function ProjectDetailPage() {
           </div>
         )}
       </section>
+
+      {contractInfo && (
+        <section className="pd-bom" aria-labelledby="pd-contract-title">
+          <div className="section-head">
+            <h2 id="pd-contract-title">{t("contract.title")}</h2>
+            <Link to={`/projects/${project.projectid}/contract`} className="btn btn-secondary btn-sm">
+              {contract ? t("pd.open_contract") : isGM && !isClosed ? t("pd.add_contract") : t("pd.open_contract")}
+            </Link>
+          </div>
+          {!contract && (
+            <div className="pd-bom-bar pd-bom-empty">
+              <p>{t("pd.contract_none")}</p>
+            </div>
+          )}
+          {contract && contractSummary && (
+            <div className="pd-bom-bar">
+              <div className="pd-bom-status">
+                <span>
+                  {contractWarnings === 0
+                    ? ""
+                    : contractWarnings === 1
+                      ? t("pd.contract_notes_one")
+                      : t("pd.contract_notes_other", { count: contractWarnings })}
+                </span>
+              </div>
+              <dl className="pd-bom-figures">
+                <div><dt>{t("contract.amount")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(contractSummary.contractAmount)}</dd></div>
+                <div><dt>{t("contract.received")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.receivedTotal)}</dd></div>
+                <div><dt>{t("contract.to_collect")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.remainingToCollect)}</dd></div>
+                <div><dt>{t("contract.cash")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.cashPosition)}</dd></div>
+              </dl>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="pd-team" aria-labelledby="pd-team-title">
         <div className="section-head">
@@ -836,10 +949,36 @@ export function ProjectDetailPage() {
                 <h2 id="project-status-title" className="modal-title">
                   {readyToActivate ? t("pd.activate_title") : t("pd.not_ready")}
                 </h2>
-                <ul className="pd-checklist">
+                {!readyToActivate && (
+                  <>
+                    <p className="pd-steps-count">{t("pd.steps_done", { done: stepsDone, total: activationChecks.length })}</p>
+                    <div
+                      className="pd-steps-bar"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={activationChecks.length}
+                      aria-valuenow={stepsDone}
+                      aria-label={t("pd.steps_done", { done: stepsDone, total: activationChecks.length })}
+                    >
+                      <div className="pd-steps-fill" style={{ width: `${(stepsDone / activationChecks.length) * 100}%` }} />
+                    </div>
+                  </>
+                )}
+                <ul className="pd-checklist pd-checklist-steps">
                   {activationChecks.map((c) => (
-                    <li key={c.label} className={c.done ? "pd-check-done" : "pd-check-missing"}>
-                      <span aria-hidden="true">{c.done ? "✓" : "–"}</span> {c.label}
+                    <li key={c.key} className={c.done ? "pd-check-done" : "pd-check-missing"}>
+                      <span className="pd-check-icon" aria-hidden="true">{c.done ? "✓" : ""}</span>
+                      <span className="pd-check-label">
+                        {c.label}
+                        {!c.done && c.note && <small>{c.note}</small>}
+                      </span>
+                      {!c.done && c.action && (
+                        c.action.to ? (
+                          <Link to={c.action.to} className="btn btn-secondary btn-sm" onClick={closeStatusDialog}>{c.action.label}</Link>
+                        ) : (
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => goToStep(c.action)}>{c.action.label}</button>
+                        )
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -858,12 +997,49 @@ export function ProjectDetailPage() {
                   value={statusInput}
                   onChange={(ev) => setStatusInput(ev.target.value)}
                 />
+                {progressPct < 100 && (
+                  <>
+                    <Banner tone="warning" title={t("pd.complete_warn", { pct: progressPct })} />
+                    <label className="pd-confirm-check">
+                      <input type="checkbox" checked={finishConfirmed} onChange={(ev) => setFinishConfirmed(ev.target.checked)} />
+                      {t("pd.complete_confirm")}
+                    </label>
+                  </>
+                )}
+              </>
+            )}
+            {statusDialog.kind === "suspend" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">{t("pd.suspend_title")}</h2>
+                <p className="modal-body">{t("pd.suspend_body")}</p>
+                <Field
+                  label={t("bom.reason")}
+                  required
+                  as="textarea"
+                  maxLength={500}
+                  placeholder={t("pd.suspend_reason_ph")}
+                  value={statusInput}
+                  onChange={(ev) => setStatusInput(ev.target.value)}
+                />
+                <Field
+                  label={t("pd.expected_resume_label")}
+                  type="date"
+                  min={new Date().toISOString().slice(0, 10)}
+                  value={resumeDate}
+                  onChange={(ev) => setResumeDate(ev.target.value)}
+                />
+              </>
+            )}
+            {statusDialog.kind === "resume" && (
+              <>
+                <h2 id="project-status-title" className="modal-title">{t("pd.resume_title")}</h2>
+                <p className="modal-body">{t("pd.resume_body")}</p>
               </>
             )}
             {statusDialog.kind === "cancel" && (
               <>
-                <h2 id="project-status-title" className="modal-title">{t("pd.cancel_title")}</h2>
-                <p className="modal-body">{t("pd.cancel_body")}</p>
+                <h2 id="project-status-title" className="modal-title">{project.activatedat ? t("pd.terminate_title") : t("pd.cancel_title")}</h2>
+                <p className="modal-body">{project.activatedat ? t("pd.terminate_body") : t("pd.cancel_body")}</p>
                 <Field
                   label={t("bom.reason")}
                   required
@@ -882,10 +1058,16 @@ export function ProjectDetailPage() {
                 onClick={handleStatusAction}
                 disabled={
                   statusBusy ||
-                  (statusDialog.kind === "activate" ? !readyToActivate : !statusInput.trim())
+                  (statusDialog.kind === "activate"
+                    ? !readyToActivate
+                    : statusDialog.kind === "resume"
+                      ? false
+                      : statusDialog.kind === "complete"
+                        ? !statusInput.trim() || (progressPct < 100 && !finishConfirmed)
+                        : !statusInput.trim())
                 }
               >
-                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : t("pd.cancel_btn")}
+                {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : statusDialog.kind === "suspend" ? t("pd.suspend_btn") : statusDialog.kind === "resume" ? t("pd.resume_btn") : project.activatedat ? t("pd.terminate_btn") : t("pd.cancel_btn")}
               </Button>}
             </div>
           </div>

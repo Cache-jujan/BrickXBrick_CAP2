@@ -1,4 +1,4 @@
-// uuid.js — ONE UUID shape check, shared by every place that accepts an id
+// uuid.js: ONE UUID shape check, shared by every place that accepts an id
 // from a client.
 //
 // Why this file exists: receipt line items are free-form JSON (lineitems is
@@ -7,7 +7,7 @@
 // point validates the shape and stores null when it doesn't match, rather
 // than trusting what the phone sent.
 //
-// This checks the SHAPE only. It does NOT check that the row exists — the
+// This checks the SHAPE only. It does NOT check that the row exists, the
 // foreign key on tickets.bomitemid does that, and receipt lines carry the id
 // in jsonb where no FK can reach. A well-formed id for a deleted BOM item
 // simply fails to match in F9 Layer 3, which is the safe direction.

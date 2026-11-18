@@ -1,4 +1,4 @@
-// materialMatch.js — F9 shared helper. ONE matching rule for both F8 (which
+// materialMatch.js: F9 shared helper. ONE matching rule for both F8 (which
 // request a receipt line can be split into) and F9 Layer 3 (whether a line
 // belongs to its request).
 //

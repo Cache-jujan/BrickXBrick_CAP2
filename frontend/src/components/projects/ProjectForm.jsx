@@ -1,3 +1,4 @@
+import LIMITS from "../../utils/inputLimits";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getEligibleManagers, getEligibleSiteManagers, getProjectOptions } from "../../api/projectsApi";
@@ -14,6 +15,8 @@ export const EMPTY_PROJECT_FORM = {
   description: "",
   clientName: "",
   budget: "",
+  // Ticked: the budget is not typed here; it is set from the BOM when the BOM is approved.
+  budgetLater: true,
   projectType: "",
   municipality: "",
   province: "Cebu",
@@ -43,7 +46,8 @@ export function projectToForm(project) {
     name: project.name || "",
     description: project.description || "",
     clientName: project.clientname || "",
-    budget: project.budget != null ? String(Number(project.budget)) : "",
+    budget: Number(project.budget) > 0 ? String(Number(project.budget)) : "",
+    budgetLater: !(Number(project.budget) > 0),
     projectType: project.projecttype || "",
     municipality: project.municipality || "",
     province: project.province || "",
@@ -72,6 +76,9 @@ export function ProjectForm({
   busyLabel,
   cancelTo,
   budgetLocked = false,
+  // Edit only: once a project is active, the target dates of development and of
+  // construction can no longer change (the completion date still can).
+  datesLocked = false,
   // Create only: content shown under the form fields (the document checklist),
   // the project type fixed by a chosen template, and a Site Manager that must be
   // chosen because the starting structure has construction tasks.
@@ -131,17 +138,26 @@ export function ProjectForm({
     const errors = {};
     if (!form.name.trim()) errors.name = t("form.err_name");
     if (!form.clientName.trim()) errors.clientName = t("form.err_client");
-    if (form.budget === "" || Number.isNaN(Number(form.budget)) || Number(form.budget) < 0) errors.budget = t("form.err_budget");
+    if (!form.budgetLater && (form.budget === "" || Number.isNaN(Number(form.budget)) || Number(form.budget) < 0)) {
+      errors.budget = t("form.err_budget");
+    }
     if (!form.projectType) errors.projectType = t("form.err_type");
     if (!form.municipality.trim()) errors.municipality = t("form.err_municipality");
     if (!form.startDate) errors.startDate = t("form.err_start");
     if (!form.constructionStartDate) errors.constructionStartDate = t("form.err_construction");
     if (!form.endDate) errors.endDate = t("form.err_end");
-    if (form.startDate && form.constructionStartDate && form.constructionStartDate < form.startDate) {
+    // A locked date can't be fixed here, so its order isn't re-checked (the server
+    // still checks it); otherwise old bad data would make the form impossible to save.
+    if (!datesLocked && form.startDate && form.constructionStartDate && form.constructionStartDate < form.startDate) {
       errors.constructionStartDate = t("form.err_construction_before");
     }
     if (form.constructionStartDate && form.endDate && form.endDate < form.constructionStartDate) {
       errors.endDate = t("form.err_end_before");
+    }
+    // A mistyped year such as 0009 must not be saved (it breaks the Reports page).
+    for (const field of ["startDate", "constructionStartDate", "endDate"]) {
+      const year = Number(String(form[field] || "").slice(0, 4));
+      if (form[field] && (year < 2000 || year > 2100)) errors[field] = t("form.err_date_year");
     }
     if (!form.projectManagerId) errors.projectManagerId = t("form.err_pm");
     if (mode === "create" && siteManagerRequired && !form.siteManagerId) {
@@ -163,7 +179,7 @@ export function ProjectForm({
       name: form.name.trim(),
       description: form.description.trim(),
       clientName: form.clientName.trim(),
-      budget: Number(form.budget),
+      budget: form.budgetLater ? 0 : Number(form.budget),
       projectType: form.projectType,
       municipality: form.municipality.trim(),
       province: form.province.trim(),
@@ -199,6 +215,7 @@ export function ProjectForm({
             required
             placeholder={t("form.project_name_placeholder")}
             value={form.name}
+            maxLength={LIMITS.projectName}
             error={fieldErrors.name}
             onChange={(e) => updateField("name", e.target.value)}
           />
@@ -208,6 +225,7 @@ export function ProjectForm({
               required
               placeholder={t("form.client_name_placeholder")}
               value={form.clientName}
+              maxLength={LIMITS.clientName}
               error={fieldErrors.clientName}
               onChange={(e) => updateField("clientName", e.target.value)}
             />
@@ -232,6 +250,7 @@ export function ProjectForm({
             className="pf-description"
             placeholder={t("form.description_placeholder")}
             value={form.description}
+            maxLength={LIMITS.description}
             onChange={(e) => updateField("description", e.target.value)}
           />
 
@@ -245,6 +264,7 @@ export function ProjectForm({
               required
               placeholder={t("form.municipality_placeholder")}
               value={form.municipality}
+              maxLength={LIMITS.municipality}
               error={fieldErrors.municipality}
               onChange={(e) => updateField("municipality", e.target.value)}
             />
@@ -252,6 +272,7 @@ export function ProjectForm({
               label={t("form.province")}
               placeholder={t("form.province_placeholder")}
               value={form.province}
+              maxLength={LIMITS.province}
               onChange={(e) => updateField("province", e.target.value)}
             />
           </div>
@@ -259,6 +280,7 @@ export function ProjectForm({
             label={t("form.site_address")}
             placeholder={t("form.address_placeholder")}
             value={form.siteAddress}
+            maxLength={LIMITS.siteAddress}
             onChange={(e) => updateField("siteAddress", e.target.value)}
           />
           {outsideServiceArea && (
@@ -274,19 +296,30 @@ export function ProjectForm({
           <h2 className="pf-section-title">{t("projects.budget")}</h2>
           <Field
             label={t("form.target_budget")}
-            required
+            required={!form.budgetLater && !budgetLocked}
             type="text"
             inputMode="decimal"
             prefix="₱"
-            placeholder="0.00"
-            value={formatAmountInput(form.budget)}
+            placeholder={form.budgetLater && !budgetLocked ? t("form.budget_later_placeholder") : "0.00"}
+            value={form.budgetLater && !budgetLocked ? "" : formatAmountInput(form.budget)}
+            maxLength={20}
             error={fieldErrors.budget}
-            disabled={budgetLocked}
+            disabled={budgetLocked || form.budgetLater}
             onChange={(e) => updateField("budget", parseAmountInput(e.target.value))}
           />
           <p className="field-hint">
             {budgetLocked ? t("form.budget_locked") : t("form.budget_auto")}
           </p>
+          {!budgetLocked && (
+            <label className="pf-budget-later">
+              <input
+                type="checkbox"
+                checked={form.budgetLater}
+                onChange={(e) => updateField("budgetLater", e.target.checked)}
+              />
+              {t("form.budget_later")}
+            </label>
+          )}
 
           </section>
 
@@ -297,28 +330,37 @@ export function ProjectForm({
               label={t("form.date_dev")}
               required
               type="date"
+              min="2000-01-01"
+              max="2100-12-31"
               value={form.startDate}
               error={fieldErrors.startDate}
+              disabled={datesLocked}
               onChange={(e) => updateField("startDate", e.target.value)}
             />
             <Field
               label={t("form.date_construction")}
               required
               type="date"
+              min={form.startDate || "2000-01-01"}
+              max="2100-12-31"
               value={form.constructionStartDate}
               error={fieldErrors.constructionStartDate}
+              disabled={datesLocked || !form.startDate}
               onChange={(e) => updateField("constructionStartDate", e.target.value)}
             />
             <Field
               label={t("form.date_end")}
               required
               type="date"
+              min={form.constructionStartDate || form.startDate || "2000-01-01"}
+              max="2100-12-31"
               value={form.endDate}
               error={fieldErrors.endDate}
+              disabled={!form.constructionStartDate}
               onChange={(e) => updateField("endDate", e.target.value)}
             />
           </div>
-          <p className="create-project-hint">{t("form.timeline_hint")}</p>
+          <p className="create-project-hint">{datesLocked ? t("form.dates_locked_note") : t("form.timeline_hint")}</p>
 
           </section>
 

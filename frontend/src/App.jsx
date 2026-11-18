@@ -12,8 +12,10 @@ import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
 import { ProjectCheckinsPage } from "./pages/Projects/ProjectCheckinsPage";
 import { EditProjectPage } from "./pages/Projects/EditProjectPage";
 import { BomPage } from "./pages/Projects/BomPage";
+import { ContractPage } from "./pages/Projects/ContractPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
+import { VendorMasterListPage } from "./pages/Admin/VendorMasterListPage";
 import { NotAuthorizedPage } from "./pages/NotAuthorizedPage";
 import { TamperAlertsPage } from "./pages/Blockchain/TamperAlertsPage";
 import { ReportsPage } from "./pages/Reports/ReportsPage";
@@ -22,7 +24,6 @@ import { TicketQueuePage } from "./pages/Tickets/TicketQueuePage";
 import { ProgressReviewPage } from "./pages/Tasks/ProgressReviewPage";
 import { SubmitExpensePage } from "./pages/Expenses/SubmitExpensePage";
 import { SplitReceiptPage } from "./pages/Expenses/SplitReceiptPage";
-import { TripCostPage } from "./pages/Expenses/TripCostPage";
 import { OpenRequestsPage } from "./pages/Requests/OpenRequestsPage";
 import { MyExpensesPage } from "./pages/Expenses/MyExpensesPage";
 import { NotificationsPage } from "./pages/Notifications/NotificationsPage";
@@ -33,12 +34,13 @@ import { AccountPage } from "./pages/Account/AccountPage";
 import { MobileOnlyPage } from "./pages/MobileOnlyPage";
 import { MilestoneTimelinePreviewPage } from "./pages/Projects/MilestoneTimelinePreviewPage";
 import { LocaleProvider } from "./i18n/LocaleProvider";
+import { ToastProvider } from "./components/ui/Toast";
 
 // Web /projects routes are scoped to GM and PM. Site Manager and Purchaser
 // use the mobile app, which hits the same backend endpoint.
 const WEB_BROADCAST_ROLES = ["General Manager", "Project Manager"];
 
-// These roles have no web app at all — they work entirely from mobile. Rather
+// These roles have no web app at all: they work entirely from mobile. Rather
 // than a dashboard, they hit a full-screen "use the app" wall at the app entry
 // (see AppShell), so no sidebar or web page is ever reachable for them.
 const MOBILE_ONLY_ROLES = ["Site Manager", "Purchaser"];
@@ -58,6 +60,9 @@ function AppShell() {
 export default function App() {
   return (
     <LocaleProvider>
+      {/* Toasts sit inside LocaleProvider (they translate their close label) and
+          outside the router, so a toast survives a page change. */}
+      <ToastProvider>
       <BrowserRouter>
         <AuthProvider>
         <Routes>
@@ -148,6 +153,15 @@ export default function App() {
                 </RoleRoute>
               }
             />
+            {/* F2: contract and client payments. GM records them; the owning PM reads them. */}
+            <Route
+              path="/projects/:id/contract"
+              element={
+                <RoleRoute allow={["General Manager", "Project Manager"]}>
+                  <ContractPage />
+                </RoleRoute>
+              }
+            />
             {/* Daily progress check-ins: the owning PM reviews, the GM reads. */}
             <Route
               path="/projects/:id/checkins"
@@ -204,15 +218,6 @@ export default function App() {
             />
 
             <Route
-              path="/expenses/trip-cost"
-              element={
-                <RoleRoute allow={["General Manager", "Project Manager"]}>
-                  <TripCostPage />
-                </RoleRoute>
-              }
-            />
-
-            <Route
               path="/requests"
               element={
                 <RoleRoute allow={["General Manager", "Project Manager"]}>
@@ -226,6 +231,15 @@ export default function App() {
               element={
                 <RoleRoute allow={["System Administrator"]}>
                   <UserManagementPage />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="/admin/vendors"
+              element={
+                <RoleRoute allow={["System Administrator"]}>
+                  <VendorMasterListPage />
                 </RoleRoute>
               }
             />
@@ -255,6 +269,7 @@ export default function App() {
         </Routes>
         </AuthProvider>
       </BrowserRouter>
+      </ToastProvider>
     </LocaleProvider>
   );
 }

@@ -1,4 +1,4 @@
-// taskProgress.js — F5 task progress submission, shared by the online route
+// taskProgress.js: F5 task progress submission, shared by the online route
 // (POST /api/tasks/:id/progress) and the F10 offline sync (routes/sync.js).
 //
 // One rule set: an offline submission is only a delivery delay, so both paths
@@ -11,6 +11,7 @@
 
 const db = require("./db");
 const r2 = require("./r2");
+const { notifySafely } = require("./notify");
 
 class TaskProgressError extends Error {
   constructor(status, code, message) {
@@ -103,6 +104,28 @@ async function submitTaskProgress(input, deps = {}) {
          RETURNING *`,
         [taskId, user.id, clientSubmissionId, photoEvidenceURL, note || null]
       );
+
+      // Tell the PM there is a photo waiting for review. Same transaction, and
+      // the online route and the offline sync both come through here.
+      const info = await client.query(
+        `SELECT t.taskName, p.name AS projectName, p.projectManagerId
+           FROM tasks t
+           JOIN milestones m ON m.milestoneId = t.milestoneId
+           JOIN projects p ON p.projectId = m.projectId
+          WHERE t.taskId = $1`,
+        [taskId]
+      );
+      const found = info.rows[0];
+      if (found) {
+        await notifySafely(client, {
+          recipientIds: [found.projectmanagerid],
+          excludeUserId: user.id,
+          type: "TaskSubmitted",
+          entityType: "Task",
+          entityId: taskId,
+          message: `${user.name || "The Site Manager"} sent a photo for "${found.taskname}" (${found.projectname}). It is waiting for your review.`,
+        });
+      }
       return insertResult.rows[0];
     });
     return { log, replayed: false };

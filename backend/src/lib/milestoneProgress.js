@@ -1,8 +1,11 @@
-// milestoneProgress.js — F3: recompute a milestone's completion % from its
+// milestoneProgress.js (F3): recompute a milestone's completion % from its
 // tasks, derive its schedule status via a due-date proximity heuristic, and
 // fire a ScheduleVarianceAlert notification the first time it crosses into
-// At Risk/Overdue (not on every recalc — that would spam the PM).
+// At Risk/Overdue (not on every recalc: that would spam the PM).
 
+const { notifyGeneralManagers } = require("./notify");
+
+// A milestone due within this many days and not yet at 100% is "At Risk" (UC-03-01).
 const AT_RISK_WINDOW_DAYS = 3;
 
 function deriveStatus(dueDate, completionPercentage) {
@@ -21,7 +24,7 @@ function deriveStatus(dueDate, completionPercentage) {
     return "On Track";
 }
 
-// `client` must expose .query(text, params) — pass the transaction client
+// `client` must expose .query(text, params), pass the transaction client
 // from withTransaction. Not designed to be called outside a transaction.
 async function recalcMilestoneProgress(client, milestoneId) {
     const taskResult = await client.query(
@@ -71,15 +74,20 @@ async function recalcMilestoneProgress(client, milestoneId) {
         const project = projectResult.rows[0];
 
         if (project) {
+            const message = `Milestone "${milestone.name}" on project "${project.name}" is now ${newStatus} — due ${new Date(milestone.duedate).toDateString()}.`;
             await client.query(
                 `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
                  VALUES ($1, 'ScheduleVarianceAlert', 'Milestone', $2, $3)`,
-                [
-                    project.projectmanagerid,
-                    milestoneId,
-                    `Milestone "${milestone.name}" on project "${project.name}" is now ${newStatus} — due ${new Date(milestone.duedate).toDateString()}.`,
-                ]
+                [project.projectmanagerid, milestoneId, message]
             );
+            // The General Manager sees the same schedule warning as the PM.
+            await notifyGeneralManagers(client, {
+                excludeUserId: project.projectmanagerid,
+                type: "ScheduleVarianceAlert",
+                entityType: "Milestone",
+                entityId: milestoneId,
+                message,
+            });
         }
     }
 
@@ -87,12 +95,12 @@ async function recalcMilestoneProgress(client, milestoneId) {
 }
 
 // Time-based variance detection (D-01, D-08): nothing re-derives status or
-// fires a task-level alert just because a due date passed — recalc only
+// fires a task-level alert just because a due date passed, recalc only
 // ever runs from task-create or Acknowledge. Call this on a timer (see
 // server.js) to catch milestones/tasks that go stale with no activity.
 // Milestone-level: reuses recalcMilestoneProgress/deriveStatus as-is
 // (UC-03-01, "within 3 days of due and not 100%").
-// Task-level (UC-05-01): narrower on purpose — tasks are binary, so "behind
+// Task-level (UC-05-01): narrower on purpose, tasks are binary, so "behind
 // its target due date" just means overdue and not Completed. One alert per
 // task, guarded by tasks.scheduleVarianceAlertSent.
 async function sweepScheduleVariance(client) {
@@ -113,15 +121,19 @@ async function sweepScheduleVariance(client) {
             AND t.dueDate < CURRENT_DATE`
     );
     for (const t of overdueTasks.rows) {
+        const message = `Task "${t.taskname}" on project "${t.projectname}" is overdue — due ${new Date(t.duedate).toDateString()}.`;
         await client.query(
             `INSERT INTO notifications (recipientId, type, relatedEntityType, relatedEntityId, message)
              VALUES ($1, 'ScheduleVarianceAlert', 'Task', $2, $3)`,
-            [
-                t.projectmanagerid,
-                t.taskid,
-                `Task "${t.taskname}" on project "${t.projectname}" is overdue — due ${new Date(t.duedate).toDateString()}.`,
-            ]
+            [t.projectmanagerid, t.taskid, message]
         );
+        await notifyGeneralManagers(client, {
+            excludeUserId: t.projectmanagerid,
+            type: "ScheduleVarianceAlert",
+            entityType: "Task",
+            entityId: t.taskid,
+            message,
+        });
         await client.query(
             "UPDATE tasks SET scheduleVarianceAlertSent = TRUE WHERE taskId = $1",
             [t.taskid]

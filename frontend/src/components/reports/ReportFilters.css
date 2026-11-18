@@ -35,14 +35,24 @@
   gap: var(--space-2);
 }
 
-.report-filters-option {
+/* Every card in a row is the same height (the li stretches, the label fills
+   it), and the status badge sits under the dates so the name gets the full
+   width instead of being squeezed beside the badge. */
+.report-filters-list li {
   display: flex;
-  align-items: center;
+}
+.report-filters-option {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
+}
+.report-filters-option input {
+  margin-top: 2px;
 }
 .report-filters-option:hover {
   background: var(--color-surface-muted);
@@ -60,11 +70,21 @@
   min-width: 0;
   display: grid;
   gap: 2px;
+  justify-items: start;
 }
+.report-filters-text .badge {
+  margin-top: var(--space-1);
+}
+/* At most two lines; the full name is in the tooltip (title). */
 .report-filters-name {
   font-size: var(--text-sm);
   font-weight: 600;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 .report-filters-dates-line {
   font-size: var(--text-xs);

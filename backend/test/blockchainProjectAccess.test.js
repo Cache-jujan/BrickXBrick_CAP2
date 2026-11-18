@@ -1,4 +1,4 @@
-// F12 — a Project Manager can only read the blockchain section of their own
+// F12: a Project Manager can only read the blockchain section of their own
 // projects (adviser audit S2).
 const test = require("node:test");
 const assert = require("node:assert/strict");

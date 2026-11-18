@@ -31,34 +31,39 @@
   margin-top: var(--space-1);
 }
 
-/* --- Empty state -------------------------------------------------------- */
+/* Empty state */
 
 .bom-empty {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-6) var(--space-5);
-  max-width: 640px;
+  padding: var(--space-7, 40px) var(--space-6);
+  max-width: 600px;
+  margin: var(--space-8) auto 0;
+  text-align: center;
 }
 
 .bom-empty h2 {
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   margin-bottom: var(--space-2);
 }
 
 .bom-empty p {
   color: var(--color-ink-soft);
   font-size: var(--text-sm);
-  margin: 0 0 var(--space-4);
+  margin: 0 auto var(--space-5);
+  max-width: 46ch;
 }
 
 .bom-empty-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
-/* --- Totals strip --------------------------------------------------------- */
+/* Totals strip */
 
 .bom-totals {
   display: grid;
@@ -109,7 +114,7 @@
   font-weight: 600;
 }
 
-/* --- Checks ------------------------------------------------------------- */
+/* Checks */
 
 .bom-checks {
   background: var(--color-surface);
@@ -129,7 +134,7 @@
   color: var(--color-ink-soft);
 }
 
-/* --- Sections ----------------------------------------------------------- */
+/* Sections */
 
 .bom-section {
   margin-bottom: var(--space-6);
@@ -243,7 +248,7 @@
   text-align: center;
 }
 
-/* --- Inline inputs ------------------------------------------------------ */
+/* Inline inputs */
 
 .bom-input {
   width: 100%;
@@ -378,7 +383,7 @@
   gap: var(--space-3);
 }
 
-/* --- Unsaved changes bar ------------------------------------------------ */
+/* Unsaved changes bar */
 
 .bom-savebar {
   position: sticky;
@@ -402,7 +407,7 @@
   gap: var(--space-2);
 }
 
-/* --- Dialog ------------------------------------------------------------- */
+/* Dialog */
 
 .bom-dialog-list {
   max-height: 200px;
@@ -476,3 +481,4 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.bom-empty > p:last-child { margin-bottom: 0; }

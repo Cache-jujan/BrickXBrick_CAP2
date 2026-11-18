@@ -1,4 +1,4 @@
-// receiptStorage.js — where receiptImageURL actually comes from.
+// receiptStorage.js: where receiptImageURL actually comes from.
 //
 // `expenses.receiptimageurl` is NOT NULL, so something has to produce a
 // real, retrievable URL at submit time. Rather than accept a placeholder
@@ -44,7 +44,7 @@ const CONTENT_TYPE_BY_MIME = {
   "application/pdf": "application/pdf",
 };
 
-// receipts/<uuid>.<jpg|png|webp|pdf> — the only key shape this module ever writes.
+// receipts/<uuid>.<jpg|png|webp|pdf>: the only key shape this module ever writes.
 const RECEIPT_KEY_RE = /^receipts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|pdf)$/i;
 
 function isAllowedMime(mimeType) {
@@ -65,7 +65,7 @@ function hasValidReceiptBytes(buffer, mimeType) {
  * Persist a receipt image and return the URL to store in
  * expenses.receiptimageurl.
  *
- * The object name is a random UUID, never the client-supplied name — an
+ * The object name is a random UUID, never the client-supplied name, an
  * uploaded filename is attacker-controlled.
  */
 async function storeReceiptImage(buffer, mimeType) {
@@ -99,4 +99,14 @@ async function receiptImageExists(url) {
   return r2.objectExists(key);
 }
 
-module.exports = { storeReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX, MAX_RECEIPT_BYTES };
+/** Delete a stored receipt file (one this module wrote). Never throws: it is cleanup. */
+async function deleteReceiptImage(url) {
+  try {
+    const key = r2.keyFromPublicUrl(url);
+    if (key && RECEIPT_KEY_RE.test(key)) await r2.deleteObject(key);
+  } catch (err) {
+    console.error("Could not delete a rejected upload:", err.message);
+  }
+}
+
+module.exports = { storeReceiptImage, deleteReceiptImage, receiptImageExists, isAllowedMime, KEY_PREFIX, MAX_RECEIPT_BYTES };

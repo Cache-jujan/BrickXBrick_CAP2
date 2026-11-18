@@ -1,4 +1,4 @@
-// scanDraft.js — F6 receipt OCR -> expense draft. Shared by the synchronous
+// scanDraft.js: F6 receipt OCR -> expense draft. Shared by the synchronous
 // POST /receipts/scan and the background POST /receipts/scans job, so both
 // return exactly the same draft.
 
@@ -24,8 +24,7 @@ async function findVendorMasterRecord(vendorName, query = defaultQuery) {
             birPermitType AS "birPermitType",
             birPermitNumber AS "birPermitNumber"
        FROM VendorMasterList
-      WHERE approvalStatus = 'Approved'
-        AND regexp_replace(lower(vendorName), '[^a-z0-9]+', '', 'g') =
+      WHERE regexp_replace(lower(vendorName), '[^a-z0-9]+', '', 'g') =
             regexp_replace(lower($1), '[^a-z0-9]+', '', 'g')
       ORDER BY createdAt DESC
       LIMIT 1`,
