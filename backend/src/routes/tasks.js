@@ -415,6 +415,51 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
     }
 });
 
+// PATCH /:id/instruction, the PM sets or clears the instruction shown in a Planning task's
+// documents dialog ("Attach the barangay clearance here"). Owning PM only: the GM can read
+// documents but not edit the task. A completed task is locked.
+const MAX_INSTRUCTION = 500;
+router.patch("/:id/instruction", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const task = await getPlanningTaskContext(req.params.id);
+        if (task.projectmanagerid !== req.user.id) {
+            const err = new Error("You may only edit tasks on a project you are the Project Manager for");
+            err.status = 403;
+            throw err;
+        }
+        await assertProjectNotTerminated(query, { taskId: req.params.id });
+        if (task.milestonephase !== "Planning") {
+            const err = new Error("Only a Planning-phase task has an attach instruction");
+            err.status = 409;
+            throw err;
+        }
+        if (task.status === "Completed") {
+            const err = new Error("This task is already completed");
+            err.status = 409;
+            throw err;
+        }
+        const raw = req.body ? req.body.attachmentInstruction : null;
+        if (raw !== null && raw !== undefined && typeof raw !== "string") {
+            const err = new Error("attachmentInstruction must be text or null");
+            err.status = 400;
+            throw err;
+        }
+        const value = typeof raw === "string" ? raw.trim() : "";
+        if (value.length > MAX_INSTRUCTION) {
+            const err = new Error(`The instruction must be ${MAX_INSTRUCTION} characters or fewer`);
+            err.status = 400;
+            throw err;
+        }
+        const result = await query(
+            "UPDATE tasks SET attachmentInstruction = $1 WHERE taskId = $2 RETURNING *",
+            [value || null, req.params.id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Planning-task documents
 //
 // A Planning task is "Handled by GM/PM" and has no photo flow, so the only way

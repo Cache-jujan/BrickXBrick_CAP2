@@ -390,6 +390,16 @@ export function ProjectDetailPage() {
     }
   }
 
+  // The documents dialog saved a new attach instruction: keep the open task and the page's copy in step.
+  async function handleInstructionSaved(updated) {
+    setDocsTask((current) => (current ? { ...current, attachmentinstruction: updated.attachmentinstruction } : current));
+    try {
+      setProject(await getProjectOverview(id));
+    } catch {
+      // the dialog already shows the saved text; the page refreshes on the next load
+    }
+  }
+
   // Called from the documents dialog once it has a file attached. Throws on failure so the dialog can show why.
   async function handleTaskCompleteFromDocs(task) {
     await completeTask(task.taskid, {});
@@ -1163,6 +1173,8 @@ export function ProjectDetailPage() {
           task={docsTask}
           canEdit={canViewTaskDocuments && !isClosed && docsTask.status !== "Completed"}
           onClose={() => setDocsTask(null)}
+          canEditInstruction={canManage && docsTask.status !== "Completed"}
+          onInstructionSaved={handleInstructionSaved}
           onComplete={canManage && docsTask.status !== "Completed" ? handleTaskCompleteFromDocs : undefined}
         />
       )}
