@@ -17,7 +17,7 @@ This talks to the existing Express backend (`routes/auth.js`,
 ```bash
 npm install
 cp .env.example .env
-# edit .env if your backend isn't on http://localhost:3000
+# edit .env if your backend isn't on http://localhost:3000 (VITE_API_URL; the deployed site on Vercel sets the same variable in its project settings)
 npm run dev
 ```
 
