@@ -85,6 +85,7 @@ export function ProjectForm({
   // chosen because the starting structure has construction tasks.
   extraSection = null,
   lockProjectType = false,
+  lockClientName = false,
   siteManagerRequired = false,
   onCancel = null,
   cancelLabel = null,
@@ -239,6 +240,7 @@ export function ProjectForm({
               value={form.clientName}
               maxLength={LIMITS.clientName}
               error={fieldErrors.clientName}
+              disabled={lockClientName}
               onChange={(e) => updateField("clientName", e.target.value)}
             />
             <Field
@@ -256,6 +258,9 @@ export function ProjectForm({
               ))}
             </Field>
           </div>
+          {(lockClientName || lockProjectType) && (
+            <p className="create-project-hint">{t("form.identity_locked_note")}</p>
+          )}
           <Field
             label={t("form.description")}
             as="textarea"

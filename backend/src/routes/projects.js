@@ -35,6 +35,7 @@ const {
   hideBudgetFrom,
 } = require("../lib/projectRules");
 const { assertDatesUnlocked } = require("../lib/projectDateLock");
+const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
@@ -421,6 +422,8 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
       // Once the project is active the target dates of development and of
       // construction are fixed, for everyone (the completion date can still move).
       assertDatesUnlocked(existing, fields);
+      // The client and the project type are fixed too once the project is active.
+      assertIdentityUnlocked(existing, fields);
       // Client: the price given to the client is the BOM total, so once the
       // BOM is approved the budget follows it (reopen the BOM to change it).
       if (Math.abs(Number(fields.budget) - Number(existing.budget)) > 0.005) {
