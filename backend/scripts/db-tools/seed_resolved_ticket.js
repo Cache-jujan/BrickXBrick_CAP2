@@ -7,27 +7,40 @@
 //
 // Usage (from backend/ folder, with the server running):
 //   node scripts/seed_ticket_resolved_b.js
+//
+// Needs SEED_ADMIN_EMAIL / _PASSWORD, SEED_SM_EMAIL / _PASSWORD, SEED_PURCHASER_B_EMAIL / _PASSWORD
+// and SEED_PM_SEED_EMAIL / _PASSWORD in backend/.env (see backend/.env.example).
 
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const BASE_URL = "http://127.0.0.1:3000";
 
-const ADMIN_EMAIL = "testadmin@gmail.com";
-const ADMIN_PASSWORD = "admin123";
+// Credentials come from the environment, never from this file. Fails fast when one is missing.
+function requireEnv(name) {
+    const value = process.env[name];
+    if (!value) {
+        console.error(`Missing env var: ${name}. Set it in backend/.env or export it before running this script.`);
+        process.exit(1);
+    }
+    return value;
+}
 
-const SM_EMAIL = "testsm@gmail.com";
-const SM_PASSWORD = "TestSm123!";
+const ADMIN_EMAIL = requireEnv("SEED_ADMIN_EMAIL");
+const ADMIN_PASSWORD = requireEnv("SEED_ADMIN_PASSWORD");
 
-const PURCHASER_B_EMAIL = "testpurchaser2@gmail.com";
-const PURCHASER_B_PASSWORD = "TestPurch2123!";
+const SM_EMAIL = requireEnv("SEED_SM_EMAIL");
+const SM_PASSWORD = requireEnv("SEED_SM_PASSWORD");
+
+const PURCHASER_B_EMAIL = requireEnv("SEED_PURCHASER_B_EMAIL");
+const PURCHASER_B_PASSWORD = requireEnv("SEED_PURCHASER_B_PASSWORD");
 const PURCHASER_B_USERID = "53e9fbd2-3056-4372-a975-b61797c26b53";
 
 // "Ticket Test Project": testsm is siteManagerId here, so SM can create on it.
 const PROJECT_ID = "ef403363-8377-46ee-902f-54634c558356";
 
-const NEW_PM_EMAIL = "testpm_seed@gmail.com";
-const NEW_PM_PASSWORD = "TestPmSeed123!";
+const NEW_PM_EMAIL = requireEnv("SEED_PM_SEED_EMAIL");
+const NEW_PM_PASSWORD = requireEnv("SEED_PM_SEED_PASSWORD");
 const NEW_PM_NAME = "Test PM Seed";
 
 async function login(email, password) {

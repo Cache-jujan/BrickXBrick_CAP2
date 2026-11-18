@@ -64,7 +64,8 @@ router.post("/accept", requireAuth, async (req, res, next) => {
         version: TERMS_VERSION,
       });
     }
-    const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim().slice(0, 64) || null;
+    // req.ip honours `trust proxy` (server.js): the address the trusted proxy saw, not a client-supplied header.
+    const ip = String(req.ip || "").slice(0, 64) || null;
     const userAgent = String(req.headers["user-agent"] || "").slice(0, 300) || null;
 
     // Accepting twice is harmless: the first acceptance is the one on record.

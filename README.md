@@ -220,46 +220,71 @@ cd mobile && npx expo start
 
 ## API Reference
 
-**Base URL:** `http://localhost:3000`
+**Base URL:** the web dashboard is deployed at <https://brick-x-brick-cap-2.vercel.app/> and reads the API address from `VITE_API_URL` (set in the Vercel project settings). For local development the API is `http://localhost:3000`.
 
 **Authentication:** Include `Authorization: Bearer <token>` header on all protected routes.
 
+> Invite and password-reset emails link to `FRONTEND_URL/set-password`. Every address you use (for example `http://127.0.0.1:5173/**` and `https://brick-x-brick-cap-2.vercel.app/**`) must also be in Supabase → Authentication → URL Configuration → Redirect URLs, or those links stop working.
+
+This is the main set of routes, not every route. The source of truth is `backend/src/routes/*.js` and the mounts in `backend/src/server.js`.
+
 ### Auth
-| Method | Endpoint | Body |
-|--------|----------|------|
-| POST | `/api/auth/register` | `{ name, email, password, role }` |
+There is no self-service sign-up. Accounts are created by a System Administrator (`POST /api/admin/users`), and the person receives a Supabase invite email to set their password.
+
+| Method | Endpoint | Body / Notes |
+|--------|----------|--------------|
 | POST | `/api/auth/login` | `{ email, password }` |
+| POST | `/api/auth/refresh` | `{ refreshToken }` |
+| GET | `/api/me` | The signed-in user |
 
 ### Projects
 | Method | Endpoint | Role |
 |--------|----------|------|
-| GET | `/api/projects` | All |
+| GET | `/api/projects` | General Manager, Project Manager, Site Manager, Purchaser (scoped to their projects) |
 | POST | `/api/projects` | General Manager |
-| GET | `/api/projects/:id` | Members only |
+| GET | `/api/projects/:id` | General Manager, Project Manager |
+| GET | `/api/projects/:id/overview` | General Manager, Project Manager (project, milestones and tasks) |
 | PATCH | `/api/projects/:id` | General Manager |
+| PATCH | `/api/projects/:id/activate`, `/cancel`, `/suspend`, `/resume`, `/complete` | General Manager |
+| PATCH | `/api/projects/:id/site-manager` | General Manager, Project Manager |
 
 ### Project Tickets
+Material requests, work items and reports are all one resource, told apart by their `ticketType`.
+
 | Method | Endpoint | Role |
 |--------|----------|------|
-| POST | `/api/material-requests` | Project Manager |
-| GET | `/api/material-requests?projectId=` | Project members |
-| PATCH | `/api/material-requests/:id/status` | Purchaser |
-| POST | `/api/work-items` | Project Manager |
-| GET | `/api/work-items?projectId=` | Project members |
+| POST | `/api/tickets` | Site Manager, Project Manager |
+| POST | `/api/tickets/batch` | Site Manager, Project Manager |
+| GET | `/api/tickets/submitted` | Own tickets |
+| GET | `/api/tickets/assigned` | Purchaser |
+| GET | `/api/tickets/pending`, `/api/tickets/managed?status=` | Project Manager |
+| PATCH | `/api/tickets/:id` | Project Manager (edit) |
+| PATCH | `/api/tickets/:id/acknowledge` | Project Manager |
+| PATCH | `/api/tickets/:id/resolve` | Purchaser, Project Manager, Site Manager |
+| PATCH | `/api/tickets/:id/reject` | Project Manager, Purchaser, Site Manager |
 
 ### Expenses (with OCR & BIR Validation)
-| Method | Endpoint | Content-Type | Role |
-|--------|----------|--------------|------|
-| POST | `/api/expenses` | multipart/form-data | Purchaser |
-| GET | `/api/expenses?projectId=` | application/json | Project members |
-| POST | `/api/expenses/:id/split-allocate` | application/json | Purchaser |
-| PATCH | `/api/expenses/:id/verify-blockchain` | application/json | General Manager |
+The receipt is scanned first (`/api/receipts/scan`), then the expense is saved as JSON with the receipt it returned.
+
+| Method | Endpoint | Role |
+|--------|----------|------|
+| POST | `/api/receipts/scan` | Purchaser, Site Manager, General Manager, Project Manager (multipart/form-data) |
+| POST | `/api/expenses` | Purchaser, Site Manager, General Manager, Project Manager |
+| GET | `/api/expenses/mine` | Purchaser, Site Manager |
+| GET | `/api/expenses`, `/api/expenses/flagged` | General Manager, Project Manager |
+| GET | `/api/expenses/:id` | Owner, or the reviewing PM / GM |
+| PATCH | `/api/expenses/:id/approve`, `/reject` | Project Manager, General Manager |
+| PATCH | `/api/expenses/:id/resubmit` | Purchaser |
+| POST | `/api/allocations/preview`, `/api/allocations` | Purchaser, Site Manager, Project Manager, General Manager (split one receipt across requests) |
 
 ### Blockchain Audit
 | Method | Endpoint | Role |
 |--------|----------|------|
 | GET | `/api/blockchain/verify/:expenseId` | General Manager |
-| GET | `/api/audit-logs` | General Manager |
+| GET | `/api/blockchain/summary` | General Manager |
+| GET | `/api/blockchain/project/:projectId` | General Manager, Project Manager |
+| GET | `/api/blockchain/alerts` | General Manager, System Administrator |
+| PATCH | `/api/blockchain/alerts/:id/resolve` | General Manager, System Administrator |
 
 ---
 
