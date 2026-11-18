@@ -100,3 +100,12 @@ test("a contract with nothing readable proposes nothing and does not throw", () 
   assert.deepEqual(suggested, []);
   assert.doesNotThrow(() => proposeProjectFromContract(null));
 });
+
+test("a very long contract line is cut to the project form's limits", () => {
+  const long = "A".repeat(5000);
+  const { proposal } = proposeProjectFromContract({ fields: { ownerName: long, scope: long, siteLocation: `${long}, ${long}, ${long}` } });
+  assert.ok(proposal.clientName.length <= 150);
+  assert.ok(proposal.description.length <= 2000);
+  assert.ok(proposal.siteAddress.length <= 255);
+  assert.ok(proposal.municipality.length <= 100 && proposal.province.length <= 100);
+});

@@ -8,6 +8,7 @@
 // Site Managers are never in a contract, so they stay for the GM to enter.
 
 const { PROJECT_TYPES } = require("./projectRules");
+const { LIMITS } = require("./inputRules");
 
 const SMALL_WORDS = new Set(["of", "the", "and", "for", "at", "in", "de", "del", "dela", "la", "las", "los", "y"]);
 
@@ -131,14 +132,17 @@ function proposeProjectFromContract(result, { serviceArea = ["consolacion"] } = 
   const site = splitSiteLocation(f.siteLocation, serviceArea);
   const name = suggestProjectName(f.ownerName, projectType);
 
+  // A proposal never goes over the project form's own limits, so a long contract line
+  // can't make the create call fail after the GM has reviewed it.
+  const cap = (value, max) => String(value || "").slice(0, max).trim();
   const proposal = {
-    name,
-    clientName: f.ownerName ? String(f.ownerName).replace(/\s+/g, " ").trim() : "",
-    description: f.scope ? titleCase(String(f.scope)) : "",
+    name: cap(name, LIMITS.projectName),
+    clientName: cap(f.ownerName ? String(f.ownerName).replace(/\s+/g, " ").trim() : "", LIMITS.clientName),
+    description: cap(f.scope ? titleCase(String(f.scope)) : "", LIMITS.description),
     projectType: PROJECT_TYPES.includes(projectType) ? projectType : "",
-    municipality: site.municipality,
-    province: site.province,
-    siteAddress: site.siteAddress,
+    municipality: cap(site.municipality, LIMITS.municipality),
+    province: cap(site.province, LIMITS.province),
+    siteAddress: cap(site.siteAddress, LIMITS.siteAddress),
     durationWorkingDays: Number.isInteger(f.durationWorkingDays) ? f.durationWorkingDays : null,
   };
   const suggested = [];
