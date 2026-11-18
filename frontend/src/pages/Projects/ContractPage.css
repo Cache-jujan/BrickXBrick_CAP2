@@ -255,3 +255,19 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Inputs have no width of their own: without this the amount box keeps its natural width
+   and covers the date next to it. The grids set the spacing between fields. */
+
+.contract-dialog-grid .field,
+.contract-grid .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.contract-dialog-grid .field-control,
+.contract-grid .field-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
