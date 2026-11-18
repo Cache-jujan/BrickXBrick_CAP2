@@ -12,6 +12,7 @@
 const zlib = require("zlib");
 const { round2 } = require("./bomRules");
 const { peso } = require("./contractRules");
+const { assertZipIsReasonable } = require("./zipGuard");
 
 const MAX_DOCUMENT_XML_BYTES = 20 * 1024 * 1024;
 
@@ -77,6 +78,7 @@ const XML_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
 /** The plain text of a .docx, one line per paragraph. */
 function docxToText(buf) {
+  assertZipIsReasonable(buf);
   const xml = readZipEntry(buf, "word/document.xml");
   if (!xml) throw unreadable("This doesn't look like a Word document (.docx).");
   return xml
