@@ -17,7 +17,7 @@ import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { ProjectForm, EMPTY_PROJECT_FORM } from "../../components/projects/ProjectForm";
 import { ProjectStartGallery } from "../../components/projects/ProjectStartGallery";
-import { DocumentChecklist, EMPTY_SELECTION, selectionToStart } from "../../components/projects/DocumentChecklist";
+import { DocumentChecklist, EMPTY_SELECTION, selectionToStart, noneTicked, countTicked } from "../../components/projects/DocumentChecklist";
 import { StructurePreview } from "../../components/projects/StructurePreview";
 import { ContractIntake } from "../../components/projects/ContractIntake";
 import { useLocale } from "../../i18n/LocaleProvider";
@@ -45,7 +45,8 @@ export function CreateProjectPage() {
   const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [loadingChecklist, setLoadingChecklist] = useState(false);
 
-  // Blank project: the permit documents of the chosen project type, ticked by default.
+  // Blank project: the permit documents of the chosen project type, all unticked: the GM ticks
+  // only the ones this project needs.
   // { type, data } so a list is only used for the type it was loaded for.
   const [blankType, setBlankType] = useState("");
   const [docsChecklist, setDocsChecklist] = useState(null);
@@ -87,7 +88,9 @@ export function CreateProjectPage() {
     let cancelled = false;
     getDocumentsChecklist(blankType)
       .then((data) => {
-        if (!cancelled) setDocsChecklist({ type: blankType, data });
+        if (cancelled) return;
+        setDocsChecklist({ type: blankType, data });
+        setSelection(noneTicked(data));
       })
       .catch(() => {
         // No list: the project is created blank, as before.
@@ -171,7 +174,10 @@ export function CreateProjectPage() {
     if (!choice) {
       // Blank sheet: nothing to review. With a document list for this type, it starts with
       // the ticked documents only; the PM adds the milestones.
-      const hasList = docsChecklist?.type === payload.projectType && docsChecklist.data.milestones.length > 0;
+      const hasList =
+        docsChecklist?.type === payload.projectType &&
+        docsChecklist.data.milestones.length > 0 &&
+        countTicked(docsChecklist.data, selection) > 0;
       await createWithContract(
         hasList
           ? { ...payload, start: selectionToStart({ mode: "documents", projectType: payload.projectType }, selection) }
