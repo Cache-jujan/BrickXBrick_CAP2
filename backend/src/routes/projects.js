@@ -3,9 +3,9 @@
 // Lifecycle (Oct 2026 revision; see lib/projectRules.js for the sources):
 //   Draft      created by the GM after the client signs the BOM; PM is assigned
 //              now so planning and procurement can start (adviser item 2)
-//   Active     activated by the GM once the Site Manager is assigned
-//              and the Bill of Materials is approved; tickets and purchases
-//              are only allowed from here
+//   Active     activated by the GM once the Site Manager is assigned,
+//              the Bill of Materials is approved and the signed contract is
+//              recorded; tickets and purchases are only allowed from here
 //   Completed  the GM records the actual completion / turnover date
 //   Suspended  put on hold by the GM with a reason (and, if known, an expected
 //              resume date); no new requests, purchases or check-ins until the
@@ -495,7 +495,8 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
 });
 
 // PATCH /:id/activate, GM. Draft -> Active. Requires both managers assigned.
-// The project's Bill of Materials must be approved (routes/bom.js).
+// The project's Bill of Materials must be approved (routes/bom.js) and the
+// signed contract recorded (routes/contract.js).
 router.patch("/:id/activate", requireRole("General Manager"), async (req, res) => {
   try {
     const project = await withTransaction(async (client) => {
@@ -508,6 +509,12 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
       const bom = await client.query("SELECT status FROM boms WHERE projectid = $1::uuid", [existing.projectid]);
       if (bom.rows[0]?.status !== "Approved") {
         throw httpError(409, "Approve the project's Bill of Materials before activating");
+      }
+      // The signed contract is recorded before work starts (routes/contract.js).
+      // It is not the budget: the budget stays the approved BOM total plus escalation.
+      const contract = await client.query("SELECT 1 FROM projectcontracts WHERE projectid = $1::uuid", [existing.projectid]);
+      if (contract.rowCount === 0) {
+        throw httpError(409, "Record the signed contract before activating");
       }
 
       const result = await client.query(
