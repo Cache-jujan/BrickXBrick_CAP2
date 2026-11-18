@@ -13,6 +13,7 @@ const { isUUID } = require("./uuid");
 const { dateWindowWarning } = require("./scheduleWindows");
 const { deriveStatus } = require("./milestoneProgress");
 const { PROJECT_TYPES } = require("./projectRules");
+const { GATE_CODE } = require("./procurementGate");
 
 const MODES = ["blank", "template", "copy", "documents"];
 const MAX_IDS = 1000;
@@ -161,7 +162,8 @@ async function loadTemplateSource(run, templateId) {
         requirementCode: r.requirementcode || null,
         offset: Number(r.kdue),
         defaultIncluded: r.defaultincluded,
-        selectable: Boolean(r.requirementcode),
+        // Permit documents can be left out; the procurement gate cannot.
+        selectable: Boolean(r.requirementcode) && r.requirementcode !== GATE_CODE,
         hint: r.hint || null,
       });
     }
@@ -184,7 +186,7 @@ async function loadCopySource(run, projectId) {
   );
   const ts = ms.rowCount
     ? await run(
-        `SELECT taskId, milestoneId, taskName, handledBy, requirementCode, dueDate
+        `SELECT taskId, milestoneId, taskName, handledBy, requirementCode, attachmentInstruction, dueDate
            FROM tasks WHERE milestoneId = ANY($1)
           ORDER BY dueDate ASC, sortOrder ASC NULLS LAST, taskName ASC`,
         [ms.rows.map((m) => m.milestoneid)]
@@ -208,7 +210,7 @@ async function loadCopySource(run, projectId) {
           offset: anchor ? daysBetween(anchor, dateKey(t.duedate)) : 0,
           defaultIncluded: true,
           selectable: true,
-          hint: null,
+          hint: t.attachmentinstruction || null,
         })),
     };
   });
@@ -323,6 +325,7 @@ function buildStructure(source, request, project) {
           name: t.name,
           handledBy: m.phase === "Planning" ? t.handledBy || "PM" : null,
           requirementCode: t.requirementCode,
+          attachmentInstruction: t.hint || null,
           dueDate: due,
           warning: w,
           sortOrder: i + 1,
@@ -364,9 +367,9 @@ async function insertStructure(client, { projectId, createdBy, siteManagerId, st
       const planning = m.phase === "Planning";
       if (!planning && !siteManagerId) throw httpError(400, "A Site Manager is required for construction tasks");
       await client.query(
-        `INSERT INTO tasks (milestoneId, assignedTo, handledBy, taskName, dueDate, sortOrder, requirementCode)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [milestoneId, planning ? null : siteManagerId, planning ? t.handledBy : null, t.name, t.dueDate, t.sortOrder, t.requirementCode]
+        `INSERT INTO tasks (milestoneId, assignedTo, handledBy, taskName, dueDate, sortOrder, requirementCode, attachmentInstruction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [milestoneId, planning ? null : siteManagerId, planning ? t.handledBy : null, t.name, t.dueDate, t.sortOrder, t.requirementCode, t.attachmentInstruction || null]
       );
     }
   }

@@ -91,6 +91,7 @@ stub("../src/lib/r2", {
     return `https://cdn.example/${key}`;
   },
   publicUrlForKey: (key) => `https://cdn.example/${key}`,
+  getSignedReadUrl: async (key) => `https://cdn.example/${key}?signed=1`,
 });
 stub("../src/lib/milestoneProgress", { recalcMilestoneProgress: async () => {} });
 stub("../src/middleware/auth", {
@@ -291,7 +292,7 @@ test("download: returns the url and file name, and 404s a missing or deleted doc
   state.docs = [{ id: DOC, fileName: "permit.pdf", key: "task-documents/x/y.pdf" }];
   const ok = await call("GET", `/api/tasks/${TASK}/documents/${DOC}/download`);
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.body, { url: "https://cdn.example/task-documents/x/y.pdf", fileName: "permit.pdf" });
+  assert.deepEqual(ok.body, { url: "https://cdn.example/task-documents/x/y.pdf?signed=1", fileName: "permit.pdf" });
 
   assert.equal((await call("GET", `/api/tasks/${TASK}/documents/cccccccc-cccc-4ccc-8ccc-cccccccccccc/download`)).status, 404);
   assert.equal((await call("GET", `/api/tasks/${TASK}/documents/nope/download`)).status, 404);

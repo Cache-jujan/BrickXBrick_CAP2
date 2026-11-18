@@ -6,7 +6,8 @@
 // needs to store receipt images too, extend this file rather than writing a
 // second one.
 
-const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const crypto = require("crypto");
 
 const REQUIRED_ENV = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY", "R2_BUCKET", "R2_PUBLIC_BASE_URL"];
@@ -39,12 +40,13 @@ const EXT_BY_MIME = { "image/jpeg": "jpg", "image/png": "png" };
 // so the bucket stays human-navigable; the object name itself is random so
 // two uploads never collide.
 //
-// NOTE: this assumes R2_PUBLIC_URL points at a bucket with public read
-// access (R2's public dev URL or a custom domain) and returns a plain URL.
-// R2 objects are private by default. If this bucket is NOT public, this
-// needs to return a signed GET URL instead (@aws-sdk/s3-request-presigner)
-// confirm which setup is actually live before this goes past local
-// testing.
+// PRIVATE BUCKET: the bucket is meant to be private. What gets STORED (in
+// avatarurl, photoUrl, photoEvidenceURL, receiptImageURL ...) is still the plain
+// <R2_PUBLIC_BASE_URL>/<key> string this returns: it is the identity of the object
+// and is never fetched directly. Whatever is SENT to a browser or phone is a signed
+// GET URL that expires after an hour (getSignedReadUrl, below): the API response
+// hook in middleware/r2Urls.js swaps every stored URL for a signed one on the way
+// out, and turns a signed URL back into the stored form on the way in.
 async function uploadBuffer(buffer, { contentType, keyPrefix = "uploads" }) {
     const ext = EXT_BY_MIME[contentType];
     if (!ext) {
@@ -102,6 +104,44 @@ function publicUrlForKey(key) {
     return `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
 }
 
+// getSignedReadUrl(key, { expiresIn }) -> a GET URL for one object that works without
+// the bucket being public and stops working after `expiresIn` seconds (default 1 hour).
+// Signing is a local calculation; it does not call R2.
+const SIGNED_URL_TTL_SECONDS = 3600;
+async function getSignedReadUrl(key, { expiresIn = SIGNED_URL_TTL_SECONDS } = {}) {
+    return getSignedUrl(getClient(), new GetObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }), { expiresIn });
+}
+
+// getSignedReadUrlFromPublicUrl(url, opts) -> a signed URL for a stored URL, or null when
+// the URL is not one of ours (an outside link is never signed).
+async function getSignedReadUrlFromPublicUrl(url, opts) {
+    const key = keyFromPublicUrl(url);
+    return key ? getSignedReadUrl(key, opts) : null;
+}
+
+// storedUrlFromSignedUrl(url) -> the stored <R2_PUBLIC_BASE_URL>/<key> form of a signed URL this
+// server handed out, or null. Phones and pages send back the URL they were given (for example
+// the receipt of a scan when saving the expense); the database matches on the stored form.
+function storedUrlFromSignedUrl(url) {
+    const account = process.env.R2_ACCOUNT_ID;
+    const bucket = process.env.R2_BUCKET;
+    if (typeof url !== "string" || !account || !bucket || !process.env.R2_PUBLIC_BASE_URL) return null;
+    // The SDK signs with the bucket in the host name; the path style is accepted too.
+    const hosted = `https://${bucket}.${account}.r2.cloudflarestorage.com/`;
+    const pathStyle = `https://${account}.r2.cloudflarestorage.com/${bucket}/`;
+    const strip = url.startsWith(hosted) ? hosted : url.startsWith(pathStyle) ? pathStyle : null;
+    if (!strip) return null;
+    let key;
+    try {
+        const parsed = new URL(url);
+        key = decodeURIComponent(parsed.pathname.slice(strip === hosted ? 1 : `/${bucket}/`.length));
+    } catch {
+        return null;
+    }
+    if (!key || key.includes("..")) return null;
+    return publicUrlForKey(key);
+}
+
 // putObject(key, buffer, contentType) -> Promise<string URL>
 //
 // Like uploadBuffer, but the caller chooses the exact key and content type.
@@ -124,4 +164,15 @@ async function deleteObject(key) {
     await getClient().send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }));
 }
 
-module.exports = { uploadBuffer, putObject, deleteObject, publicUrlForKey, keyFromPublicUrl, objectExists, getClient };
+module.exports = {
+    uploadBuffer,
+    putObject,
+    deleteObject,
+    publicUrlForKey,
+    keyFromPublicUrl,
+    getSignedReadUrl,
+    getSignedReadUrlFromPublicUrl,
+    storedUrlFromSignedUrl,
+    objectExists,
+    getClient,
+};

@@ -172,7 +172,7 @@ export function ProgressReviewPage() {
                   <p className="progress-review-card-error" role="alert">{cardError.message}</p>
                 )}
                 <div className="progress-review-actions">
-                  <Button type="button" onClick={() => handleReview(submission, "Acknowledge")} disabled={isSubmitting}>
+                  <Button type="button" variant="secondary" onClick={() => handleReview(submission, "Acknowledge")} disabled={isSubmitting}>
                     {isSubmitting ? t("common.saving") : t("review.acknowledge")}
                   </Button>
                   <div className="progress-review-flag">

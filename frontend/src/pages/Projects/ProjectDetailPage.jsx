@@ -26,6 +26,7 @@ import { Field } from "../../components/ui/Field";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { ProjectTimeline } from "../../components/milestones/ProjectTimeline";
 import { TaskDocumentsDialog } from "../../components/milestones/TaskDocumentsDialog";
+import { ProgressBreakdownDialog } from "../../components/milestones/ProgressBreakdownDialog";
 import { EditTimelineModal } from "../../components/milestones/EditTimelineModal";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
@@ -117,6 +118,7 @@ export function ProjectDetailPage() {
   // directly. { task } while a confirm dialog is open.
   // Planning-task documents dialog: the task whose files are open, or null.
   const [docsTask, setDocsTask] = useState(null);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   // The PM's "Edit timeline" modal (rename, re-date, delete milestones and tasks).
   const [timelineDialog, setTimelineDialog] = useState(false);
   // Site Manager assignment moved from an always-open picker into a modal.
@@ -390,6 +392,16 @@ export function ProjectDetailPage() {
     }
   }
 
+  // The documents dialog saved a new attach instruction: keep the open task and the page's copy in step.
+  async function handleInstructionSaved(updated) {
+    setDocsTask((current) => (current ? { ...current, attachmentinstruction: updated.attachmentinstruction } : current));
+    try {
+      setProject(await getProjectOverview(id));
+    } catch {
+      // the dialog already shows the saved text; the page refreshes on the next load
+    }
+  }
+
   // Called from the documents dialog once it has a file attached. Throws on failure so the dialog can show why.
   async function handleTaskCompleteFromDocs(task) {
     await completeTask(task.taskid, {});
@@ -592,6 +604,12 @@ export function ProjectDetailPage() {
         <Banner key={w.code} tone="warning" title={w.message} />
       ))}
 
+      {project.procurementGateCompleted === false && (project.milestones || []).some((m) => m.phase === "Construction") && (
+        <Banner tone="warning" title={t("pd.gate_banner_title")}>
+          {t("pd.gate_banner_body", { name: t("pd.gate_task_name_default") })}
+        </Banner>
+      )}
+
       {project.description && <p className="pd-description">{project.description}</p>}
 
       <section className="pd-summary" aria-label={t("pd.summary")}>
@@ -612,10 +630,10 @@ export function ProjectDetailPage() {
             <div className="pd-progress">
               <dt>{t("pd.work_progress")}</dt>
               <dd>
-                <div className="pd-progress-track">
+                <button type="button" className="pd-progress-track pd-progress-clickable" onClick={() => setBreakdownOpen(true)} aria-haspopup="dialog" title={t("pd.progress_breakdown_title")}>
                   <ProgressBar value={progressPct} />
                   <span className="pd-progress-pct">{progressPct}%</span>
-                </div>
+                </button>
               </dd>
             </div>
           </dl>
@@ -1158,11 +1176,14 @@ export function ProjectDetailPage() {
           onSaved={handleTimelineSaved}
         />
       )}
+      {breakdownOpen && <ProgressBreakdownDialog project={project} onClose={() => setBreakdownOpen(false)} />}
       {docsTask && (
         <TaskDocumentsDialog
           task={docsTask}
           canEdit={canViewTaskDocuments && !isClosed && docsTask.status !== "Completed"}
           onClose={() => setDocsTask(null)}
+          canEditInstruction={canManage && docsTask.status !== "Completed"}
+          onInstructionSaved={handleInstructionSaved}
           onComplete={canManage && docsTask.status !== "Completed" ? handleTaskCompleteFromDocs : undefined}
         />
       )}

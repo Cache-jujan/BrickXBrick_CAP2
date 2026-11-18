@@ -12,6 +12,7 @@
 const db = require("./db");
 const r2 = require("./r2");
 const { notifySafely } = require("./notify");
+const { GATE_BLOCKED_MESSAGE, isBlockedByProcurementGate } = require("./procurementGate");
 
 class TaskProgressError extends Error {
   constructor(status, code, message) {
@@ -78,6 +79,14 @@ async function submitTaskProgress(input, deps = {}) {
 
   if (task.status === "Completed") {
     throw new TaskProgressError(409, "TASK_CLOSED", "This task is already completed and cannot be resubmitted");
+  }
+
+  // The Site Manager's procurement gate must be done before other Construction work takes progress
+  // (online and offline sync alike; checked before any photo is stored).
+  if (await isBlockedByProcurementGate(query, taskId)) {
+    const error = new TaskProgressError(409, "PROCUREMENT_GATE", GATE_BLOCKED_MESSAGE);
+    error.details = { code: "PROCUREMENT_GATE" };
+    throw error;
   }
 
   // Before storing any photo: one submission waits for review at a time.

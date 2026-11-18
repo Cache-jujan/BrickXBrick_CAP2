@@ -14,6 +14,7 @@ const TASK_REASONS = {
   WRONG_ROLE: "This account can't send task updates.",
   DUPLICATE_UUID: "This update was already sent from another device.",
   INVALID_FIELDS: "This update was not valid. Please submit it again.",
+  PROCUREMENT_GATE: "Mark 'Receive all initial procurement on site' as done before Construction work can start.",
 };
 
 // Daily check-in rejections (kind "daily_checkin").
@@ -60,6 +61,7 @@ const TASK_REASON_KEYS = {
   WRONG_ROLE: "sm.reject_wrong_role",
   DUPLICATE_UUID: "sm.reject_duplicate",
   INVALID_FIELDS: "sm.reject_invalid",
+  PROCUREMENT_GATE: "errors.procurement_gate_not_done",
 };
 
 // The text to show for a rejected task update. Unknown codes fall back to the

@@ -30,3 +30,11 @@ export async function completeTask(taskId, payload = {}) {
   const { data } = await apiClient.patch(`/api/tasks/${taskId}/complete`, payload);
   return data;
 }
+
+// PATCH /api/tasks/:id/instruction, the owning Project Manager, Planning tasks that are not
+// completed. attachmentInstruction: text up to 500 characters, or "" / null to clear it.
+// Returns the updated task row.
+export async function updateTaskInstruction(taskId, attachmentInstruction) {
+  const { data } = await apiClient.patch(`/api/tasks/${taskId}/instruction`, { attachmentInstruction });
+  return data;
+}

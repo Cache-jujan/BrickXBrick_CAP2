@@ -9,3 +9,9 @@
 .task-docs-remove:hover { text-decoration: underline; }
 .task-docs-remove:disabled { color: var(--color-ink-faint); cursor: default; text-decoration: none; }
 .task-docs-locked, .task-docs-hint { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--color-ink-soft); }
+.task-docs-instruction-link { align-self: flex-start; background: none; border: none; padding: 0; margin: 0 0 var(--space-2); font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-brick); cursor: pointer; }
+.task-docs-instruction-link:hover { text-decoration: underline; }
+.task-docs-instruction-link:disabled { color: var(--color-ink-faint); cursor: default; text-decoration: none; }
+.task-docs-instruction-edit { margin-bottom: var(--space-3); }
+.task-docs-instruction-input { width: 100%; box-sizing: border-box; font: inherit; padding: var(--space-2); border: 1px solid var(--color-border, rgba(0, 0, 0, 0.2)); border-radius: var(--radius-sm, 6px); resize: vertical; }
+.task-docs-instruction-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
