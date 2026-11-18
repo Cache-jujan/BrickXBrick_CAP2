@@ -264,8 +264,8 @@ export function CreateProjectPage() {
 
       {step === "basics" && (
         <div className="create-project-card">
-          <ContractIntake reading={reading} onRead={applyContract} onClear={clearContract} />
           <p className="create-project-hint">{t("cp.next_steps")}</p>
+          <ContractIntake reading={reading} onRead={applyContract} onClear={clearContract} />
           <ProjectForm
             key={`${choice ? `${choice.mode}-${choice.templateId || choice.sourceProjectId}` : "blank"}-${prefillKey}`}
             mode="create"
