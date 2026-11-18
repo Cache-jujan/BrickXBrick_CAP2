@@ -18,6 +18,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Banner } from "../../components/ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
+import "../../components/projects/AssignmentLimitsCard.css";
 import "./UserManagementPage.css";
 
 const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
@@ -256,29 +257,38 @@ function isFull(usage, role) {
 }
 
 // The System Administrator sets how many active accounts each role may have.
+// Same bar and edit form as the General Manager's Assignment limits (Projects page).
 // A limit only blocks NEW accounts; nobody who already exists is ever removed.
 function RoleLimitsCard({ usage, onSaved }) {
   const { t } = useLocale();
   const [draft, setDraft] = useState({});
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const valueFor = (row) => (draft[row.role] !== undefined ? draft[row.role] : String(row.limit));
-  const changed = usage.roles.filter((row) => draft[row.role] !== undefined && draft[row.role] !== String(row.limit));
-  const invalid = changed.some((row) => {
-    const n = Number(draft[row.role]);
-    return !Number.isInteger(n) || n < usage.min || n > usage.max;
-  });
-
-  async function handleSave() {
-    setBusy(true);
+  function startEdit() {
+    setDraft(Object.fromEntries(usage.roles.map((row) => [row.role, String(row.limit)])));
     setError("");
     setSaved(false);
+    setEditing(true);
+  }
+
+  const inRange = (value) => {
+    const n = Number(value);
+    return value !== "" && Number.isInteger(n) && n >= usage.min && n <= usage.max;
+  };
+  const valid = usage.roles.every((row) => inRange(draft[row.role]));
+  const changed = usage.roles.filter((row) => draft[row.role] !== undefined && Number(draft[row.role]) !== row.limit);
+
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!valid || changed.length === 0) return;
+    setBusy(true);
+    setError("");
     try {
-      const limits = Object.fromEntries(changed.map((row) => [row.role, Number(draft[row.role])]));
-      onSaved(await updateRoleLimits(limits));
-      setDraft({});
+      onSaved(await updateRoleLimits(Object.fromEntries(changed.map((row) => [row.role, Number(draft[row.role])]))));
+      setEditing(false);
       setSaved(true);
     } catch (err) {
       setError(extractErrorMessage(err, t("errors.save_account_limits")));
@@ -288,36 +298,52 @@ function RoleLimitsCard({ usage, onSaved }) {
   }
 
   return (
-    <Card className="users-limits-card">
-      <h2 className="users-limits-title">{t("users.limits_title")}</h2>
-      <p className="users-limits-hint">{t("users.limits_hint")}</p>
-      <div className="users-limits-grid">
-        {usage.roles.map((row) => (
-          <div key={row.role} className={`users-limit-row${row.full ? " is-full" : ""}`}>
-            <div className="users-limit-name">
-              <strong>{row.role}</strong>
-              <span className="users-limit-count">{t("users.limits_count", { active: row.active, limit: row.limit })}</span>
-              {row.over ? <span className="users-limit-flag">{t("users.limits_over")}</span> : row.full ? <span className="users-limit-flag">{t("users.limits_full")}</span> : null}
-            </div>
-            <input
+    <section className="limits-card" aria-label={t("users.limits_title")}>
+      {!editing ? (
+        <div className="limits-row">
+          <div className="limits-text">
+            <span className="limits-label">{t("users.limits_title")}</span>
+            {usage.roles.map((row) => (
+              <span key={row.role} className="limits-item">
+                <span className="limits-role">{row.role}</span>
+                <strong>{t("users.limits_count", { active: row.active, limit: row.limit })}</strong>
+                {row.full && <span className="limits-unit">{row.over ? t("users.limits_over") : t("users.limits_full")}</span>}
+              </span>
+            ))}
+          </div>
+          <Button variant="secondary" className="btn-sm" onClick={startEdit}>
+            {t("limits.edit")}
+          </Button>
+        </div>
+      ) : (
+        <form className="limits-form" onSubmit={handleSave} noValidate>
+          {usage.roles.map((row) => (
+            <Field
+              key={row.role}
+              label={row.role}
               type="number"
-              className="field-control users-limit-input"
               min={usage.min}
               max={usage.max}
               step={1}
-              value={valueFor(row)}
-              onChange={(e) => { setSaved(false); setDraft((d) => ({ ...d, [row.role]: e.target.value })); }}
-              aria-label={t("users.limits_input", { role: row.role })}
+              value={draft[row.role] ?? ""}
+              onChange={(e) => setDraft((d) => ({ ...d, [row.role]: e.target.value }))}
+              error={draft[row.role] !== "" && !inRange(draft[row.role]) ? t("limits.range", { min: usage.min, max: usage.max }) : ""}
             />
+          ))}
+          <p className="limits-hint">{t("users.limits_hint")}</p>
+          <div className="limits-actions">
+            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={busy || !valid || changed.length === 0}>
+              {busy ? t("common.saving") : t("users.limits_save")}
+            </Button>
           </div>
-        ))}
-      </div>
+        </form>
+      )}
       {error && <Banner tone="error" title={error} />}
-      {saved && <Banner tone="success" title={t("users.limits_saved")} />}
-      <div className="users-form-actions">
-        <Button onClick={handleSave} disabled={busy || changed.length === 0 || invalid}>{busy ? t("common.saving") : t("users.limits_save")}</Button>
-      </div>
-    </Card>
+      {saved && !editing && <p className="limits-saved">{t("users.limits_saved")}</p>}
+    </section>
   );
 }
 
