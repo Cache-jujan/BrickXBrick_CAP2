@@ -306,7 +306,28 @@ export type TicketInput = {
   // this is the rejected ticket's id. The backend validates ownership /
   // status and links the two so the PM sees the resubmission flagged.
   resubmittedFromId?: string;
+  // Report only: URLs returned by uploadTicketPhoto (at most 3).
+  photoUrls?: string[];
 };
+
+// Upload ONE photo for a Report ticket (POST /api/tickets/photo) and return its URL.
+// The ticket itself is created afterwards with the URLs in photoUrls.
+export async function uploadTicketPhoto(photo: { uri: string; mimeType?: string | null }): Promise<string> {
+  await ensureFreshToken();
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/tickets/photo`, photo.uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "photo",
+    mimeType: photo.mimeType || "image/jpeg",
+    headers: authHeaders(),
+  });
+  if (result.status === 401) handleUnauthorized();
+  const data = JSON.parse(result.body || "{}");
+  if (result.status < 200 || result.status >= 300 || !data.photoUrl) {
+    throw new Error(data.error || `Failed to upload photo (${result.status})`);
+  }
+  return data.photoUrl;
+}
 
 // Load one ticket the caller submitted (any status). Used by the "Fix &
 // resubmit" flow to prefill the form from the rejected original.

@@ -859,6 +859,17 @@ function TicketCard(props) {
 
       {ticket.description && <p className="ticket-card-description">{ticket.description}</p>}
 
+      {isReport && ticket.photos?.length > 0 && (
+        <div className="ticket-card-photos">
+          <span className="ticket-card-photos-label">{tr("tq.photos_locked")}</span>
+          {ticket.photos.map((p) => (
+            <a key={p.photoUrl} className="ticket-card-photo" href={p.photoUrl} target="_blank" rel="noopener noreferrer">
+              <img src={p.photoUrl} alt="" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
+
       {!isReport && !isAdjustment && (ticket.materialtype || ticket.quantity || ticket.vendorname) && (
         <dl className="ticket-card-facts">
           <div><dt>{tr("tq.material")}</dt><dd>{ticket.materialtype || "—"}</dd></div>

@@ -28,7 +28,7 @@ const users = {
   [PURCHASER]: { userid: PURCHASER, role: "Purchaser", status: "Active" },
 };
 
-const state = { me: SM, inserted: [], updates: [], ticket: null, bought: false };
+const state = { me: SM, inserted: [], updates: [], ticket: null, bought: false, photos: [] };
 
 // Pair the INSERT's column list with its values, so tests read by column name.
 function insertedRow(text, params) {
@@ -62,6 +62,10 @@ const client = {
       const row = insertedRow(text, params);
       state.inserted.push(row);
       return { rowCount: 1, rows: [{ ticketid: `ticket-${state.inserted.length}`, ...row }] };
+    }
+    if (text.startsWith("insert into ticket_photos")) {
+      state.photos.push(params);
+      return { rowCount: 1, rows: [] };
     }
     if (text.startsWith("select status from tickets where ticketid")) {
       return { rowCount: 1, rows: [{ status: state.ticket.status }] };
@@ -113,6 +117,7 @@ function reset(me) {
   state.me = me;
   state.inserted.length = 0;
   state.updates.length = 0;
+  state.photos.length = 0;
   state.ticket = null;
 }
 
@@ -263,4 +268,34 @@ test("PM cancelling an Acknowledged request stores a 'Cancelled by PM:' reason",
   const res = await call("PATCH", "/api/tickets/ticket-9/reject", { reason: "Stock found on site" });
   assert.equal(res.status, 200, JSON.stringify(res.body));
   assert.ok(state.updates[0].params.includes("Cancelled by PM: Stock found on site"));
+});
+
+const PHOTO_BASE = "https://photos.test";
+const photo = (n) => `${PHOTO_BASE}/ticket-photos/${n}.jpg`;
+const report = (extra = {}) => ({ projectID: PROJECT, ticketType: "Report", subject: "Leak", description: "Water on level 2", ...extra });
+
+test("a Report keeps up to 3 of this server's photos, in order", async () => {
+  process.env.R2_PUBLIC_BASE_URL = PHOTO_BASE;
+  reset(SM);
+  const res = await call("POST", "/api/tickets", report({ photoUrls: [photo("a"), photo("b")] }));
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.deepEqual(state.photos.map((p) => [p[1], p[2]]), [[photo("a"), 1], [photo("b"), 2]]);
+});
+
+test("a Report refuses a fourth photo and links that are not our uploads", async () => {
+  process.env.R2_PUBLIC_BASE_URL = PHOTO_BASE;
+  reset(SM);
+  const four = await call("POST", "/api/tickets", report({ photoUrls: [photo("a"), photo("b"), photo("c"), photo("d")] }));
+  assert.equal(four.status, 400);
+  const foreign = await call("POST", "/api/tickets", report({ photoUrls: ["https://evil.test/x.jpg"] }));
+  assert.equal(foreign.status, 400);
+  assert.equal(state.photos.length, 0);
+});
+
+test("photos sent with a non-Report ticket are ignored", async () => {
+  process.env.R2_PUBLIC_BASE_URL = PHOTO_BASE;
+  reset(SM);
+  const res = await call("POST", "/api/tickets", smMaterialRequest({ photoUrls: [photo("a")] }));
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(state.photos.length, 0);
 });
