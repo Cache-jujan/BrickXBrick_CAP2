@@ -3,6 +3,7 @@ import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { COST_CATEGORIES, MAX_ESCALATION_PCT } from "../../utils/costCategories";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./BudgetJustification.css";
 
 const PESO = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
@@ -96,12 +97,11 @@ export function BudgetJustification({
           <Field
             label={t("bomjust.amount_label")}
             required
-            type="number"
-            min="0"
-            step="any"
             inputMode="decimal"
-            value={cost.amount}
-            onChange={(e) => setCost((c) => ({ ...c, amount: e.target.value }))}
+            placeholder="0.00"
+            maxLength={18}
+            value={formatAmountInput(cost.amount)}
+            onChange={(e) => setCost((c) => ({ ...c, amount: parseAmountInput(e.target.value) }))}
           />
           <div className="budget-just-add-actions">
             <Button type="button" variant="secondary" onClick={() => setAdding(false)}>
