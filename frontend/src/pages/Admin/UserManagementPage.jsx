@@ -6,6 +6,8 @@ import {
   deactivateUser,
   unlockUser,
   sendPasswordEmail,
+  getRoleLimits,
+  updateRoleLimits,
   VALID_ROLES,
 } from "../../api/adminApi";
 import { extractErrorMessage } from "../../api/client";
@@ -16,6 +18,7 @@ import { Button } from "../../components/ui/Button";
 import { Field } from "../../components/ui/Field";
 import { Banner } from "../../components/ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
+import "../../components/projects/AssignmentLimitsCard.css";
 import "./UserManagementPage.css";
 
 const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
@@ -36,10 +39,21 @@ export function UserManagementPage() {
   // { type: "password" | "role" | "deactivate" | "reactivate", user }
   const [dialog, setDialog] = useState(null);
   const [rowError, setRowError] = useState("");
+  const [usage, setUsage] = useState(null); // account limits: { roles: [{ role, limit, active, full, over }] }
+
+  // The limits card is a nicety: if it can't load, the list and the server-side checks still work.
+  async function reloadUsage() {
+    try {
+      setUsage(await getRoleLimits());
+    } catch {
+      setUsage(null);
+    }
+  }
 
   async function reload() {
     setLoading(true);
     setListError("");
+    reloadUsage();
     try {
       setUsers(await listUsers());
     } catch (err) {
@@ -88,6 +102,7 @@ export function UserManagementPage() {
 
       {showForm && (
         <CreateUserForm
+          usage={usage}
           onCreated={(email) => {
             setShowForm(false);
             setNotice(t("users.invite_sent", { email }));
@@ -96,6 +111,8 @@ export function UserManagementPage() {
         />
       )}
       {notice && <Banner tone="info" title={notice} />}
+
+      {usage && <RoleLimitsCard usage={usage} onSaved={setUsage} />}
 
       <div className="users-toolbar">
         <input
@@ -198,7 +215,7 @@ export function UserManagementPage() {
         <SendPasswordEmailDialog user={dialog.user} onClose={() => { setDialog(null); reload(); }} />
       )}
       {dialog?.type === "role" && (
-        <ChangeRoleDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => { setDialog(null); reload(); }} />
+        <ChangeRoleDialog usage={usage} user={dialog.user} onClose={() => setDialog(null)} onDone={() => { setDialog(null); reload(); }} />
       )}
       {(dialog?.type === "deactivate" || dialog?.type === "reactivate") && (
         <StatusDialog
@@ -233,7 +250,107 @@ function Modal({ title, children, onClose, labelId = "users-modal-title" }) {
 
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
 
-function CreateUserForm({ onCreated }) {
+// True when the role already has as many active accounts as its limit allows.
+function isFull(usage, role) {
+  const row = usage?.roles?.find((r) => r.role === role);
+  return Boolean(row && row.full);
+}
+
+// The System Administrator sets how many active accounts each role may have.
+// Same bar and edit form as the General Manager's Assignment limits (Projects page).
+// A limit only blocks NEW accounts; nobody who already exists is ever removed.
+function RoleLimitsCard({ usage, onSaved }) {
+  const { t } = useLocale();
+  const [draft, setDraft] = useState({});
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  function startEdit() {
+    setDraft(Object.fromEntries(usage.roles.map((row) => [row.role, String(row.limit)])));
+    setError("");
+    setSaved(false);
+    setEditing(true);
+  }
+
+  const inRange = (value) => {
+    const n = Number(value);
+    return value !== "" && Number.isInteger(n) && n >= usage.min && n <= usage.max;
+  };
+  const valid = usage.roles.every((row) => inRange(draft[row.role]));
+  const changed = usage.roles.filter((row) => draft[row.role] !== undefined && Number(draft[row.role]) !== row.limit);
+
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!valid || changed.length === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      onSaved(await updateRoleLimits(Object.fromEntries(changed.map((row) => [row.role, Number(draft[row.role])]))));
+      setEditing(false);
+      setSaved(true);
+    } catch (err) {
+      setError(extractErrorMessage(err, t("errors.save_account_limits")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="limits-card" aria-label={t("users.limits_title")}>
+      {!editing ? (
+        <>
+          <div className="limits-row">
+            <span className="limits-label limits-label-solo">{t("users.limits_title")}</span>
+            <Button variant="secondary" className="btn-sm" onClick={startEdit}>
+              {t("limits.edit")}
+            </Button>
+          </div>
+          <div className="limits-grid">
+            {usage.roles.map((row) => (
+              <div key={row.role} className={`limits-cell${row.full ? " is-full" : ""}`}>
+                <span className="limits-role">{row.role}</span>
+                <strong>{t("users.limits_count", { active: row.active, limit: row.limit })}</strong>
+                {row.full && <span className="limits-flag">{row.over ? t("users.limits_over") : t("users.limits_full")}</span>}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <form className="limits-form limits-form-roles" onSubmit={handleSave} noValidate>
+          <span className="limits-label limits-label-solo limits-form-title">{t("users.limits_title")}</span>
+          {usage.roles.map((row) => (
+            <Field
+              key={row.role}
+              label={row.role}
+              type="number"
+              min={usage.min}
+              max={usage.max}
+              step={1}
+              value={draft[row.role] ?? ""}
+              onChange={(e) => setDraft((d) => ({ ...d, [row.role]: e.target.value }))}
+              error={draft[row.role] !== "" && !inRange(draft[row.role]) ? t("limits.range", { min: usage.min, max: usage.max }) : ""}
+            />
+          ))}
+          <p className="limits-hint">{t("users.limits_hint")}</p>
+          <div className="limits-actions">
+            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={busy || !valid || changed.length === 0}>
+              {busy ? t("common.saving") : t("users.limits_save")}
+            </Button>
+          </div>
+        </form>
+      )}
+      {error && <Banner tone="error" title={error} />}
+      {saved && !editing && <p className="limits-saved">{t("users.limits_saved")}</p>}
+    </section>
+  );
+}
+
+function CreateUserForm({ onCreated, usage }) {
   const { t } = useLocale();
   const [form, setForm] = useState({ name: "", email: "", role: VALID_ROLES[0] });
   const [error, setError] = useState("");
@@ -270,10 +387,11 @@ function CreateUserForm({ onCreated }) {
           <label className="field">
             <span className="field-label">{t("settings.role")}<span className="field-required"> *</span></span>
             <select className="field-control" value={form.role} onChange={(e) => update("role", e.target.value)}>
-              {VALID_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+              {VALID_ROLES.map((role) => <option key={role} value={role}>{role}{isFull(usage, role) ? ` ${t("users.limit_full_tag")}` : ""}</option>)}
             </select>
           </label>
         </div>
+        {isFull(usage, form.role) && <Banner tone="warning" title={t("users.limit_full_warn", { role: form.role })} />}
         <p className="users-form-hint">
           <strong>{t("users.hint_strong")}</strong> {t("users.hint_rest")}
         </p>
@@ -335,7 +453,7 @@ function SendPasswordEmailDialog({ user, onClose }) {
   );
 }
 
-function ChangeRoleDialog({ user, onClose, onDone }) {
+function ChangeRoleDialog({ user, usage, onClose, onDone }) {
   const { t } = useLocale();
   const [role, setRole] = useState(user.role);
   const [error, setError] = useState("");
@@ -359,9 +477,10 @@ function ChangeRoleDialog({ user, onClose, onDone }) {
       <label className="field">
         <span className="field-label">{t("settings.role")}</span>
         <select className="field-control" value={role} onChange={(e) => setRole(e.target.value)}>
-          {VALID_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          {VALID_ROLES.map((r) => <option key={r} value={r}>{r}{r !== user.role && isFull(usage, r) ? ` ${t("users.limit_full_tag")}` : ""}</option>)}
         </select>
       </label>
+      {role !== user.role && isFull(usage, role) && <Banner tone="warning" title={t("users.limit_full_warn", { role })} />}
       {error && <Banner tone="error" title={error} />}
       <div className="modal-actions">
         <Button variant="secondary" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>

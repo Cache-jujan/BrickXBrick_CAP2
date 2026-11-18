@@ -1,6 +1,6 @@
 import LIMITS from "../../utils/inputLimits";
-import { useEffect, useState } from "react";
-import { createTicket, listApprovedVendors, listPurchasers } from "../../api/ticketsApi";
+import { useEffect, useRef, useState } from "react";
+import { createTicket, listApprovedVendors, listPurchasers, uploadTicketPhoto } from "../../api/ticketsApi";
 import { listProjects } from "../../api/projectsApi";
 import { getBomItems } from "../../api/bomApi";
 import { extractErrorMessage } from "../../api/client";
@@ -25,6 +25,10 @@ const UNIT_OPTIONS = [
   "m", "cm", "mm", "sq.m", "cu.m",
   "bag", "box", "roll", "sheet", "pair", "bundle", "gal", "can", "truckload",
 ];
+
+const MAX_PHOTOS = 3;
+const PHOTO_TYPES = ["image/jpeg", "image/png"];
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 const EMPTY_FORM = {
   projectID: "",
@@ -146,6 +150,46 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the project or type changes, not on a language change
   }, [form.projectID, form.ticketType]);
 
+  // Report photos: each pick uploads at once; the form keeps the returned URL and a local
+  // preview. Nothing is attached to a ticket until the ticket itself is created.
+  const [photos, setPhotos] = useState([]);
+  const [photoError, setPhotoError] = useState("");
+  const photoInputRef = useRef(null);
+  const photoSeq = useRef(0);
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.preview)), []);
+
+  async function handlePhotoPick(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = ""; // allow picking the same file again
+    setPhotoError("");
+    const room = MAX_PHOTOS - photosRef.current.length;
+    if (files.length > room) setPhotoError(t("tr.photo_err_limit"));
+    for (const file of files.slice(0, Math.max(room, 0))) {
+      if (!PHOTO_TYPES.includes(file.type)) { setPhotoError(t("tr.photo_err_type")); continue; }
+      if (file.size > PHOTO_MAX_BYTES) { setPhotoError(t("tr.photo_err_size")); continue; }
+      photoSeq.current += 1;
+      const entry = { id: photoSeq.current, preview: URL.createObjectURL(file), url: null };
+      setPhotos((cur) => [...cur, entry]);
+      try {
+        const { photoUrl } = await uploadTicketPhoto(file);
+        setPhotos((cur) => cur.map((p) => (p.id === entry.id ? { ...p, url: photoUrl } : p)));
+      } catch (err) {
+        URL.revokeObjectURL(entry.preview);
+        setPhotos((cur) => cur.filter((p) => p.id !== entry.id));
+        setPhotoError(extractErrorMessage(err, t("tr.photo_err_upload")));
+      }
+    }
+  }
+
+  function removePhoto(id) {
+    const gone = photosRef.current.find((p) => p.id === id);
+    if (gone) URL.revokeObjectURL(gone.preview);
+    setPhotos((cur) => cur.filter((p) => p.id !== id));
+    setPhotoError("");
+  }
+
   function updateField(key, value) {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
@@ -165,6 +209,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     const errors = {};
     if (!form.projectID) errors.projectID = t("tf.err_project");
     if (!form.ticketType) errors.ticketType = t("tf.err_type");
+    if (form.ticketType === "Report" && photos.some((p) => !p.url)) errors.photos = t("tr.photo_err_wait");
     if (!form.subject.trim()) errors.subject = t("tf.err_subject");
 
     const isMaterialReq = form.ticketType === "Material Request";
@@ -240,6 +285,9 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
     }
     if (isWorkItem) {
       payload.materialType = form.materialType.trim();
+    }
+    if (form.ticketType === "Report" && photos.length > 0) {
+      payload.photoUrls = photos.map((p) => p.url);
     }
     if (isMaterialReq) {
       if (isPM) payload.approvedBudget = Number(form.approvedBudget);
@@ -379,6 +427,25 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         maxLength={LIMITS.description}
         onChange={(e) => updateField("description", e.target.value)}
       />
+
+      {form.ticketType === "Report" && (
+        <div className="ticket-form-photos">
+          <span className="field-label">{t("tr.photos_label")}</span>
+          <ul className="ticket-form-photo-list">
+            {photos.map((p) => (
+              <li key={p.id} className="ticket-form-photo">
+                <img src={p.preview} alt="" className={p.url ? "" : "is-uploading"} />
+                <button type="button" className="ticket-form-photo-remove" aria-label={t("tr.photo_remove")} onClick={() => removePhoto(p.id)}>×</button>
+              </li>
+            ))}
+          </ul>
+          <input ref={photoInputRef} type="file" accept="image/jpeg,image/png" multiple onChange={handlePhotoPick} hidden />
+          {photos.length < MAX_PHOTOS && (
+            <Button type="button" variant="secondary" onClick={() => photoInputRef.current?.click()} disabled={submitting}>{t("tr.photo_add")}</Button>
+          )}
+          {(photoError || fieldErrors.photos) && <p className="field-error" role="alert">{photoError || fieldErrors.photos}</p>}
+        </div>
+      )}
 
       </div>
 

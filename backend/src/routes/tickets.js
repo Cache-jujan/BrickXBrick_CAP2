@@ -1,6 +1,7 @@
 // tickets.js: F4 ticket creation, acknowledgment, and status transitions.
 
 const express = require("express");
+const multer = require("multer");
 const { query, withTransaction } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
@@ -9,10 +10,51 @@ const { notify } = require("../lib/notify");
 const { assertProjectNotTerminated } = require("../lib/projectHold");
 const { VALID_TICKET_TYPES } = require("../lib/ticketRouting");
 const { parseNeededBy } = require("../lib/neededBy");
+const { uploadBuffer, keyFromPublicUrl } = require("../lib/r2");
+const { hasValidMagicBytes } = require("../lib/photoValidation");
 const { LIMITS, text, amount, quantity: cleanQuantity, uuid, collect } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
+
+// Report tickets can carry up to 3 photos, attached when the ticket is created and
+// locked afterwards. Same upload rules as the daily check-in photos.
+const MAX_TICKET_PHOTOS = 3;
+const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png"];
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
+
+function badRequest(message) {
+    const err = new Error(message);
+    err.status = 400;
+    return err;
+}
+
+function receivePhoto(req, res, next) {
+    photoUpload.single("photo")(req, res, (err) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError) {
+            const message = err.code === "LIMIT_FILE_SIZE" ? "photo must be 10MB or smaller" : err.message;
+            return res.status(400).json({ error: message });
+        }
+        return next(err);
+    });
+}
+
+// The photo URLs sent with a new Report: a short list of photos THIS server stored
+// under ticket-photos/ (anything else could be a link to an arbitrary site).
+function cleanPhotoUrls(value) {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) throw badRequest("photoUrls must be a list");
+    if (value.length > MAX_TICKET_PHOTOS) throw badRequest(`A report can have at most ${MAX_TICKET_PHOTOS} photos`);
+    for (const url of value) {
+        if (typeof url !== "string" || url.length === 0 || url.length > 2048) {
+            throw badRequest("Each photo link must be text of at most 2048 characters");
+        }
+        const key = keyFromPublicUrl(url);
+        if (!key || !key.startsWith("ticket-photos/")) throw badRequest("A photo is not one uploaded for tickets");
+    }
+    return [...new Set(value)];
+}
 
 // A Budget Adjustment ticket is decided through /api/budget-adjustments (approve or reject), never through
 // the Material Request actions below.
@@ -83,6 +125,33 @@ async function getTicket(ticketId) {
     return result.rows[0];
 }
 
+// A request counts as "bought" once any non-Rejected expense points at it. The PM
+// can still edit or cancel it until then. Takes the transaction's client so the
+// check runs under the ticket row lock that expense entry also takes.
+async function lockTicketUnbought(client, ticketId, verb) {
+    const locked = await client.query("SELECT status FROM tickets WHERE ticketId = $1 FOR UPDATE", [ticketId]);
+    const status = locked.rows[0] && locked.rows[0].status;
+    if (status !== "Pending" && status !== "Acknowledged") {
+        const err = new Error(`Only pending or acknowledged tickets can be ${verb}; this one is ${status}`);
+        err.status = 409;
+        throw err;
+    }
+    const bought = await client.query(
+        "SELECT 1 FROM expenses WHERE ticketId = $1 AND status <> 'Rejected' LIMIT 1",
+        [ticketId]
+    );
+    if (bought.rowCount > 0) {
+        const err = new Error(
+            verb === "edited"
+                ? "This request already has a receipt, so it can't be edited."
+                : "This request already has a receipt, so it can't be cancelled."
+        );
+        err.status = 409;
+        throw err;
+    }
+    return status;
+}
+
 // POST /: create a ticket.
 //
 // Two creators:
@@ -124,10 +193,13 @@ async function createTicketRecord(client, user, body) {
             notInBomReason,
             resubmittedFromId,
             neededBy,
+            photoUrls,
         } = body || {};
 
         const isPM = user.role === "Project Manager";
         const isSM = user.role === "Site Manager";
+        // Photos only ride on a Report; for any other type they are ignored.
+        const reportPhotoUrls = ticketType === "Report" ? cleanPhotoUrls(photoUrls) : [];
 
         if (!projectID || !ticketType || !subject) {
             const err = new Error("projectID, ticketType, and subject are required");
@@ -445,6 +517,13 @@ async function createTicketRecord(client, user, body) {
             );
             const newTicket = insertResult.rows[0];
 
+            for (let i = 0; i < reportPhotoUrls.length; i += 1) {
+                await client.query(
+                    "INSERT INTO ticket_photos (ticketId, photoUrl, sortOrder) VALUES ($1, $2, $3)",
+                    [newTicket.ticketid, reportPhotoUrls[i], i + 1]
+                );
+            }
+
             // Audit: every ticket is born Pending. A PM-created ticket is
             // acknowledged by the same action, so record that transition too.
             await logTransition(client, {
@@ -465,6 +544,22 @@ async function createTicketRecord(client, user, body) {
             return newTicket;
         }
 }
+
+// POST /photo: multipart, field "photo" (JPEG/PNG, up to 10MB). Stores ONE photo and
+// returns its URL; the Report ticket's own POST then carries the URLs. Nothing is
+// attached to a ticket until that POST succeeds.
+router.post("/photo", requireRole("Site Manager"), receivePhoto, async (req, res, next) => {
+    try {
+        const file = req.file;
+        if (!file) throw badRequest("photo is required");
+        if (!ALLOWED_PHOTO_TYPES.includes(file.mimetype)) throw badRequest("photo must be JPEG or PNG");
+        if (!hasValidMagicBytes(file.buffer, file.mimetype)) throw badRequest("photo content does not match a valid JPEG or PNG file");
+        const photoUrl = await uploadBuffer(file.buffer, { contentType: file.mimetype, keyPrefix: "ticket-photos" });
+        res.status(201).json({ photoUrl });
+    } catch (err) {
+        next(err);
+    }
+});
 
 // POST /: create a single ticket (SM request, or PM direct create).
 router.post("/", requireRole("Site Manager", "Project Manager"), async (req, res, next) => {
@@ -612,10 +707,15 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
 router.get("/pending", requireRole("Project Manager"), async (req, res, next) => {
     try {
         const result = await query(
-            `SELECT t.*, p.name AS projectName, u.name AS submittedByName
+            `SELECT t.*, p.name AS projectName, u.name AS submittedByName, ph.photos
                FROM tickets t
                JOIN projects p ON p.projectId = t.projectId
                LEFT JOIN users u ON u.userId = t.submittedBy
+               LEFT JOIN LATERAL (
+                   SELECT jsonb_agg(jsonb_build_object('photoUrl', tp.photoUrl, 'sortOrder', tp.sortOrder) ORDER BY tp.sortOrder) AS photos
+                     FROM ticket_photos tp
+                    WHERE tp.ticketId = t.ticketId
+               ) ph ON t.ticketType = 'Report'
               WHERE p.projectManagerId = $1 AND t.status = 'Pending'
               ORDER BY t.createdAt ASC`,
             [req.user.id]
@@ -672,10 +772,12 @@ router.get("/managed", requireRole("Project Manager"), async (req, res, next) =>
                     orig.subject         AS "resubmitOfSubject",
                     orig.rejectionReason AS "resubmitOfReason",
                     EXISTS (SELECT 1 FROM tickets n WHERE n.resubmittedFromId = t.ticketId) AS "wasResubmitted",
+                    EXISTS (SELECT 1 FROM expenses e WHERE e.ticketId = t.ticketId AND e.status <> 'Rejected') AS "hasReceipts",
                     bi.quantity AS "bomQuantity",
                     bi.unitCost AS "bomUnitCost",
                     bi.unit     AS "bomUnit",
-                    COALESCE(agg.alreadyRequested, 0) AS "bomAlreadyRequested"
+                    COALESCE(agg.alreadyRequested, 0) AS "bomAlreadyRequested",
+                    ph.photos
                FROM tickets t
                JOIN projects p ON p.projectId = t.projectId
                LEFT JOIN users u ON u.userId = t.submittedBy
@@ -683,6 +785,11 @@ router.get("/managed", requireRole("Project Manager"), async (req, res, next) =>
                LEFT JOIN users a ON a.userId = t.assignedTo
                LEFT JOIN tickets orig ON orig.ticketId = t.resubmittedFromId
                LEFT JOIN bomItems bi ON bi.bomItemId = t.bomItemId
+               LEFT JOIN LATERAL (
+                   SELECT jsonb_agg(jsonb_build_object('photoUrl', tp.photoUrl, 'sortOrder', tp.sortOrder) ORDER BY tp.sortOrder) AS photos
+                     FROM ticket_photos tp
+                    WHERE tp.ticketId = t.ticketId
+               ) ph ON t.ticketType = 'Report'
                LEFT JOIN LATERAL (
                    SELECT SUM(o.quantity) AS alreadyRequested
                      FROM tickets o
@@ -753,10 +860,16 @@ router.get("/submitted", async (req, res, next) => {
             `SELECT t.*, u.role AS rejectedByRole, n.ticketId AS resubmittedById,
                     COALESCE(ec.expenseCount, 0) AS expenseCount,
                     COALESCE(ec.expenseTotal, 0) AS expenseTotal,
-                    COALESCE(ec.expenseQuantity, 0) AS expenseQuantity
+                    COALESCE(ec.expenseQuantity, 0) AS expenseQuantity,
+                    ph.photos
                FROM tickets t
                LEFT JOIN users u ON u.userId = t.resolvedBy
                LEFT JOIN tickets n ON n.resubmittedFromId = t.ticketId
+               LEFT JOIN LATERAL (
+                   SELECT jsonb_agg(jsonb_build_object('photoUrl', tp.photoUrl, 'sortOrder', tp.sortOrder) ORDER BY tp.sortOrder) AS photos
+                     FROM ticket_photos tp
+                    WHERE tp.ticketId = t.ticketId
+               ) ph ON t.ticketType = 'Report'
                LEFT JOIN LATERAL (
                    SELECT COUNT(*) AS expenseCount, SUM(amount) AS expenseTotal, SUM(quantity) AS expenseQuantity
                      FROM expenses e
@@ -954,7 +1067,8 @@ router.patch("/:id/resolve", requireRole("Purchaser", "Project Manager", "Site M
     }
 });
 
-// PATCH /:id/reject, PM (Pending only) or assigned Purchaser (Acknowledged only).
+// PATCH /:id/reject, PM (Pending, or Acknowledged while nothing has been bought)
+// or assigned Purchaser (Acknowledged only).
 router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Manager"), async (req, res, next) => {
     try {
         const ticket = await getTicket(req.params.id);
@@ -969,8 +1083,8 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
                 err.status = 403;
                 throw err;
             }
-            if (ticket.status !== "Pending") {
-                const err = new Error("Project Manager may only reject a ticket while it is Pending");
+            if (ticket.status !== "Pending" && ticket.status !== "Acknowledged") {
+                const err = new Error("Project Manager may only reject a ticket while it is Pending or Acknowledged");
                 err.status = 409;
                 throw err;
             }
@@ -1001,14 +1115,23 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
 
         assertLegalTransition(ticket.status, "Rejected");
 
+        // A PM cancelling an Acknowledged request: the reason is stored with a prefix so
+        // history tells it apart from a Purchaser's rejection.
+        const storedReason = req.user.role === "Project Manager" && ticket.status === "Acknowledged"
+            ? `Cancelled by PM: ${reasonText}`
+            : reasonText || null;
+
         const updated = await withTransaction(async (client) => {
+            if (req.user.role === "Project Manager" && ticket.status === "Acknowledged") {
+                await lockTicketUnbought(client, req.params.id, "cancelled");
+            }
             const updateResult = await client.query(
                 `UPDATE tickets
                     SET status = 'Rejected', resolvedBy = $1, resolvedAt = NOW(), updatedAt = NOW(),
                         rejectionReason = $4
                   WHERE ticketId = $2 AND status = $3
                   RETURNING *`,
-                [req.user.id, req.params.id, ticket.status, reasonText || null]
+                [req.user.id, req.params.id, ticket.status, storedReason]
             );
 
             if (updateResult.rowCount === 0) {
@@ -1038,7 +1161,7 @@ router.patch("/:id/reject", requireRole("Project Manager", "Purchaser", "Site Ma
 // Declared after the specific /:id/* routes so it only matches a bare id.
 //
 // Scope: PM-only, on a project they manage, and only while the ticket is still
-// Pending. Editable fields depend on the ticket's shape; the BOM linkage itself
+// Pending, or Acknowledged with nothing bought against it yet. Editable fields depend on the ticket's shape; the BOM linkage itself
 // (which BOM item, or on-BOM vs not-in-BOM) is NOT editable here, an on-BOM
 // Material Request keeps its BOM-derived materialType and unit locked.
 router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
@@ -1051,8 +1174,8 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
             err.status = 403;
             throw err;
         }
-        if (ticket.status !== "Pending") {
-            const err = new Error(`Only pending tickets can be edited; this one is ${ticket.status}`);
+        if (ticket.status !== "Pending" && ticket.status !== "Acknowledged") {
+            const err = new Error(`Only pending or acknowledged tickets can be edited; this one is ${ticket.status}`);
             err.status = 409;
             throw err;
         }
@@ -1091,14 +1214,17 @@ router.patch("/:id", requireRole("Project Manager"), async (req, res, next) => {
         }
 
         // isReport falls through with just subject + description updated.
-        const result = await query(
-            `UPDATE tickets SET ${sets.join(", ")}, updatedAt = NOW()
-              WHERE ticketId = $${p + 1} AND status = 'Pending'
-              RETURNING *`,
-            [...vals, req.params.id]
-        );
+        const result = await withTransaction(async (client) => {
+            const lockedStatus = await lockTicketUnbought(client, req.params.id, "edited");
+            return client.query(
+                `UPDATE tickets SET ${sets.join(", ")}, updatedAt = NOW()
+                  WHERE ticketId = $${p + 1} AND status = $${p + 2}
+                  RETURNING *`,
+                [...vals, req.params.id, lockedStatus]
+            );
+        });
         if (result.rowCount === 0) {
-            const err = new Error("This ticket is no longer pending");
+            const err = new Error("This ticket is no longer open");
             err.status = 409;
             throw err;
         }

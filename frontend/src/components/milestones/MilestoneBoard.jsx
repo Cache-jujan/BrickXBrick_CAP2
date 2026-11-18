@@ -36,7 +36,9 @@ function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments
   const done = task.status === "Completed";
   const isPlanning = milestone.phase === "Planning";
   const showDone = canManage && isPlanning && !done;
-  const showDocs = isPlanning && onOpenDocuments;
+  // Mark Done opens the documents dialog: finishing a Planning task needs a file as evidence.
+  // Documents stays as its own action only where there is nothing to mark done (completed task, GM).
+  const showDocs = isPlanning && onOpenDocuments && !showDone;
   // A file dragged onto a Planning task card is attached straight away. A completed task's documents are locked.
   const { isOver, dropProps } = useTaskFileDrop({
     enabled: isPlanning && Boolean(onDropFiles),
@@ -57,7 +59,7 @@ function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments
       </div>
       {(showDone || showDocs) && (
         <div className="board-task-actions">
-          {showDone && <button type="button" className="board-action" onClick={() => onCompleteTask?.(task)}>{t("pd.mark_done")}</button>}
+          {showDone && <button type="button" className="board-action" onClick={() => (onOpenDocuments || onCompleteTask)?.(task)}>{t("pd.mark_done")}</button>}
           {showDocs && <button type="button" className="board-action" onClick={() => onOpenDocuments(task)}>{t("tl.documents")}</button>}
         </div>
       )}

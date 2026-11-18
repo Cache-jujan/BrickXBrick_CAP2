@@ -339,6 +339,9 @@
   font-size: var(--text-sm);
   font-weight: 700;
 }
+.gm-skin .limits-label {
+  color: var(--color-ink);
+}
 .gm-skin .pd-group-title {
   margin-bottom: var(--space-3);
   color: var(--color-ink);

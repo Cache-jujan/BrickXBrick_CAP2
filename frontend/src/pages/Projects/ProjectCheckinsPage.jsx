@@ -8,6 +8,7 @@ import { Banner } from "../../components/ui/Banner";
 import { BackLink } from "../../components/ui/BackLink";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { useLocale } from "../../i18n/LocaleProvider";
 import "./ProjectCheckinsPage.css";
 
 const SLOT_ORDER = ["Morning", "Midday", "EndOfDay"];
@@ -65,6 +66,9 @@ export function ProjectCheckinsPage() {
   // "history" = acknowledged, kept out of the way so the list does not pile up.
   const [view, setView] = useState("todo");
   // Which check-in has its review form open, with its draft.
+  const { t } = useLocale();
+  // The check-in whose flag the PM is about to dismiss (waiting on the confirm dialog).
+  const [dismissing, setDismissing] = useState(null);
   const [flagging, setFlagging] = useState(null);
   const [flagComment, setFlagComment] = useState("");
   const [busyId, setBusyId] = useState(null);
@@ -133,6 +137,12 @@ export function ProjectCheckinsPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function confirmDismissFlag() {
+    const checkin = dismissing;
+    setDismissing(null);
+    if (checkin) await submitReview(checkin, "Acknowledged");
   }
 
   if (loading && !data) return <p className="dashboard-loading">Loading check-ins…</p>;
@@ -309,13 +319,10 @@ export function ProjectCheckinsPage() {
                   )}
                   {canReview && !open && (
                     <div className="checkin-actions">
-                      {(!c.review || c.review.decision !== "Acknowledged") && (
-                        <Button variant="secondary" disabled={busyId === c.checkinId} onClick={() => submitReview(c, "Acknowledged")}>
-                          Acknowledge
-                        </Button>
-                      )}
+                      {/* Flag sits on the left as the louder action; a flagged check-in swaps the plain
+                          Acknowledge for an explicit, confirmed "Dismiss flag". */}
                       <Button
-                        variant="secondary"
+                        variant={c.review?.decision === "Flagged" ? "secondary" : "danger"}
                         disabled={busyId === c.checkinId}
                         onClick={() => {
                           setFlagging(c.checkinId);
@@ -325,6 +332,15 @@ export function ProjectCheckinsPage() {
                       >
                         {c.review?.decision === "Flagged" ? "Edit flag" : "Flag"}
                       </Button>
+                      {c.review?.decision === "Flagged" ? (
+                        <Button variant="secondary" disabled={busyId === c.checkinId} onClick={() => setDismissing(c)}>
+                          {t("checkins.dismiss_flag")}
+                        </Button>
+                      ) : (!c.review || c.review.decision !== "Acknowledged") && (
+                        <Button variant="ghost" disabled={busyId === c.checkinId} onClick={() => submitReview(c, "Acknowledged")}>
+                          Acknowledge
+                        </Button>
+                      )}
                     </div>
                   )}
                   {open && (
@@ -356,6 +372,18 @@ export function ProjectCheckinsPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+      {dismissing && (
+        <div className="modal-overlay" role="presentation" onClick={() => setDismissing(null)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="dismiss-flag-title" onClick={(ev) => ev.stopPropagation()}>
+            <h2 id="dismiss-flag-title" className="modal-title">{t("checkins.dismiss_flag_confirm_title")}</h2>
+            <p className="modal-body">{t("checkins.dismiss_flag_confirm_body")}</p>
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => setDismissing(null)}>{t("common.cancel")}</Button>
+              <Button onClick={confirmDismissFlag}>{t("checkins.dismiss_flag")}</Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

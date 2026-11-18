@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { API_URL, authHeaders, getAuthToken } from "../constants/api";
 import type { BackendLineItem } from "./expense-types";
 import { apiFetch } from "@/lib/http";
-import { ensureFreshToken, handleUnauthorized } from "@/lib/auth";
+import { ensureFreshToken, getSession, handleUnauthorized, setAvatarUrl } from "@/lib/auth";
 
 export type Ticket = {
   ticketid: string;
@@ -105,6 +105,9 @@ export type AssignedTask = {
   completionpercentage: number | string;
   photoevidenceurl?: string | null;
   pendingphotoevidenceurl?: string | null;
+  // True while the project's "Receive all initial procurement on site" gate task is open and
+  // this is some other Construction task: progress can't be sent yet.
+  procurementgateblocked?: boolean | null;
   // When the submission now waiting for the PM's review was made, and its note.
   pendingsubmittedat?: string | null;
   pendingnote?: string | null;
@@ -306,7 +309,28 @@ export type TicketInput = {
   // this is the rejected ticket's id. The backend validates ownership /
   // status and links the two so the PM sees the resubmission flagged.
   resubmittedFromId?: string;
+  // Report only: URLs returned by uploadTicketPhoto (at most 3).
+  photoUrls?: string[];
 };
+
+// Upload ONE photo for a Report ticket (POST /api/tickets/photo) and return its URL.
+// The ticket itself is created afterwards with the URLs in photoUrls.
+export async function uploadTicketPhoto(photo: { uri: string; mimeType?: string | null }): Promise<string> {
+  await ensureFreshToken();
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/tickets/photo`, photo.uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "photo",
+    mimeType: photo.mimeType || "image/jpeg",
+    headers: authHeaders(),
+  });
+  if (result.status === 401) handleUnauthorized();
+  const data = JSON.parse(result.body || "{}");
+  if (result.status < 200 || result.status >= 300 || !data.photoUrl) {
+    throw new Error(data.error || `Failed to upload photo (${result.status})`);
+  }
+  return data.photoUrl;
+}
 
 // Load one ticket the caller submitted (any status). Used by the "Fix &
 // resubmit" flow to prefill the form from the rejected original.
@@ -510,6 +534,20 @@ export async function uploadAvatar(uri: string): Promise<string> {
   }
   if (result.status < 200 || result.status >= 300) throw new Error(data.error || "Failed to save the picture");
   return data.avatarUrl as string;
+}
+
+// The profile picture link the server hands out stops working after an hour, and the saved sign-in
+// keeps the one from sign-in time. Ask the server for a fresh one (no-op when signed out or offline).
+export async function refreshAvatarUrl(): Promise<void> {
+  if (!getSession()) return;
+  try {
+    const res = await apiFetch(`${API_URL}/api/me`, { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (data?.user && "avatarUrl" in data.user) setAvatarUrl(data.user.avatarUrl ?? null);
+  } catch {
+    // offline: the saved picture stays until the next try
+  }
 }
 
 export async function removeAvatar(): Promise<void> {

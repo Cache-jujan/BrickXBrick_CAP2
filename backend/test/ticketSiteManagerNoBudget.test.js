@@ -28,7 +28,7 @@ const users = {
   [PURCHASER]: { userid: PURCHASER, role: "Purchaser", status: "Active" },
 };
 
-const state = { me: SM, inserted: [], updates: [], ticket: null };
+const state = { me: SM, inserted: [], updates: [], ticket: null, bought: false, photos: [] };
 
 // Pair the INSERT's column list with its values, so tests read by column name.
 function insertedRow(text, params) {
@@ -62,6 +62,20 @@ const client = {
       const row = insertedRow(text, params);
       state.inserted.push(row);
       return { rowCount: 1, rows: [{ ticketid: `ticket-${state.inserted.length}`, ...row }] };
+    }
+    if (text.startsWith("insert into ticket_photos")) {
+      state.photos.push(params);
+      return { rowCount: 1, rows: [] };
+    }
+    if (text.startsWith("select status from tickets where ticketid")) {
+      return { rowCount: 1, rows: [{ status: state.ticket.status }] };
+    }
+    if (text.startsWith("select 1 from expenses")) {
+      return state.bought ? { rowCount: 1, rows: [{ "?column?": 1 }] } : { rowCount: 0, rows: [] };
+    }
+    if (text.startsWith("update tickets set")) {
+      state.updates.push({ text, params });
+      return { rowCount: 1, rows: [{ ...state.ticket, status: text.includes("status = 'rejected'") ? "Rejected" : state.ticket.status }] };
     }
     return { rowCount: 0, rows: [] };
   },
@@ -103,6 +117,7 @@ function reset(me) {
   state.me = me;
   state.inserted.length = 0;
   state.updates.length = 0;
+  state.photos.length = 0;
   state.ticket = null;
 }
 
@@ -210,4 +225,77 @@ test("PM editing a pending request sets the vendor and never touches requestedBu
   assert.ok(text.includes("vendorname"));
   assert.ok(params.includes("Cebu Hardware"));
   assert.equal(params.includes(9999), false);
+});
+
+function ackTicket() {
+  state.ticket = {
+    ticketid: "ticket-9",
+    tickettype: "Material Request",
+    status: "Acknowledged",
+    bomitemid: "bom-item-1",
+    projectmanagerid: PM.id,
+    sitemanagerid: SM.id,
+    projectid: PROJECT,
+    projectname: "Alpha",
+    subject: "Cement for slab",
+  };
+}
+
+test("PM can edit an Acknowledged request while nothing has been bought", async () => {
+  reset(PM);
+  ackTicket();
+  const res = await call("PATCH", "/api/tickets/ticket-9", { subject: "Cement for slab", quantity: 30 });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(state.updates.length, 1);
+});
+
+test("PM cannot edit or cancel an Acknowledged request that already has a receipt", async () => {
+  reset(PM);
+  ackTicket();
+  state.bought = true;
+  const edit = await call("PATCH", "/api/tickets/ticket-9", { subject: "Cement for slab", quantity: 30 });
+  assert.equal(edit.status, 409);
+  assert.match(edit.body.error, /already has a receipt/);
+  const cancel = await call("PATCH", "/api/tickets/ticket-9/reject", { reason: "Not needed" });
+  assert.equal(cancel.status, 409);
+  assert.equal(state.updates.length, 0);
+  state.bought = false;
+});
+
+test("PM cancelling an Acknowledged request stores a 'Cancelled by PM:' reason", async () => {
+  reset(PM);
+  ackTicket();
+  const res = await call("PATCH", "/api/tickets/ticket-9/reject", { reason: "Stock found on site" });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.ok(state.updates[0].params.includes("Cancelled by PM: Stock found on site"));
+});
+
+const PHOTO_BASE = "https://photos.test";
+const photo = (n) => `${PHOTO_BASE}/ticket-photos/${n}.jpg`;
+const report = (extra = {}) => ({ projectID: PROJECT, ticketType: "Report", subject: "Leak", description: "Water on level 2", ...extra });
+
+test("a Report keeps up to 3 of this server's photos, in order", async () => {
+  process.env.R2_PUBLIC_BASE_URL = PHOTO_BASE;
+  reset(SM);
+  const res = await call("POST", "/api/tickets", report({ photoUrls: [photo("a"), photo("b")] }));
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.deepEqual(state.photos.map((p) => [p[1], p[2]]), [[photo("a"), 1], [photo("b"), 2]]);
+});
+
+test("a Report refuses a fourth photo and links that are not our uploads", async () => {
+  process.env.R2_PUBLIC_BASE_URL = PHOTO_BASE;
+  reset(SM);
+  const four = await call("POST", "/api/tickets", report({ photoUrls: [photo("a"), photo("b"), photo("c"), photo("d")] }));
+  assert.equal(four.status, 400);
+  const foreign = await call("POST", "/api/tickets", report({ photoUrls: ["https://evil.test/x.jpg"] }));
+  assert.equal(foreign.status, 400);
+  assert.equal(state.photos.length, 0);
+});
+
+test("photos sent with a non-Report ticket are ignored", async () => {
+  process.env.R2_PUBLIC_BASE_URL = PHOTO_BASE;
+  reset(SM);
+  const res = await call("POST", "/api/tickets", smMaterialRequest({ photoUrls: [photo("a")] }));
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(state.photos.length, 0);
 });

@@ -73,8 +73,9 @@ function buildStorageKey(taskId, ext) {
 // goes private, change this function (signed URL, or stream through the API)
 // and nothing else: the API already returns it behind an authenticated call
 // and the table stores keys, not URLs.
-function documentUrl(storageKey) {
-    return require("./r2").publicUrlForKey(storageKey);
+// A signed, 1-hour link to the stored file (the bucket is private).
+async function documentUrl(storageKey) {
+    return require("./r2").getSignedReadUrl(storageKey);
 }
 
 module.exports = {

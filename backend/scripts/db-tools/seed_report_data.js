@@ -14,6 +14,7 @@
 // Refuses to run against Neon.
 //
 // Usage (from backend/):  DATABASE_URL=postgresql://... node scripts/db-tools/seed_report_data.js
+// Needs SEED_REPORT_GM_EMAIL and SEED_REPORT_PM_EMAIL (see backend/.env.example).
 
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", "..", ".env") });
@@ -21,6 +22,16 @@ const crypto = require("crypto");
 const { Client } = require("pg");
 const { planAllocation } = require("../../src/lib/allocationPlan");
 const { formatMoney } = require("../../src/lib/allocationValidation");
+
+// Credentials come from the environment, never from this file. Fails fast when one is missing.
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`Missing env var: ${name}. Set it in backend/.env or export it before running this script.`);
+    process.exit(1);
+  }
+  return value;
+}
 
 const RANGE = { from: "2026-10-01", to: "2026-10-31" };
 const FORMAL = "Formal-Tax-Deductible";
@@ -39,8 +50,8 @@ async function main() {
     await db.query("BEGIN");
     await clearPreviousSeed(db);
 
-    const gm = await upsertUser(db, "f11seedgm@gmail.com", "F11 Seed GM", "General Manager");
-    const pm = await upsertUser(db, "f11seedpm@gmail.com", "F11 Seed PM", "Project Manager");
+    const gm = await upsertUser(db, requireEnv("SEED_REPORT_GM_EMAIL"), "F11 Seed GM", "General Manager");
+    const pm = await upsertUser(db, requireEnv("SEED_REPORT_PM_EMAIL"), "F11 Seed PM", "Project Manager");
 
     const projectA = await insertProject(db, gm, pm, "F11 Seed A", "100000.00");
     const projectB = await insertProject(db, gm, pm, "F11 Seed B", "50000.00");

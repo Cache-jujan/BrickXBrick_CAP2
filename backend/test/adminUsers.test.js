@@ -26,6 +26,7 @@ const state = {
   openProjects: [],
   openTasks: 0,
   openRequests: 0,
+  activeInRole: {}, // active accounts per role, for the account limits
   calls: [],
   me: { id: "admin-1", role: "System Administrator" },
 };
@@ -49,12 +50,15 @@ async function fakeQuery(sql, params = []) {
   if (text.startsWith("update users set role")) {
     return { rowCount: 1, rows: [{ ...state.user, role: params[0] || state.user.role, status: params[1] || state.user.status }] };
   }
+  if (text.startsWith("select count(*)::int as n from users")) {
+    return { rowCount: 1, rows: [{ n: state.activeInRole[params[0]] || 0 }] };
+  }
   if (text.startsWith("update users set status = 'inactive'")) return { rowCount: 1, rows: [{ userid: USER_ID, status: "Inactive" }] };
   return { rowCount: 1, rows: [] };
 }
 
 const supabase = { recovery: [], invites: [], inviteOpts: [], passwordUpdates: [] };
-stub("../src/lib/db", { query: fakeQuery });
+stub("../src/lib/db", { query: fakeQuery, withTransaction: async (fn) => fn({ query: fakeQuery }) });
 stub("../src/middleware/auth", {
   requireAuth: (req, _res, next) => {
     req.user = state.me;
@@ -107,6 +111,7 @@ function reset({ confirmed = true, status = "Active" } = {}) {
   state.openProjects = [];
   state.openTasks = 0;
   state.openRequests = 0;
+  state.activeInRole = {};
   state.calls.length = 0;
   state.me = { id: "admin-1", role: "System Administrator" };
   supabase.recovery.length = 0;
@@ -256,4 +261,63 @@ test("PATCH refuses a status other than Active or Inactive", async () => {
     assert.match(res.body.error, /Active or Inactive/);
   }
   assert.ok(!state.calls.some((c) => c.text.startsWith("update users")), "nothing written");
+});
+
+
+// 3. account limits: how many active accounts each role may have
+
+const NEW_ACCOUNT = { name: "Ana Reyes", email: "ana.reyes01@gmail.com" };
+
+test("creating an account in a full role is refused before any invitation is sent", async () => {
+  reset();
+  state.activeInRole = { "Project Manager": 2 };
+  const res = await call("POST", "/api/admin/users", { ...NEW_ACCOUNT, role: "Project Manager" });
+  assert.equal(res.status, 409, JSON.stringify(res.body));
+  assert.equal(res.body.code, "role_limit_reached");
+  assert.equal(res.body.limit, 2);
+  assert.equal(supabase.invites.length, 0, "no invitation sent");
+  assert.ok(!state.calls.some((c) => c.text.startsWith("insert into users")), "nothing saved");
+});
+
+test("a role with room still gets its new account", async () => {
+  reset();
+  state.activeInRole = { "Project Manager": 1 };
+  const res = await call("POST", "/api/admin/users", { ...NEW_ACCOUNT, role: "Project Manager" });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(supabase.invites.length, 1);
+});
+
+test("changing someone into a full role is refused and nothing is written", async () => {
+  reset();
+  state.activeInRole = { Purchaser: 2 };
+  const res = await call("PATCH", `/api/admin/users/${USER_ID}`, { role: "Purchaser" });
+  assert.equal(res.status, 409, JSON.stringify(res.body));
+  assert.equal(res.body.code, "role_limit_reached");
+  assert.ok(!state.calls.some((c) => c.text.startsWith("update users")), "nothing written");
+});
+
+test("reactivating an inactive account whose role is full is refused; saving the same role is not", async () => {
+  reset({ status: "Inactive" });
+  state.activeInRole = { "Project Manager": 2 };
+  const reactivate = await call("PATCH", `/api/admin/users/${USER_ID}`, { status: "Active" });
+  assert.equal(reactivate.status, 409, JSON.stringify(reactivate.body));
+  reset();
+  state.activeInRole = { "Project Manager": 2 };
+  const sameRole = await call("PATCH", `/api/admin/users/${USER_ID}`, { role: "Project Manager" });
+  assert.equal(sameRole.status, 200, "an account already in the role takes no new place");
+});
+
+test("the System Administrator reads and changes the limits; bad numbers and other roles are refused", async () => {
+  reset();
+  const read = await call("GET", "/api/admin/users/limits");
+  assert.equal(read.status, 200);
+  assert.equal(read.body.roles.length, 5);
+  const save = await call("PATCH", "/api/admin/users/limits", { limits: { "Project Manager": 4 } });
+  assert.equal(save.status, 200, JSON.stringify(save.body));
+  assert.ok(state.calls.some((c) => c.text.startsWith("insert into system_settings") && c.params[0] === "max_accounts_project_manager" && c.params[1] === "4"));
+  const bad = await call("PATCH", "/api/admin/users/limits", { limits: { "Project Manager": 0 } });
+  assert.equal(bad.status, 400);
+  state.me = { id: "gm-1", role: "General Manager" };
+  assert.equal((await call("GET", "/api/admin/users/limits")).status, 403);
+  assert.equal((await call("PATCH", "/api/admin/users/limits", { limits: { "Project Manager": 3 } })).status, 403);
 });

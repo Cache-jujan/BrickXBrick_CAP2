@@ -38,6 +38,7 @@ const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
+const { GATE_CODE } = require("../lib/procurementGate");
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
 
 const router = express.Router();
@@ -944,10 +945,12 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     if (milestones.length > 0) {
       // assignedToName: the timeline shows who a task is assigned to; the bare
       // tasks row only has the assignedTo user id, so it always read "Unassigned".
+      // completedByName: the progress breakdown names who closed each task.
       const tasksResult = await query(
-        `SELECT t.*, u.name AS assignedtoname
+        `SELECT t.*, u.name AS assignedtoname, cb.name AS completedbyname
            FROM tasks t
            LEFT JOIN users u ON u.userid = t.assignedto
+           LEFT JOIN users cb ON cb.userid = t.completedby
           WHERE t.milestoneId = ANY($1)
           ORDER BY t.dueDate ASC, t.sortOrder ASC NULLS LAST`,
         [milestoneIds]
@@ -993,7 +996,11 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
       flagged: reviewByMilestone[m.milestoneid]?.flagged || 0,
     }));
 
-    res.json({ ...project, milestones: milestonesWithTasks });
+    // The Site Manager's procurement gate: true when the project has none or it is Completed.
+    const gate = tasks.find((t) => t.requirementcode === GATE_CODE);
+    const procurementGateCompleted = !gate || gate.status === "Completed";
+
+    res.json({ ...project, procurementGateCompleted, milestones: milestonesWithTasks });
   } catch (err) {
     sendError(res, err);
   }

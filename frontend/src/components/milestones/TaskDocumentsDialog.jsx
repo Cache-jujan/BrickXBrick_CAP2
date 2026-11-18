@@ -8,11 +8,13 @@ import {
   listTaskDocuments,
   uploadTaskDocument,
 } from "../../api/taskDocumentsApi";
+import { updateTaskInstruction } from "../../api/tasksApi";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./TaskDocumentsDialog.css";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const MAX_INSTRUCTION = 500;
 const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 
 function formatSize(bytes) {
@@ -21,13 +23,17 @@ function formatSize(bytes) {
 }
 
 // Documents for one Planning task. canEdit is false when the task is already
-// completed or the project is closed: the list is then read-only.
-export function TaskDocumentsDialog({ task, canEdit, onClose }) {
+// completed or the project is closed: the list is then read-only. With onComplete
+// the dialog also marks the task done, once at least one file is attached.
+export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete, canEditInstruction, onInstructionSaved }) {
   const { t, formatDate } = useLocale();
   const [documents, setDocuments] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef(null);
+  const [instruction, setInstruction] = useState(task.attachmentinstruction || "");
+  const [editingInstruction, setEditingInstruction] = useState(false);
+  const [instructionDraft, setInstructionDraft] = useState("");
 
   async function load() {
     try {
@@ -67,6 +73,43 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
     }
   }
 
+  function startEditInstruction() {
+    setInstructionDraft(instruction);
+    setEditingInstruction(true);
+    setError("");
+  }
+
+  async function handleSaveInstruction() {
+    if (instructionDraft.trim().length > MAX_INSTRUCTION) {
+      setError(t("docs.instruction_too_long"));
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await updateTaskInstruction(task.taskid, instructionDraft.trim() || null);
+      setInstruction(updated.attachmentinstruction || "");
+      setEditingInstruction(false);
+      onInstructionSaved?.(updated);
+    } catch (err) {
+      setError(extractErrorMessage(err, t("errors.save_changes")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleComplete() {
+    setBusy(true);
+    setError("");
+    try {
+      await onComplete(task);
+      onClose();
+    } catch (err) {
+      setError(extractErrorMessage(err, t("errors.complete_task")));
+      setBusy(false);
+    }
+  }
+
   async function handleOpen(doc) {
     // Open the tab now, from the click, so popup blockers allow it; point it
     // at the file once the server has given us the link.
@@ -101,6 +144,34 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
     <div className="modal-overlay" role="presentation" onClick={() => { if (!busy) onClose(); }}>
       <div className="modal task-docs" role="dialog" aria-modal="true" aria-labelledby="task-docs-title" onClick={(ev) => ev.stopPropagation()}>
         <h2 id="task-docs-title" className="modal-title">{t("docs.title", { name: task.taskname })}</h2>
+
+        {editingInstruction ? (
+          <div className="task-docs-instruction-edit">
+            <textarea
+              className="task-docs-instruction-input"
+              value={instructionDraft}
+              maxLength={MAX_INSTRUCTION}
+              placeholder={t("docs.instruction_placeholder")}
+              aria-label={t("docs.instruction_edit")}
+              onChange={(ev) => setInstructionDraft(ev.target.value)}
+              disabled={busy}
+              rows={3}
+            />
+            <div className="task-docs-instruction-actions">
+              <Button variant="secondary" onClick={() => setEditingInstruction(false)} disabled={busy}>{t("common.cancel")}</Button>
+              <Button onClick={handleSaveInstruction} disabled={busy}>{t("docs.instruction_save")}</Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {instruction && <Banner tone="info" title={instruction} />}
+            {canEditInstruction && (
+              <button type="button" className="task-docs-instruction-link" onClick={startEditInstruction} disabled={busy}>
+                {t("docs.instruction_edit")}
+              </button>
+            )}
+          </>
+        )}
 
         {error && <Banner tone="error" title={error} />}
 
@@ -148,8 +219,16 @@ export function TaskDocumentsDialog({ task, canEdit, onClose }) {
               {busy ? t("common.working") : t("docs.attach")}
             </Button>
           )}
+          {canEdit && onComplete && (
+            <Button onClick={handleComplete} disabled={busy || documents === null || documents.length === 0}>
+              {t("pd.mark_done")}
+            </Button>
+          )}
         </div>
-        {canEdit && <p className="task-docs-hint">{t("docs.hint")}</p>}
+        {canEdit && onComplete && documents !== null && documents.length === 0 && (
+          <p className="task-docs-hint">{t("pd.mark_done_blocked")}</p>
+        )}
+        {canEdit && !instruction && <p className="task-docs-hint">{t("docs.hint")}</p>}
       </div>
     </div>
   );

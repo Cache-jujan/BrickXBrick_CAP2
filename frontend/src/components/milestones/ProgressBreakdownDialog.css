@@ -1,0 +1,9 @@
+.progress-breakdown { max-width: 560px; max-height: 80vh; overflow-y: auto; }
+.progress-breakdown-milestone { margin-bottom: var(--space-4); }
+.progress-breakdown-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-2); font-size: var(--text-base, 1rem); }
+.progress-breakdown-chip { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; background: var(--color-surface-sunken, rgba(0, 0, 0, 0.06)); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.progress-breakdown-section { margin: var(--space-2) 0 var(--space-1); font-size: var(--text-sm); font-weight: 600; color: var(--color-ink-soft); }
+.progress-breakdown-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.progress-breakdown-list li { display: flex; flex-direction: column; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08)); }
+.progress-breakdown-meta { font-size: var(--text-sm); color: var(--color-ink-soft); }
+.progress-breakdown-note { margin-top: 2px; font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }

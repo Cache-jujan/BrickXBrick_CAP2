@@ -22,6 +22,7 @@ const {
 const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview, taskReviewNotice } = require("../lib/taskProgress");
 const { assertProjectNotOnHold, assertProjectNotTerminated } = require("../lib/projectHold");
 const { notify } = require("../lib/notify");
+const { GATE_CODE } = require("../lib/procurementGate");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -44,6 +45,13 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                     p.status AS projectstatus,
                     p.startDate AS projectstartdate,
                     p.endDate AS projectenddate,
+                    (m.phase = 'Construction'
+                     AND t.requirementCode IS DISTINCT FROM $2
+                     AND EXISTS (SELECT 1 FROM tasks g
+                                   JOIN milestones gm ON gm.milestoneId = g.milestoneId
+                                  WHERE gm.projectId = m.projectId
+                                    AND g.requirementCode = $2
+                                    AND g.status <> 'Completed')) AS procurementgateblocked,
                     pending.photoevidenceurl AS pendingphotoevidenceurl,
                     pending.createdat AS pendingsubmittedat,
                     pending.note AS pendingnote,
@@ -68,7 +76,7 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                ) latest ON TRUE
               WHERE t.assignedTo = $1
               ORDER BY t.dueDate ASC`,
-            [req.user.id]
+            [req.user.id, GATE_CODE]
         );
         res.json(result.rows);
     } catch (err) {
@@ -356,7 +364,8 @@ async function getTaskForCompletion(taskId) {
 
 // PATCH /:id/complete, PM marks a Planning-phase task done. There's no SM
 // photo-submission/review flow for Planning work (#5), it's "Handled by:
-// GM/PM" and only the owning PM can close it out, optionally with a note.
+// GM/PM" and only the owning PM can close it out, with at least one attached
+// document as evidence (and optionally a note, which the web no longer sends).
 // Construction tasks keep going through POST /:id/progress + the PM
 // Acknowledge/Flag review above; this route refuses them.
 router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, next) => {
@@ -383,6 +392,16 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
         }
 
         const updated = await withTransaction(async (client) => {
+            // A Planning task is closed on evidence: at least one attached, non-deleted document.
+            const docs = await client.query(
+                "SELECT COUNT(*)::int AS n FROM task_documents WHERE taskId = $1 AND deletedAt IS NULL",
+                [req.params.id]
+            );
+            if (docs.rows[0].n === 0) {
+                const err = new Error("Attach at least one document or photo as evidence before marking this task done.");
+                err.status = 409;
+                throw err;
+            }
             const taskUpdate = await client.query(
                 `UPDATE tasks
                     SET status = 'Completed'::varchar,
@@ -399,6 +418,51 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
         });
 
         res.json(updated);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PATCH /:id/instruction, the PM sets or clears the instruction shown in a Planning task's
+// documents dialog ("Attach the barangay clearance here"). Owning PM only: the GM can read
+// documents but not edit the task. A completed task is locked.
+const MAX_INSTRUCTION = 500;
+router.patch("/:id/instruction", requireRole("Project Manager"), async (req, res, next) => {
+    try {
+        const task = await getPlanningTaskContext(req.params.id);
+        if (task.projectmanagerid !== req.user.id) {
+            const err = new Error("You may only edit tasks on a project you are the Project Manager for");
+            err.status = 403;
+            throw err;
+        }
+        await assertProjectNotTerminated(query, { taskId: req.params.id });
+        if (task.milestonephase !== "Planning") {
+            const err = new Error("Only a Planning-phase task has an attach instruction");
+            err.status = 409;
+            throw err;
+        }
+        if (task.status === "Completed") {
+            const err = new Error("This task is already completed");
+            err.status = 409;
+            throw err;
+        }
+        const raw = req.body ? req.body.attachmentInstruction : null;
+        if (raw !== null && raw !== undefined && typeof raw !== "string") {
+            const err = new Error("attachmentInstruction must be text or null");
+            err.status = 400;
+            throw err;
+        }
+        const value = typeof raw === "string" ? raw.trim() : "";
+        if (value.length > MAX_INSTRUCTION) {
+            const err = new Error(`The instruction must be ${MAX_INSTRUCTION} characters or fewer`);
+            err.status = 400;
+            throw err;
+        }
+        const result = await query(
+            "UPDATE tasks SET attachmentInstruction = $1 WHERE taskId = $2 RETURNING *",
+            [value || null, req.params.id]
+        );
+        res.json(result.rows[0]);
     } catch (err) {
         next(err);
     }
@@ -586,7 +650,7 @@ router.get("/:id/documents/:docId/download", requireRole("General Manager", "Pro
         if (result.rowCount === 0) throw notFound();
 
         const row = result.rows[0];
-        res.json({ url: documentUrl(row.storagekey), fileName: row.filename });
+        res.json({ url: await documentUrl(row.storagekey), fileName: row.filename });
     } catch (err) {
         next(err);
     }
