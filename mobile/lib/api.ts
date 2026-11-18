@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { API_URL, authHeaders, getAuthToken } from "../constants/api";
 import type { BackendLineItem } from "./expense-types";
 import { apiFetch } from "@/lib/http";
-import { ensureFreshToken, handleUnauthorized } from "@/lib/auth";
+import { ensureFreshToken, getSession, handleUnauthorized, setAvatarUrl } from "@/lib/auth";
 
 export type Ticket = {
   ticketid: string;
@@ -534,6 +534,20 @@ export async function uploadAvatar(uri: string): Promise<string> {
   }
   if (result.status < 200 || result.status >= 300) throw new Error(data.error || "Failed to save the picture");
   return data.avatarUrl as string;
+}
+
+// The profile picture link the server hands out stops working after an hour, and the saved sign-in
+// keeps the one from sign-in time. Ask the server for a fresh one (no-op when signed out or offline).
+export async function refreshAvatarUrl(): Promise<void> {
+  if (!getSession()) return;
+  try {
+    const res = await apiFetch(`${API_URL}/api/me`, { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (data?.user && "avatarUrl" in data.user) setAvatarUrl(data.user.avatarUrl ?? null);
+  } catch {
+    // offline: the saved picture stays until the next try
+  }
 }
 
 export async function removeAvatar(): Promise<void> {

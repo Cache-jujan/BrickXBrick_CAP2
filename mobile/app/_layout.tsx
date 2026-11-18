@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { AppState, View } from "react-native";
 import { Stack, router, useRootNavigationState } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 
@@ -9,6 +9,7 @@ import { OfflineBanner, OfflineStripProvider } from "@/components/offline-banner
 import { NotificationToast } from "@/components/notification-toast";
 import { LocaleProvider } from "@/lib/i18n-context";
 import { nextRouteAfterLogin, restoreSession } from "@/lib/auth";
+import { refreshAvatarUrl } from "@/lib/api";
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -51,6 +52,14 @@ export default function RootLayout() {
     sentHome.current = true;
     router.replace(nextRouteAfterLogin(restored.user));
   }, [screensDrawn, navReady, restored]);
+  // Profile picture links expire after an hour: renew now and whenever the app comes back to the front.
+  useEffect(() => {
+    refreshAvatarUrl();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshAvatarUrl();
+    });
+    return () => sub.remove();
+  }, []);
   // If the fonts fail to load, carry on with the system font.
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});

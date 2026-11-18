@@ -7,6 +7,7 @@ const { createGracefulShutdown } = require("./lib/gracefulShutdown");
 const helmet = require("helmet");
 
 const { requireAuth } = require("./middleware/auth");
+const { signResponseUrls, storedUrlsFromRequest } = require("./middleware/r2Urls");
 const { query, withTransaction, pool } = require("./lib/db");
 const { sweepScheduleVariance } = require("./lib/milestoneProgress");
 
@@ -66,6 +67,9 @@ app.use("/api/reports/pdf", express.json({ limit: "2mb" }));
 // 100 kb default; the phone would then resend the same oversized batch every 15 s.
 app.use("/api/sync", express.json({ limit: "2mb" }));
 app.use(express.json());
+// The R2 bucket is private: stored photo / receipt / avatar URLs go out as signed 1-hour links
+// and a signed link sent back is read as the stored URL (middleware/r2Urls.js).
+app.use("/api", storedUrlsFromRequest, signResponseUrls);
 
 // Health / session
 app.get("/health", (req, res) => res.json({ ok: true }));

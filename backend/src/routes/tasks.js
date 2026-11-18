@@ -650,7 +650,7 @@ router.get("/:id/documents/:docId/download", requireRole("General Manager", "Pro
         if (result.rowCount === 0) throw notFound();
 
         const row = result.rows[0];
-        res.json({ url: documentUrl(row.storagekey), fileName: row.filename });
+        res.json({ url: await documentUrl(row.storagekey), fileName: row.filename });
     } catch (err) {
         next(err);
     }
