@@ -132,13 +132,13 @@ export default function TurnInScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.bg },
+  safeArea: { flex: 1, backgroundColor: COLORS.bgWarm },
 
-  header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
-  title: { fontSize: 26, fontFamily: FONT.extrabold, color: COLORS.heading },
-  subtitle: { fontSize: 13, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
+  header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 },
+  title: { fontSize: 28, fontFamily: FONT.extrabold, letterSpacing: -0.5, color: COLORS.heading },
+  subtitle: { fontSize: 15, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 6 },
 
-  list: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
+  list: { paddingHorizontal: 20, paddingBottom: 24, gap: 10 },
   card: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "flex-start", gap: 10, minHeight: MIN_TAP, padding: 14 },
   removeBtn: { minHeight: MIN_TAP, justifyContent: "center", alignItems: "flex-end", paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: COLORS.border },

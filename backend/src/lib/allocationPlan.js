@@ -2,10 +2,10 @@
 //
 // One receipt line is split across the open Material Requests for that
 // material, oldest request first. A request never receives more than its
-// remaining quantity. Buying MORE than every open request wants is a fact, not
-// an error (the money is already spent): the extra rides on the last request
-// that took part of the line and is reported as an "extra" for the PM to judge.
-// A line no request matches at all still blocks the submit (UC-06-01 E3).
+// remaining quantity. Buying MORE than every open request wants leaves that
+// quantity unmatched, exactly like a line no request matches at all: nothing is
+// allocated without a request, so the submit is blocked until a request exists
+// for it (UC-06-01 E3).
 //
 // Units: centavos for money, hundredths for quantity (see allocationValidation.js).
 
@@ -74,6 +74,19 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   const excluded = new Set((options.excludeTicketIDs || []).map((id) => String(id).toLowerCase()));
   const feeTargets = options.feeTargets || {};
   const lineTargets = options.lineTargets || {};
+  // { lineIndex: { ticketID: quantityH } } typed by the Purchaser; a line with an entry here is split exactly so.
+  const quantityTargets = options.quantityTargets || {};
+
+  // Every open request that asks for something on this receipt, whether or not it is ticked or reached
+  // by the split. The app lists all of them so the Purchaser can tick the ones the receipt belongs to.
+  const candidates = (openTickets || []).flatMap((ticket) => {
+    const id = String(ticket.ticketID).toLowerCase();
+    const lineIndexes = lines
+      .filter((line) => line.quantityH > 0)
+      .filter((line) => (lineTargets[line.lineIndex] ? lineTargets[line.lineIndex] === id : matches(line.description, ticket.materialType)))
+      .map((line) => line.lineIndex);
+    return lineIndexes.length > 0 ? [{ ...ticket, ticketID: id, lineIndexes }] : [];
+  });
 
   // Step 2. Drop excluded tickets, sort oldest first, and copy each remaining
   // quantity into a working map so lines of the same material share one pool.
@@ -91,6 +104,8 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   const portionsByTicket = new Map();
   const extras = [];
   const unmatched = [];
+  // Typed amounts that do not fit: more than a request still wants, or more than the receipt line has.
+  const overruns = [];
 
   function portionFor(ticket) {
     if (!portionsByTicket.has(ticket.ticketID)) {
@@ -106,6 +121,10 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
         allowancePct: Number.isFinite(Number(ticket.budgetAllowancePct)) ? Number(ticket.budgetAllowancePct) : DEFAULT_ALLOWANCE_PCT,
         startRemainingH: ticket.remainingH,
         remainingBudgetCents: ticket.remainingBudgetCents,
+        // What the request asked for, shown on the Allocate screen so the Purchaser knows what each tick is for.
+        requestedQuantity: ticket.requestedQuantity ?? null,
+        approvedBudgetCents: toCents(ticket.approvedBudget),
+        unit: ticket.unit ?? null,
         manualLines: [],
       });
     }
@@ -119,7 +138,11 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
     // A line the Purchaser matched by hand goes to that request only. If that request is no
     // longer in play (closed, out of scope), the line is matched the normal way.
     const chosen = tickets.find((ticket) => ticket.ticketID === lineTargets[line.lineIndex]);
-    const matching = chosen ? [chosen] : tickets.filter((ticket) => matches(line.description, ticket.materialType));
+    // The Purchaser typed how much of this line goes to which request: exactly those requests, in those amounts.
+    const manual = quantityTargets[line.lineIndex] || null;
+    const matching = manual
+      ? tickets.filter((ticket) => manual[ticket.ticketID] !== undefined)
+      : chosen ? [chosen] : tickets.filter((ticket) => matches(line.description, ticket.materialType));
 
     // 3b. No open request for this material at all.
     if (matching.length === 0) {
@@ -136,8 +159,31 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
     let left = line.quantityH;
     const pieces = [];
     for (const ticket of matching) {
-      if (left === 0) break;
       const available = leftH.get(ticket.ticketID);
+      if (manual) {
+        // Typed amounts: take exactly what was typed. More than the request still wants, or more than is
+        // left on the receipt line, is reported (and blocks the submit) instead of being quietly cut.
+        const entered = manual[ticket.ticketID];
+        if (entered === 0) continue;
+        const take = Math.min(entered, available, left);
+        if (entered > take) {
+          overruns.push({
+            lineIndex: line.lineIndex,
+            ticketID: ticket.ticketID,
+            projectName: ticket.projectName,
+            materialType: ticket.materialType,
+            kind: entered > available ? "request" : "receipt",
+            enteredH: entered,
+            maxH: entered > available ? available : take,
+          });
+        }
+        if (take === 0) continue;
+        pieces.push({ ticket, quantityH: take });
+        leftH.set(ticket.ticketID, available - take);
+        left -= take;
+        continue;
+      }
+      if (left === 0) break;
       if (available === 0) continue;
       const take = Math.min(left, available);
       pieces.push({ ticket, quantityH: take });
@@ -145,35 +191,29 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
       left -= take;
     }
 
-    // 3d. More than the requests want: an extra on the last request that took part
-    // of this line (or the oldest match if none had room), priced last.
-    if (left > 0) {
-      const lastTaker = [...pieces].reverse().find((piece) => piece.ticket)?.ticket ?? matching[0];
-      pieces.push({ ticket: lastTaker, quantityH: left, extra: true });
-    }
-
-    // 3e. Price the pieces; the last piece takes the remainder (rule 8).
+    // 3d. More than the requests want: that quantity has no request, and nothing is ever allocated
+    // without one. It is reported as unmatched (blocks the submit) until a request exists for it.
+    // 3e. Price the pieces; the last piece takes the remainder (rule 8). When part of the line has no
+    // request, that part is the last piece and takes the remainder instead.
     let pricedCents = 0;
     pieces.forEach((piece, index) => {
-      const isLast = index === pieces.length - 1;
+      const isLast = left === 0 && index === pieces.length - 1;
       piece.amountCents = isLast
         ? line.amountCents - pricedCents
         : proportionalCents(line.amountCents, piece.quantityH, line.quantityH);
       pricedCents += piece.amountCents;
     });
+    if (left > 0) {
+      unmatched.push({
+        lineIndex: line.lineIndex,
+        description: line.description,
+        quantityH: left,
+        amountCents: line.amountCents - pricedCents,
+      });
+    }
 
     for (const piece of pieces) {
       const portion = portionFor(piece.ticket);
-      if (piece.extra) {
-        portion.extraH += piece.quantityH;
-        extras.push({
-          lineIndex: line.lineIndex,
-          description: line.description,
-          quantityH: piece.quantityH,
-          amountCents: piece.amountCents,
-          ticketID: piece.ticket.ticketID,
-        });
-      }
       portion.lines.push({
         lineIndex: line.lineIndex,
         description: line.description,
@@ -265,6 +305,10 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
       extraH: portion.extraH,
       allowancePct: portion.allowancePct,
       manualLines: portion.manualLines,
+      requestedQuantity: portion.requestedQuantity,
+      remainingBeforeH: portion.startRemainingH,
+      approvedBudgetCents: portion.approvedBudgetCents,
+      unit: portion.unit,
     };
   });
 
@@ -272,13 +316,15 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
   const linesCents = lines.reduce((sum, line) => sum + line.amountCents, 0);
 
   return {
-    ok: unmatched.length === 0 && portions.length >= 1,
+    ok: unmatched.length === 0 && overruns.length === 0 && portions.length >= 1,
+    overruns,
     portions,
     extras,
     unmatched,
     allocatedCents,
     linesCents,
     warnings,
+    candidates,
   };
 }
 
@@ -292,6 +338,13 @@ function describePlanProblems(plan) {
       piece.quantityH === 0
         ? `"${piece.description}" has no portion to ride on because no line matched an open request.`
         : `No open request for ${qty(piece.quantityH)} of "${piece.description}". Ask the Site Manager to file one.`
+    );
+  }
+  for (const over of plan.overruns || []) {
+    problems.push(
+      over.kind === "request"
+        ? `${over.projectName} asked for only ${qty(over.maxH)} of ${over.materialType}, but ${qty(over.enteredH)} was entered.`
+        : `${qty(over.enteredH)} of ${over.materialType} for ${over.projectName} is more than is left on the receipt.`
     );
   }
   if (plan.unmatched.length === 0 && plan.portions.length === 0) {
@@ -337,6 +390,14 @@ function presentPlan(plan) {
   return {
     ok: plan.ok,
     problems: describePlanProblems(plan),
+    // Typed amounts that did not fit, so the app can mark the field.
+    overruns: (plan.overruns || []).map((o) => ({
+      lineIndex: o.lineIndex,
+      ticketID: o.ticketID,
+      kind: o.kind,
+      entered: qty(o.enteredH),
+      max: qty(o.maxH),
+    })),
     portions: plan.portions.map((portion) => ({
       ticketID: portion.ticketID,
       projectID: portion.projectID,
@@ -350,12 +411,29 @@ function presentPlan(plan) {
       overBudget: portion.overBudget,
       overAllowance: portion.overAllowance,
       extraQuantity: qty(portion.extraH),
+      // What the request wanted and had left before this receipt, and its approved budget.
+      requestedQuantity: portion.requestedQuantity,
+      remainingBefore: qty(portion.remainingBeforeH),
+      approvedBudget: peso(portion.approvedBudgetCents),
+      unit: portion.unit,
       lines: portion.lines.map(presentLine),
     })),
     // Always empty now: kept so older clients that read it keep working.
     uncovered: [],
     extras: plan.extras.map((line) => ({ ...presentLine(line), ticketID: line.ticketID })),
     unmatched: plan.unmatched.map(presentLine),
+    // Every open request that matches a line, with what it asked for (see planAllocation).
+    candidates: (plan.candidates || []).map((ticket) => ({
+      ticketID: ticket.ticketID,
+      projectID: ticket.projectID,
+      projectName: ticket.projectName,
+      materialType: ticket.materialType,
+      lineIndexes: ticket.lineIndexes,
+      requestedQuantity: ticket.requestedQuantity ?? null,
+      remainingQuantity: ticket.remainingQuantity === undefined || ticket.remainingQuantity === null ? null : Number(ticket.remainingQuantity),
+      unit: ticket.unit ?? null,
+      remainingBudget: peso(toCents(ticket.remainingBudget)),
+    })),
     allocated: peso(plan.allocatedCents),
     linesTotal: peso(plan.linesCents),
     warnings: plan.warnings.map((warning) =>

@@ -3,8 +3,8 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { Redirect, router, useFocusEffect, useLocalSearchParams, type Href } from "expo-router";
 
 import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
-import { type AssignedTask, type SiteProject } from "@/lib/api";
-import { loadAssignedTasks, loadMyProjects } from "@/lib/cached-api";
+import { type AssignedTask, type OpenRequest, type SiteProject } from "@/lib/api";
+import { loadAssignedTasks, loadMyProjects, loadOpenRequests } from "@/lib/cached-api";
 import { getSession } from "@/lib/auth";
 import { daysUntil, dueLabel, toDay } from "@/lib/sm-dashboard";
 import { describeLoadError } from "@/lib/sync/messages";
@@ -14,6 +14,7 @@ import { useLocale } from "@/lib/i18n-context";
 import { useScreenInsets } from "@/hooks/use-screen-insets";
 import { AppButton } from "@/components/app-button";
 import { FlowHeader } from "@/components/flow-header";
+import { PurchaseOrderSheet } from "@/components/purchase-order-sheet";
 import { Screen } from "@/components/screen";
 import { StateCard } from "@/components/state-card";
 import { StatusChip, type ChipTone } from "@/components/status-chip";
@@ -44,13 +45,21 @@ export default function SiteManagerProjectScreen() {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // Open material requests, for the Purchase Order. Optional: the screen works without them.
+  const [requests, setRequests] = useState<OpenRequest[]>([]);
+  const [poOpen, setPoOpen] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
-      const [projects, assigned] = await Promise.all([loadMyProjects(), loadAssignedTasks()]);
+      const [projects, assigned, open] = await Promise.all([
+        loadMyProjects(),
+        loadAssignedTasks(),
+        loadOpenRequests().then((r) => r.data).catch(() => [] as OpenRequest[]),
+      ]);
+      setRequests(open);
       setProject(projects.data.find((p) => p.projectid === id) ?? null);
       setTasks(assigned.data.filter((task) => task.projectid === id));
       setSavedAt(projects.fromCache || assigned.fromCache ? (projects.fromCache ? projects.savedAt : assigned.savedAt) : null);
@@ -71,6 +80,8 @@ export default function SiteManagerProjectScreen() {
     [tasks]
   );
   const done = tasks.length - open.length;
+  // What is still left to buy on this project: decides whether the Purchase order button shows.
+  const toBuyHere = requests.filter((r) => r.projectID === id && Number(r.remainingQuantity) > 0).length;
   const overdue = open.filter((task) => dueLabel(task.duedate).tone === "late").length;
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
@@ -202,6 +213,11 @@ export default function SiteManagerProjectScreen() {
           </View>
         </View>
 
+        {/* Purchase order: a printable list of what is still to be bought for this project. */}
+        {toBuyHere > 0 ? (
+          <AppButton label={t("po.button")} variant="secondary" onPress={() => setPoOpen(true)} style={styles.poButton} />
+        ) : null}
+
         {/* Details */}
         <Text style={styles.sectionTitle}>{t("sm.proj_details")}</Text>
         <View style={styles.list}>
@@ -250,6 +266,7 @@ export default function SiteManagerProjectScreen() {
           </View>
         )}
       </ScrollView>
+      <PurchaseOrderSheet visible={poOpen} requests={requests} initialProjectId={id ?? null} onClose={() => setPoOpen(false)} />
     </Screen>
   );
 }
@@ -285,6 +302,7 @@ const styles = StyleSheet.create({
   statLabel: { color: COLORS.muted, fontFamily: FONT.medium, fontSize: 12, marginTop: 2 },
   statDivider: { backgroundColor: COLORS.border, height: 28, width: 1 },
 
+  poButton: { marginTop: 14 },
   sectionTitle: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 17, marginBottom: 10, marginTop: 26 },
   sectionHead: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10, marginTop: 26 },
   sectionTitleInline: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 17 },

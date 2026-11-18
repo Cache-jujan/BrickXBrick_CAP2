@@ -23,7 +23,7 @@ import { RequestedMaterialPicker, type RequestedMaterial } from "@/components/re
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { editLine, unitPriceForPayload, withUnitPrice } from "@/lib/line-math";
 import type { LineItem } from "@/lib/expense-types";
-import { COLORS, FONT } from "@/constants/expense-flow-colors";
+import { COLORS, FONT, MIN_TAP } from "@/constants/expense-flow-colors";
 import { formatAmountInput, formatPesoCents, groupAmountLive, groupAmountText, toCents, toHundredths } from "@/lib/money";
 import { devLog } from "@/lib/sync/log";
 import {
@@ -457,8 +457,8 @@ export default function ReviewScreen() {
                     </View>
                   ) : materials.length > 0 ? (
                     <Pressable onPress={() => setPickingItemId(item.id)} style={({ pressed }) => [styles.matchLink, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t("rv.pick_aria", { n: index + 1 })}>
+                      <IconSymbol name="list.clipboard.fill" size={18} color={COLORS.primary} />
                       <Text style={styles.matchLinkText}>{t("rv.match_material")}</Text>
-                      <IconSymbol name="chevron.right" size={16} color={COLORS.primary} />
                     </Pressable>
                   ) : null}
                   <View style={styles.itemRow}>
@@ -631,8 +631,9 @@ const styles = StyleSheet.create({
   lineBlockDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.border, paddingTop: 14, marginTop: 6 },
   lineNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   tagRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  matchLink: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 36, alignSelf: "flex-start" },
-  matchLinkText: { fontSize: 14, fontFamily: FONT.semibold, color: COLORS.primary },
+  // An action button: a clear outlined button across the card, not a small link.
+  matchLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: MIN_TAP, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12, backgroundColor: COLORS.card, paddingHorizontal: 14 },
+  matchLinkText: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.primary },
   removeX: { fontSize: 24, lineHeight: 26, fontFamily: FONT.regular, color: COLORS.muted },
   thumbRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 10, marginBottom: 10 },
   thumb: { width: 64, height: 84, borderRadius: 10, backgroundColor: COLORS.bg },

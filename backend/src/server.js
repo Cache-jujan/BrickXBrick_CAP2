@@ -34,6 +34,8 @@ const { flagOverduePending } = require("./lib/blockchainOverdue");
 const { runIntegrityScan } = require("./lib/integrityCheck");
 const notificationRoutes = require("./routes/notifications");
 const allocationRoutes = require("./routes/allocations");
+const purchaseOrderRoutes = require("./routes/purchaseOrders");
+const budgetAdjustmentRoutes = require("./routes/budgetAdjustments");
 
 const app = express();
 // Security headers (nosniff, frame denial, HSTS, no X-Powered-By, ...). The CSP
@@ -92,6 +94,8 @@ app.use("/api/tasks", taskRoutes);                // F3 tasks
 app.use("/api/tickets", ticketRoutes);            // F4 tickets
 app.use("/api/expenses", expenseRoutes);          // F6 expenses
 app.use("/api/allocations", allocationRoutes);     // F8 split receipt allocation
+app.use("/api/budget-adjustments", budgetAdjustmentRoutes); // Purchaser asks the PM to adjust a request's budget
+app.use("/api/purchase-orders", purchaseOrderRoutes); // Purchaser PO number (the PDF is built on the phone)
 app.use("/api/receipts", receiptRoutes);          // F6 OCR receipt scanning
 app.use("/api/sync", syncRoutes);                 // F10 offline sync
 app.use("/api/blockchain", blockchainRoutes);     // F12 audit trail

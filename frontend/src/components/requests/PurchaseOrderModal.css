@@ -1,0 +1,71 @@
+/* The Purchase order dialog: pick the projects, then print. Neutral enough to sit in any role's skin. */
+
+.modal.po-modal,
+.gm-skin .modal.po-modal {
+  max-width: 520px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.po-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.po-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: 1.25;
+}
+.po-help {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.po-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.po-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+.po-row:hover {
+  border-color: var(--color-primary, #bf4307);
+}
+.po-row-on {
+  border-color: var(--color-primary, #bf4307);
+  background: var(--color-surface-alt, #fff6ee);
+}
+.po-row input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--color-primary, #bf4307);
+}
+.po-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.po-row-count {
+  flex: 0 0 auto;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
