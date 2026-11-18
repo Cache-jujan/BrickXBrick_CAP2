@@ -10,6 +10,7 @@ const {
   paymentProblem,
   contractChangeProblem,
   priceDifference,
+  bomContractWarning,
   ledgerSummary,
 } = require("../src/lib/contractRules");
 
@@ -187,4 +188,14 @@ test("the contract amount is compared with the agreed price, and the budget stay
   const differs = off.warnings.find((w) => w.code === "CONTRACT_DIFFERS_FROM_AGREED_PRICE");
   assert.equal(differs.level, "warning");
   assert.match(differs.message, /₱345,045\.00/);
+});
+
+test("a BOM total that differs from the recorded contract gives a warning, never a block", () => {
+  assert.equal(bomContractWarning(1241983.75, 1241983.75), null);
+  assert.equal(bomContractWarning(1241983.75, null), null);
+  const higher = bomContractWarning(1300000, 1241983.75);
+  assert.equal(higher.level, "warning");
+  assert.equal(higher.code, "CONTRACT_DIFFERS_FROM_BOM");
+  assert.match(higher.message, /₱58,016\.25 higher than this BOM total \(₱1,241,983\.75\)/);
+  assert.match(bomContractWarning(1200000, 1241983.75).message, /₱41,983\.75 lower/);
 });

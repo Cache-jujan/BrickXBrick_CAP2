@@ -233,6 +233,22 @@ function priceDifference(contractAmount, agreedPrice) {
 }
 
 /**
+ * Shown when the GM is about to approve a BOM whose total is not the amount on
+ * the recorded contract. It is a warning that needs a tick, never a block:
+ * approving still sets the agreed price to the BOM total.
+ */
+function bomContractWarning(contractAmount, bomPrice) {
+  const diff = priceDifference(contractAmount, bomPrice);
+  if (!diff || !diff.differs) return null;
+  const direction = diff.difference > 0 ? "higher" : "lower";
+  return {
+    level: "warning",
+    code: "CONTRACT_DIFFERS_FROM_BOM",
+    message: `The recorded contract amount (${peso(contractAmount)}) is ${peso(Math.abs(diff.difference))} ${direction} than this BOM total (${peso(diff.agreedPrice)}). Approving sets the agreed price to the BOM total. Check which one is right first.`,
+  };
+}
+
+/**
  * The finance picture of one project.
  *   contract      { contractAmount, downPaymentPercent, retentionPercent }
  *   payments      every payment, voided ones included ({ kind, amount, voidedAt })
@@ -316,5 +332,6 @@ module.exports = {
   paymentProblem,
   contractChangeProblem,
   priceDifference,
+  bomContractWarning,
   ledgerSummary,
 };
