@@ -5,6 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { httpError, notifyProject } = require("../lib/projectRules");
 const { parseBomWorkbook } = require("../lib/bomImport");
+const { bomContractWarning } = require("../lib/contractRules");
 const {
   laborModeOf,
   sectionTotals,
@@ -169,6 +170,19 @@ function warningsFor(bom, sections, project) {
   });
 }
 
+// A recorded contract whose amount is not this BOM's total. Only asked while the
+// BOM is a draft: that is when approving it would set the agreed price.
+async function contractWarnings(target, project, bom, contractPrice) {
+  if (bom.status === "Approved") return [];
+  const found = await runnerOf(target)(
+    "SELECT contractamount::text AS contractamount FROM projectcontracts WHERE projectid = $1::uuid",
+    [project.projectid]
+  );
+  if (found.rowCount === 0) return [];
+  const warning = bomContractWarning(Number(found.rows[0].contractamount), contractPrice);
+  return warning ? [warning] : [];
+}
+
 async function buildResponse(target, project) {
   const bom = await loadBomRow(target, project.projectid);
   const base = { projectId: project.projectid, projectStatus: project.status, projectBudget: n(project.budget) };
@@ -200,7 +214,10 @@ async function buildResponse(target, project) {
       // { contractPrice, escalationRate, escalationAllowance, targetBudget }
       budget,
       budgetOnApproval: budget.targetBudget,
-      warnings: warningsFor(bom, sections, project),
+      warnings: [
+        ...warningsFor(bom, sections, project),
+        ...(await contractWarnings(target, project, bom, budget.contractPrice)),
+      ],
     },
   };
 }
@@ -464,7 +481,10 @@ router.patch("/approve", requireRole(GM), async (req, res) => {
       const problems = approvalProblems(sections);
       if (problems.length) throw httpError(409, problems.join(" "));
 
-      const warnings = warningsFor(bom, sections, project).filter((w) => w.level === "warning");
+      const warnings = [
+        ...warningsFor(bom, sections, project),
+        ...(await contractWarnings(client, project, bom, budgetBreakdown(bom, sections).contractPrice)),
+      ].filter((w) => w.level === "warning");
       if (warnings.length && req.body?.confirmWarnings !== true) {
         const err = httpError(409, "Check the warnings against the signed BOM, then confirm to approve.");
         err.details = { code: "CONFIRM_WARNINGS", warnings };
@@ -600,4 +620,15 @@ router.get("/items", requireRole(GM, PM, "Site Manager", "Purchaser"), async (re
   }
 });
 
+// The price agreed with the client for a project's BOM: the signed total, or the
+// computed BOM total. The contract amount defaults to it (routes/contract.js).
+// Returns { price, approved } or null when the project has no BOM. Read only.
+async function agreedPrice(target, projectId) {
+  const bom = await loadBomRow(target, projectId);
+  if (!bom) return null;
+  const sections = await loadSections(target, bom.bomid);
+  return { price: budgetBreakdown(bom, sections).contractPrice, approved: bom.status === "Approved" };
+}
+
 module.exports = router;
+module.exports.agreedPrice = agreedPrice;

@@ -15,6 +15,8 @@ export const EMPTY_PROJECT_FORM = {
   description: "",
   clientName: "",
   budget: "",
+  // Ticked: the budget is not typed here; it is set from the BOM when the BOM is approved.
+  budgetLater: true,
   projectType: "",
   municipality: "",
   province: "Cebu",
@@ -44,7 +46,8 @@ export function projectToForm(project) {
     name: project.name || "",
     description: project.description || "",
     clientName: project.clientname || "",
-    budget: project.budget != null ? String(Number(project.budget)) : "",
+    budget: Number(project.budget) > 0 ? String(Number(project.budget)) : "",
+    budgetLater: !(Number(project.budget) > 0),
     projectType: project.projecttype || "",
     municipality: project.municipality || "",
     province: project.province || "",
@@ -135,7 +138,9 @@ export function ProjectForm({
     const errors = {};
     if (!form.name.trim()) errors.name = t("form.err_name");
     if (!form.clientName.trim()) errors.clientName = t("form.err_client");
-    if (form.budget === "" || Number.isNaN(Number(form.budget)) || Number(form.budget) < 0) errors.budget = t("form.err_budget");
+    if (!form.budgetLater && (form.budget === "" || Number.isNaN(Number(form.budget)) || Number(form.budget) < 0)) {
+      errors.budget = t("form.err_budget");
+    }
     if (!form.projectType) errors.projectType = t("form.err_type");
     if (!form.municipality.trim()) errors.municipality = t("form.err_municipality");
     if (!form.startDate) errors.startDate = t("form.err_start");
@@ -174,7 +179,7 @@ export function ProjectForm({
       name: form.name.trim(),
       description: form.description.trim(),
       clientName: form.clientName.trim(),
-      budget: Number(form.budget),
+      budget: form.budgetLater ? 0 : Number(form.budget),
       projectType: form.projectType,
       municipality: form.municipality.trim(),
       province: form.province.trim(),
@@ -291,20 +296,30 @@ export function ProjectForm({
           <h2 className="pf-section-title">{t("projects.budget")}</h2>
           <Field
             label={t("form.target_budget")}
-            required
+            required={!form.budgetLater && !budgetLocked}
             type="text"
             inputMode="decimal"
             prefix="₱"
-            placeholder="0.00"
-            value={formatAmountInput(form.budget)}
+            placeholder={form.budgetLater && !budgetLocked ? t("form.budget_later_placeholder") : "0.00"}
+            value={form.budgetLater && !budgetLocked ? "" : formatAmountInput(form.budget)}
             maxLength={20}
             error={fieldErrors.budget}
-            disabled={budgetLocked}
+            disabled={budgetLocked || form.budgetLater}
             onChange={(e) => updateField("budget", parseAmountInput(e.target.value))}
           />
           <p className="field-hint">
             {budgetLocked ? t("form.budget_locked") : t("form.budget_auto")}
           </p>
+          {!budgetLocked && (
+            <label className="pf-budget-later">
+              <input
+                type="checkbox"
+                checked={form.budgetLater}
+                onChange={(e) => updateField("budgetLater", e.target.checked)}
+              />
+              {t("form.budget_later")}
+            </label>
+          )}
 
           </section>
 

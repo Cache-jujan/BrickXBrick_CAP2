@@ -4,14 +4,14 @@
 
 // Static bundle identifier and deep-link scheme.
 // NOTE: scheme must match the redirect URI configured in your OAuth
-// provider (Supabase): update that dashboard setting to
+// provider (Supabase) — update that dashboard setting to
 // "brickxbrick://oauth/callback" if it isn't already.
 const bundleId = "com.fourloop.brickxbrick";
 const scheme = "brickxbrick";
 
 const env = {
   appName: "BrickXBrick",
-  appSlug: "receipt-capture-mobile",
+  appSlug: "brickxbrick",
   scheme,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -127,7 +127,7 @@ const config = {
   },
   extra: {
     eas: {
-      projectId: "ecca3f5b-5be2-440f-b12c-0d9a12581a46",
+      projectId: "9d3496e7-7d9a-43f5-bad0-7f2bd270f199",
     },
   },
 };
