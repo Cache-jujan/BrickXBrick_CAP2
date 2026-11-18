@@ -1,3 +1,4 @@
+import LIMITS from "../../utils/inputLimits";
 import { useEffect, useState } from "react";
 import { createTicket, listApprovedVendors, listPurchasers } from "../../api/ticketsApi";
 import { listProjects } from "../../api/projectsApi";
@@ -5,9 +6,11 @@ import { getBomItems } from "../../api/bomApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Field } from "../ui/Field";
+import { SearchableSelect } from "../ui/SearchableSelect";
 import { Button } from "../ui/Button";
 import { Banner } from "../ui/Banner";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./TicketForm.css";
 
 // Sentinel value for the BOM-item select when the material isn't in the BOM.
@@ -32,7 +35,6 @@ const EMPTY_FORM = {
   quantity: "",
   unit: "",
   vendorName: "",
-  requestedBudget: "",
   approvedBudget: "",
   assignedTo: "",
   bomItemID: "",
@@ -41,12 +43,14 @@ const EMPTY_FORM = {
 
 // The ticket create form, shared by the standalone CreateTicketPage (Site
 // Manager) and the "New ticket" modal on the PM's Ticket Queue. All the role
-// logic lives here: a Site Manager raises a request (Pending); a Project
-// Manager creates directly (straight to the Purchaser) and sets the approved
-// budget. The caller decides what happens on success / cancel.
+// logic lives here: a Site Manager raises a request (Pending) with no budget
+// and no vendor; a Project Manager creates directly (straight to the
+// Purchaser) and sets the vendor and the approved budget. Only the PM gives a
+// budget (post-consultation fix, Nov 2026). The caller decides what happens on
+// success / cancel.
 //
-// onSuccess(ticket, { isPM }) — called after the ticket is created.
-// onCancel()                  — called when the user backs out.
+// onSuccess(ticket, { isPM }), called after the ticket is created.
+// onCancel(): called when the user backs out.
 export function TicketForm({ onSuccess, onCancel, onClose }) {
   const { user } = useAuth();
   const { t, tv } = useLocale();
@@ -60,7 +64,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState("");
   const [vendors, setVendors] = useState([]);
-  const [vendorsLoading, setVendorsLoading] = useState(true);
+  // Only the PM picks a vendor, so only the PM loads the list.
+  const [vendorsLoading, setVendorsLoading] = useState(isPM);
   const [vendorsError, setVendorsError] = useState("");
   const [purchasers, setPurchasers] = useState([]);
   const [purchasersLoading, setPurchasersLoading] = useState(false);
@@ -68,6 +73,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const [bomItems, setBomItems] = useState([]);
   const [bomItemsLoading, setBomItemsLoading] = useState(false);
   const [bomItemsError, setBomItemsError] = useState("");
+  // What is typed in the BOM search box. Only narrows the list shown; it is not
+  // part of the form data and is never sent to the server.
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -83,28 +90,41 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   }, []);
 
   useEffect(() => {
+    if (!isPM) return undefined;
     let cancelled = false;
     listApprovedVendors()
       .then((data) => { if (!cancelled) setVendors(data); })
       .catch((err) => { if (!cancelled) setVendorsError(extractErrorMessage(err, t("errors.load_vendors"))); })
       .finally(() => { if (!cancelled) setVendorsLoading(false); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per role; a language change must not refetch
+  }, [isPM]);
 
-  // A PM must assign a Purchaser at creation (the ticket is created already
-  // acknowledged), so load the Purchaser list for them.
+  // A PM must say who buys at creation (the ticket is created already
+  // acknowledged), so load the buyers for them: the Purchasers, plus the chosen
+  // project's Site Manager (role "Site Manager"), whom the PM can assign a
+  // Material Request to directly. Reloads when the project changes.
   useEffect(() => {
     if (!isPM) return undefined;
     let cancelled = false;
     setPurchasersLoading(true);
-    listPurchasers()
-      .then((data) => { if (!cancelled) setPurchasers(data); })
-      .catch((err) => { if (!cancelled) setPurchasersError(extractErrorMessage(err, t("errors.load_purchasers"))); })
+    setPurchasersError("");
+    listPurchasers(form.projectID || undefined)
+      .then((data) => {
+        if (cancelled) return;
+        setPurchasers(data);
+        // The buyer picked for another project may not be on this project's list.
+        setForm((prev) => (prev.assignedTo && !data.some((p) => p.userid === prev.assignedTo) ? { ...prev, assignedTo: "" } : prev));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPurchasers([]);
+        setPurchasersError(extractErrorMessage(err, t("errors.load_purchasers")));
+      })
       .finally(() => { if (!cancelled) setPurchasersLoading(false); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
-  }, [isPM]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the project changes, not on a language change
+  }, [isPM, form.projectID]);
 
   // Load the approved BOM items for the Material Request picker whenever the
   // project (or ticket type) changes. Only Material Requests reference the BOM.
@@ -136,6 +156,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       }
       return next;
     });
+    // The search belongs to one project's BOM, so it starts over with the selection.
     setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
     setFormError("");
   }
@@ -154,8 +175,8 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       if (form.quantity === "" || !Number.isFinite(Number(form.quantity)) || Number(form.quantity) <= 0) {
         errors.quantity = t("tf.err_quantity");
       }
-      if (!form.vendorName.trim()) errors.vendorName = t("tf.err_vendor");
-      if (isPM && !form.assignedTo) errors.assignedTo = t("tf.err_purchaser");
+      if (isPM && !form.vendorName.trim()) errors.vendorName = t("tf.err_vendor");
+      if (isPM && !form.assignedTo) errors.assignedTo = t("tf.err_buyer");
     }
 
     // Unit: an on-BOM Material Request takes it from the BOM item, so it's only
@@ -177,13 +198,9 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         if (!form.materialType.trim()) errors.materialType = t("tf.err_material_type");
         if (!form.notInBomReason.trim()) errors.notInBomReason = t("tf.err_reason");
       }
-      // SM states a requested budget; the PM sets the approved budget directly.
-      if (isPM) {
-        if (form.approvedBudget === "" || !Number.isFinite(Number(form.approvedBudget)) || Number(form.approvedBudget) < 0) {
-          errors.approvedBudget = t("tf.err_approved_budget");
-        }
-      } else if (form.requestedBudget === "" || !Number.isFinite(Number(form.requestedBudget)) || Number(form.requestedBudget) < 0) {
-        errors.requestedBudget = t("tf.err_requested_budget");
+      // Only the PM gives a budget; a Site Manager's request has none.
+      if (isPM && (form.approvedBudget === "" || !Number.isFinite(Number(form.approvedBudget)) || Number(form.approvedBudget) < 0)) {
+        errors.approvedBudget = t("tf.err_approved_budget");
       }
     }
 
@@ -213,8 +230,10 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
     if (isMaterialReq || isWorkItem) {
       payload.quantity = Number(form.quantity);
-      payload.vendorName = form.vendorName.trim();
-      if (isPM) payload.assignedTo = form.assignedTo; // PM assigns the Purchaser now
+      if (isPM) {
+        payload.vendorName = form.vendorName.trim();
+        payload.assignedTo = form.assignedTo; // PM says who buys now: a Purchaser, or the project's Site Manager
+      }
       // On-BOM Material Requests derive their unit server-side from the BOM
       // item; only send a unit when the creator picked one.
       if ((isMaterialReq && notInBom) || isWorkItem) payload.unit = form.unit;
@@ -223,11 +242,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
       payload.materialType = form.materialType.trim();
     }
     if (isMaterialReq) {
-      if (isPM) {
-        payload.approvedBudget = Number(form.approvedBudget);
-      } else {
-        payload.requestedBudget = Number(form.requestedBudget);
-      }
+      if (isPM) payload.approvedBudget = Number(form.approvedBudget);
       if (notInBom) {
         payload.notInBom = true;
         payload.notInBomReason = form.notInBomReason.trim();
@@ -260,20 +275,30 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   const isMaterialReq = form.ticketType === "Material Request";
   const isWorkItem = form.ticketType === "Work Item";
   const notInBom = isMaterialReq && form.bomItemID === NOT_IN_BOM;
-  // An on-BOM item carries its own unit — show it read-only so it's clear the
+  // An on-BOM item carries its own unit: show it read-only so it's clear the
   // request will use the BOM's unit, not a free choice.
   const selectedBomItem = bomItems.find((it) => it.bomItemId === form.bomItemID);
   const onBomUnit = isMaterialReq && form.bomItemID && !notInBom ? selectedBomItem?.unit : null;
   const needsUnitPicker = (isMaterialReq && notInBom) || isWorkItem;
 
-  // Group the BOM items by their section for the picker.
-  const groupedBomItems = Object.entries(
-    bomItems.reduce((acc, it) => {
-      const key = it.section || "Other";
-      (acc[key] = acc[key] || []).push(it);
-      return acc;
-    }, {})
-  );
+  // Who the PM can assign to buy: Purchasers, plus the project's Site Manager (either ticket type).
+  const projectSiteManagers = purchasers.filter((p) => p.role === "Site Manager");
+  const purchaserOptions = purchasers.filter((p) => p.role !== "Site Manager");
+  const siteManagerOptions = projectSiteManagers;
+  const buyerCount = purchaserOptions.length + siteManagerOptions.length;
+  const buyerOption = (p) => ({ value: p.userid, label: `${p.name} (${p.email})` });
+  const buyerPlaceholder = purchasersLoading ? t("tf.loading_buyers") : buyerCount ? t("tf.select_buyer") : t("tf.no_buyers");
+  // After a PM create: was it handed to the Site Manager to buy (the confirmation says so)?
+  const createdForSiteManager = Boolean(created && projectSiteManagers.some((p) => p.userid === created.assignedto));
+
+  // Options for the type-to-filter BOM picker. Grouped by section; "Not in the
+  // BOM" is pinned so it stays reachable whatever was typed. The unit and the
+  // payload still come from the full list (selectedBomItem above).
+  const bomOptions = [
+    { value: "", label: !form.projectID ? t("tf.select_project_first") : bomItemsLoading ? t("tf.loading_bom") : t("tf.select_bom"), pinned: true },
+    ...bomItems.map((it) => ({ value: it.bomItemId, label: `${it.description} (${it.unit})`, group: it.section || "Other", searchText: it.unit })),
+    { value: NOT_IN_BOM, label: t("tf.not_in_bom"), pinned: true },
+  ];
 
   if (created) {
     return (
@@ -285,7 +310,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         </span>
         <h3 className="ticket-form-success-title">{t("tf.created_title")}</h3>
         <p className="ticket-form-success-text">
-          {t(isPM ? "tf.created_pm" : "tf.created_sm", { subject: created.subject })}
+          {t(isPM ? (createdForSiteManager ? "tf.created_pm_sm" : "tf.created_pm") : "tf.created_sm", { subject: created.subject })}
         </p>
         <div className="ticket-form-success-actions">
           <Button type="button" variant="secondary" onClick={handleCreateAnother}>
@@ -302,25 +327,26 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
   return (
     <form className="ticket-form" onSubmit={handleSubmit} noValidate>
       {projectsError && <Banner tone="error" title={projectsError} />}
-      {vendorsError && <Banner tone="error" title={vendorsError} />}
+      {isPM && vendorsError && <Banner tone="error" title={vendorsError} />}
       {isPM && purchasersError && <Banner tone="error" title={purchasersError} />}
 
-      <Field
+      <div className="ticket-form-cols">
+      <div className="ticket-form-main">
+      <SearchableSelect
         label={t("nav.project")}
-        as="select"
         required
         value={form.projectID}
         error={fieldErrors.projectID}
         disabled={projectsLoading || projects.length === 0}
-        onChange={(e) => updateField("projectID", e.target.value)}
-      >
-        <option value="">{projectsLoading ? t("common.loading") : t("tf.select_project")}</option>
-        {projects.map((project) => (
-          <option key={project.projectid} value={project.projectid}>
-            {project.name}
-          </option>
-        ))}
-      </Field>
+        onChange={(v) => updateField("projectID", v)}
+        options={[
+          { value: "", label: projectsLoading ? t("common.loading") : t("tf.select_project"), pinned: true },
+          ...projects.map((project) => ({ value: project.projectid, label: project.name })),
+        ]}
+        placeholder={projectsLoading ? t("common.loading") : t("tf.select_project")}
+        searchPlaceholder={t("ss.search_ph")}
+        noMatchText={t("ss.no_match", { query: "{query}" })}
+      />
 
       <Field
         label={t("tf.ticket_type")}
@@ -340,6 +366,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         required
         placeholder={t("tf.subject_ph")}
         value={form.subject}
+        maxLength={LIMITS.ticketSubject}
         error={fieldErrors.subject}
         onChange={(e) => updateField("subject", e.target.value)}
       />
@@ -349,8 +376,11 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
         as="textarea"
         placeholder={t("tf.description_ph")}
         value={form.description}
+        maxLength={LIMITS.description}
         onChange={(e) => updateField("description", e.target.value)}
       />
+
+      </div>
 
       {(isMaterialReq || isWorkItem) && (
         <div className="create-ticket-procurement">
@@ -358,33 +388,18 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
 
           {isMaterialReq && (
             <>
-              <Field
+              <SearchableSelect
                 label={t("tf.bom_item")}
-                as="select"
                 required
                 value={form.bomItemID}
                 error={fieldErrors.bomItemID}
                 disabled={!form.projectID || bomItemsLoading}
-                onChange={(e) => updateField("bomItemID", e.target.value)}
-              >
-                <option value="">
-                  {!form.projectID
-                    ? t("tf.select_project_first")
-                    : bomItemsLoading
-                    ? t("tf.loading_bom")
-                    : t("tf.select_bom")}
-                </option>
-                {groupedBomItems.map(([section, items]) => (
-                  <optgroup key={section} label={section}>
-                    {items.map((it) => (
-                      <option key={it.bomItemId} value={it.bomItemId}>
-                        {it.description} ({it.unit})
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                <option value={NOT_IN_BOM}>{t("tf.not_in_bom")}</option>
-              </Field>
+                onChange={(v) => updateField("bomItemID", v)}
+                options={bomOptions}
+                placeholder={bomOptions[0].label}
+                searchPlaceholder={t("tf.bom_search_ph")}
+                noMatchText={t("tf.bom_no_match", { query: "{query}" })}
+              />
 
               {bomItemsError && <Banner tone="error" title={bomItemsError} />}
               {!bomItemsLoading && form.projectID && bomItems.length === 0 && !bomItemsError && (
@@ -400,6 +415,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
                     required
                     placeholder={t("tf.material_type_ph_light")}
                     value={form.materialType}
+                    maxLength={LIMITS.materialType}
                     error={fieldErrors.materialType}
                     onChange={(e) => updateField("materialType", e.target.value)}
                   />
@@ -409,6 +425,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
                     required
                     placeholder={t("tf.not_in_bom_reason_ph")}
                     value={form.notInBomReason}
+                    maxLength={LIMITS.reason}
                     error={fieldErrors.notInBomReason}
                     onChange={(e) => updateField("notInBomReason", e.target.value)}
                   />
@@ -423,6 +440,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               required
               placeholder={t("tf.material_type_ph_cement")}
               value={form.materialType}
+                    maxLength={LIMITS.materialType}
               error={fieldErrors.materialType}
               onChange={(e) => updateField("materialType", e.target.value)}
             />
@@ -435,6 +453,7 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
               type="number"
               min="0.01"
               step="0.01"
+              max={LIMITS.quantityMax}
               placeholder="0"
               value={form.quantity}
               error={fieldErrors.quantity}
@@ -465,73 +484,65 @@ export function TicketForm({ onSuccess, onCancel, onClose }) {
             )}
           </div>
 
-          <Field
-            label={t("tf.preferred_vendor")}
-            as="select"
-            required
-            value={form.vendorName}
-            error={fieldErrors.vendorName}
-            disabled={vendorsLoading || vendors.length === 0}
-            onChange={(e) => updateField("vendorName", e.target.value)}
-          >
-            <option value="">
-              {vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
-            </option>
-            {vendors.map((vendor) => (
-              <option key={vendor.vendorID} value={vendor.vendorName}>{vendor.vendorName}</option>
-            ))}
-          </Field>
-          {!vendorsLoading && vendors.length === 0 && !vendorsError && (
-            <p role="status">{t("tf.no_vendors_help")}</p>
+          {/* Vendor and budget are the PM's call; a Site Manager's request has neither. */}
+          {isPM && (
+            <>
+              <SearchableSelect
+                label={t("tf.preferred_vendor")}
+                required
+                value={form.vendorName}
+                error={fieldErrors.vendorName}
+                disabled={vendorsLoading || vendors.length === 0}
+                onChange={(v) => updateField("vendorName", v)}
+                options={[
+                  { value: "", label: vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors"), pinned: true },
+                  ...vendors.map((vendor) => ({ value: vendor.vendorName, label: vendor.vendorName })),
+                ]}
+                placeholder={vendorsLoading ? t("tf.loading_vendors") : vendors.length ? t("tf.select_vendor") : t("tf.no_vendors")}
+                searchPlaceholder={t("ss.search_ph")}
+                noMatchText={t("ss.no_match", { query: "{query}" })}
+              />
+              {!vendorsLoading && vendors.length === 0 && !vendorsError && (
+                <p role="status">{t("tf.no_vendors_help")}</p>
+              )}
+            </>
           )}
 
           {isPM && (
-            <Field
-              label={t("tf.assign_purchaser")}
-              as="select"
+            <SearchableSelect
+              label={t("tf.assign_buyer")}
               required
               value={form.assignedTo}
               error={fieldErrors.assignedTo}
-              disabled={purchasersLoading || purchasers.length === 0}
-              onChange={(e) => updateField("assignedTo", e.target.value)}
-            >
-              <option value="">
-                {purchasersLoading ? t("tf.loading_purchasers") : purchasers.length ? t("tf.select_purchaser") : t("tf.no_purchasers")}
-              </option>
-              {purchasers.map((p) => (
-                <option key={p.userid} value={p.userid}>{p.name} ({p.email})</option>
-              ))}
-            </Field>
-          )}
-
-          {isMaterialReq && !isPM && (
-            <Field
-              label={t("tf.requested_budget")}
-              required
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={form.requestedBudget}
-              error={fieldErrors.requestedBudget}
-              onChange={(e) => updateField("requestedBudget", e.target.value)}
+              disabled={purchasersLoading || buyerCount === 0}
+              onChange={(v) => updateField("assignedTo", v)}
+              options={[
+                { value: "", label: buyerPlaceholder, pinned: true },
+                ...purchaserOptions.map((p) => ({ ...buyerOption(p), group: siteManagerOptions.length ? t("tf.buyer_group_purchasers") : undefined })),
+                ...siteManagerOptions.map((p) => ({ ...buyerOption(p), group: t("tf.buyer_group_sm") })),
+              ]}
+              placeholder={buyerPlaceholder}
+              searchPlaceholder={t("ss.search_ph")}
+              noMatchText={t("ss.no_match", { query: "{query}" })}
             />
           )}
+
           {isMaterialReq && isPM && (
+            // Text box so the amount shows thousands commas; the form keeps the plain number.
             <Field
               label={t("tf.approved_budget")}
               required
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="decimal"
               placeholder="0.00"
-              value={form.approvedBudget}
+              value={formatAmountInput(form.approvedBudget)}
+              maxLength={16}
               error={fieldErrors.approvedBudget}
-              onChange={(e) => updateField("approvedBudget", e.target.value)}
+              onChange={(e) => updateField("approvedBudget", parseAmountInput(e.target.value))}
             />
           )}
         </div>
       )}
+      </div>
 
       {formError && <Banner tone="error" title={formError} />}
 

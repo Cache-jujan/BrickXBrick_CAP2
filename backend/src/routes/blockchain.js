@@ -8,7 +8,7 @@ const { checkExpenseIntegrity } = require("../lib/integrityCheck");
 const router = express.Router();
 router.use(requireAuth);
 
-// GET /api/blockchain/verify/:expenseId — General Manager only.
+// GET /api/blockchain/verify/:expenseId, General Manager only.
 // Same check as the background scan (lib/integrityCheck.js): compares the
 // expense with the hash secured on the chain when it was approved.
 router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res, next) => {
@@ -24,7 +24,7 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
         if (result.state === "NotSecured") {
             return res.status(404).json({ error: "This expense hasn't been secured yet, so there's nothing to check against." });
         }
-        // UC-12-01 E3: node unreachable is NOT tampering — tell the GM to retry.
+        // UC-12-01 E3: node unreachable is NOT tampering, tell the GM to retry.
         if (result.state === "Unreachable") {
             return res.status(503).json({
                 error: "We can't run the check right now because the verification servers didn't respond. Your records are safe. Try again in a few minutes.",
@@ -49,7 +49,7 @@ router.get("/verify/:expenseId", requireRole("General Manager"), async (req, res
     }
 });
 
-// GET /api/blockchain/alerts?status=open|reviewed|all — GM/SysAdmin.
+// GET /api/blockchain/alerts?status=open|reviewed|all, GM/SysAdmin.
 // Default "open" (the sidebar badge uses it). Reviewed alerts stay listed
 // with who reviewed them, when and why.
 router.get("/alerts", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
@@ -77,7 +77,7 @@ router.get("/alerts", requireRole("General Manager", "System Administrator"), as
     }
 });
 
-// GET /project/:projectId — summary for the project's Financial/Blockchain section.
+// GET /project/:projectId, summary for the project's Financial/Blockchain section.
 // GM, or the PM who manages the project (same access as viewing the project).
 router.get("/project/:projectId", requireRole("General Manager", "Project Manager"), async (req, res, next) => {
     try {
@@ -125,7 +125,7 @@ router.get("/project/:projectId", requireRole("General Manager", "Project Manage
     }
 });
 
-// PATCH /api/blockchain/alerts/:id/resolve — GM/SysAdmin marks an alert
+// PATCH /api/blockchain/alerts/:id/resolve, GM/SysAdmin marks an alert
 // as reviewed. Body { note } is required. The alert stays on record and the
 // expense keeps its "changed after approval" status (lib/tamperAlerts.js).
 router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Administrator"), async (req, res, next) => {
@@ -137,7 +137,7 @@ router.patch("/alerts/:id/resolve", requireRole("General Manager", "System Admin
     }
 });
 
-// GET /api/blockchain/summary — GM only. Aggregate across all projects.
+// GET /api/blockchain/summary: GM only. Aggregate across all projects.
 router.get("/summary", requireRole("General Manager"), async (req, res, next) => {
     try {
         const confirmed = await query(

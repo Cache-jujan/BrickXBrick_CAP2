@@ -1,4 +1,4 @@
-// notify.js — small helper for writing notifications.
+// notify.js: small helper for writing notifications.
 //
 // Always called with the transaction `client` of the change that triggered
 // the notification, so the notification commits or rolls back together with
@@ -21,6 +21,44 @@ async function notify(client, { recipientIds, excludeUserId, type, entityType, e
       [id, type, entityType, entityId, message]
     );
   }
+}
+
+// Same as notify(), but a failed notification never fails the change it rides
+// along with. Postgres aborts the whole transaction on any failed statement, so
+// the insert runs inside a savepoint: on error only the savepoint is rolled
+// back, the problem is logged, and the submission still commits. Used where the
+// notice is a courtesy to the PM, not part of the record (for example while a
+// new notification type has not been migrated yet).
+async function notifySafely(client, args) {
+  await client.query("SAVEPOINT notify_safely");
+  try {
+    await notify(client, args);
+    await client.query("RELEASE SAVEPOINT notify_safely");
+  } catch (error) {
+    console.error("Notification skipped:", error.message);
+    await client.query("ROLLBACK TO SAVEPOINT notify_safely");
+  }
+}
+
+// Ids of every active General Manager. The GM watches all projects, so this is
+// the recipient list for "the GM should know" notices.
+async function activeGeneralManagerIds(client) {
+  const { rows } = await client.query(
+    "SELECT userid FROM users WHERE role = 'General Manager' AND status = 'Active'"
+  );
+  return rows.map((r) => r.userid);
+}
+
+// One notification to every active General Manager (never the actor).
+async function notifyGeneralManagers(client, { excludeUserId, type, entityType, entityId, message }) {
+  await notify(client, {
+    recipientIds: await activeGeneralManagerIds(client),
+    excludeUserId,
+    type,
+    entityType,
+    entityId,
+    message,
+  });
 }
 
 // Notifications for a ticket STATUS change. Called from logTransition so that
@@ -103,7 +141,7 @@ async function notifyTicketTransition(client, { ticketId, toStatus, changedBy })
       entityId: ticketId,
       message: `Your request "${subject}" was rejected (${project}).${reason}`,
     });
-    // If a Purchaser rejected it, the PM hears too — as a manager notice.
+    // If a Purchaser rejected it, the PM hears too, as a manager notice.
     // (When the PM is the one rejecting, excludeUserId drops them here.)
     await notify(client, {
       recipientIds: [t.projectmanagerid],
@@ -116,4 +154,4 @@ async function notifyTicketTransition(client, { ticketId, toStatus, changedBy })
   }
 }
 
-module.exports = { notify, notifyTicketTransition };
+module.exports = { notify, notifySafely, notifyTicketTransition, activeGeneralManagerIds, notifyGeneralManagers };

@@ -19,7 +19,7 @@ export type Ticket = {
   description: string | null;
   status: string;
   createdat: string;
-  // Procurement fields — present on Material Request / Work Item tickets,
+  // Procurement fields: present on Material Request / Work Item tickets,
   // used by My Requests and the Fix & Resubmit prefill.
   materialtype?: string | null;
   quantity?: string | number | null;
@@ -35,7 +35,7 @@ export type Ticket = {
   rejectionreason?: string | null;
   rejectedbyrole?: string | null;
   // Resubmission wiring. resubmittedfromid: this ticket replaces that one.
-  // resubmittedbyid: the newer ticket that replaced THIS one (if any) — lets
+  // resubmittedbyid: the newer ticket that replaced THIS one (if any), lets
   // My Requests show "Resubmitted ✓" instead of a "Fix & resubmit" button.
   resubmittedfromid?: string | null;
   resubmittedbyid?: string | null;
@@ -43,6 +43,8 @@ export type Ticket = {
   // expense): how many non-rejected expenses already exist against it.
   expensecount?: string | number;
   expensetotal?: string | number;
+  // Quantity already bought for this request (expenses that are not Rejected).
+  expensequantity?: string | number;
 };
 
 export type Project = {
@@ -50,6 +52,41 @@ export type Project = {
   name: string;
   budget?: string;
 };
+
+// A project as the Site Manager sees it: the same GET /api/projects the pickers use,
+// with every status (the server only returns the projects assigned to this person
+// and leaves the budget out).
+export type SiteProject = {
+  projectid: string;
+  name: string;
+  description?: string | null;
+  clientname?: string | null;
+  status: string;
+  startdate?: string | null;
+  constructionstartdate?: string | null;
+  enddate?: string | null;
+  actualcompletiondate?: string | null;
+  // Set once the project went Active; a Cancelled project with it is shown as "Terminated".
+  activatedat?: string | null;
+  // Set while the project is on hold (Suspended).
+  suspensionreason?: string | null;
+  cancellationreason?: string | null;
+  expectedresumedate?: string | null;
+  projecttype?: string | null;
+  municipality?: string | null;
+  province?: string | null;
+  siteaddress?: string | null;
+  projectmanagername?: string | null;
+  // Average completion of the project's milestones, 0-100 (comes as text).
+  progress?: string | number | null;
+};
+
+export async function fetchMyProjects(): Promise<SiteProject[]> {
+  const res = await apiFetch(`${API_URL}/api/projects`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to load projects (${res.status})`);
+  return data;
+}
 
 export type ApprovedVendor = {
   vendorID: string;
@@ -75,6 +112,8 @@ export type AssignedTask = {
   latestreviewreason?: string | null;
   // Dashboard: project dates, the milestone deadline, and when it was completed.
   projectid?: string;
+  // Draft, Active, Suspended, Completed, Cancelled (shown as terminated) or Archived.
+  projectstatus?: string | null;
   projectstartdate?: string | null;
   projectenddate?: string | null;
   milestoneduedate?: string | null;
@@ -147,7 +186,7 @@ export async function fetchAllAssignedTickets(role: "Purchaser" | "Site Manager"
   return res.json();
 }
 
-// ── daily progress check-ins (Site Manager) ──
+// daily progress check-ins (Site Manager)
 export type CheckinSlotName = "Morning" | "Midday" | "EndOfDay";
 export type CheckinSlot = {
   slot: CheckinSlotName;
@@ -346,6 +385,8 @@ export type ExpenseSubmission = {
   tin?: string | null;
   birPermitNumber?: string | null;
   lineItems: unknown[];
+  // Why the request was finished under budget (the server requires it then).
+  submitNote?: string;
 };
 
 export async function submitExpense(body: ExpenseSubmission) {
@@ -369,7 +410,7 @@ export async function submitExpense(body: ExpenseSubmission) {
   return data;
 }
 
-// ---- Rejected expenses: correct and resubmit --------------------------------
+// Rejected expenses: correct and resubmit
 
 // One row of GET /api/expenses/mine. amount is a string (Postgres numeric) and
 // receiptDate a full timestamp (Postgres DATE read as midnight server time).
@@ -419,7 +460,7 @@ export async function resubmitExpense(expenseID: string, body: ExpenseResubmissi
   return data;
 }
 
-// ---- F8 split receipt ------------------------------------------------------
+// F8 split receipt
 
 // Error that keeps the server's `details` (e.g. which lines aren't covered).
 export class ApiError extends Error {
@@ -448,6 +489,34 @@ export async function updateUsername(username: string): Promise<{ id: string; na
   return (await readJson(res, "Failed to save the username")).user;
 }
 
+// Sets the profile picture from a local image file. Resolves to its public URL.
+export async function uploadAvatar(uri: string): Promise<string> {
+  await ensureFreshToken();
+  const result = await FileSystem.uploadAsync(`${API_URL}/api/me/avatar`, uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "photo",
+    mimeType: "image/jpeg",
+    // The ngrok header skips its browser-warning page when the backend is tunnelled during testing.
+    headers: { Authorization: `Bearer ${getAuthToken()}`, "ngrok-skip-browser-warning": "1" },
+  });
+  if (result.status === 401) handleUnauthorized();
+  let data: { error?: string; avatarUrl?: string } = {};
+  try {
+    data = JSON.parse(result.body || "{}");
+  } catch {
+    // An HTML answer means the request did not reach this API (wrong URL, a tunnel page, or a backend without this route).
+    throw new Error(`The server did not answer like the API (status ${result.status}). Check EXPO_PUBLIC_API_URL.`);
+  }
+  if (result.status < 200 || result.status >= 300) throw new Error(data.error || "Failed to save the picture");
+  return data.avatarUrl as string;
+}
+
+export async function removeAvatar(): Promise<void> {
+  const res = await apiFetch(`${API_URL}/api/me/avatar`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) await readJson(res, "Failed to remove the picture");
+}
+
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const res = await apiFetch(`${API_URL}/api/me/change-password`, {
     method: "POST",
@@ -473,6 +542,13 @@ export type OpenRequest = {
   approvedBudget: number | null;
   remainingBudget: number | null;
   createdAt: string;
+  // For the request details sheet. Optional: a list saved on the phone before
+  // the backend sent these (or an older backend) simply leaves them out.
+  unit?: string | null;
+  neededBy?: string | null; // "YYYY-MM-DD"
+  description?: string | null;
+  requestedByName?: string | null;
+  approvedByName?: string | null;
 };
 
 export type SplitLine = { description: string; quantity: number; amount: number; bomItemID?: string | null };
@@ -507,6 +583,9 @@ export type AllocationPlan = {
   allocated: string;
   linesTotal: string;
   warnings: { type: string; ticketID: string; amount?: string; remainingBudget?: string; overAllowance?: boolean; quantity?: number }[];
+  // Strict budget, from POST /allocations/preview: OVER_BUDGET and NO_APPROVED_BUDGET stop the
+  // submit; UNDERSPEND_NOTE_REQUIRED asks for a note.
+  budgetIssues?: { ticketID: string; code: "OVER_BUDGET" | "NO_APPROVED_BUDGET" | "UNDERSPEND_NOTE_REQUIRED"; message: string }[];
 };
 
 // lineTargets: receipt lines the Purchaser matched to a request by hand, { lineIndex: ticketID }.
@@ -562,29 +641,6 @@ export async function submitAllocation(body: AllocationSubmission): Promise<Allo
   return readJson(res, "Failed to submit the split");
 }
 
-export type TripCostSubmission = {
-  receiptImageURL: string;
-  vendorName: string;
-  receiptDate: string;
-  receiptTotal: number;
-  reason: "Gas" | "Toll" | "Delivery" | "Other";
-  projectIds: string[];
-  tin?: string | null;
-  birPermitNumber?: string | null;
-  birNumber?: string | null;
-  commonReceiptID: string;
-};
-
-// A cost with no request (gas, toll, delivery), shared evenly between the ticked projects.
-export async function submitTripCost(body: TripCostSubmission): Promise<AllocationResult> {
-  const res = await apiFetch(`${API_URL}/api/allocations/trip-cost`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(body),
-  });
-  return readJson(res, "Failed to send the trip cost");
-}
-
 // "That's all I could buy": close a part-bought request with a reason.
 export async function closeShortRequest(ticketID: string, reason: string): Promise<void> {
   const res = await apiFetch(`${API_URL}/api/allocations/close-short/${ticketID}`, {
@@ -595,7 +651,7 @@ export async function closeShortRequest(ticketID: string, reason: string): Promi
   await readJson(res, "Failed to close the request");
 }
 
-// ---- Notifications (#6c) ---------------------------------------------------
+// Notifications (#6c)
 
 export type AppNotification = {
   notificationid: string;

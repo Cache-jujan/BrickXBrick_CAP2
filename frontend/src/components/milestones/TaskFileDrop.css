@@ -1,0 +1,25 @@
+/* A task row or board card while a file is dragged over it (see useTaskFileDrop.js). */
+.is-file-over {
+  outline: 2px dashed var(--color-brick);
+  outline-offset: -2px;
+  background: var(--color-brick-tint);
+  border-radius: 6px;
+}
+
+.file-drop-hint {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-brick);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* On a board card (a grid) the pill sits at its own width instead of stretching across the card. */
+.board-task > .file-drop-hint { justify-self: start; }
+
+/* The upload result line above the timeline. */
+.file-drop-status { margin: 0 0 12px; }

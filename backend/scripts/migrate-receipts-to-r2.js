@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
-// migrate-receipts-to-r2.js — one-time move of locally stored receipts into
+// migrate-receipts-to-r2.js: one-time move of locally stored receipts into
 // the Cloudflare R2 bucket (under receipts/), then rewrite the stored URLs.
 //
 // Usage (from backend/, with R2_* and DATABASE_URL in backend/.env):

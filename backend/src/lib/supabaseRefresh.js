@@ -1,4 +1,4 @@
-// supabaseRefresh.js — swap a Supabase refresh token for a new access token.
+// supabaseRefresh.js: swap a Supabase refresh token for a new access token.
 //
 // It calls Supabase's token endpoint directly instead of going through
 // supabaseAnon.auth.refreshSession: that client is shared by every request, and

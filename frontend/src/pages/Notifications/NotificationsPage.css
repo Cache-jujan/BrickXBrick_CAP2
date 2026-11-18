@@ -18,10 +18,6 @@
   margin-bottom: var(--space-2);
 }
 
-.notifications-heading h1 {
-  font-size: var(--text-xl);
-}
-
 .notifications-markall {
   background: none;
   border: none;

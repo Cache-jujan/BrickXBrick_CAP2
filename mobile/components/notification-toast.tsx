@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { metaFor, routeForNotification } from "@/lib/notificationMeta";
-import { emitNewNotifications } from "@/lib/notification-events";
+import { metaFor, notificationText, routeForNotification } from "@/lib/notificationMeta";
+import { emitNewNotifications, useOnExpediteChecks } from "@/lib/notification-events";
 import { kvGet, kvSet } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { pickNewNotifications } from "@/lib/sync/new-notifications";
@@ -72,13 +72,17 @@ export function NotificationToast() {
     };
   }, [isOnline, check]);
 
+  // A receipt was just sent to be read: look for its "ready" notice every few seconds for a
+  // minute instead of waiting for the next 20-second check.
+  useOnExpediteChecks(check);
+
   useEffect(() => () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }, []);
 
   if (!shown) return null;
-  const { icon, bg, fg, fallbackKey } = metaFor(shown.n.type);
-  const message = shown.n.message || t(fallbackKey);
+  const { icon, bg, fg } = metaFor(shown.n.type);
+  const message = notificationText(shown.n, t);
 
   function open() {
     if (!shown) return;
@@ -129,8 +133,8 @@ const styles = StyleSheet.create({
   },
   icon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   body: { flex: 1 },
-  title: { color: COLORS.muted, fontSize: 11, fontFamily: FONT.bold },
+  title: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.bold },
   message: { color: COLORS.heading, fontSize: 14, fontFamily: FONT.semibold, lineHeight: 19, marginTop: 2 },
-  more: { color: COLORS.primary, fontSize: 11, fontFamily: FONT.bold, marginTop: 3 },
+  more: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.bold, marginTop: 3 },
   close: { color: COLORS.muted, fontSize: 22, fontFamily: FONT.regular, paddingHorizontal: 4 },
 });

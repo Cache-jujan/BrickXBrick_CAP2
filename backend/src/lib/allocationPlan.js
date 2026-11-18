@@ -1,4 +1,4 @@
-// allocationPlan.js — F8 split logic as a pure function (no database).
+// allocationPlan.js: F8 split logic as a pure function (no database).
 //
 // One receipt line is split across the open Material Requests for that
 // material, oldest request first. A request never receives more than its
@@ -14,6 +14,9 @@ const { parseAllocationLines, httpError, formatMoney } = require("./allocationVa
 // One matching rule shared with F9 Layer 3 (Jan's helper). Tests inject a fake.
 const { matchesMaterial } = require("./materialMatch");
 
+// Quantities are kept as whole hundredths (the "H" in quantityH / remainingH) and money as whole
+// centavos (the "Cents" in amountCents). 2.5 bags is 250, so splitting a receipt across requests
+// is integer math and never loses a fraction to float error.
 // DECIMAL columns come back from node-postgres as strings ("20.00").
 // Number() first, then round to whole hundredths / centavos.
 function toHundredths(value, fieldName) {
@@ -230,6 +233,7 @@ function planAllocation(lineItems, openTickets, options = {}, matches = matchesM
     const overBudget =
       portion.remainingBudgetCents !== null && portion.amountCents > portion.remainingBudgetCents;
     // Beyond the PM's allowance the Purchaser must say why; inside it, it is normal.
+    // Integer form of: amount > budget * (1 + allowancePct / 100), so no decimals are involved.
     const overAllowance =
       overBudget &&
       portion.amountCents * 100 > portion.remainingBudgetCents * (100 + portion.allowancePct);

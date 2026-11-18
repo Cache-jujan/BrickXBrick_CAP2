@@ -120,23 +120,19 @@ test("unknown vendor is flagged", async () => {
   assert.equal(result, "not_found");
 });
 
-test("flagged vendor is detected", async () => {
+test("a vendor on the list passes the vendor check", async () => {
   const screening = createFraudScreening({
     query: async () => ({
       rowCount: 1,
-      rows: [
-        {
-          approvalstatus: "Flagged",
-        },
-      ],
+      rows: [{ vendorid: "v1" }],
     }),
   });
 
   const result = await screening.checkVendor({
-    vendorname: "Flagged Hardware",
+    vendorname: "Listed Hardware",
   });
 
-  assert.equal(result, "flagged");
+  assert.equal(result, false);
 });
 
 test("ticket mismatch is detected", async () => {
@@ -168,9 +164,7 @@ test("ticket mismatch is detected", async () => {
   assert.equal(result, true);
 });
 
-// ============================================================
 // T2c-L3: BOM-aware material matching tests
-// ============================================================
 
 test("T2c-L3: BOM-linked ticket + matching expense line item = no mismatch", async () => {
   const bomItemID = "550e8400-e29b-41d4-a716-446655440000";
@@ -505,4 +499,151 @@ test("more than requested is a mismatch even for an allocation portion", async (
   });
 
   assert.equal(result, true);
+});
+
+// Unlinked receipt line that reads exactly the requested material
+// (the OCR read "CEMENT" but the purchaser didn't tap
+// "Match to a requested material")
+
+const PADEENA_TICKET = {
+  tickettype: "Material Request",
+  materialtype: "CEMENT",
+  quantity: "100.00",
+  vendorname: "Padeena Enterprises",
+  bomitemid: "550e8400-e29b-41d4-a716-446655440000",
+};
+
+const PADEENA_EXPENSE = {
+  ticketid: "ticket-1",
+  category: "Materials",
+  quantity: "100.00",
+  vendorname: "Padeena Enterprises",
+  lineitems: [{ description: "CEMENT", amount: 19000, quantity: 100, unitPrice: 190 }],
+};
+
+test("BOM-linked ticket + unlinked line reading exactly the requested material = no mismatch", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  assert.equal(await screening.checkTicketMismatch(PADEENA_EXPENSE), false);
+  assert.equal(await screening.describeTicketMismatch(PADEENA_EXPENSE), false);
+});
+
+test("the material text match ignores case and extra spaces", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const result = await screening.checkTicketMismatch({
+    ...PADEENA_EXPENSE,
+    lineitems: [{ description: "  cement ", amount: 19000 }],
+  });
+
+  assert.equal(result, false);
+});
+
+test("a line linked to a different BOM item does not match by its text", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const result = await screening.checkTicketMismatch({
+    ...PADEENA_EXPENSE,
+    lineitems: [{ description: "CEMENT", amount: 19000, bomItemID: "660e8400-e29b-41d4-a716-446655440001" }],
+  });
+
+  assert.equal(result, true);
+});
+
+test("a line matched to this ticket on the review screen counts as the material", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const result = await screening.checkTicketMismatch({
+    ...PADEENA_EXPENSE,
+    lineitems: [{ description: "Portland cement 40kg", amount: 19000, matchedTicketID: "ticket-1" }],
+  });
+
+  assert.equal(result, false);
+});
+
+test("the mismatch reason names only the part that differs", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const reason = await screening.describeTicketMismatch({
+    ...PADEENA_EXPENSE,
+    vendorname: "Other Hardware",
+  });
+
+  assert.match(reason, /^Store:/);
+  assert.doesNotMatch(reason, /Material|Quantity/);
+});
+
+test("lineitems stored as a JSON string are still read", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const result = await screening.checkTicketMismatch({
+    ...PADEENA_EXPENSE,
+    lineitems: JSON.stringify([{ amount: 19000, quantity: 100, bomItemID: null, unitPrice: 190, description: "CEMENT" }]),
+  });
+
+  assert.equal(result, false);
+});
+// Quantity is the requested material's lines only, not the whole receipt
+
+test("other materials and fee lines on the receipt do not trigger a quantity mismatch", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const expense = {
+    ...PADEENA_EXPENSE,
+    quantity: "115.00", // 100 cement + 15 sand
+    lineitems: [
+      { description: "CEMENT", amount: 19000, quantity: 100, unitPrice: 190 },
+      { description: "Washed sand", amount: 3000, quantity: 15, unitPrice: 200 },
+      { description: "Delivery fee", amount: 500, quantity: 0 },
+    ],
+  };
+
+  assert.equal(await screening.describeTicketMismatch(expense), false);
+});
+
+test("buying more of the requested material is still a quantity mismatch", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [PADEENA_TICKET] }),
+  });
+
+  const reason = await screening.describeTicketMismatch({
+    ...PADEENA_EXPENSE,
+    quantity: "130.00",
+    lineitems: [
+      { description: "CEMENT", amount: 24700, quantity: 130, unitPrice: 190 },
+      { description: "Delivery fee", amount: 500, quantity: 0 },
+    ],
+  });
+
+  assert.match(reason, /^Quantity: 130 on the receipt, 100 requested/);
+});
+
+test("the quantity check uses the receipt total when no line can be tied to the request", async () => {
+  const screening = createFraudScreening({
+    query: async () => ({ rowCount: 1, rows: [{ ...PADEENA_TICKET, bomitemid: null }] }),
+  });
+
+  // The material is found through the category/vendor text, but no description matches it.
+  const reason = await screening.describeTicketMismatch({
+    ...PADEENA_EXPENSE,
+    category: "Cement",
+    quantity: "60.00",
+    lineitems: [{ description: "Bag 40kg", amount: 11400, quantity: 60 }],
+  });
+
+  assert.match(reason, /^Quantity: 60 on the receipt, 100 requested/);
 });

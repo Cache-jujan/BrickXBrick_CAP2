@@ -1,22 +1,22 @@
-// reassignSiteManager.js — D-02: tasks.assignedTo was copied at task-create
+// reassignSiteManager.js (D-02): tasks.assignedTo was copied at task-create
 // time and never moved when a project's Site Manager changed, so the old SM
 // kept backend access to open (non-Completed) tasks and the new SM got 403
 // on them. This moves every open task to the new SM in the same transaction
 // as the project update.
 //
 // #5: a Planning-phase milestone's tasks are never assigned to a Site
-// Manager at all (assignedTo is NULL; they're "Handled by: GM/PM" instead —
+// Manager at all (assignedTo is NULL; they're "Handled by: GM/PM" instead,
 // see tasks_owner_present_check in migration 035), so they must never be
 // counted or touched here. Scoped to Construction-phase milestones only,
 // which is exactly the set of tasks that can ever have assignedTo set.
 //
 // Clearing the SM (siteManagerId: null) while open Construction tasks exist
-// would silently leave them with the outgoing SM — that's rejected with 409
+// would silently leave them with the outgoing SM: that's rejected with 409
 // instead. Completed tasks keep their original assignee; the work and photo
 // evidence really are theirs, and the PM review route doesn't key off
 // current assignment anyway.
 //
-// `client` must expose .query(text, params) — pass the transaction client
+// `client` must expose .query(text, params), pass the transaction client
 // from withTransaction.
 
 async function countOpenTasks(client, projectId) {

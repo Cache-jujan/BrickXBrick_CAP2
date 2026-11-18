@@ -1,17 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { scanReceipt } from "../../api/expensesApi";
 import { listOpenRequests, previewAllocation, submitAllocation } from "../../api/allocationsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { useReceiptScans, useOpenWantedScan } from "../../context/ReceiptScanContext";
+import { ReceiptScanTray } from "../../components/expenses/ReceiptScanTray";
+import { ExpenseModeBar } from "../../components/expenses/ExpenseModeBar";
+import { ReceiptCapture } from "../../components/expenses/ReceiptCapture";
+import { TaxDetails } from "../../components/expenses/TaxDetails";
+import { SubmitBlockers } from "../../components/expenses/SubmitBlockers";
+import { lineGaps } from "../../utils/formGaps";
 import { Banner } from "../../components/ui/Banner";
-import { BackLink } from "../../components/ui/BackLink";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { RequestPickerModal } from "../../components/expenses/RequestPickerModal";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { EMPTY_DRAFT, draftFromScan, isSupportedReceipt } from "./SubmitExpensePage";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import { editLine } from "../../utils/lineItemMath";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./SubmitExpensePage.css";
@@ -27,12 +34,12 @@ import "./SplitReceiptPage.css";
 // Buying more than every request wants is allowed: the extra rides on the last request and
 // the PM is told. Spending past the project's allowance, or buying extra, needs a short reason.
 
-// A line starting with this makes the expense go to PM review (Receipt_Adjustment flag).
-const ADJUSTMENT_PREFIX = "Adjustment";
+// Quick reasons are for finishing a request UNDER budget only. The note is read by the PM, so it stays English.
 const QUICK_REASONS = [
-  { key: "ck.reason_price", text: "Prices went up." },
-  { key: "ck.reason_delivery", text: "Delivery or gas." },
-  { key: "ck.reason_promo", text: "The store gave extra." },
+  { key: "ck.under_cheaper", text: "Prices were lower than expected." },
+  { key: "ck.under_stock", text: "The store ran out of stock." },
+  { key: "ck.under_less", text: "Needed less than planned." },
+  { key: "ck.under_alt", text: "Bought a cheaper alternative." },
 ];
 
 /** Create an empty receipt draft with its own editable line item. */
@@ -49,14 +56,17 @@ const toCents = (value) => Math.round(Number(value) * 100);
 export function SplitReceiptPage() {
   const { user } = useAuth();
   const { t, tv } = useLocale();
-  const cameraInput = useRef(null);
-  const imageInput = useRef(null);
-  const pdfInput = useRef(null);
   const busyRef = useRef(false);
 
   const [draft, setDraft] = useState(blankDraft);
   const [receiptName, setReceiptName] = useState("");
-  const [scanning, setScanning] = useState(false);
+  // Only the short upload is waited for; reading the receipt happens in the background.
+  const [uploading, setUploading] = useState(false);
+  // The scan whose result is in the form now (removed from the tray once the split is saved).
+  const [activeScanID, setActiveScanID] = useState("");
+  // The tax fields are folded away; the user can open them.
+  const [taxOpen, setTaxOpen] = useState(false);
+  const { startScan, dismissScan } = useReceiptScans();
   const [submitting, setSubmitting] = useState(false);
   const [pageError, setPageError] = useState("");
   const [ocrNotice, setOcrNotice] = useState("");
@@ -157,6 +167,20 @@ export function SplitReceiptPage() {
     draft.receiptImageURL && draft.vendorName.trim() && draft.receiptDate && amountIsValid && allLinesValid && totalMatches
   );
 
+  // What is still missing before the split can be previewed: tags on the boxes, and the reason
+  // shown beside the greyed-out button.
+  const gapOfLines = lineGaps(draft.lineItems);
+  const missing = { vendor: !draft.vendorName.trim(), amount: !amountIsValid, date: !draft.receiptDate };
+  const previewGaps = [
+    !draft.receiptImageURL && t("gap.receipt"),
+    missing.vendor && t("submit.vendor_name"),
+    missing.amount && t("submit.receipt_total"),
+    missing.date && t("my_expenses.receipt_date"),
+    gapOfLines.none && t("gap.line_item"),
+    gapOfLines.numbers && t("gap.line_numbers"),
+    allLinesValid && amountIsValid && !totalMatches && t("gap.total_match"),
+  ].filter(Boolean);
+
   /** Clear allocation choices, preview results and errors for a fresh preview. */
   function resetAllocation() {
     setAllocating(false);
@@ -169,40 +193,45 @@ export function SplitReceiptPage() {
     setNote("");
   }
 
-  /** Validate and scan a selected receipt, replacing the draft and clearing its old allocation. */
-  async function handleReceiptPick(event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || busyRef.current) return;
+  // Picking a file only uploads it and puts it in the tray; the receipt you are splitting stays
+  // as it is, so more receipts can be added while earlier ones are still being read.
+  async function handleReceiptPick(file) {
+    if (!file || uploading) return;
 
     setPageError("");
-    setOcrNotice("");
-    setReceiptName("");
-    setResult(null);
-    resetAllocation();
-    setDraft(blankDraft());
     if (!isSupportedReceipt(file)) {
       setPageError(t("errors.receipt_type"));
       return;
     }
-
-    setReceiptName(file.name);
-    busyRef.current = true;
-    setScanning(true);
+    setUploading(true);
     try {
-      const scan = await scanReceipt(file);
-      setDraft(draftFromScan(scan));
-      setOcrNotice(scan.ocrError || "");
-      if (!scan.ocrError && scan.confidence === "low") {
-        setOcrNotice(t("split.ocr_low"));
-      }
+      await startScan(file, "split");
     } catch (error) {
       setPageError(extractErrorMessage(error, t("errors.upload_failed")));
     } finally {
-      busyRef.current = false;
-      setScanning(false);
+      setUploading(false);
     }
   }
+
+  /** Load a scan from the tray: replaces the draft and clears any old allocation. */
+  function openScan(scan) {
+    setPageError("");
+    setResult(null);
+    resetAllocation();
+    setReceiptName(scan.context?.fileName || "");
+    setActiveScanID(scan.scanID);
+    if (scan.status === "Ready" && scan.result) {
+      setDraft(draftFromScan({ ...scan.result, receiptImageURL: scan.result.receiptImageURL || scan.receiptImageURL }));
+      setOcrNotice(scan.result.ocrError || (scan.result.confidence === "low" ? t("split.ocr_low") : ""));
+    } else {
+      // Could not be read: the photo is stored, so the details are typed in by hand.
+      setDraft({ ...blankDraft(), receiptImageURL: scan.receiptImageURL });
+      setOcrNotice(t("scan.manual_notice"));
+    }
+  }
+
+  // Arriving from the "receipt ready" pop-up or the bell (?scan=<id>).
+  useOpenWantedScan("split", openScan);
 
   // Live preview. Debounced so typing in a quantity doesn't fire a request per key.
   useEffect(() => {
@@ -286,47 +315,17 @@ export function SplitReceiptPage() {
     }));
   }
 
-  /**
-   * The lines and the receipt total differ: add an "Adjustment" line for the gap, or take an
-   * overage off the biggest line as a discount and note it. Either one sends the expense to PM review.
-   */
-  function applyAdjustment() {
-    const gap = toCents(draft.amount) - linesCents;
-    if (gap === 0) return;
-    setDraft((current) => {
-      if (gap > 0) {
-        return {
-          ...current,
-          lineItems: [...current.lineItems, { description: `${ADJUSTMENT_PREFIX} / rounding`, quantity: "0", amount: (gap / 100).toFixed(2), unitPrice: "" }],
-        };
-      }
-      const over = -gap;
-      let biggest = -1;
-      current.lineItems.forEach((item, i) => {
-        if (Number(item.quantity) > 0 && (biggest < 0 || toCents(item.amount) > toCents(current.lineItems[biggest].amount))) biggest = i;
-      });
-      if (biggest < 0) return current;
-      const lineItems = current.lineItems.map((item, i) =>
-        i === biggest ? editLine(item, "amount", ((toCents(item.amount) - over) / 100).toFixed(2)) : item
-      );
-      lineItems.push({
-        description: `${ADJUSTMENT_PREFIX}: ${peso(over / 100)} discount taken off ${current.lineItems[biggest].description}`,
-        quantity: "0",
-        amount: "0.00",
-        unitPrice: "",
-      });
-      return { ...current, lineItems };
-    });
-  }
-
-  // Extra quantity or spending past the allowance needs a few words for the PM.
+  // Extra quantity, or finishing a request under its budget, needs a few words for the PM.
+  // Over budget (or no approved budget) is refused outright, for every role.
   const extraPortions = (plan?.portions ?? []).filter((p) => Number(p.extraQuantity) > 0);
-  const overAllowancePortions = (plan?.portions ?? []).filter((p) => p.overAllowance);
-  const needsReason = extraPortions.length > 0 || overAllowancePortions.length > 0;
+  const budgetIssues = plan?.budgetIssues ?? [];
+  const budgetBlockers = budgetIssues.filter((issue) => issue.code !== "UNDERSPEND_NOTE_REQUIRED");
+  const underspentIssues = budgetIssues.filter((issue) => issue.code === "UNDERSPEND_NOTE_REQUIRED");
+  const needsReason = extraPortions.length > 0 || underspentIssues.length > 0;
   const reasonOk = !needsReason || note.trim().length > 0;
 
   const canSubmit = Boolean(
-    plan?.ok && draft.category && readyToPreview && reasonOk && !previewing && !scanning && !submitting && !result
+    plan?.ok && budgetBlockers.length === 0 && draft.category && readyToPreview && reasonOk && !previewing && !uploading && !submitting && !result
   );
 
   /** Submit a valid split once, displaying saved results or refreshing stale request capacity. */
@@ -350,9 +349,10 @@ export function SplitReceiptPage() {
         excludeTicketIDs: excluded,
         feeTargets,
         lineTargets,
-        note: needsReason ? note.trim() : undefined,
+        note: note.trim() || undefined,
       });
       setResult(saved);
+      if (activeScanID) { dismissScan(activeScanID); setActiveScanID(""); } // this receipt is done: take it off the tray
     } catch (error) {
       const problems = error?.response?.data?.details?.problems;
       if (Array.isArray(problems)) {
@@ -382,7 +382,7 @@ export function SplitReceiptPage() {
     return <Banner tone="error" title={t("auth.not_authorized_title")}>{t("split.not_authorized_body")}</Banner>;
   }
 
-  // ---- After a successful submit ------------------------------------------
+  // After a successful submit
   if (result) {
     /** Resolve a saved request's project name, using a fallback if it is unknown. */
     const name = (id) => known[id]?.projectName ?? t("split.request");
@@ -390,15 +390,9 @@ export function SplitReceiptPage() {
     const flagged = screening.filter((s) => (s.flagTypes ?? []).length > 0).length;
     const notScreened = screening.filter((s) => s.flagTypes === null).length;
     return (
-      <div className="submit-expense-page">
-        <div className="submit-expense-header">
-          <div>
-            <h1>{t("split.saved_title")}</h1>
-            <p className="submit-expense-subtitle">
-              {t("split.saved_subtitle", { count: result.expenses.length })}
-            </p>
-          </div>
-        </div>
+      <div className="submit-expense-page" data-mode="split">
+        <ExpenseModeBar mode="split" />
+        <Banner tone="info" title={t("split.saved_title")}>{t("split.saved_subtitle", { count: result.expenses.length })}</Banner>
         <Card className="submit-expense-card">
           <section className="submit-expense-section">
             <h2>{t("split.completed_requests")}</h2>
@@ -438,25 +432,19 @@ export function SplitReceiptPage() {
   const warningFor = (ticketID) => plan?.warnings?.find((w) => w.type === "OVER_BUDGET" && w.ticketID === ticketID);
 
   return (
-    <div className="submit-expense-page">
+    <div className="submit-expense-page" data-mode="split">
       <LoadingOverlay
-        open={scanning || submitting}
-        message={scanning ? t("submit.reading") : t("split.submitting")}
-        detail={scanning ? t("submit.scan_detail") : t("split.creating")}
+        open={submitting}
+        message={t("split.submitting")}
+        detail={t("split.creating")}
       />
-      <div className="submit-expense-header">
-        <div>
-          <BackLink to="/expenses">{t("submit.back")}</BackLink>
-          <h1>{t("nav.split_receipt")}</h1>
-          <p className="submit-expense-subtitle">{t("split.intro")}</p>
-        </div>
-        <span className="submit-expense-role">{user.role}</span>
-      </div>
+      <ExpenseModeBar mode="split" />
 
       {pageError && <Banner tone="error" title={t("submit.could_not_continue")}>{pageError}</Banner>}
       {ocrNotice && <Banner tone="warning" title={t("submit.review_carefully")}>{ocrNotice}</Banner>}
 
-      <Card className="submit-expense-card">
+      <div className="xp-layout">
+      <Card className="submit-expense-card xp-receipt">
         <section className="submit-expense-section" aria-labelledby="split-receipt-heading">
           <div className="submit-expense-section-heading">
             <div>
@@ -466,15 +454,9 @@ export function SplitReceiptPage() {
             {receiptName && <span className="submit-expense-filename">{receiptName}</span>}
           </div>
 
-          <input ref={cameraInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" capture="environment" onChange={handleReceiptPick} />
-          <input ref={imageInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" onChange={handleReceiptPick} />
-          <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={handleReceiptPick} />
+          <ReceiptCapture onFile={handleReceiptPick} disabled={uploading} uploading={uploading} />
 
-          <div className="submit-expense-upload-actions">
-            <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>{t("submit.capture_camera")}</Button>
-            <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>{t("submit.choose_image")}</Button>
-            <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>{t("submit.choose_pdf")}</Button>
-          </div>
+          <ReceiptScanTray mode="split" activeScanID={activeScanID} onOpen={openScan} />
 
           {draft.receiptImageURL && (
             <div className="submit-expense-receipt-preview">
@@ -491,7 +473,7 @@ export function SplitReceiptPage() {
         </section>
       </Card>
 
-      <Card className="submit-expense-card">
+      <Card className="submit-expense-card xp-details">
         <section className="submit-expense-section" aria-labelledby="split-review-heading">
           <div className="submit-expense-section-heading">
             <div>
@@ -500,19 +482,22 @@ export function SplitReceiptPage() {
             </div>
           </div>
 
-          <div className="submit-expense-fields">
-            <Field label={t("submit.vendor_name")} required value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
-            <Field label={t("submit.receipt_total")} required type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setField("amount", e.target.value)} />
-            <Field label={t("my_expenses.receipt_date")} required type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
+          <div className={`submit-expense-fields xp-main-fields`}>
+            <Field label={t("submit.vendor_name")} required missing={missing.vendor} value={draft.vendorName} onChange={(e) => setField("vendorName", e.target.value)} />
+            <Field label={t("submit.receipt_total")} required missing={missing.amount} inputMode="decimal" value={formatAmountInput(draft.amount)} onChange={(e) => setField("amount", parseAmountInput(e.target.value))} />
+            <Field label={t("my_expenses.receipt_date")} required missing={missing.date} type="date" value={draft.receiptDate} onChange={(e) => setField("receiptDate", e.target.value)} />
             <Field as="select" label={t("submit.expense_category")} required value={draft.category} onChange={(e) => setField("category", e.target.value)}>
               <option value="Materials">{tv("category", "Materials")}</option>
               <option value="Equipment">{tv("category", "Equipment")}</option>
               <option value="Other">{tv("category", "Other")}</option>
             </Field>
+          </div>
+
+          <TaxDetails open={taxOpen} onToggle={setTaxOpen} filled={Boolean(draft.tin || draft.birPermitNumber || draft.birNumber || draft.birPermitType)}>
             <Field label="TIN" value={draft.tin} onChange={(e) => setField("tin", e.target.value)} />
             <Field label={t("submit.field_bir_permit")} value={draft.birPermitNumber} onChange={(e) => setField("birPermitNumber", e.target.value)} />
             <Field label="OR / SI number" value={draft.birNumber} onChange={(e) => setField("birNumber", e.target.value)} />
-          </div>
+          </TaxDetails>
 
           <div className="submit-expense-items-heading">
             <div>
@@ -525,10 +510,10 @@ export function SplitReceiptPage() {
             {draft.lineItems.map((item, index) => (
               <div className="split-line-block" key={`item-${index}`}>
               <div className="submit-expense-item-row">
-                <Field label={t("submit.item_n", { n: index + 1 })} required value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder={t("submit.description")} />
-                <Field label={t("submit.item_amount")} required type="number" min="0" step="0.01" value={item.amount} onChange={(e) => updateLineItem(index, "amount", e.target.value)} />
-                <Field label={t("split.quantity_fees")} required type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
-                <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(e) => updateLineItem(index, "unitPrice", e.target.value)} />
+                <Field label={t("submit.item_n", { n: index + 1 })} required missing={gapOfLines.rows[index]?.desc} value={item.description} onChange={(e) => updateLineItem(index, "description", e.target.value)} placeholder={t("submit.description")} />
+                <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} inputMode="decimal" value={formatAmountInput(item.amount)} onChange={(e) => updateLineItem(index, "amount", parseAmountInput(e.target.value))} />
+                <Field label={t("split.quantity_fees")} required missing={gapOfLines.rows[index]?.qty} type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLineItem(index, "quantity", e.target.value)} />
+                <Field label={t("submit.unit_price")} inputMode="decimal" placeholder={t("submit.calculated")} value={formatAmountInput(item.unitPrice)} onChange={(e) => updateLineItem(index, "unitPrice", parseAmountInput(e.target.value))} />
                 <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
               </div>
               {item.description.trim() && openRequests.length > 0 && (
@@ -544,7 +529,20 @@ export function SplitReceiptPage() {
                       <Button type="button" variant="ghost" onClick={() => clearMatch(index)}>{t("rv.remove_match")}</Button>
                     </>
                   ) : null}
-                  <Button type="button" variant="secondary" onClick={() => setPickingIndex(index)}>{t("rv.match_material")}</Button>
+                  <Button
+                    type="button"
+                    variant={item.matchedTicketID ? "secondary" : "primary"}
+                    className={item.matchedTicketID ? undefined : "split-match-cta"}
+                    onClick={() => setPickingIndex(index)}
+                  >
+                    {!item.matchedTicketID && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+                        <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+                      </svg>
+                    )}
+                    {t("rv.match_material")}
+                  </Button>
                 </div>
               )}
               </div>
@@ -555,26 +553,21 @@ export function SplitReceiptPage() {
             <Banner
               tone="warning"
               title={t("split.mismatch_title")}
-              action={
-                <Button type="button" variant="secondary" onClick={applyAdjustment}>
-                  {toCents(draft.amount) > linesCents
-                    ? t("rv.fix_add", { gap: peso((toCents(draft.amount) - linesCents) / 100) })
-                    : t("rv.fix_discount_web", { gap: peso((linesCents - toCents(draft.amount)) / 100) })}
-                </Button>
-              }
             >
-              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })} {t("split.adjust_hint")}
+              {t("split.mismatch_body", { lines: peso(linesCents / 100), total: peso(draft.amount) })}{" "}
+              {t("split.fix_totals_hint")}
             </Banner>
           )}
 
           {!allocating && (
-            <div className="submit-expense-footer">
-              <p>{t("split.next_hint")}</p>
+            <div className="submit-expense-footer xp-footer">
+              <SubmitBlockers gaps={previewGaps} note={t("split.next_hint")} />
               <Button type="button" disabled={!readyToPreview} onClick={() => setAllocating(true)}>{t("split.preview")}</Button>
             </div>
           )}
         </section>
       </Card>
+      </div>
 
       <RequestPickerModal
         line={pickingIndex !== null ? draft.lineItems[pickingIndex] ?? null : null}
@@ -631,9 +624,34 @@ export function SplitReceiptPage() {
                 </ul>
               </Banner>
             )}
-            {plan?.warnings?.some((w) => w.type === "OVER_BUDGET") && (
-              <Banner tone="warning" title={t("dashboard.over_budget")}>
-                {overAllowancePortions.length > 0 ? t("split.over_allowance_body") : t("split.over_budget_body")}
+            {budgetBlockers.length > 0 && (
+              <Banner tone="error" title={t("bd.over_title")}>
+                <ul className="split-problems">
+                  <li><strong>{t("ck.over_auto")}</strong></li>
+                  {budgetBlockers.map((issue, index) => (
+                    <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
+            {budgetBlockers.length > 0 && !needsReason && (
+              <div className="split-note split-note-over">
+                <Field
+                  as="textarea"
+                  label={t("ck.over_note_hint")}
+                  maxLength={200}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </div>
+            )}
+            {underspentIssues.length > 0 && (
+              <Banner tone="warning" title={t("bd.note_title")}>
+                <ul className="split-problems">
+                  {underspentIssues.map((issue, index) => (
+                    <li key={`${issue.ticketID}-${index}`}>{issue.message}</li>
+                  ))}
+                </ul>
               </Banner>
             )}
             {needsReason && (
@@ -647,13 +665,13 @@ export function SplitReceiptPage() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
-                <div className="split-note-quick">
+                {underspentIssues.length > 0 && <div className="split-note-quick">
                   {QUICK_REASONS.map((reason) => (
                     <Button key={reason.key} type="button" variant="secondary" onClick={() => setNote((current) => (current ? `${current} ${reason.text}` : reason.text))}>
                       {t(reason.key)}
                     </Button>
                   ))}
-                </div>
+                </div>}
               </div>
             )}
 
@@ -730,17 +748,15 @@ export function SplitReceiptPage() {
                 <h3>{t("split.fees_title")}</h3>
                 <p className="split-muted">{t("split.fees_help")}</p>
                 {feeLines.map((line) => (
-                  <Field
+                  <SearchableSelect
                     key={line.lineIndex}
-                    as="select"
                     label={`${line.description} (${peso(line.amount)})`}
                     value={line.ticketID}
-                    onChange={(e) => moveFee(line.lineIndex, e.target.value)}
-                  >
-                    {plan.portions.map((p) => (
-                      <option key={p.ticketID} value={p.ticketID}>{p.projectName} · {p.materialType}</option>
-                    ))}
-                  </Field>
+                    onChange={(v) => moveFee(line.lineIndex, v)}
+                    options={plan.portions.map((p) => ({ value: p.ticketID, label: `${p.projectName} · ${p.materialType}` }))}
+                    searchPlaceholder={t("ss.search_ph")}
+                    noMatchText={t("ss.no_match", { query: "{query}" })}
+                  />
                 ))}
               </div>
             )}
@@ -752,7 +768,7 @@ export function SplitReceiptPage() {
             )}
 
             <div className="submit-expense-footer">
-              <p>{t("split.footer_note")}</p>
+              <SubmitBlockers gaps={[budgetBlockers.length > 0 && t("bd.over_title"), needsReason && !reasonOk && t("gap.split_reason")].filter(Boolean)} note={t("split.footer_note")} />
               <Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
                 {submitting ? t("common.submitting") : t("split.submit_for_approval")}
               </Button>

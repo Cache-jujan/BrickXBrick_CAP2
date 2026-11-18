@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { STATUS_META, assigneeLabel, byDueDate, formatDue, statusMeta, taskIsOverdue } from "./milestoneUtils";
+import { useTaskFileDrop } from "./useTaskFileDrop";
 import "./MilestoneBoard.css";
 
 function percentOf(milestone) {
@@ -30,15 +31,22 @@ function TaskChip({ task }) {
   return <span className="board-chip board-chip-pending">{t("common.pending")}</span>;
 }
 
-function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments }) {
+function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments, onDropFiles }) {
   const { t, formatDate } = useLocale();
   const done = task.status === "Completed";
   const isPlanning = milestone.phase === "Planning";
   const showDone = canManage && isPlanning && !done;
   const showDocs = isPlanning && onOpenDocuments;
+  // A file dragged onto a Planning task card is attached straight away. A completed task's documents are locked.
+  const { isOver, dropProps } = useTaskFileDrop({
+    enabled: isPlanning && Boolean(onDropFiles),
+    accepts: !done,
+    onFiles: (files) => onDropFiles(task, files),
+  });
   return (
-    <li className="board-task">
+    <li className={`board-task${isOver ? " is-file-over" : ""}`} {...dropProps}>
       <strong className="board-task-name">{task.taskname}</strong>
+      {isOver && <span className="file-drop-hint">{t("docs.drop_here")}</span>}
       <div className="board-task-row">
         <TaskChip task={task} />
         <span>{t("ms.due", { date: formatDue(task, formatDate, { month: "short", day: "numeric" }) })}</span>
@@ -57,7 +65,7 @@ function BoardTask({ task, milestone, canManage, onCompleteTask, onOpenDocuments
   );
 }
 
-function BoardColumn({ milestone, phaseLabel, index, canManage, hasSiteManager, onAddTask, onCompleteTask, onOpenDocuments }) {
+function BoardColumn({ milestone, phaseLabel, index, canManage, hasSiteManager, onAddTask, onCompleteTask, onOpenDocuments, onDropFiles }) {
   const { t, tv, formatDate } = useLocale();
   const meta = statusMeta(milestone.status);
   const tasks = milestone.tasks || [];
@@ -98,6 +106,7 @@ function BoardColumn({ milestone, phaseLabel, index, canManage, hasSiteManager, 
               canManage={canManage}
               onCompleteTask={onCompleteTask}
               onOpenDocuments={onOpenDocuments}
+              onDropFiles={onDropFiles}
             />
           ))}
         </ul>
@@ -106,7 +115,7 @@ function BoardColumn({ milestone, phaseLabel, index, canManage, hasSiteManager, 
   );
 }
 
-export const MilestoneBoard = memo(function MilestoneBoard({ milestones, canManage = false, hasSiteManager = false, onAddTask, onCompleteTask, onOpenDocuments }) {
+export const MilestoneBoard = memo(function MilestoneBoard({ milestones, canManage = false, hasSiteManager = false, onAddTask, onCompleteTask, onOpenDocuments, onDropFiles }) {
   const { t } = useLocale();
   const groups = useMemo(() => {
     const planning = milestones.filter((m) => m.phase === "Planning").sort(byDueDate);
@@ -143,6 +152,7 @@ export const MilestoneBoard = memo(function MilestoneBoard({ milestones, canMana
                     onAddTask={onAddTask}
                     onCompleteTask={onCompleteTask}
                     onOpenDocuments={onOpenDocuments}
+                    onDropFiles={onDropFiles}
                   />
                 ))}
               </div>

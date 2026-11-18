@@ -63,9 +63,9 @@ async function main() {
   console.log(`${RED}   RESULT: TAMPERED ${RESET}`);
   console.log(`${RED}==================================${RESET}`);
 
-  // PART A — Appendix H sub-point 7: log tamper alert permanently.
+  // Appendix H sub-point 7: log tamper alert permanently.
   // Stand-in for the `tamper_alerts` table (flagged earlier as a Data
-  // Dictionary gap) — this is deliberately a minimal shape, not a guess
+  // Dictionary gap): this is deliberately a minimal shape, not a guess
   // at the real schema, which still needs to formalize.
   const alert = {
     alertID: crypto.randomUUID(),
@@ -82,9 +82,9 @@ async function main() {
   existingAlerts.push(alert);
   fs.writeFileSync(alertsFile, JSON.stringify(existingAlerts, null, 2));
 
-  // PART A — Appendix H sub-point 8: notify SysAdmin on tamper detection.
+  // Appendix H sub-point 8: notify SysAdmin on tamper detection.
   // Spike shortcut: console output only. Real F12 would push this to an
-  // actual channel (email/SMS/push) via a notification service — not
+  // actual channel (email/SMS/push) via a notification service, not
   // implemented here, this just proves the trigger point exists.
   console.log(`${YELLOW}==================================${RESET}`);
   console.log(`${YELLOW}   SYSADMIN NOTIFIED${RESET}`);

@@ -48,3 +48,13 @@ export function groupAmountText(text: string): string {
   const cents = toCents(text);
   return cents === null ? text : formatAmountInput(cents);
 }
+
+// Groups with commas as the person types: "1234567.5" -> "1,234,567.5". Keeps a trailing dot
+// and at most 2 decimals, so typing is never fought. toCents ignores the commas.
+export function groupAmountLive(text: string): string {
+  const cleaned = text.replace(/[^0-9.]/g, "");
+  const dot = cleaned.indexOf(".");
+  const whole = (dot === -1 ? cleaned : cleaned.slice(0, dot)).replace(/^0+(?=\d)/, "");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return dot === -1 ? grouped : `${grouped}.${cleaned.slice(dot + 1).replace(/\./g, "").slice(0, 2)}`;
+}

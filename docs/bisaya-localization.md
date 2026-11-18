@@ -2,13 +2,13 @@
 
 ## Architecture
 
-The web and mobile clients use one checked-in message catalog at `shared/i18n/messages.json`. Each locale is a flat key/value map (`en` and `ceb`), and parameterized messages use named placeholders such as `{count}`. The application selects a locale in React state and calls `t(key, values)` while rendering. Switching locale changes state immediately; neither client reloads a page or clears the current session.
+The web and mobile clients use one checked-in message catalog at `shared/i18n/messages.json`. Each locale is a flat key/value map (`en`, `ceb` and `fil`), and parameterized messages use named placeholders such as `{count}`. The application selects a locale in React state and calls `t(key, values)` while rendering. Switching locale changes state immediately; neither client reloads a page or clears the current session.
 
 ```text
 Toggle / settings
       │
       ├─ Web LocaleProvider ── localStorage (brickxbrick.locale.v1)
-      │         └─ React rerender; document lang becomes en or ceb
+      │         └─ React rerender; document lang follows the chosen locale
       │
       └─ Mobile LocaleProvider ── existing SQLite app_kv table
                 └─ React rerender; works offline and survives app restarts
@@ -77,7 +77,7 @@ const setLanguage = (next: AppLocale) => {
 };
 ```
 
-For either provider, the context value exposes `locale`, `setLanguage`, `toggleLanguage`, and `t`. The web toggle implementation is [`frontend/src/i18n/LanguageToggle.jsx`](../frontend/src/i18n/LanguageToggle.jsx); the login, header, and settings controls all call the same context action.
+For either provider, the context value exposes `locale`, `setLanguage`, `toggleLanguage`, and `t`. The web toggle implementation is [`frontend/src/i18n/LanguageToggle.jsx`](../frontend/src/i18n/LanguageToggle.jsx); every control calls the same context action. On the web the language switch is a globe button beside the notification bell in the top bar (`variant="icon"`, changes at once) and text links on the sign-in card (`variant="inline"`). On mobile it lives in Settings → Language, plus a globe button on the sign-in screen only, where Settings cannot be reached yet; both mobile surfaces share `mobile/lib/use-language-choice.ts`, which asks for confirmation before applying a change. The Cebuano language is shown by the name "Cebuano" (catalog key `language.bisaya`).
 
 The catalog is a reviewable source of truth, not a machine-translation cache. A Cebuano reviewer can correct a phrase by changing only its value under `ceb`, without altering English copy or component logic. If machine-generated suggestions are introduced later, keep them in a separate unapproved file and layer reviewed overrides after them; never overwrite approved Cebuano strings from an automatic refresh.
 

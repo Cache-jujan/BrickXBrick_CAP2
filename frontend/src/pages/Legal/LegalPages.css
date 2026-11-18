@@ -8,7 +8,7 @@
   color: var(--color-ink);
 }
 
-/* ---------- Header (stays at the top) ---------- */
+/* Header (stays at the top) */
 .legal-header {
   position: sticky;
   top: 0;
@@ -131,7 +131,7 @@
   transition: transform 80ms linear;
 }
 
-/* ---------- Content ---------- */
+/* Content */
 .legal-main {
   max-width: 1120px;
   margin: 0 auto;
@@ -198,7 +198,7 @@
   margin-bottom: var(--space-5);
 }
 
-/* ---------- Agreement bar (stays at the bottom) ---------- */
+/* Agreement bar (stays at the bottom) */
 .legal-consent {
   position: fixed;
   left: 0;
@@ -298,7 +298,7 @@
   padding: 0 var(--space-5);
 }
 
-/* ---------- Smaller screens ---------- */
+/* Smaller screens */
 @media (max-width: 760px) {
   .legal-header-user {
     display: none;
@@ -361,4 +361,10 @@
   .legal-main {
     padding: 0;
   }
+}
+
+.legal-accepted-note {
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
 }

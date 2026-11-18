@@ -32,6 +32,7 @@ import { useNetwork } from "@/lib/sync/network-context";
 import { copyPhotoToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
 import { FlowHeader } from "@/components/flow-header";
+import { StatusChip } from "@/components/status-chip";
 import { KeyboardScreen } from "@/components/screen";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -64,7 +65,7 @@ export default function SiteManagerTaskDetailScreen() {
   // Set when the task on screen is the copy saved on this phone (offline).
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  // F10 — offline queue state for THIS task.
+  // F10: offline queue state for THIS task.
   const { isOnline, pendingCount, refreshPendingCount, syncing, lastSync } = useNetwork();
   const [queued, setQueued] = useState<QueuedUpdate | null>(null);
   const [rejectedHere, setRejectedHere] = useState<QueuedUpdate[]>([]);
@@ -177,7 +178,7 @@ export default function SiteManagerTaskDetailScreen() {
       : t("sm.qb_online");
 
   const evidenceUrl = task?.pendingphotoevidenceurl || task?.photoevidenceurl;
-  // D-04: flag only ever lived on the log row — the SM had no way to see
+  // D-04: flag only ever lived on the log row, the SM had no way to see
   // that a submission was flagged, let alone why, short of asking the PM.
   const flagged = task?.latestreviewstatus === "Flagged";
 
@@ -201,7 +202,7 @@ export default function SiteManagerTaskDetailScreen() {
     }
   }
 
-  // F10 — no connection: keep the photo on the phone and queue the update. It is
+  // F10: no connection: keep the photo on the phone and queue the update. It is
   // sent by itself on reconnect (lib/sync/sync.js). One queued update per task:
   // a newer one replaces the older one.
   // updateId: pass the online attempt's clientSubmissionId when a submit just
@@ -322,17 +323,19 @@ export default function SiteManagerTaskDetailScreen() {
                 {t("sm.showing_task", { reason: isOnline ? t("sm.cant_reach") : t("mx.offline_title"), when: savedAtLabel(savedAt, new Date(), t, intlLocale) })}
               </Text>
             )}
-            <Text style={styles.eyebrow}>{t("sm.eyebrow")}</Text>
             <Text style={styles.title}>{task.taskname}</Text>
-            <View style={[styles.statusPill, task.status === "Completed" && styles.statusPillCompleted]}>
-              <Text style={[styles.statusText, task.status === "Completed" && styles.statusTextCompleted]}>
-                {tv("status", task.status)}
-              </Text>
+            <View style={styles.chipRow}>
+              <StatusChip label={tv("status", task.status)} tone={task.status === "Completed" ? "success" : "primary"} />
             </View>
 
-            <View style={styles.progressCard}>
-              <Text style={styles.cardLabel}>{t("sm.progress_label")}</Text>
-              <Text style={styles.progressValue}>{Number(task.completionpercentage || 0)}%</Text>
+            <View style={styles.progressBlock}>
+              <View style={styles.progressTop}>
+                <Text style={styles.cardLabel}>{t("sm.progress_label")}</Text>
+                <Text style={styles.progressValue}>{Number(task.completionpercentage || 0)}%</Text>
+              </View>
+              <View style={styles.track}>
+                <View style={[styles.trackFill, { width: `${Math.max(0, Math.min(100, Number(task.completionpercentage || 0)))}%` }]} />
+              </View>
               <Text style={styles.progressBody}>
                 {task.status === "Completed" ? t("sm.completed_ack") : t("sm.add_photo_note")}
               </Text>
@@ -348,7 +351,6 @@ export default function SiteManagerTaskDetailScreen() {
               )}
               {task.milestonename && <InfoRow label={t("sm.milestone")} value={task.milestonename} />}
               <InfoRow label={t("mobile.due_date")} value={formatDate(task.duedate)} />
-              <InfoRow label={t("sm.task_status")} value={tv("status", task.status)} />
             </View>
 
             {flagged && (
@@ -496,47 +498,46 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: "#F8F1E8", flex: 1 },
+  safeArea: { backgroundColor: COLORS.bg, flex: 1 },
   keyboardAvoider: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
-  eyebrow: { color: COLORS.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 },
   title: { color: COLORS.heading, fontSize: 28, fontWeight: "800", lineHeight: 34 },
-  statusPill: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 20, marginTop: 14, paddingHorizontal: 11, paddingVertical: 6 },
-  statusPillCompleted: { backgroundColor: COLORS.successBg },
-  statusText: { color: COLORS.primary, fontSize: 12, fontWeight: "800" },
-  statusTextCompleted: { color: COLORS.success },
-  progressCard: { backgroundColor: "#1A1A1A", borderRadius: 18, marginTop: 28, padding: 20 },
-  cardLabel: { color: "#D8C7AA", fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
-  progressValue: { color: "#FFFFFF", fontSize: 42, fontWeight: "800", marginTop: 10 },
-  progressBody: { color: "#C9C0B3", fontSize: 13, lineHeight: 19, marginTop: 8 },
-  infoCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 14, paddingHorizontal: 16 },
+  chipRow: { flexDirection: "row", marginTop: 12 },
+  progressBlock: { backgroundColor: COLORS.dark, borderRadius: 18, marginTop: 22, padding: 20 },
+  progressTop: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between" },
+  cardLabel: { color: "#E8DFD0", fontSize: 15, fontWeight: "700" },
+  progressValue: { color: "#FFFFFF", fontSize: 40, fontWeight: "800", lineHeight: 44 },
+  track: { backgroundColor: "#3A3631", borderRadius: 5, height: 10, marginTop: 14, overflow: "hidden" },
+  trackFill: { backgroundColor: COLORS.accentLight, borderRadius: 5, height: 10 },
+  progressBody: { color: "#D8D0C4", fontSize: 14, lineHeight: 21, marginTop: 14 },
+  infoCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 14, paddingHorizontal: 16 },
   infoRow: { borderBottomColor: "#EEE7DE", borderBottomWidth: 1, paddingVertical: 15 },
   infoLabel: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
   infoValue: { color: COLORS.heading, fontSize: 14, fontWeight: "700", marginTop: 5 },
   flagCard: { backgroundColor: "#FFF5F3", borderColor: "#F4C7C3", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 16 },
   flagTitle: { color: "#B42318", fontSize: 14, fontWeight: "800" },
   flagBody: { color: "#8C2D24", fontSize: 13, lineHeight: 19, marginTop: 6 },
-  evidenceCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 14, overflow: "hidden", padding: 12 },
+  evidenceCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 14, overflow: "hidden", padding: 12 },
   evidenceTitle: { color: COLORS.heading, fontSize: 13, fontWeight: "800", marginBottom: 10 },
   evidenceImage: { backgroundColor: "#EEE7DE", borderRadius: 10, height: 220, width: "100%" },
   submissionSection: { marginTop: 26 },
   sectionTitle: { color: COLORS.heading, fontSize: 18, fontWeight: "800" },
   sectionSubtitle: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
   photoActions: { flexDirection: "row", gap: 10, marginTop: 16 },
-  photoButton: { alignItems: "center", backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 14, borderWidth: 1, flex: 1, minHeight: 82, justifyContent: "center" },
+  photoButton: { alignItems: "center", backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 14, borderWidth: 1, flex: 1, minHeight: 82, justifyContent: "center" },
   photoButtonIcon: { color: COLORS.primary, fontSize: 25, fontWeight: "700" },
   photoButtonText: { color: COLORS.heading, fontSize: 12, fontWeight: "800", marginTop: 7 },
-  previewCard: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 16, borderWidth: 1, marginTop: 12, overflow: "hidden" },
+  previewCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 16, borderWidth: 1, marginTop: 12, overflow: "hidden" },
   previewImage: { backgroundColor: "#EEE7DE", height: 190, width: "100%" },
   previewFooter: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", padding: 12 },
   previewName: { color: COLORS.heading, flex: 1, fontSize: 12, fontWeight: "700", marginRight: 10 },
   removeText: { color: "#B42318", fontSize: 12, fontWeight: "800" },
-  photoEmpty: { alignItems: "center", backgroundColor: "#FFFCF8", borderColor: "#E7DDCF", borderRadius: 14, borderStyle: "dashed", borderWidth: 1, marginTop: 12, padding: 22 },
+  photoEmpty: { alignItems: "center", backgroundColor: "#FFFCF8", borderColor: COLORS.border, borderRadius: 14, borderStyle: "dashed", borderWidth: 1, marginTop: 12, padding: 22 },
   photoEmptyTitleError: { color: "#B42318" },
   photoEmptyTitle: { color: COLORS.heading, fontSize: 13, fontWeight: "800" },
   photoEmptyBody: { color: COLORS.muted, fontSize: 12, marginTop: 6 },
   noteLabel: { color: COLORS.heading, fontSize: 13, fontWeight: "800", marginBottom: 7, marginTop: 18 },
-  noteInput: { backgroundColor: COLORS.card, borderColor: "#E7DDCF", borderRadius: 13, borderWidth: 1, color: COLORS.heading, fontSize: 14, minHeight: 100, padding: 13 },
+  noteInput: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderRadius: 13, borderWidth: 1, color: COLORS.heading, fontSize: 14, minHeight: 100, padding: 13 },
   submitError: { color: "#B42318", fontSize: 13, lineHeight: 19, marginTop: 12 },
   submitButton: { alignItems: "center", backgroundColor: COLORS.primary, borderRadius: 14, justifyContent: "center", marginTop: 14, minHeight: 50, paddingHorizontal: 16 },
   submitButtonPressed: { opacity: 0.82 },
@@ -550,7 +551,7 @@ const styles = StyleSheet.create({
   queuedCard: { backgroundColor: "#FFF8E6", borderColor: "#F0D78C", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 14 },
   queuedHeader: { alignItems: "center", flexDirection: "row", gap: 8 },
   reviewCard: { backgroundColor: "#EEF4FF", borderColor: "#B9CCF2", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 16 },
-  reviewEyebrow: { color: "#1D4E89", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+  reviewEyebrow: { color: "#1D4E89", fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
   reviewTitle: { color: "#123A6B", fontSize: 16, fontWeight: "800", marginTop: 6 },
   reviewMeta: { color: "#2F5C93", fontSize: 12, fontWeight: "600", marginTop: 4 },
   reviewNote: { color: "#123A6B", fontSize: 13, fontStyle: "italic", lineHeight: 19, marginTop: 8 },

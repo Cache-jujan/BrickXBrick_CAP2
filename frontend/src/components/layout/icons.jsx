@@ -1,4 +1,4 @@
-// Small inline icon set for the sidebar/topbar — no icon-library dependency.
+// Small inline icon set for the sidebar/topbar: no icon-library dependency.
 
 export function GridIcon() {
   return (
@@ -81,7 +81,7 @@ export function BellIcon() {
   );
 }
 
-// ---- Notification-type icons (per-type, see utils/notificationMeta.js) ----
+// Notification-type icons (per-type, see utils/notificationMeta.js)
 
 export function TicketGlyph() {
   return (
@@ -167,6 +167,125 @@ export function RefreshGlyph() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 12a8 8 0 0 1 14.2-5M20 12a8 8 0 0 1-14.2 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <path d="M18.5 3.5V7h-3.5M5.5 20.5V17H9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+// Navigation icons: one distinct shape per sidebar item
+function NavSvg({ children }) {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
+/** Open requests: an inbox tray. */
+export function InboxIcon() {
+  return (
+    <NavSvg>
+      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+    </NavSvg>
+  );
+}
+
+/** Expenses: a wallet. */
+export function WalletIcon() {
+  return (
+    <NavSvg>
+      <path d="M20 12V8H6a2 2 0 0 1 0-4h12v4" />
+      <path d="M4 6v12a2 2 0 0 0 2 2h14v-4" />
+      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+    </NavSvg>
+  );
+}
+
+/** Submit expense: a receipt with a plus. */
+export function ReceiptPlusIcon() {
+  return (
+    <NavSvg>
+      <path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2Z" />
+      <path d="M12 7v6M9 10h6" />
+    </NavSvg>
+  );
+}
+
+/** Reports: bar chart. */
+export function BarChartIcon() {
+  return (
+    <NavSvg>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </NavSvg>
+  );
+}
+
+/** Tamper alerts: a shield with an alert mark. */
+export function ShieldAlertIcon() {
+  return (
+    <NavSvg>
+      <path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z" />
+      <path d="M12 8.5v4M12 16h.01" />
+    </NavSvg>
+  );
+}
+
+/** Tickets: a ticket stub. */
+export function TicketIcon() {
+  return (
+    <NavSvg>
+      <path d="M3 9a2 2 0 0 0 0 6v3a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-3a2 2 0 0 1 0-6V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v3Z" />
+      <path d="M13 5v2M13 11v2M13 17v2" />
+    </NavSvg>
+  );
+}
+
+/** Create ticket: a square with a plus. */
+export function PlusSquareIcon() {
+  return (
+    <NavSvg>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M12 8v8M8 12h8" />
+    </NavSvg>
+  );
+}
+
+/** Progress review: a clipboard with a tick. */
+export function ClipboardCheckIcon() {
+  return (
+    <NavSvg>
+      <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z" />
+      <path d="M8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2" />
+      <path d="m9 14 2 2 4-4" />
+    </NavSvg>
+  );
+}
+
+/** Settings: a gear. */
+export function GearIcon() {
+  return (
+    <NavSvg>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+    </NavSvg>
+  );
+}
+
+/** Small menu icons: a person (Account) and a document (Terms & Privacy). */
+export function UserIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
+      <path d="M4 21a8 8 0 0 1 16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function DocIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

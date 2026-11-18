@@ -1,4 +1,4 @@
-// projectTemplates.js — F2: the start screen for "New project".
+// projectTemplates.js (F2): the start screen for "New project".
 //
 // General Manager only. Read-only: templates are seeded by migration and are
 // never edited from the app. Nothing here creates a project; POST /api/projects
@@ -66,7 +66,7 @@ router.get("/", async (req, res) => {
          LEFT JOIN project_template_tasks k ON k.templateMilestoneId = m.templateMilestoneId
         WHERE t.isActive
         GROUP BY t.templateId
-        ORDER BY t.projectType, CASE t.size WHEN 'small' THEN 1 WHEN 'large' THEN 2 ELSE 3 END`
+        ORDER BY t.projectType, CASE t.size WHEN 'small' THEN 1 WHEN 'medium' THEN 2 WHEN 'large' THEN 3 ELSE 4 END`
     );
     res.json(
       result.rows.map((r) => ({
@@ -124,7 +124,7 @@ router.get("/copy-sources/:projectId", async (req, res) => {
   }
 });
 
-// Body: { start, startDate, constructionStartDate, endDate } — the same `start`
+// Body: { start, startDate, constructionStartDate, endDate }, the same `start`
 // the create call will send. Dates may be entered but unsaved, so nothing is stored.
 router.post("/preview", async (req, res) => {
   try {

@@ -1,4 +1,4 @@
-// userOpenWork.js — F1: what a user is still responsible for.
+// userOpenWork.js (F1): what a user is still responsible for.
 //
 // Used before a System Administrator changes someone's role or deactivates
 // them. If the person still manages an open project, has unfinished tasks, or
@@ -6,7 +6,7 @@
 // stuck (nobody else can act on it, and they no longer can). The admin is told
 // what to reassign first. Past records are never touched: they point to the
 // person's ID, so history stays correct either way.
-const OPEN_PROJECT_STATUSES = ["Draft", "Active"];
+const OPEN_PROJECT_STATUSES = ["Draft", "Active", "Suspended"];
 const OPEN_TICKET_STATUSES = ["Pending", "Acknowledged"];
 const NAMES_SHOWN = 3;
 

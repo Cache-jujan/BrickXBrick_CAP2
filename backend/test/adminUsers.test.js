@@ -1,4 +1,4 @@
-// F1 — "Enforce change password upon login" and safe role changes.
+// F1: "Enforce change password upon login" and safe role changes.
 //
 //   1. The System Administrator can only SEND a password email; no route
 //      accepts a password typed by an admin.
@@ -134,9 +134,9 @@ async function call(method, url, body) {
   }
 }
 
-// ---- 1. password emails ------------------------------------------------------
+// 1. password emails
 
-test("send password email to an active account: recovery link, old password retired, lockout cleared", async () => {
+test("send password email to an active account: recovery link, current password untouched, lockout cleared", async () => {
   reset({ confirmed: true });
   const res = await call("POST", `/api/admin/users/${USER_ID}/send-password-email`);
   assert.equal(res.status, 200, JSON.stringify(res.body));
@@ -144,8 +144,7 @@ test("send password email to an active account: recovery link, old password reti
   assert.equal(supabase.recovery.length, 1);
   assert.equal(supabase.recovery[0].email, "testpm.sample@gmail.com");
   assert.equal(supabase.recovery[0].opts.redirectTo, "http://127.0.0.1:5173/set-password");
-  assert.equal(supabase.passwordUpdates.length, 1, "old password replaced");
-  assert.ok(supabase.passwordUpdates[0].attrs.password.length >= 32, "random throwaway, not a chosen one");
+  assert.equal(supabase.passwordUpdates.length, 0, "the current password is not changed until the user sets a new one");
   assert.ok(state.calls.some((c) => c.text.includes("lockoutuntil = null")), "lockout cleared");
 });
 
@@ -193,7 +192,7 @@ test("only a System Administrator can send password emails", async () => {
   assert.equal(res.status, 403);
 });
 
-// ---- 2. role change / deactivation guard ------------------------------------
+// 2. role change / deactivation guard
 
 test("changing the role of a PM who still manages open projects is refused, naming them", async () => {
   reset();

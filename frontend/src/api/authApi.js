@@ -7,7 +7,7 @@ export async function login(email, password) {
   return data;
 }
 
-// GET /api/me — used to re-hydrate the session on page refresh.
+// GET /api/me: used to re-hydrate the session on page refresh.
 export async function fetchCurrentUser() {
   const { data } = await apiClient.get("/api/me");
   return data.user;

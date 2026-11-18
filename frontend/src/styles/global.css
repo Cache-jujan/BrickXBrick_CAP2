@@ -136,7 +136,7 @@ textarea {
 }
 
 .modal-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   margin-bottom: var(--space-3);
 }
 

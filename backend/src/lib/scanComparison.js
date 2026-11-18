@@ -1,4 +1,4 @@
-// scanComparison.js — F9. Compares a submitted expense with what the
+// scanComparison.js: F9. Compares a submitted expense with what the
 // server's own OCR read from the same receipt image (ReceiptScans.result).
 //
 // Why: the review screen lets the submitter correct every field, which is
@@ -72,7 +72,10 @@ function sameItem(a, b) {
   const setB = new Set(wb);
   const shared = new Set(wa.filter((w) => setB.has(w))).size;
   const dice = (2 * shared) / (new Set(wa).size + setB.size);
+  // Dice score = 2 x shared words / total distinct words. 0.5 or more means about half the words match.
   if (dice >= 0.5) return true;
+  // Typo check: the two descriptions may differ by up to a quarter of the longer one's characters
+  // (Levenshtein edit distance).
   const ja = wa.join(" ");
   const jb = wb.join(" ");
   return levenshtein(ja, jb) <= Math.floor(Math.max(ja.length, jb.length) * 0.25);

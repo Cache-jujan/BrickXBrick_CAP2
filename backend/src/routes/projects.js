@@ -1,12 +1,16 @@
-// projects.js — F2: Project Initialization
+// projects.js (F2): Project Initialization
 //
 // Lifecycle (Oct 2026 revision; see lib/projectRules.js for the sources):
 //   Draft      created by the GM after the client signs the BOM; PM is assigned
 //              now so planning and procurement can start (adviser item 2)
-//   Active     activated by the GM once the Site Manager is assigned
-//              and the Bill of Materials is approved; tickets and purchases
-//              are only allowed from here
+//   Active     activated by the GM once the Site Manager is assigned,
+//              the Bill of Materials is approved and the signed contract is
+//              recorded; tickets and purchases are only allowed from here
 //   Completed  the GM records the actual completion / turnover date
+//   Suspended  put on hold by the GM with a reason (and, if known, an expected
+//              resume date); no new requests, purchases or check-ins until the
+//              GM resumes it. Dates are not moved by a hold. Shown as
+//              "Terminated" if it is then cancelled.
 //   Cancelled  the project didn't push through; a reason is required
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");
@@ -30,7 +34,10 @@ const {
   projectListScope,
   hideBudgetFrom,
 } = require("../lib/projectRules");
+const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
+const { notifyGeneralManagers } = require("../lib/notify");
+const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -40,6 +47,7 @@ const PROJECT_MANAGEMENT_ROLES = ["General Manager", "Project Manager"];
 const PROJECT_COLUMNS = `projectid, createdby, name, description, clientname, status,
   startdate, constructionstartdate, enddate, actualcompletiondate,
   activatedat, cancelledat, cancellationreason,
+  suspendedat, suspensionreason, expectedresumedate,
   projecttype, municipality, province, siteaddress,
   budget, projectmanagerid, sitemanagerid,
   created_from_template_id, copied_from_project_id`;
@@ -47,8 +55,18 @@ const PROJECT_COLUMNS = `projectid, createdby, name, description, clientname, st
 // p.-prefixed version for the joined detail queries.
 const DETAIL_COLUMNS = PROJECT_COLUMNS.split(",").map((c) => `p.${c.trim()}`).join(", ");
 
+// Postgres "bad input" codes: a malformed id or an over-long value is the caller's
+// mistake (400), and an unexpected database error is ours (500). Neither echoes the
+// database's own message, which names tables and columns.
+const PG_INPUT_ERROR_CODES = new Set(["22P02", "22007", "22008", "22001", "22003"]);
+
 function sendError(res, err) {
-  res.status(err.status || 500).json({ error: err.message, ...(err.details || {}) });
+  if (!err.status) {
+    if (PG_INPUT_ERROR_CODES.has(err.code)) return res.status(400).json({ error: "Invalid input value" });
+    console.error("Unhandled projects error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.status(err.status).json({ error: err.message, ...(err.details || {}) });
 }
 
 // Accepts either the pool's query function or a transaction client.
@@ -79,28 +97,63 @@ async function assertUniqueName(target, name, excludeProjectId = null) {
 
 // Shared validation for create and edit. `existing` is the stored row on edit.
 function validateProjectBody(body, existing = null) {
+  const errors = [];
+  // Run one field check; a bad value adds a field error instead of stopping the rest.
+  const check = (fn, fallback = null) => {
+    try {
+      return fn();
+    } catch (err) {
+      if (!(err instanceof InputError)) throw err;
+      errors.push({ field: err.field, message: err.message });
+      return fallback;
+    }
+  };
+  const textField = (key, current, opts) =>
+    body[key] !== undefined ? check(() => text(body[key], { field: key, ...opts })) : current ?? null;
+
   const merged = {
-    name: body.name !== undefined ? trimOrNull(body.name) : existing?.name ?? null,
-    clientName: body.clientName !== undefined ? trimOrNull(body.clientName) : existing?.clientname ?? null,
-    budget: body.budget !== undefined ? body.budget : existing ? Number(existing.budget) : undefined,
+    name: textField("name", existing?.name, { label: "Project name", max: LIMITS.projectName, required: true }),
+    clientName: textField("clientName", existing?.clientname, { label: "Client name", max: LIMITS.clientName, required: true }),
+    budget: undefined,
     startDate: body.startDate !== undefined ? body.startDate : toIso(existing?.startdate),
     constructionStartDate:
       body.constructionStartDate !== undefined ? body.constructionStartDate : toIso(existing?.constructionstartdate),
     endDate: body.endDate !== undefined ? body.endDate : toIso(existing?.enddate),
     projectType: body.projectType !== undefined ? body.projectType : existing?.projecttype ?? null,
-    municipality: body.municipality !== undefined ? trimOrNull(body.municipality) : existing?.municipality ?? null,
+    municipality: textField("municipality", existing?.municipality, {
+      label: "Municipality / city of the site",
+      max: LIMITS.municipality,
+      required: true,
+    }),
   };
 
-  const errors = [];
-  if (!merged.name) errors.push({ field: "name", message: "Project name is required" });
-  if (!merged.clientName) errors.push({ field: "clientName", message: "Client name is required" });
-  if (typeof merged.budget !== "number" || !Number.isFinite(merged.budget) || merged.budget < 0) {
-    errors.push({ field: "budget", message: "Target budget must be a number of 0 or more" });
+  if (body.budget !== undefined || !existing) {
+    // A budget is a number; a text value like "5000" from a form is read, anything else is refused.
+    merged.budget = check(() => amount(body.budget, {
+      field: "budget",
+      label: "Target budget",
+      allowZero: true,
+      max: LIMITS.projectBudgetMax,
+    }));
+  } else {
+    merged.budget = Number(existing.budget);
   }
+
+  // Optional fields: checked here so a bad value is reported together with the rest.
+  for (const [key, opts] of [
+    ["description", { label: "Description", max: LIMITS.description, multiline: true }],
+    ["province", { label: "Province", max: LIMITS.province }],
+    ["siteAddress", { label: "Site address", max: LIMITS.siteAddress }],
+  ]) {
+    if (body[key] !== undefined) check(() => text(body[key], { field: key, ...opts }));
+  }
+
   if (!PROJECT_TYPES.includes(merged.projectType)) {
     errors.push({ field: "projectType", message: `Project type must be one of: ${PROJECT_TYPES.join(", ")}` });
   }
-  if (!merged.municipality) {
+  if (!errors.some((e) => e.field === "name") && !merged.name) errors.push({ field: "name", message: "Project name is required" });
+  if (!errors.some((e) => e.field === "clientName") && !merged.clientName) errors.push({ field: "clientName", message: "Client name is required" });
+  if (!errors.some((e) => e.field === "municipality") && !merged.municipality) {
     errors.push({ field: "municipality", message: "Municipality / city of the site is required" });
   }
   errors.push(...validateProjectDates(merged));
@@ -113,7 +166,7 @@ function validateProjectBody(body, existing = null) {
 
 // node-postgres returns a DATE as a JS Date at *local* midnight of the
 // server. toISOString() would convert that to UTC, which on a Philippine
-// server (UTC+8) is the previous day — so read the local calendar fields.
+// server (UTC+8) is the previous day: so read the local calendar fields.
 function toIso(value) {
   if (!value) return null;
   if (typeof value === "string") return value.slice(0, 10);
@@ -131,7 +184,7 @@ async function getProjectRow(target, projectId, { lock = false } = {}) {
   return result.rows[0];
 }
 
-// CREATE — GM only. The client has already signed the BOM; the project
+// CREATE: GM only. The client has already signed the BOM; the project
 // starts as Draft so the PM can plan before construction (adviser item 2).
 router.post("/", requireRole("General Manager"), async (req, res) => {
   try {
@@ -244,7 +297,7 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// LIST — broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter.
+// LIST: broadcast to GM/PM/SM/Purchaser; optional ?status=Active filter.
 // Site Managers and Project Managers are scoped to their own projects so
 // pickers cannot expose unrelated projects and ticket creation cannot be
 // directed at a project they do not manage. Purchasers see no budget.
@@ -285,7 +338,7 @@ router.get("/", requireRole(...BROADCAST_ROLES), async (req, res) => {
   }
 });
 
-// GET /eligible-managers?projectId= — GM only. Every active PM with the open
+// GET /eligible-managers?projectId=: GM only. Every active PM with the open
 // projects they hold and whether they can take one more. The dropdown shows
 // only `available` managers; the busy ones are listed with their schedules
 // (adviser item 2). Pass projectId when editing so the current project
@@ -300,7 +353,7 @@ router.get("/eligible-managers", requireRole("General Manager"), async (req, res
   }
 });
 
-// GET /eligible-site-managers?projectId= — GM/PM. Same shape as above.
+// GET /eligible-site-managers?projectId=: GM/PM. Same shape as above.
 router.get("/eligible-site-managers", requireRole("General Manager", "Project Manager"), async (req, res) => {
   try {
     const excludeProjectId = req.query.projectId || null;
@@ -311,7 +364,7 @@ router.get("/eligible-site-managers", requireRole("General Manager", "Project Ma
   }
 });
 
-// GET /options — values the Create/Edit Project form needs.
+// GET /options: values the Create/Edit Project form needs.
 router.get("/options", requireRole("General Manager"), async (req, res) => {
   try {
     const settings = await loadProjectSettings(query);
@@ -326,7 +379,7 @@ router.get("/options", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// GET /settings/limits — GM. How many open (Draft/Active) projects a PM and an
+// GET /settings/limits: GM. How many open (Draft/Active) projects a PM and an
 // SM may hold at once (adviser item 4; client policy, editable without a code change).
 router.get("/settings/limits", requireRole("General Manager"), async (req, res) => {
   try {
@@ -337,7 +390,7 @@ router.get("/settings/limits", requireRole("General Manager"), async (req, res) 
   }
 });
 
-// PATCH /settings/limits — GM. Body { pm?, sm? }, whole numbers 1–10.
+// PATCH /settings/limits: GM. Body { pm?, sm? }, whole numbers 1–10.
 // Lowering a limit never unassigns anyone; it only blocks new assignments.
 router.patch("/settings/limits", requireRole("General Manager"), async (req, res) => {
   try {
@@ -350,7 +403,7 @@ router.patch("/settings/limits", requireRole("General Manager"), async (req, res
   }
 });
 
-// PATCH /:id — GM edits project details (adviser item 4). Status changes use
+// PATCH /:id, GM edits project details (adviser item 4). Status changes use
 // the dedicated routes below. Completed/Cancelled/Archived projects are read-only.
 router.patch("/:id", requireRole("General Manager"), async (req, res) => {
   try {
@@ -363,6 +416,9 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
       }
 
       const fields = validateProjectBody(req.body, existing);
+      // Once the project is active the target dates of development and of
+      // construction are fixed, for everyone (the completion date can still move).
+      assertDatesUnlocked(existing, fields);
       // Client: the price given to the client is the BOM total, so once the
       // BOM is approved the budget follows it (reopen the BOM to change it).
       if (Math.abs(Number(fields.budget) - Number(existing.budget)) > 0.005) {
@@ -438,8 +494,9 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
   }
 });
 
-// PATCH /:id/activate — GM. Draft -> Active. Requires both managers assigned.
-// The project's Bill of Materials must be approved (routes/bom.js).
+// PATCH /:id/activate, GM. Draft -> Active. Requires both managers assigned.
+// The project's Bill of Materials must be approved (routes/bom.js) and the
+// signed contract recorded (routes/contract.js).
 router.patch("/:id/activate", requireRole("General Manager"), async (req, res) => {
   try {
     const project = await withTransaction(async (client) => {
@@ -452,6 +509,26 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
       const bom = await client.query("SELECT status FROM boms WHERE projectid = $1::uuid", [existing.projectid]);
       if (bom.rows[0]?.status !== "Approved") {
         throw httpError(409, "Approve the project's Bill of Materials before activating");
+      }
+      // The signed contract is recorded before work starts (routes/contract.js).
+      // It is not the budget: the budget stays the approved BOM total plus escalation.
+      const contract = await client.query(
+        "SELECT contractid, downpaymentpercent FROM projectcontracts WHERE projectid = $1::uuid",
+        [existing.projectid]
+      );
+      if (contract.rowCount === 0) {
+        throw httpError(409, "Record the signed contract before activating");
+      }
+      // The down payment is the go signal to start work (pilot contractor). A contract
+      // with a 0% down payment has nothing to wait for.
+      if (Number(contract.rows[0].downpaymentpercent) > 0) {
+        const down = await client.query(
+          "SELECT 1 FROM clientpayments WHERE contractid = $1::uuid AND kind = 'Down Payment' AND voidedat IS NULL",
+          [contract.rows[0].contractid]
+        );
+        if (down.rowCount === 0) {
+          throw httpError(409, "Record the down payment before activating");
+        }
       }
 
       const result = await client.query(
@@ -482,23 +559,50 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
   }
 });
 
-// PATCH /:id/cancel — GM. Draft/Active -> Cancelled, with a reason
+// PATCH /:id/cancel, GM. Draft/Active -> Cancelled, with a reason
 // (client: a project that doesn't push through is cancelled).
 router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => {
   try {
-    const reason = trimOrNull(req.body.reason);
-    if (!reason) throw httpError(400, "A cancellation reason is required");
+    let reason;
+    try {
+      reason = text(req.body?.reason, { field: "reason", label: "Cancellation reason", max: LIMITS.reason, required: true, multiline: true });
+    } catch (err) {
+      if (!(err instanceof InputError)) throw err;
+      throw httpError(400, err.field === "reason" && err.message.endsWith("required") ? "A cancellation reason is required" : err.message, { fieldErrors: err.fieldErrors });
+    }
 
     const project = await withTransaction(async (client) => {
       const existing = await getProjectRow(client, req.params.id, { lock: true });
       assertStatusTransition(existing.status, "Cancelled");
       const result = await client.query(
         `UPDATE projects
-            SET status = 'Cancelled', cancelledAt = NOW(), cancellationReason = $2
+            SET status = 'Cancelled', cancelledAt = NOW(), cancellationReason = $2,
+                suspendedAt = NULL, suspensionReason = NULL, expectedResumeDate = NULL
           WHERE projectid = $1 RETURNING ${PROJECT_COLUMNS}`,
         [existing.projectid, reason]
       );
-      return result.rows[0];
+      if (existing.status === "Suspended") {
+        // A hold that ends in termination: keep it in the history.
+        await client.query(
+          `INSERT INTO project_status_log (projectId, fromStatus, toStatus, reason, changedBy)
+           VALUES ($1, 'Suspended', 'Cancelled', $2, $3)`,
+          [existing.projectid, reason, req.user.id]
+        );
+      }
+      // Tell the people on the project. "Terminated" once it had been activated,
+      // "cancelled" for a Draft that never started.
+      const row = result.rows[0];
+      const started = Boolean(existing.activatedat);
+      const message = started
+        ? `"${row.name}" was terminated. It is read-only now: no new requests, purchases, progress or check-ins. Reason: ${reason}`
+        : `"${row.name}" was cancelled before it started. Reason: ${reason}`;
+      const recipients = started
+        ? await suspensionRecipients(client, row)
+        : new Set([row.projectmanagerid, row.sitemanagerid].filter(Boolean));
+      for (const recipientId of recipients) {
+        await notifyProject(client, { recipientId, type: "ProjectTerminated", projectId: row.projectid, message });
+      }
+      return row;
     });
     res.json(project);
   } catch (err) {
@@ -506,7 +610,127 @@ router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => 
   }
 });
 
-// PATCH /:id/complete — GM. Active -> Completed, recording the actual
+// Who hears about a hold or a resume: the people working on the project and
+// the Purchasers (they buy for it), same as on activation.
+async function suspensionRecipients(client, row) {
+  const recipients = new Set([row.projectmanagerid, row.sitemanagerid]);
+  const purchasers = await client.query("SELECT userid FROM users WHERE role = 'Purchaser' AND status = 'Active'");
+  purchasers.rows.forEach((p) => recipients.add(p.userid));
+  recipients.delete(null);
+  return recipients;
+}
+
+const SUSPENSION_REASON_MAX = 500;
+
+// PATCH /:id/suspend, GM. Active -> Suspended, with a reason and an optional
+// expected resume date. Nothing else is changed: dates, tasks, requests and
+// budget stay as they are, so resuming picks up where work stopped.
+router.patch("/:id/suspend", requireRole("General Manager"), async (req, res) => {
+  try {
+    const reason = trimOrNull(typeof req.body?.reason === "string" ? req.body.reason : null);
+    if (!reason) throw httpError(400, "A reason is required to suspend a project");
+    if (reason.length > SUSPENSION_REASON_MAX) {
+      throw httpError(400, `The reason must be ${SUSPENSION_REASON_MAX} characters or fewer`);
+    }
+    const expected = req.body?.expectedResumeDate || null;
+    if (expected !== null) {
+      if (!isIsoDate(expected)) throw httpError(400, "expectedResumeDate must be a valid date (YYYY-MM-DD)");
+      if (expected < new Date().toISOString().slice(0, 10)) {
+        throw httpError(400, "The expected resume date can't be in the past");
+      }
+    }
+
+    const project = await withTransaction(async (client) => {
+      const existing = await getProjectRow(client, req.params.id, { lock: true });
+      assertStatusTransition(existing.status, "Suspended");
+      const result = await client.query(
+        `UPDATE projects
+            SET status = 'Suspended', suspendedAt = NOW(), suspensionReason = $2, expectedResumeDate = $3
+          WHERE projectid = $1 RETURNING ${PROJECT_COLUMNS}`,
+        [existing.projectid, reason, expected]
+      );
+      const row = result.rows[0];
+      await client.query(
+        `INSERT INTO project_status_log (projectId, fromStatus, toStatus, reason, expectedResumeDate, changedBy)
+         VALUES ($1, 'Active', 'Suspended', $2, $3, $4)`,
+        [row.projectid, reason, expected, req.user.id]
+      );
+      const when = expected ? ` Expected back: ${expected}.` : "";
+      for (const recipientId of await suspensionRecipients(client, row)) {
+        await notifyProject(client, {
+          recipientId,
+          type: "ProjectSuspended",
+          projectId: row.projectid,
+          message: `"${row.name}" is on hold. No new requests, purchases or check-ins until it resumes. Reason: ${reason}.${when}`,
+        });
+      }
+      return row;
+    });
+    res.json(project);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// PATCH /:id/resume, GM. Suspended -> Active. The project keeps its original
+// activation date and target dates; the hold stays in project_status_log.
+router.patch("/:id/resume", requireRole("General Manager"), async (req, res) => {
+  try {
+    const project = await withTransaction(async (client) => {
+      const existing = await getProjectRow(client, req.params.id, { lock: true });
+      if (existing.status !== "Suspended") {
+        throw httpError(409, `Only a suspended project can be resumed (this one is ${existing.status})`);
+      }
+      assertStatusTransition(existing.status, "Active");
+      const result = await client.query(
+        `UPDATE projects
+            SET status = 'Active', suspendedAt = NULL, suspensionReason = NULL, expectedResumeDate = NULL
+          WHERE projectid = $1 RETURNING ${PROJECT_COLUMNS}`,
+        [existing.projectid]
+      );
+      const row = result.rows[0];
+      await client.query(
+        `INSERT INTO project_status_log (projectId, fromStatus, toStatus, changedBy)
+         VALUES ($1, 'Suspended', 'Active', $2)`,
+        [row.projectid, req.user.id]
+      );
+      for (const recipientId of await suspensionRecipients(client, row)) {
+        await notifyProject(client, {
+          recipientId,
+          type: "ProjectResumed",
+          projectId: row.projectid,
+          message: `"${row.name}" is back on. Requests, purchases and check-ins can continue.`,
+        });
+      }
+      return row;
+    });
+    res.json(project);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// GET /:id/status-history, the holds and resumes of a project, newest first.
+router.get("/:id/status-history", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
+  try {
+    const project = await loadDetail(req.params.id);
+    if (!project) return res.status(404).json({ error: "Not found" });
+    await assertProjectAccess(project, req.user);
+    const result = await query(
+      `SELECT l.fromstatus, l.tostatus, l.reason, l.expectedresumedate, l.changedat, u.name AS changedbyname
+         FROM project_status_log l
+         LEFT JOIN users u ON u.userid = l.changedby
+        WHERE l.projectid = $1
+        ORDER BY l.changedat DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// PATCH /:id/complete, GM. Active -> Completed, recording the actual
 // completion / turnover date (defaults to today).
 router.patch("/:id/complete", requireRole("General Manager"), async (req, res) => {
   try {
@@ -534,7 +758,7 @@ router.patch("/:id/complete", requireRole("General Manager"), async (req, res) =
   }
 });
 
-// PATCH /:id/site-manager — GM or the owning PM may assign, replace, or clear
+// PATCH /:id/site-manager, GM or the owning PM may assign, replace, or clear
 // the Site Manager. Only active Site Manager accounts under the SM project
 // limit are valid assignments.
 //
@@ -543,11 +767,11 @@ router.patch("/:id/complete", requireRole("General Manager"), async (req, res) =
 // tasks and the new SM got 403 on them. Reassignment now moves every open
 // (non-Completed) task under this project's milestones to the new SM in the
 // same transaction as the project update. Completed tasks keep their
-// original assignee — the work and photo evidence really are theirs, and
+// original assignee: the work and photo evidence really are theirs, and
 // the PM review route doesn't key off current assignment anyway.
 //
 // Only Construction-phase tasks are ever assigned to a Site Manager (see
-// reassignSiteManager.js) — clearing the SM (siteManagerId: null) while open
+// reassignSiteManager.js): clearing the SM (siteManagerId: null) while open
 // ones exist would silently leave them with the outgoing SM, so that's
 // rejected with 409 instead. Clearing is only allowed once no open
 // Construction tasks remain. An Active project must keep a Site Manager.
@@ -597,6 +821,15 @@ router.patch("/:id/site-manager", requireRole("General Manager", "Project Manage
           projectId: row.projectid,
           message: `You are now the Site Manager of "${row.name}".`,
         });
+        // When the Project Manager makes the swap, the General Manager is told who the new Site Manager is.
+        if (req.user.role === "Project Manager") {
+          await notifyGeneralManagers(client, {
+            type: "ProjectAssigned",
+            entityType: "Project",
+            entityId: row.projectid,
+            message: `${req.user.name} changed the Site Manager of "${row.name}" to ${row.sitemanagername || "a new Site Manager"}.`,
+          });
+        }
       }
       return row;
     });
@@ -637,10 +870,34 @@ async function loadDetail(projectId) {
   if (result.rowCount === 0) return null;
   const row = result.rows[0];
   const settings = await loadProjectSettings(query);
-  return { ...row, warnings: buildProjectWarnings({ municipality: row.municipality }, settings) };
+  const detail = { ...row, warnings: buildProjectWarnings({ municipality: row.municipality }, settings) };
+  if (row.status === "Cancelled") detail.termination = await loadTerminationSummary(row);
+  return detail;
 }
 
-// SINGLE — includes computed overall progress (mean of milestone completion %)
+// A project cancelled after it went Active is shown as "terminated": work had
+// started, so the close-out figures matter. Nothing new is stored; the numbers
+// come from the expenses and requests that already exist.
+//   terminated      true when the project had been activated
+//   spent           approved purchases, in PHP
+//   openRequests    requests still Pending or Acknowledged (nobody is working on them now)
+async function loadTerminationSummary(row) {
+  const spent = await query(
+    "SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE projectid = $1 AND status = 'Approved'",
+    [row.projectid]
+  );
+  const open = await query(
+    "SELECT COUNT(*)::int AS n FROM tickets WHERE projectid = $1 AND status IN ('Pending', 'Acknowledged')",
+    [row.projectid]
+  );
+  return {
+    terminated: row.activatedat != null,
+    spent: Number(spent.rows[0].total),
+    openRequests: open.rows[0].n,
+  };
+}
+
+// SINGLE: includes computed overall progress (mean of milestone completion %)
 router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {
   try {
     const project = await loadDetail(req.params.id);
@@ -652,7 +909,7 @@ router.get("/:id", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) =>
   }
 });
 
-// GET /:id/overview — project + progress + all milestones, each with its tasks nested.
+// GET /:id/overview, project + progress + all milestones, each with its tasks nested.
 // One combined payload for a GM/PM overview page instead of N+1 calls
 // (project detail -> milestone list -> per-milestone task list).
 router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req, res) => {

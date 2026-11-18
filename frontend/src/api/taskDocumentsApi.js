@@ -11,7 +11,7 @@ export async function listTaskDocuments(taskId) {
   return data;
 }
 
-// POST /api/tasks/:id/documents — the form field must be named "file".
+// POST /api/tasks/:id/documents, the form field must be named "file".
 // PDF, JPEG or PNG, up to 10 MB.
 export async function uploadTaskDocument(taskId, file) {
   const fd = new FormData();
@@ -30,7 +30,7 @@ export async function getTaskDocumentUrl(taskId, documentId) {
   return data;
 }
 
-// DELETE /api/tasks/:id/documents/:docId — only while the task is still open.
+// DELETE /api/tasks/:id/documents/:docId, only while the task is still open.
 export async function deleteTaskDocument(taskId, documentId) {
   await apiClient.delete(`/api/tasks/${taskId}/documents/${documentId}`);
 }

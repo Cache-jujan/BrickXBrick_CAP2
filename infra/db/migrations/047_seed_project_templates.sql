@@ -1,6 +1,6 @@
 -- 047_seed_project_templates.sql
 -- Seeds the 15 project templates (catalog v0.2-draft) created by 046.
--- Generated from infra/db/templates/project-templates.json — edit the JSON, not this file,
+-- Generated from infra/db/templates/project-templates.json, edit the JSON, not this file,
 -- and add a new migration if the catalog changes after this has been applied.
 --
 -- Structure only: no BOM data, quantities, prices, assignees or progress.
@@ -10,7 +10,7 @@
 --
 -- Safe to re-run: every insert skips rows that already exist.
 
--- Residential Building — small
+-- Residential Building: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('residential-small', 'Residential Building — small', 'Residential Building', 'small', 'Small residential build such as a bungalow or compact single-family dwelling.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -87,7 +87,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'residential-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Residential Building — large
+-- Residential Building: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('residential-large', 'Residential Building — large', 'Residential Building', 'large', 'Large residential build such as a multi-storey house or complex dwelling.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -171,7 +171,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'residential-large'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Commercial Building — small
+-- Commercial Building: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('commercial-small', 'Commercial Building — small', 'Commercial Building', 'small', 'Small commercial building or low-complexity business premises.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -242,7 +242,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'commercial-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Commercial Building — large
+-- Commercial Building: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('commercial-large', 'Commercial Building — large', 'Commercial Building', 'large', 'Large or multi-level commercial building with more complex coordination and inspections.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -322,7 +322,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'commercial-large'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Fit-out / Renovation — small
+-- Fit-out / Renovation: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('fitout-renovation-small', 'Fit-out / Renovation — small', 'Fit-out / Renovation', 'small', 'Small interior renovation or fit-out with limited structural intervention.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -384,7 +384,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'fitout-renovation-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Fit-out / Renovation — large
+-- Fit-out / Renovation: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('fitout-renovation-large', 'Fit-out / Renovation — large', 'Fit-out / Renovation', 'large', 'Large renovation, major fit-out, or alteration with multiple work zones and systems.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -453,7 +453,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'fitout-renovation-large'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Civil Works — small
+-- Civil Works: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('civil-works-small', 'Civil Works — small', 'Civil Works', 'small', 'Small civil works such as minor site development, concrete works, or public-area improvements.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -515,7 +515,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'civil-works-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Civil Works — large
+-- Civil Works: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('civil-works-large', 'Civil Works — large', 'Civil Works', 'large', 'Large civil works with multiple zones, interfaces, or authority clearances.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -585,7 +585,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'civil-works-large'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Structural Retrofitting — small
+-- Structural Retrofitting: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('structural-retrofitting-small', 'Structural Retrofitting — small', 'Structural Retrofitting', 'small', 'Small structural repair or strengthening project with limited intervention.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -646,7 +646,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'structural-retrofitting-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Structural Retrofitting — large
+-- Structural Retrofitting: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('structural-retrofitting-large', 'Structural Retrofitting — large', 'Structural Retrofitting', 'large', 'Large or phased strengthening project involving multiple structural zones or systems.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -715,7 +715,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'structural-retrofitting-large'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Drainage / Flood Control — small
+-- Drainage / Flood Control: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('drainage-flood-control-small', 'Drainage / Flood Control — small', 'Drainage / Flood Control', 'small', 'Small drainage improvement, canal repair, culvert work, or localized flood-control project.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -774,7 +774,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'drainage-flood-control-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Drainage / Flood Control — large
+-- Drainage / Flood Control: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('drainage-flood-control-large', 'Drainage / Flood Control — large', 'Drainage / Flood Control', 'large', 'Large drainage or flood-control project covering multiple zones, channels, or structures.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -843,7 +843,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'drainage-flood-control-large'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Road Maintenance — small
+-- Road Maintenance: small
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('road-maintenance-small', 'Road Maintenance — small', 'Road Maintenance', 'small', 'Small road repair, patching, resurfacing, shoulder, or localized pavement maintenance project.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;
@@ -901,7 +901,7 @@ SELECT m.templateMilestoneId, v.sequence, v.name, v.handledBy, v.requirementCode
  WHERE t.templateKey = 'road-maintenance-small'
 ON CONFLICT (templateMilestoneId, sequence) DO NOTHING;
 
--- Road Maintenance — large
+-- Road Maintenance: large
 INSERT INTO project_templates (templateKey, name, projectType, size, description, version)
 VALUES ('road-maintenance-large', 'Road Maintenance — large', 'Road Maintenance', 'large', 'Large or phased road maintenance project involving multiple sections, traffic stages, or drainage interfaces.', '0.2')
 ON CONFLICT (templateKey) DO NOTHING;

@@ -1,4 +1,4 @@
-// supabaseRefresh.js — how Supabase's answer to a refresh is read.
+// supabaseRefresh.js: how Supabase's answer to a refresh is read.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 

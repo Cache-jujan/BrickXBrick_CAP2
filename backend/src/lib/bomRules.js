@@ -22,6 +22,7 @@ const COST_CATEGORIES = [
   "Overhead & Contingency",
 ];
 const DEFAULT_COST_CATEGORY = COST_CATEGORIES[0];
+// Highest escalation allowance a BOM can carry, as a fraction (0.1 = 10%). A larger rate is rejected.
 const MAX_ESCALATION_RATE = 0.1;
 
 function categoryOf(section) {

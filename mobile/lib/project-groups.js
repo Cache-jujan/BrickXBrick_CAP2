@@ -1,5 +1,5 @@
 // Groups rows by project for the Purchaser's screens (To Buy by project, the allocation
-// preview, the trip-cost checklist). Pure, so it is tested in Node
+// preview). Pure, so it is tested in Node
 // (lib/sync/test/project-groups.test.mjs).
 
 /**

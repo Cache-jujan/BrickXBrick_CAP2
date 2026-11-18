@@ -4,13 +4,13 @@ import { supabase } from "../../api/supabaseClient";
 import { Field } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
 import { Banner } from "../../components/ui/Banner";
-import { Card } from "../../components/ui/Card";
+import { AuthShell } from "../../components/auth/AuthShell";
 import { EyeIcon, EyeOffIcon } from "../../components/ui/icons";
+import { PasswordChecklist } from "../../components/ui/PasswordChecklist";
+import { passwordMeetsRules } from "../../utils/passwordRules";
 import { LINK_TYPE_KEY } from "../../auth/authLinkRedirect";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./AuthPages.css";
-
-const MIN_LENGTH = 8;
 
 /** Return the link type saved before Supabase clears the URL, or null if absent or storage is blocked. */
 function readLinkType() {
@@ -79,7 +79,7 @@ export function SetPasswordPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (password.length < MIN_LENGTH) return setError(t("errors.password_short", { min: MIN_LENGTH }));
+    if (!passwordMeetsRules(password)) return setError(t("pw.rules_not_met"));
     if (password !== confirm) return setError(t("errors.password_mismatch"));
 
     setBusy(true);
@@ -102,28 +102,28 @@ export function SetPasswordPage() {
   const showBroken = linkBroken || (!ready && waited);
 
   return (
-    <div className="auth-simple">
-      <Card className="auth-simple-card">
-        <h1>{isInvite ? t("auth.create_password") : t("auth.set_password")}</h1>
+    <AuthShell>
+        <h2>{isInvite ? t("auth.create_password") : t("auth.set_password")}</h2>
 
         {showBroken && (
           <>
             <Banner tone="error" title={t("auth.link_invalid_title")}>
               {t("auth.link_invalid_body")}
             </Banner>
-            <Link to="/forgot-password" className="auth-simple-back">{t("auth.forgot_title")}</Link>
+            <Link to="/forgot-password" className="auth-back">{t("auth.forgot_title")}</Link>
           </>
         )}
 
-        {!showForm && !showBroken && <p className="auth-simple-sub">{t("auth.verifying")}</p>}
+        {!showForm && !showBroken && <p className="auth-card-sub">{t("auth.verifying")}</p>}
 
         {showForm && (
           <form onSubmit={handleSubmit} noValidate>
-            <p className="auth-simple-sub">
+            <p className="auth-card-sub">
               {isInvite ? t("auth.welcome_invite") : t("auth.choose_password")}
             </p>
             <PasswordField label={t("auth.new_password")} value={password}
               onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+            <PasswordChecklist password={password} />
             <PasswordField label={t("auth.confirm_password")} value={confirm}
               onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
             {error && <Banner tone="error" title={error} />}
@@ -132,7 +132,6 @@ export function SetPasswordPage() {
             </Button>
           </form>
         )}
-      </Card>
-    </div>
+    </AuthShell>
   );
 }

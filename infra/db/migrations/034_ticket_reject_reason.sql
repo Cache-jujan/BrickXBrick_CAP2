@@ -3,7 +3,7 @@
 --
 -- The Project Manager rejects a Pending ticket (and the assigned Purchaser an
 -- Acknowledged one) with a reason. Nullable because rows rejected before this
--- migration — and every non-rejected ticket — have none. Mirrors the existing
+-- migration: and every non-rejected ticket, have none. Mirrors the existing
 -- Expenses.rejectionReason (migration 015).
 --
 -- Safe to re-run.

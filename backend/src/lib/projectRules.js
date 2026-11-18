@@ -1,4 +1,4 @@
-// projectRules.js — F2 project lifecycle and manager-assignment rules.
+// projectRules.js: F2 project lifecycle and manager-assignment rules.
 //
 // Pure functions first (unit-tested in test/projectRules.test.js), then the
 // helpers that need a database. Every DB helper takes `runQuery` (or a
@@ -8,7 +8,7 @@
 //   - Lifecycle dates, type, location: adviser consultation (Oct 2026), item 3
 //   - One open project per PM, three per SM, Consolacion service area:
 //     pilot client answers (Oct 2026); limits live in system_settings
-//   - Pre-construction assignment: adviser item 2 — PM is required at
+//   - Pre-construction assignment: adviser item 2, PM is required at
 //     creation, SM is required before the project can be activated
 
 const PROJECT_TYPES = [
@@ -22,8 +22,8 @@ const PROJECT_TYPES = [
   "Other",
 ];
 
-// A project in either of these states occupies its PM and SM.
-const OPEN_PROJECT_STATUSES = ["Draft", "Active"];
+// A project in any of these states occupies its PM and SM (a hold does not free them).
+const OPEN_PROJECT_STATUSES = ["Draft", "Active", "Suspended"];
 
 // Statuses whose details can no longer be edited or reassigned.
 const CLOSED_PROJECT_STATUSES = ["Completed", "Cancelled", "Archived"];
@@ -35,6 +35,10 @@ const DEFAULT_SETTINGS = {
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// A year such as 0009 is a typing slip (2009? 2026?). It used to be saved and
+// then broke the Reports page, so project dates must fall inside these years.
+const MIN_PROJECT_YEAR = 2000;
+const MAX_PROJECT_YEAR = 2100;
 
 function httpError(status, message, extra) {
   const err = new Error(message);
@@ -68,6 +72,8 @@ function validateProjectDates({ startDate, constructionStartDate, endDate }) {
       errors.push({ field, message: `${label} is required` });
     } else if (!isIsoDate(value)) {
       errors.push({ field, message: `${label} must be a valid date (YYYY-MM-DD)` });
+    } else if (Number(value.slice(0, 4)) < MIN_PROJECT_YEAR || Number(value.slice(0, 4)) > MAX_PROJECT_YEAR) {
+      errors.push({ field, message: `${label} must be in the years ${MIN_PROJECT_YEAR} to ${MAX_PROJECT_YEAR}` });
     }
   }
   if (errors.length) return errors;
@@ -148,7 +154,10 @@ function evaluateAvailability(openProjects, maxOpenProjects) {
  */
 const STATUS_TRANSITIONS = {
   Draft: ["Active", "Cancelled"],
-  Active: ["Completed", "Cancelled"],
+  Active: ["Suspended", "Completed", "Cancelled"],
+  // On hold: it can go back to work, or be stopped for good. It can't be
+  // completed without resuming first, so the completion date means work finished.
+  Suspended: ["Active", "Cancelled"],
   Completed: ["Archived"],
   Cancelled: ["Archived"],
   Archived: [],
@@ -161,9 +170,7 @@ function assertStatusTransition(from, to) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Database helpers
-// ---------------------------------------------------------------------------
 
 async function loadProjectSettings(runQuery) {
   const result = await runQuery(
@@ -247,7 +254,7 @@ async function loadManagerWorkload(runQuery, role, { excludeProjectId = null, se
 /**
  * Throws unless `userId` is an active user with `role` who can take one more
  * project. Locks the user row (FOR UPDATE) so two GMs assigning the same
- * manager at the same moment can't both get past the limit — call it with
+ * manager at the same moment can't both get past the limit, call it with
  * the transaction client.
  */
 async function assertManagerAvailable(client, { userId, role, excludeProjectId = null, settings }) {
@@ -345,10 +352,12 @@ async function assertProjectActive(runQuery, projectId, action = "This action") 
   if (result.rowCount === 0) throw httpError(404, `Project ${projectId} not found`);
   const { status } = result.rows[0];
   if (status !== "Active") {
-    throw httpError(
-      409,
-      `${action} isn't allowed yet: purchases start after the client agrees to the BOM and the project is activated (this project is ${status}).`
-    );
+    const why =
+      status === "Cancelled" ? "this project was terminated"
+      : status === "Suspended" ? "this project is on hold"
+      : status === "Draft" ? "purchases start after the client agrees to the BOM and the project is activated (this project is Draft)"
+      : `this project is ${status}`;
+    throw httpError(409, `${action} isn't allowed: ${why}.`);
   }
 }
 
@@ -385,6 +394,8 @@ module.exports = {
   STATUS_TRANSITIONS,
   httpError,
   isIsoDate,
+  MIN_PROJECT_YEAR,
+  MAX_PROJECT_YEAR,
   validateProjectDates,
   normalizeMunicipality,
   parseServiceArea,

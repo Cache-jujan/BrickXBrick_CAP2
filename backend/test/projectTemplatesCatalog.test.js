@@ -9,7 +9,10 @@ const { PROJECT_TYPES } = require("../src/lib/projectRules");
 
 const ROOT = path.resolve(__dirname, "../../infra/db");
 const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "templates/project-templates.json"), "utf8"));
-const seed = fs.readFileSync(path.join(ROOT, "migrations/047_seed_project_templates.sql"), "utf8");
+// The catalog is seeded by 047 (small, large, custom) and 061 (medium).
+const seed = ["047_seed_project_templates.sql", "061_medium_templates.sql"]
+  .map((file) => fs.readFileSync(path.join(ROOT, "migrations", file), "utf8"))
+  .join("\n");
 const STANDARD = catalog.requirementCatalog.standard.map((d) => d.code);
 const FORBIDDEN_KEYS = /price|cost|quantity|qty|amount|unit|supplier|vendor|assignee|assignedTo|progress|photo|ticket|expense|receipt|note|bom(Item|Line)/i;
 

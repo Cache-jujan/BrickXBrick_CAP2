@@ -1,4 +1,4 @@
-// neededBy.js — validation for a ticket's optional "needed by" date.
+// neededBy.js: validation for a ticket's optional "needed by" date.
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 

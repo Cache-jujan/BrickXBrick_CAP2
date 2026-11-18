@@ -1,17 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { scanReceipt, submitExpense } from "../../api/expensesApi";
+import { submitExpense } from "../../api/expensesApi";
 import { listExpenseLinkableTickets } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { useReceiptScans, useOpenWantedScan } from "../../context/ReceiptScanContext";
+import { ReceiptScanTray } from "../../components/expenses/ReceiptScanTray";
+import { ExpenseModeBar } from "../../components/expenses/ExpenseModeBar";
+import { ReceiptCapture } from "../../components/expenses/ReceiptCapture";
+import { TaxDetails } from "../../components/expenses/TaxDetails";
+import { SubmitBlockers } from "../../components/expenses/SubmitBlockers";
+import { lineGaps } from "../../utils/formGaps";
 import { Banner } from "../../components/ui/Banner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
+import { isReceiptType } from "../../utils/receiptFile";
+import { matchedQuantity, receiptProgress, receiptTotalQuantity } from "../../utils/requestProgress";
 import "./SubmitExpensePage.css";
-import { BackLink } from "../../components/ui/BackLink";
 import { useLocale } from "../../i18n/LocaleProvider";
+
+const pesoText = (cents) => `₱${(cents / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const EMPTY_DRAFT = {
   vendorName: "",
@@ -23,6 +35,7 @@ export const EMPTY_DRAFT = {
   birPermitNumber: "",
   birNumber: "",
   receiptImageURL: "",
+  note: "", // why the request is finished under budget (required then)
   lineItems: [{ description: "", amount: "", quantity: "", unitPrice: "" }],
 };
 
@@ -40,6 +53,8 @@ export function draftFromScan(result) {
   const extractedItems = Array.isArray(result.lineItems)
     ? result.lineItems.map((item) => withUnitPrice({
         description: item.description || "",
+        bomItemID: item.bomItemID,
+        matchedTicketID: item.matchedTicketID,
         amount: item.amount == null ? "" : String(item.amount),
         quantity: item.quantity == null ? "" : String(item.quantity),
         unitPrice: item.unitPrice == null ? "" : String(item.unitPrice),
@@ -67,27 +82,28 @@ export function draftFromScan(result) {
   };
 }
 
-/** Accept a JPEG, PNG or PDF MIME type or extension for client-side receipt selection. */
+/** Accept a JPEG, PNG, WebP or PDF receipt (the one rule lives in utils/receiptFile.js). */
 export function isSupportedReceipt(file) {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  return ["image/jpeg", "image/jpg", "image/png", "application/pdf"].includes(file.type)
-    || ["jpg", "jpeg", "png", "pdf"].includes(extension);
+  return isReceiptType(file);
 }
 
 /** Render the managers' receipt capture and expense submission flow for resolved tickets. */
 export function SubmitExpensePage() {
   const { user } = useAuth();
   const { t, tv } = useLocale();
-  const cameraInput = useRef(null);
-  const imageInput = useRef(null);
-  const pdfInput = useRef(null);
 
   const [tickets, setTickets] = useState([]);
   const [selectedTicketId, setSelectedTicketId] = useState("");
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [receiptName, setReceiptName] = useState("");
   const [loadingTickets, setLoadingTickets] = useState(true);
-  const [scanning, setScanning] = useState(false);
+  // Only the short upload is waited for; reading the receipt happens in the background.
+  const [uploading, setUploading] = useState(false);
+  // The scan whose result is in the form now (removed from the tray once submitted).
+  const [activeScanID, setActiveScanID] = useState("");
+  // The tax fields are folded away; the user can open them.
+  const [taxOpen, setTaxOpen] = useState(false);
+  const { startScan, dismissScan } = useReceiptScans();
   const [submitting, setSubmitting] = useState(false);
   const [pageError, setPageError] = useState("");
   const [pageNotice, setPageNotice] = useState("");
@@ -103,22 +119,31 @@ export function SubmitExpensePage() {
     [tickets, selectedTicketId]
   );
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let active = true;
-    async function loadTickets() {
+    mountedRef.current = true; // StrictMode mounts, unmounts and mounts again in development
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // `quiet` refreshes the list after a purchase without the loading state or an error banner:
+  // the quantities bought so far must be current for the next receipt.
+  async function loadTickets({ quiet = false } = {}) {
+    if (!quiet) {
       setLoadingTickets(true);
       setPageError("");
-      try {
-        const rows = await listExpenseLinkableTickets();
-        if (active) setTickets(Array.isArray(rows) ? rows : []);
-      } catch (error) {
-        if (active) setPageError(extractErrorMessage(error, t("errors.load_tickets")));
-      } finally {
-        if (active) setLoadingTickets(false);
-      }
     }
+    try {
+      const rows = await listExpenseLinkableTickets();
+      if (mountedRef.current) setTickets(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+      if (mountedRef.current && !quiet) setPageError(extractErrorMessage(error, t("errors.load_tickets")));
+    } finally {
+      if (mountedRef.current && !quiet) setLoadingTickets(false);
+    }
+  }
+
+  useEffect(() => {
     loadTickets();
-    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; a language change must not refetch
   }, []);
 
@@ -126,43 +151,50 @@ export function SubmitExpensePage() {
     setDraft((current) => ({ ...current, [name]: value }));
   }
 
-  async function handleReceiptPick(event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || busyRef.current) return;
+  // Picking a file only uploads it and puts it in the tray; the form you are working on stays
+  // as it is, so more receipts can be added while earlier ones are still being read.
+  async function handleReceiptPick(file) {
+    if (!file || uploading) return;
 
     setPageError("");
-    setPageNotice("");
-    setOcrNotice("");
-    setReceiptName("");
-    setVendorInfo({ autoFilled: [], conflicts: [] });
-    setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
     if (!isSupportedReceipt(file)) {
       setPageError(t("errors.receipt_type"));
       return;
     }
-
-    setReceiptName(file.name);
-    busyRef.current = true;
-    setScanning(true);
+    setUploading(true);
     try {
-      const result = await scanReceipt(file);
-      setDraft(draftFromScan(result));
+      await startScan(file, "submit");
+    } catch (error) {
+      setPageError(extractErrorMessage(error, t("errors.upload_failed")));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  /** Load a scan from the tray into the form: its draft when it was read, or just the photo when it could not be. */
+  function openScan(scan) {
+    setPageError("");
+    setPageNotice("");
+    setReceiptName(scan.context?.fileName || "");
+    setActiveScanID(scan.scanID);
+    if (scan.status === "Ready" && scan.result) {
+      const result = scan.result;
+      setDraft(draftFromScan({ ...result, receiptImageURL: result.receiptImageURL || scan.receiptImageURL }));
       setVendorInfo({
         autoFilled: Array.isArray(result.autoFilled) ? result.autoFilled : [],
         conflicts: Array.isArray(result.vendorConflicts) ? result.vendorConflicts : [],
       });
-      setOcrNotice(result.ocrError || "");
-      if (!result.ocrError && result.confidence === "low") {
-        setOcrNotice(t("submit.ocr_low"));
-      }
-    } catch (error) {
-      setPageError(extractErrorMessage(error, t("errors.upload_failed")));
-    } finally {
-      busyRef.current = false;
-      setScanning(false);
+      setOcrNotice(result.ocrError || (result.confidence === "low" ? t("submit.ocr_low") : ""));
+    } else {
+      // Could not be read: the photo is already stored, so the details are typed in by hand.
+      setDraft({ ...EMPTY_DRAFT, receiptImageURL: scan.receiptImageURL, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
+      setVendorInfo({ autoFilled: [], conflicts: [] });
+      setOcrNotice(t("scan.manual_notice"));
     }
   }
+
+  // Arriving from the "receipt ready" pop-up or the bell (?scan=<id>).
+  useOpenWantedScan("submit", openScan);
 
   function handleTicketChange(ticketID) {
     setSelectedTicketId(ticketID);
@@ -208,8 +240,29 @@ export function SubmitExpensePage() {
   const amountIsValid = draft.amount !== ""
     && Number.isFinite(Number(draft.amount))
     && Number(draft.amount) >= 0;
+  // Strict budget: nothing above what is left of the request; a note when it is finished under budget.
+  // (The server checks again and has the last word.)
+  const amountCents = amountIsValid ? Math.round(Number(draft.amount) * 100) : null;
+  const leftCents = selectedTicket && selectedTicket.remainingBudget != null ? Math.round(Number(selectedTicket.remainingBudget) * 100) : null;
+  const noBudget = Boolean(selectedTicket) && leftCents === null;
+  const overBudget = amountCents !== null && leftCents !== null && amountCents > leftCents;
+  // The request stays open until a purchase brings what is left to 0, so the note is only needed on the last one.
+  const progress = selectedTicket
+    ? receiptProgress({
+        requested: selectedTicket.quantity,
+        remaining: selectedTicket.remainingQuantity,
+        thisQuantity: matchedQuantity(namedLineItems, selectedTicket.materialType, selectedTicket.bomItemID, selectedTicket.ticketID) ?? receiptTotalQuantity(namedLineItems),
+      })
+    : null;
+  const completes = progress ? progress.completes : true;
+  const unitText = selectedTicket?.unit ? ` ${selectedTicket.unit}` : "";
+  const needsNote = amountCents !== null && leftCents !== null && amountCents < leftCents && completes;
+  const noteMissing = needsNote && !draft.note.trim();
   const canSubmit = Boolean(
     selectedTicket
+      && !noBudget
+      && !overBudget
+      && !noteMissing
       && draft.receiptImageURL
       && draft.vendorName.trim()
       && amountIsValid
@@ -217,9 +270,30 @@ export function SubmitExpensePage() {
       && draft.category
       && allLinesValid
       && !loadingTickets
-      && !scanning
+      && !uploading
       && !submitting
   );
+
+  // What is still missing: tags on those boxes, and the reason shown beside the greyed-out button.
+  const gapOfLines = lineGaps(draft.lineItems);
+  const missing = {
+    ticket: !selectedTicket,
+    vendor: !draft.vendorName.trim(),
+    amount: !amountIsValid,
+    date: !draft.receiptDate,
+  };
+  const gaps = [
+    !draft.receiptImageURL && t("gap.receipt"),
+    missing.ticket && t("submit.ticket_label"),
+    missing.vendor && t("submit.vendor_name"),
+    missing.amount && t("submit.receipt_total"),
+    missing.date && t("my_expenses.receipt_date"),
+    noBudget && t("bd.none_title"),
+    overBudget && t("bd.over_title"),
+    noteMissing && t("bd.note_title"),
+    gapOfLines.none && t("gap.line_item"),
+    gapOfLines.numbers && t("gap.line_numbers"),
+  ].filter(Boolean);
 
   /** Validate and submit the ticket-linked receipt once, clearing the draft after success. */
   async function handleSubmit(event) {
@@ -243,11 +317,14 @@ export function SubmitExpensePage() {
         receiptDate: draft.receiptDate,
         category: draft.category,
         receiptImageURL: draft.receiptImageURL,
+        submitNote: draft.note.trim() || undefined,
         tin: draft.tin.trim() || null,
         birPermitNumber: draft.birPermitNumber.trim() || null,
         birNumber: draft.birNumber.trim() || null,
         lineItems: validLineItems.map((item) => ({
           description: item.description.trim(),
+          bomItemID: item.bomItemID,
+          matchedTicketID: item.matchedTicketID,
           amount: Number(item.amount),
           quantity: Number(item.quantity),
           unitPrice: unitPriceForPayload(item),
@@ -255,11 +332,23 @@ export function SubmitExpensePage() {
       };
       const expense = await submitExpense(payload);
       setPageNotice(expense.expenseID ? t("submit.saved_pending_id", { id: expense.expenseID }) : t("submit.saved_pending"));
+      if (activeScanID) { dismissScan(activeScanID); setActiveScanID(""); } // this receipt is done: take it off the tray
       setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
       setSelectedTicketId("");
       setReceiptName("");
       setOcrNotice("");
       setVendorInfo({ autoFilled: [], conflicts: [] });
+      // The receipt is saved even if refreshing the available requests fails.
+      setLoadingTickets(true);
+      try {
+        const rows = await listExpenseLinkableTickets();
+        setTickets(Array.isArray(rows) ? rows : []);
+      } catch (error) {
+        setTickets([]);
+        setPageError(extractErrorMessage(error, t("errors.load_tickets")));
+      } finally {
+        setLoadingTickets(false);
+      }
     } catch (error) {
       // Keep the draft so the user can fix the problem and retry.
       setPageError(extractErrorMessage(error, t("errors.submit_failed")));
@@ -279,20 +368,9 @@ export function SubmitExpensePage() {
   }
 
   return (
-    <div className="submit-expense-page">
-      <LoadingOverlay
-        open={scanning || submitting}
-        message={scanning ? t("submit.reading") : t("submit.submitting")}
-        detail={scanning ? t("submit.scan_detail") : t("submit.dont_close")}
-      />
-      <div className="submit-expense-header">
-        <div>
-          <BackLink to="/expenses">{t("submit.back")}</BackLink>
-          <h1>{t("nav.submit_expense")}</h1>
-          <p className="submit-expense-subtitle">{t("submit.subtitle")}</p>
-        </div>
-        <span className="submit-expense-role">{user.role}</span>
-      </div>
+    <div className="submit-expense-page" data-mode="submit">
+      <LoadingOverlay open={submitting} message={t("submit.submitting")} detail={t("submit.dont_close")} />
+      <ExpenseModeBar mode="submit" />
 
       {pageError && <Banner tone="error" title={t("submit.could_not_continue")}>{pageError}</Banner>}
       {pageNotice && <Banner tone="info" title={t("submit.saved_title")}>{pageNotice}</Banner>}
@@ -304,8 +382,8 @@ export function SubmitExpensePage() {
         </Banner>
       )}
 
-      <form className="submit-expense-form" onSubmit={handleSubmit}>
-        <Card className="submit-expense-card">
+      <form className="xp-layout" onSubmit={handleSubmit}>
+        <Card className="submit-expense-card xp-receipt">
           <section className="submit-expense-section" aria-labelledby="receipt-source-heading">
             <div className="submit-expense-section-heading">
               <div>
@@ -315,16 +393,9 @@ export function SubmitExpensePage() {
               {receiptName && <span className="submit-expense-filename">{receiptName}</span>}
             </div>
 
-            <input ref={cameraInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" capture="environment" onChange={handleReceiptPick} />
-            <input ref={imageInput} className="submit-expense-hidden-input" type="file" accept="image/jpeg,image/png" onChange={handleReceiptPick} />
-            <input ref={pdfInput} className="submit-expense-hidden-input" type="file" accept="application/pdf,.pdf" onChange={handleReceiptPick} />
+            <ReceiptCapture onFile={handleReceiptPick} disabled={uploading} uploading={uploading} />
 
-            <div className="submit-expense-upload-actions">
-              <Button type="button" onClick={() => cameraInput.current?.click()} disabled={scanning}>{t("submit.capture_camera")}</Button>
-              <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()} disabled={scanning}>{t("submit.choose_image")}</Button>
-              <Button type="button" variant="secondary" onClick={() => pdfInput.current?.click()} disabled={scanning}>{t("submit.choose_pdf")}</Button>
-              {scanning && <span className="submit-expense-progress" role="status">{t("submit.uploading_scanning")}</span>}
-            </div>
+            <ReceiptScanTray mode="submit" activeScanID={activeScanID} onOpen={openScan} />
 
             {draft.receiptImageURL && (
               <div className="submit-expense-receipt-preview">
@@ -349,7 +420,7 @@ export function SubmitExpensePage() {
           </section>
         </Card>
 
-        <Card className="submit-expense-card">
+        <Card className="submit-expense-card xp-details">
           <section className="submit-expense-section" aria-labelledby="ticket-heading">
             <div className="submit-expense-section-heading">
               <div>
@@ -358,36 +429,55 @@ export function SubmitExpensePage() {
               </div>
             </div>
 
-            <Field
-              as="select"
+            <SearchableSelect
               label={t("submit.ticket_label")}
               required
+              missing={missing.ticket}
+              missingText={t("gap.needed")}
               value={selectedTicketId}
-              onChange={(event) => handleTicketChange(event.target.value)}
+              onChange={handleTicketChange}
               disabled={loadingTickets || tickets.length === 0}
-            >
-              <option value="">{loadingTickets ? t("submit.loading_tickets") : t("submit.choose_ticket")}</option>
-              {tickets.map((ticket) => (
-                <option key={ticket.ticketID} value={ticket.ticketID}>
-                  {ticket.projectName} — {ticket.subject} ({ticket.vendorName || t("submit.vendor_not_specified")})
-                </option>
-              ))}
-            </Field>
+              options={[
+                { value: "", label: loadingTickets ? t("submit.loading_tickets") : t("submit.choose_ticket"), pinned: true },
+                ...tickets.map((ticket) => ({
+                  value: ticket.ticketID,
+                  label: `${ticket.projectName} — ${ticket.subject} (${ticket.vendorName || t("submit.vendor_not_specified")})`,
+                  searchText: ticket.materialType ?? "",
+                })),
+              ]}
+              placeholder={loadingTickets ? t("submit.loading_tickets") : t("submit.choose_ticket")}
+              searchPlaceholder={t("ss.search_ph")}
+              noMatchText={t("ss.no_match", { query: "{query}" })}
+            />
             {selectedTicket && (
               <div className="submit-expense-ticket-context">
                 <strong>{selectedTicket.projectName}</strong>
                 <span>{selectedTicket.materialType || t("submit.material_request")}</span>
                 {selectedTicket.quantity != null && <span>{t("submit.requested_quantity", { quantity: selectedTicket.quantity })}</span>}
+                {leftCents !== null && <strong>{t("bd.left", { remaining: pesoText(leftCents) })}</strong>}
+              </div>
+            )}
+            {progress && (
+              <div className={`xp-qty${progress.over ? " xp-qty-over" : ""}`}>
+                <strong>{t("rq.bar_line", { bought: progress.boughtBefore + progress.thisQuantity, total: `${progress.requested}${unitText}` })}</strong>
+                <div className="xp-qty-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress.afterShare * 100)}>
+                  <span className="xp-qty-before" style={{ width: `${Math.round(progress.boughtShare * 100)}%` }} />
+                  <span className="xp-qty-this" style={{ width: `${Math.round((progress.afterShare - progress.boughtShare) * 100)}%` }} />
+                </div>
+                <span>{t("rq.bar_detail", { before: progress.boughtBefore, added: progress.thisQuantity })}</span>
+                {progress.over ? (
+                  <span className="xp-qty-warn">{t("rq.over_qty", { extra: progress.thisQuantity - (progress.requested - progress.boughtBefore) })}</span>
+                ) : !progress.completes ? (
+                  <span>{t("rq.stays_open", { left: `${progress.leftAfter}${unitText}` })}</span>
+                ) : null}
               </div>
             )}
             {!loadingTickets && tickets.length === 0 && !pageError && (
               <Banner tone="info" title={t("submit.no_tickets_title")}>{t("submit.no_tickets_body")}</Banner>
             )}
           </section>
-        </Card>
 
-        <Card className="submit-expense-card">
-          <section className="submit-expense-section" aria-labelledby="review-heading">
+          <section className="submit-expense-section xp-section-next" aria-labelledby="review-heading">
             <div className="submit-expense-section-heading">
               <div>
                 <h2 id="review-heading">{t("submit.step3_title")}</h2>
@@ -395,20 +485,55 @@ export function SubmitExpensePage() {
               </div>
             </div>
 
-            <div className="submit-expense-fields">
-              <Field label={t("submit.vendor_name")} required value={draft.vendorName} onChange={(event) => setField("vendorName", event.target.value)} />
-              <Field label={t("submit.receipt_total")} required type="number" min="0" step="0.01" value={draft.amount} onChange={(event) => setField("amount", event.target.value)} />
-              <Field label={t("my_expenses.receipt_date")} required type="date" value={draft.receiptDate} onChange={(event) => setField("receiptDate", event.target.value)} />
+            <div className={`submit-expense-fields xp-main-fields`}>
+              <Field label={t("submit.vendor_name")} required missing={missing.vendor} value={draft.vendorName} onChange={(event) => setField("vendorName", event.target.value)} />
+              <Field label={t("submit.receipt_total")} required missing={missing.amount} inputMode="decimal" value={formatAmountInput(draft.amount)} onChange={(event) => setField("amount", parseAmountInput(event.target.value))} />
+              <Field label={t("my_expenses.receipt_date")} required missing={missing.date} type="date" value={draft.receiptDate} onChange={(event) => setField("receiptDate", event.target.value)} />
               <Field as="select" label={t("submit.expense_category")} required value={draft.category} onChange={(event) => setField("category", event.target.value)}>
                 <option value="Materials">{tv("category", "Materials")}</option>
                 <option value="Equipment">{tv("category", "Equipment")}</option>
                 <option value="Other">{tv("category", "Other")}</option>
               </Field>
+            </div>
+
+            <TaxDetails open={taxOpen} onToggle={setTaxOpen} filled={Boolean(draft.tin || draft.birPermitNumber || draft.birNumber || draft.birPermitType)}>
               <Field label={vendorLabel("TIN", "tin")} value={draft.tin} onChange={(event) => setField("tin", event.target.value)} />
-              <Field label={vendorLabel(t("submit.field_bir_type"), "birPermitType")} value={draft.birPermitType} onChange={(event) => setField("birPermitType", event.target.value)} placeholder="Permit, PTU, or ATP" />
               <Field label={vendorLabel(t("submit.field_bir_permit"), "birPermitNumber")} value={draft.birPermitNumber} onChange={(event) => setField("birPermitNumber", event.target.value)} />
               <Field label="OR / SI number" value={draft.birNumber} onChange={(event) => setField("birNumber", event.target.value)} />
-            </div>
+            </TaxDetails>
+
+            {selectedTicket && (noBudget || overBudget || needsNote) && (
+              <Banner tone={noteMissing ? "warning" : "error"} title={noBudget ? t("bd.none_title") : overBudget ? t("bd.over_title") : t("bd.note_title")}>
+                {noBudget
+                  ? t("bd.none_body")
+                  : overBudget
+                    ? t("ck.over_auto") + " " + t("bd.over_body", { amount: pesoText(amountCents), remaining: pesoText(leftCents) })
+                    : t("bd.note_body", { unspent: pesoText(leftCents - amountCents) })}
+              </Banner>
+            )}
+            {overBudget && (
+              <div className="xp-over-note">
+                <Field
+                  as="textarea"
+                  label={t("ck.over_note_hint")}
+                  maxLength={300}
+                  value={draft.note}
+                  onChange={(event) => setField("note", event.target.value)}
+                />
+              </div>
+            )}
+            {needsNote && (
+              <Field
+                as="textarea"
+                label={t("bd.notes_required")}
+                required
+                maxLength={300}
+                missing={noteMissing}
+                missingText={t("gap.needed")}
+                value={draft.note}
+                onChange={(event) => setField("note", event.target.value)}
+              />
+            )}
 
             <div className="submit-expense-items-heading">
               <div>
@@ -420,10 +545,10 @@ export function SubmitExpensePage() {
             <div className="submit-expense-items">
               {draft.lineItems.map((item, index) => (
                 <div className="submit-expense-item-row" key={`item-${index}`}>
-                  <Field label={t("submit.item_n", { n: index + 1 })} required value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder={t("submit.description")} />
-                  <Field label={t("submit.item_amount")} required type="number" min="0" step="0.01" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
-                  <Field label={t("submit.quantity_help")} required type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
-                  <Field label={t("submit.unit_price")} type="number" min="0" step="0.01" placeholder={t("submit.calculated")} value={item.unitPrice} onChange={(event) => updateLineItem(index, "unitPrice", event.target.value)} />
+                  <Field label={t("submit.item_n", { n: index + 1 })} required missing={gapOfLines.rows[index]?.desc} value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} placeholder={t("submit.description")} />
+                  <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} inputMode="decimal" value={formatAmountInput(item.amount)} onChange={(event) => updateLineItem(index, "amount", parseAmountInput(event.target.value))} />
+                  <Field label={t("split.quantity_fees")} required missing={gapOfLines.rows[index]?.qty} type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
+                  <Field label={t("submit.unit_price")} inputMode="decimal" placeholder={t("submit.calculated")} value={formatAmountInput(item.unitPrice)} onChange={(event) => updateLineItem(index, "unitPrice", parseAmountInput(event.target.value))} />
                   <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
                 </div>
               ))}
@@ -431,8 +556,8 @@ export function SubmitExpensePage() {
           </section>
         </Card>
 
-        <div className="submit-expense-footer">
-          <p>{t("submit.footer_note")}</p>
+        <div className="submit-expense-footer xp-footer">
+          <SubmitBlockers gaps={gaps} note={t("submit.footer_note")} />
           <Button type="submit" disabled={!canSubmit}>{submitting ? t("common.submitting") : t("nav.submit_expense")}</Button>
         </div>
       </form>

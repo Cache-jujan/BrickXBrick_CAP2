@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RequestDetailModal } from "../../components/requests/RequestDetailModal";
+import { Badge } from "../../components/ui/Badge";
 import { listOpenRequests } from "../../api/allocationsApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -33,6 +35,7 @@ export function OpenRequestsPage() {
   const [view, setView] = useState("store");
   const [vendorFilter, setVendorFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,6 +50,9 @@ export function OpenRequestsPage() {
   }, [t]);
 
   useEffect(() => { load(); }, [load]);
+
+  // The open dialog always shows the latest copy of its request; if a refresh drops it from the list, the dialog closes.
+  const selected = selectedId ? requests.find((r) => r.ticketID === selectedId) ?? null : null;
 
   const stores = useMemo(() => vendorOptions(requests), [requests]);
   const projects = useMemo(() => groupByProject(requests), [requests]);
@@ -77,58 +83,54 @@ export function OpenRequestsPage() {
   return (
     <div className="open-requests-page">
       <div className="open-requests-header">
-        <div>
+        <div className="open-requests-title">
           <h1>{t("open_requests.title")}</h1>
           <p className="open-requests-subtitle">
             {user.role === "General Manager" ? t("open_requests.subtitle_gm") : t("open_requests.subtitle_pm")}
+            {groups.length > 0 && unfiltered && <span className="open-requests-total">{countLabel(shown.length)}</span>}
           </p>
         </div>
-        <Button type="button" variant="secondary" onClick={load} disabled={loading}>
-          {loading ? t("common.checking") : t("open_requests.refresh")}
-        </Button>
+
+        <div className="open-requests-controls">
+          <div className="open-requests-toggle" role="group" aria-label={t("open_requests.view")}>
+            {["store", "project"].map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`open-requests-toggle-btn${view === mode ? " open-requests-toggle-on" : ""}`}
+                aria-pressed={view === mode}
+                onClick={() => setView(mode)}
+              >
+                {t(mode === "store" ? "tb.view_store" : "tb.view_project")}
+              </button>
+            ))}
+          </div>
+
+          {view === "store" ? (
+            <Field as="select" label={t("tb.filter_store")} value={activeVendor ?? ""} onChange={(e) => setVendorFilter(e.target.value)}>
+              <option value="">{t("tb.all_stores")}</option>
+              {stores.map((s) => <option key={s.key} value={s.key}>{s.vendorName}</option>)}
+            </Field>
+          ) : (
+            <Field as="select" label={t("tb.filter_project")} value={activeProject ?? ""} onChange={(e) => setProjectFilter(e.target.value)}>
+              <option value="">{t("tb.all_projects")}</option>
+              {projects.map((p) => <option key={p.projectId} value={p.projectId}>{p.projectName}</option>)}
+            </Field>
+          )}
+
+          <Button type="button" variant="secondary" onClick={load} disabled={loading}>
+            {loading ? t("common.checking") : t("open_requests.refresh")}
+          </Button>
+        </div>
       </div>
 
       {error && <Banner tone="error" title={t("open_requests.load_failed")}>{error}</Banner>}
-
-      <div className="open-requests-controls">
-        <div className="open-requests-toggle" role="group" aria-label={t("open_requests.view")}>
-          {["store", "project"].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={`open-requests-toggle-btn${view === mode ? " open-requests-toggle-on" : ""}`}
-              aria-pressed={view === mode}
-              onClick={() => setView(mode)}
-            >
-              {t(mode === "store" ? "tb.view_store" : "tb.view_project")}
-            </button>
-          ))}
-        </div>
-
-        {view === "store" ? (
-          <Field as="select" label={t("tb.filter_store")} value={activeVendor ?? ""} onChange={(e) => setVendorFilter(e.target.value)}>
-            <option value="">{t("tb.all_stores")}</option>
-            {stores.map((s) => <option key={s.key} value={s.key}>{s.vendorName}</option>)}
-          </Field>
-        ) : (
-          <Field as="select" label={t("tb.filter_project")} value={activeProject ?? ""} onChange={(e) => setProjectFilter(e.target.value)}>
-            <option value="">{t("tb.all_projects")}</option>
-            {projects.map((p) => <option key={p.projectId} value={p.projectId}>{p.projectName}</option>)}
-          </Field>
-        )}
-      </div>
 
       {!loading && groups.length === 0 && !error && (
         <Banner tone="empty" title={t("open_requests.empty_title")}>{t("open_requests.empty_body")}</Banner>
       )}
 
-      {groups.length > 0 && unfiltered && (
-        <div className="open-requests-all" role="heading" aria-level={2}>
-          <strong>{t(view === "store" ? "tb.all_stores" : "tb.all_projects")}</strong>
-          <span>{countLabel(shown.length)}</span>
-        </div>
-      )}
-
+      <div className="open-requests-groups">
       {groups.map((group) => (
         <Card key={group.key} className="open-requests-group">
           <div className="open-requests-group-head">
@@ -139,33 +141,52 @@ export function OpenRequestsPage() {
             {group.requests.map((request) => {
               const progress = progressOf(request);
               return (
-                <li key={request.ticketID} className="open-requests-row">
-                  <div className="open-requests-row-main">
-                    <strong>{request.subject}</strong>
-                    <span className="open-requests-meta">
-                      {t("tb.need_line", {
-                        quantity: formatNumber ? formatNumber(request.requestedQuantity) : request.requestedQuantity,
-                        material: request.materialType,
-                        project: request.projectName,
-                      })}
-                      {view === "project" && request.vendorName ? ` · ${request.vendorName}` : ""}
+                <li key={request.ticketID} className="open-requests-item">
+                  <button
+                    type="button"
+                    className="open-requests-row"
+                    onClick={() => setSelectedId(request.ticketID)}
+                    aria-label={t("rq.view_details", { subject: request.subject })}
+                    aria-haspopup="dialog"
+                  >
+                    <span className="open-requests-row-main">
+                      <strong>{request.subject}</strong>
+                      <span className="open-requests-meta">
+                        {t("tb.need_line", {
+                          quantity: formatNumber ? formatNumber(request.requestedQuantity) : request.requestedQuantity,
+                          material: request.materialType,
+                          project: request.projectName,
+                        })}
+                        {view === "project" && request.vendorName ? ` · ${request.vendorName}` : ""}
+                      </span>
                     </span>
-                  </div>
-                  <div className="open-requests-progress">
-                    <div className="open-requests-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((progress.quantityShare ?? 0) * 100)}>
-                      <div className="open-requests-fill" style={{ width: `${Math.round((progress.quantityShare ?? 0) * 100)}%` }} />
-                    </div>
-                    <span className="open-requests-meta">
-                      {t("tb.progress_qty", { bought: progress.bought, total: progress.requested })}
-                      {progress.budget != null ? ` · ${t("open_requests.budget_left", { left: PESO.format(Number(request.remainingBudget ?? progress.budget)) })}` : ""}
+                    <span className="open-requests-progress">
+                      <span className="open-requests-progress-top">
+                        <Badge status={request.status} />
+                        <span className="open-requests-meta">
+                          {t("tb.progress_qty", { bought: progress.bought, total: progress.requested })}
+                        </span>
+                      </span>
+                      <span className="open-requests-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((progress.quantityShare ?? 0) * 100)}>
+                        <span className="open-requests-fill" style={{ width: `${Math.round((progress.quantityShare ?? 0) * 100)}%` }} />
+                      </span>
+                      {progress.budget != null && (
+                        <span className="open-requests-meta">
+                          {t("open_requests.budget_left", { left: PESO.format(Number(request.remainingBudget ?? progress.budget)) })}
+                        </span>
+                      )}
                     </span>
-                  </div>
+                    <span className="open-requests-chevron" aria-hidden="true">›</span>
+                  </button>
                 </li>
               );
             })}
           </ul>
         </Card>
       ))}
+      </div>
+
+      {selected && <RequestDetailModal request={selected} role={user.role} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }

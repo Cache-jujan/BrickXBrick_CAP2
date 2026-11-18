@@ -14,7 +14,7 @@ import {
   FolderIcon,
 } from "../components/layout/icons";
 
-// type -> { Icon, bg, fg, fallbackKey } — the fallback text only shows if the backend's
+// type -> { Icon, bg, fg, fallbackKey }, the fallback text only shows if the backend's
 // message is ever empty; every current producer always sends a message.
 export const NOTIFICATION_META = {
   TicketSubmitted:     { Icon: TicketGlyph,      bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.ticket_submitted" },
@@ -27,6 +27,8 @@ export const NOTIFICATION_META = {
   BlockchainOverdue:   { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.blockchain_overdue" },
   TamperAlert:         { Icon: ShieldAlertGlyph, bg: "#FDE8E8", fg: "#9F1239", fallbackKey: "notif.fallback.tamper_alert" },
   TaskAssigned:        { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_assigned" },
+  TaskSubmitted:       { Icon: ClipboardGlyph,   bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.task_submitted" },
+  ExpenseResubmitted:  { Icon: RefreshGlyph,     bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.expense_resubmitted" },
   TaskAcknowledged:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.task_acknowledged" },
   TaskFlagged:         { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.task_flagged" },
   CheckinIssue:        { Icon: ClockAlertGlyph, bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.checkin_issue" },
@@ -34,8 +36,23 @@ export const NOTIFICATION_META = {
   ProjectAssigned:     { Icon: FolderIcon,       bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.project_assigned" },
   ProjectActivated:    { Icon: RocketGlyph,      bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.project_activated" },
   BOMApproved:         { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.bom_approved" },
+  ReceiptScanReady:    { Icon: CheckCircleGlyph, bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.scan_ready" },
+  ReceiptScanFailed:   { Icon: ReceiptXGlyph,    bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.scan_failed" },
   BOMReopened:         { Icon: RefreshGlyph,     bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.bom_reopened" },
+  ProjectSuspended:    { Icon: ClockAlertGlyph,  bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.default" },
+  ProjectResumed:      { Icon: RocketGlyph,      bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.default" },
+  ProjectTerminated:   { Icon: XCircleGlyph,     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.default" },
 };
+
+// Types whose wording the app writes itself, in the user's language, instead of showing the
+// text stored by the server (which is English only).
+const LOCALIZED_TYPES = new Set(["ReceiptScanReady", "ReceiptScanFailed"]);
+
+/** The text to show for a notification: the app's own wording for scan types, else the stored message. */
+export function notificationText(n, t, humanize) {
+  if (LOCALIZED_TYPES.has(n.type)) return t(metaFor(n.type).fallbackKey);
+  return humanize(n.message, t) || t(metaFor(n.type).fallbackKey);
+}
 
 const DEFAULT_META = { Icon: ClipboardGlyph, bg: "#F1F5F9", fg: "#64748B", fallbackKey: "notif.fallback.default" };
 
@@ -102,6 +119,10 @@ export function routeForNotification(n, role) {
   // General Manager and System Administrator can open the alerts page; others land on the expense.
   if (n.type === "TamperAlert" || n.type === "BlockchainOverdue") {
     if (role === "General Manager" || role === "System Administrator") return "/blockchain/alerts";
+  }
+  // A finished receipt scan: the Submit expense page opens it ready to review.
+  if (type === "ReceiptScan") {
+    return role === "General Manager" || role === "Project Manager" ? `/expenses/new?scan=${n.relatedentityid}` : null;
   }
   // Open the expense itself: the expenses page shows just that one until "Show all" is pressed.
   if (type === "Expense") return `/expenses?focus=${n.relatedentityid}`;

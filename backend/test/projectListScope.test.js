@@ -1,4 +1,4 @@
-// F2 — the project list is limited by role (adviser audit S12).
+// F2: the project list is limited by role (adviser audit S12).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { projectListScope, hideBudgetFrom } = require("../src/lib/projectRules");

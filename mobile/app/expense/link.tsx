@@ -6,20 +6,30 @@ import * as Crypto from "expo-crypto";
 
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { dismissScan } from "@/lib/receipt-scans";
-import { getSession } from "@/lib/auth";
-import { resolveTicket, resubmitExpense, submitExpense } from "@/lib/api";
+import { resubmitExpense, submitExpense } from "@/lib/api";
 import { canEnqueue, queueExpense } from "@/lib/sync/db";
 import { useNetwork } from "@/lib/sync/network-context";
 import { isNetworkError } from "@/lib/sync/messages";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { FlowHeader } from "@/components/flow-header";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { IconSymbol } from "@/components/ui/icon-symbol";
 import { BlockedReasons, fieldErrorStyle } from "@/components/blocked-reasons";
-import { formatPeso } from "@/lib/money";
+import { formatPeso, formatQty } from "@/lib/money";
+import { matchedQuantity, receiptProgress, receiptTotalQuantity } from "@/lib/request-progress";
+import { budgetIssue } from "@/lib/budget-check";
 import { KeyboardAvoider } from "@/components/keyboard-avoider";
 import { useLocale } from "@/lib/i18n-context";
 
 const CATEGORIES = ["Materials", "Equipment", "Other"] as const;
+
+// Quick notes for finishing a request under budget. The PM reads the note, so it is saved in English.
+const NOTE_REASONS = [
+  { key: "cheaper", labelKey: "ck.under_cheaper", text: "Prices were lower than expected." },
+  { key: "stock", labelKey: "ck.under_stock", text: "The store ran out of stock." },
+  { key: "less", labelKey: "ck.under_less", text: "Needed less than planned." },
+  { key: "alt", labelKey: "ck.under_alt", text: "Bought a cheaper alternative." },
+] as const;
 
 export default function LinkScreen() {
   const { t, tv } = useLocale();
@@ -31,12 +41,26 @@ export default function LinkScreen() {
   const [submitting, setSubmitting] = useState(false);
   // setState is async; the ref stops a fast double tap from submitting twice.
   const busyRef = useRef(false);
+  const notesInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   // Set when Submit is tapped without a category, so the chips turn red.
   const [triedSubmit, setTriedSubmit] = useState(false);
 
   // All hooks are above this line. Direct deep link / hot reload with an empty draft lands here.
   // A rejected expense being resubmitted may have no ticket on hand: the server keeps its link.
   if (!ocrResult || (!ticket && !draft.resubmit)) return <Redirect href="/" />;
+
+  // How much of the request this receipt buys: only the lines for the requested material count.
+  // The request stays open (and in To Buy) until a purchase brings what is left to 0; the server
+  // decides and has the last word. With no quantities on hand there is no bar and the old rule applies.
+  const progress = ticket && !draft.resubmit
+    ? receiptProgress({
+        requested: ticket.requestedQuantity,
+        remaining: ticket.remainingQuantity,
+        thisQuantity: matchedQuantity(ocrResult.lineItems, ticket) ?? receiptTotalQuantity(ocrResult.lineItems),
+      })
+    : null;
+  const completes = progress ? progress.completes : true;
+  const unitText = ticket?.unit ? ` ${ticket.unit}` : "";
 
   // Arrow function declared AFTER the guard, so ocrResult stays narrowed inside it.
   const handleSubmit = async () => {
@@ -59,6 +83,20 @@ export default function LinkScreen() {
       return Alert.alert(t("mx.no_items_title"), t("mx.no_items_body"));
     }
 
+    // The strict budget, checked here so a refused amount never leaves the request Resolved.
+    // The server checks again and has the last word. (A resubmit is checked by the server.)
+    if (ticket && !draft.resubmit) {
+      const problem = budgetIssue({ amount: amountNum, remaining: ticket.remaining, note: notes, completes });
+      if (problem?.code === "none") return Alert.alert(t("bd.none_title"), t("bd.none_body"));
+      if (problem?.code === "over") {
+        return Alert.alert(t("bd.over_title"), t("bd.over_body", { amount: formatPeso(amountNum), remaining: formatPeso(problem.remaining) }));
+      }
+      if (problem?.code === "note") {
+        setTriedSubmit(true);
+        return Alert.alert(t("bd.note_title"), t("bd.note_body", { unspent: formatPeso((problem.remaining ?? 0) - amountNum) }));
+      }
+    }
+
     // Resubmitting a Rejected expense needs the server (it edits the existing row),
     // so it can't be queued offline.
     if (!isOnline && draft.resubmit) {
@@ -68,7 +106,7 @@ export default function LinkScreen() {
     busyRef.current = true;
     setSubmitting(true);
     try {
-      // F10 — offline: queue the expense in SQLite instead of POSTing.
+      // F10: offline: queue the expense in SQLite instead of POSTing.
       // The server (POST /api/sync) runs the full validation + screening on reconnect.
       if (!isOnline) {
         if (!ticket) throw new Error(t("mx.not_linked"));
@@ -87,6 +125,7 @@ export default function LinkScreen() {
           tin: ocrResult.tin,
           birPermitNumber: ocrResult.birPermitNumber,
           lineItems,
+          ...(notes.trim() ? { submitNote: notes.trim() } : {}),
         });
         if (!queued) {
           throw new Error(t("mx.offline_save_failed"));
@@ -121,18 +160,8 @@ export default function LinkScreen() {
 
       if (!ticket) throw new Error(t("mx.not_linked"));
 
-      // 2) Purchasers resolve the ticket after capture. Site Managers arrive
-      // only through their own already-resolved Material Request tickets.
-      if (getSession()?.user.role !== "Site Manager") {
-        try {
-          await resolveTicket(ticket.ticketId);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!/cannot move ticket from resolved/i.test(msg)) throw err;
-        }
-      }
-
-      // 3) Submit the expense.
+      // 2) Submit the expense. The server resolves the request only when this purchase brings
+      // what is left to 0; a part purchase leaves it open for the rest, for every role.
       await submitExpense({
         ticketID: ticket.ticketId,
         vendorName: ocrResult.vendorName,
@@ -144,11 +173,17 @@ export default function LinkScreen() {
         tin: ocrResult.tin,
         birPermitNumber: ocrResult.birPermitNumber,
         lineItems,
+        ...(notes.trim() ? { submitNote: notes.trim() } : {}),
       });
 
       // Submitted: take it off "Scanned receipts" so it can't be sent twice.
       if (draft.scanID) dismissScan(draft.scanID).catch(() => {});
-      Alert.alert(t("mx.submitted_title"), t("mx.submitted_body"));
+      Alert.alert(
+        t("mx.submitted_title"),
+        progress && !progress.completes
+          ? `${t("mx.submitted_body")} ${t("rq.stays_open", { left: `${formatQty(progress.leftAfter)}${unitText}` })}`
+          : t("mx.submitted_body")
+      );
       router.replace("/");
       reset();
     } catch (err) {
@@ -167,6 +202,14 @@ export default function LinkScreen() {
   };
 
   const itemCount = (ocrResult.lineItems ?? []).length;
+  // The note turns required (red) when the request would be finished under budget.
+  const noteRequired =
+    !!ticket && !draft.resubmit &&
+    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes, completes })?.code === "note";
+
+  const overBudget =
+    !!ticket && !draft.resubmit &&
+    budgetIssue({ amount: Number(ocrResult.amount), remaining: ticket.remaining, note: notes, completes })?.code === "over";
 
   const submitLabel = !category
     ? t("mx.pick_category")
@@ -190,6 +233,27 @@ export default function LinkScreen() {
             </View>
           ) : null}
 
+          {progress ? (
+            // The same bar as To Buy: what was bought before (solid), what this receipt adds (accent).
+            <View style={[styles.qtyCard, progress.over && styles.qtyCardOver]}>
+              <Text style={styles.qtyTitle}>
+                {t("rq.bar_line", { bought: formatQty(progress.boughtBefore + progress.thisQuantity), total: `${formatQty(progress.requested)}${unitText}` })}
+              </Text>
+              <View style={styles.qtyTrack} accessibilityRole="progressbar">
+                <View style={[styles.qtyBefore, { width: `${Math.round(progress.boughtShare * 100)}%` }]} />
+                <View style={[styles.qtyThis, progress.over && styles.qtyThisOver, { width: `${Math.round((progress.afterShare - progress.boughtShare) * 100)}%` }]} />
+              </View>
+              <Text style={styles.qtyDetail}>
+                {t("rq.bar_detail", { before: formatQty(progress.boughtBefore), added: formatQty(progress.thisQuantity) })}
+              </Text>
+              {progress.over ? (
+                <Text style={[styles.qtyDetail, styles.qtyOverText]}>{t("rq.over_qty", { extra: formatQty(progress.thisQuantity - (progress.requested - progress.boughtBefore)) })}</Text>
+              ) : !progress.completes ? (
+                <Text style={styles.qtyDetail}>{t("rq.stays_open", { left: `${formatQty(progress.leftAfter)}${unitText}` })}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.receiptCard}>
             <Text style={styles.receiptVendor} numberOfLines={1}>{ocrResult.vendorName || t("dashboard.vendor")}</Text>
             <Text style={styles.ticketMeta}>{itemCount === 1 ? t("mx.receipt_meta_one", { date: ocrResult.receiptDate ?? "" }) : t("mx.receipt_meta_other", { date: ocrResult.receiptDate ?? "", count: itemCount })}</Text>
@@ -206,8 +270,50 @@ export default function LinkScreen() {
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>{t("mx.notes_optional")}</Text>
-          <TextInput style={styles.notesInput} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder={t("mx.notes_ph")} placeholderTextColor={COLORS.muted} />
+          {overBudget && (
+            <View style={styles.overBox} accessibilityRole="alert">
+              <Text style={styles.overTitle}>{t("bd.over_title")}</Text>
+              <Text style={styles.overText}>{t("ck.over_auto")}</Text>
+            </View>
+          )}
+          {noteRequired ? (
+            // Finishing under budget: the note is required, so it is lifted out of the form.
+            // The pencil jumps to the box; the chips fill in the usual reasons with one tap.
+            <View style={[styles.noteCard, triedSubmit && !notes.trim() && styles.noteCardMissing]}>
+              <View style={styles.noteHead}>
+                <Text style={styles.noteTitle}>{t("bd.notes_required")}</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.noteAction, pressed && { opacity: 0.8 }]}
+                  onPress={() => notesInputRef.current?.focus()}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("bd.note_action")}
+                >
+                  <IconSymbol name="square.and.pencil" size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+              <View style={styles.noteChips}>
+                {NOTE_REASONS.map((r) => (
+                  <Pressable
+                    key={r.key}
+                    style={[styles.noteChip, notes === r.text && styles.noteChipActive]}
+                    onPress={() => { setNotes(r.text); setDraftNotes(r.text); }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: notes === r.text }}
+                  >
+                    <Text style={[styles.noteChipText, notes === r.text && { color: COLORS.primary }]}>{t(r.labelKey)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput ref={notesInputRef} style={[styles.notesInput, styles.noteInput]} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder={t("mx.notes_ph")} placeholderTextColor={COLORS.muted} />
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.fieldLabel, overBudget && styles.fieldLabelError]}>
+                {overBudget ? t("ck.over_note_hint") : t("mx.notes_optional")}
+              </Text>
+              <TextInput style={[styles.notesInput, overBudget && fieldErrorStyle]} multiline numberOfLines={3} value={notes} onChangeText={(v) => { setNotes(v); setDraftNotes(v); }} placeholder={t("mx.notes_ph")} placeholderTextColor={COLORS.muted} />
+            </>
+          )}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -235,10 +341,13 @@ const styles = StyleSheet.create({
   receiptVendor: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg },
   ticketCard: { backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.primary, padding: 14, marginBottom: 16 },
-  ticketBadge: { fontSize: 11, fontFamily: FONT.bold, color: COLORS.success, marginBottom: 4 },
+  ticketBadge: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.success, marginBottom: 4 },
   ticketSubject: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.heading },
   ticketMeta: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, marginTop: 2 },
   ticketBudget: { fontSize: 12, fontFamily: FONT.bold, color: COLORS.heading, marginTop: 6 },
+  overBox: { backgroundColor: COLORS.errorFill, borderWidth: 1.5, borderColor: COLORS.errorText, borderRadius: 14, padding: 14, gap: 4, marginBottom: 12 },
+  overTitle: { fontSize: 15, fontFamily: FONT.bold, color: COLORS.errorText },
+  overText: { fontSize: 13, fontFamily: FONT.medium, color: COLORS.errorText, lineHeight: 19 },
   fieldLabelError: { color: COLORS.errorText },
   fieldLabel: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.muted, marginBottom: 6, marginTop: 4 },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
@@ -246,6 +355,25 @@ const styles = StyleSheet.create({
   categoryChipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryTint },
   categoryChipText: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.heading },
   categoryChipTextActive: { color: COLORS.primary },
+  qtyCard: { backgroundColor: COLORS.card, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, padding: 12, gap: 6, marginBottom: 16 },
+  qtyCardOver: { borderColor: COLORS.amberBorder, backgroundColor: COLORS.amberFill },
+  qtyTitle: { fontSize: 14, fontFamily: FONT.bold, color: COLORS.heading },
+  qtyTrack: { flexDirection: "row", height: 8, borderRadius: 4, backgroundColor: COLORS.border, overflow: "hidden" },
+  qtyBefore: { height: 8, backgroundColor: COLORS.muted },
+  qtyThis: { height: 8, backgroundColor: COLORS.primary },
+  qtyThisOver: { backgroundColor: COLORS.errorText },
+  qtyDetail: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted, lineHeight: 17 },
+  qtyOverText: { color: COLORS.amberText, fontFamily: FONT.semibold },
+  noteCard: { backgroundColor: COLORS.amberFill, borderWidth: 1.5, borderColor: COLORS.amberBorder, borderRadius: 14, padding: 12, gap: 10, marginTop: 4, marginBottom: 14 },
+  noteCardMissing: { borderColor: COLORS.errorText, backgroundColor: COLORS.errorFill },
+  noteHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  noteTitle: { flex: 1, fontSize: 14, fontFamily: FONT.bold, color: COLORS.amberText, lineHeight: 20 },
+  noteAction: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },
+  noteChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  noteChip: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderColor: COLORS.amberBorder, borderRadius: 20, paddingHorizontal: 12, backgroundColor: COLORS.card },
+  noteChipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryTint },
+  noteChipText: { fontSize: 12, fontFamily: FONT.semibold, color: COLORS.heading },
+  noteInput: { marginBottom: 0 },
   notesInput: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, fontSize: 13, fontFamily: FONT.regular, color: COLORS.heading, textAlignVertical: "top", minHeight: 70, marginBottom: 14 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   summaryLabel: { fontSize: 12, fontFamily: FONT.regular, color: COLORS.muted },

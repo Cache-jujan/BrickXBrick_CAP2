@@ -34,7 +34,7 @@ test("a field that normalizes to empty makes the receipt Informal", () => {
   const bir = normalizeBirFields({ tin: "N/A", birPermitNumber: "FP-0123", birNumber: "OR 4567" });
   assert.equal(classifyBir(bir).birValidationStatus, "Informal");
 });
-// --- applyVendorMaster (vendor-list auto-fill) ---
+// applyVendorMaster (vendor-list auto-fill)
 const { applyVendorMaster } = require("../src/lib/receiptFields");
 
 const MASTER = {

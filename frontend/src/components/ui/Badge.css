@@ -51,3 +51,10 @@
   border-color: var(--color-border);
   color: var(--color-blueprint);
 }
+
+/* Flagged: a check found something to look at. Warmer than Pending so the two read apart. */
+.badge-flag {
+  background: #fde8dc;
+  border-color: rgba(191, 67, 7, 0.28);
+  color: #a33a07;
+}

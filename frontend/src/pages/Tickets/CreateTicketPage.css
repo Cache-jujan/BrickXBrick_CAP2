@@ -2,7 +2,7 @@
    live in components/tickets/TicketForm.css (scoped to .ticket-form) so they
    apply in the Ticket Queue modal too. */
 .create-ticket {
-  max-width: var(--form-max);
+  max-width: 1000px;
 }
 
 .create-ticket-title {

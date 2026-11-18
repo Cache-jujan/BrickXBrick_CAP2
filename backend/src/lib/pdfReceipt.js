@@ -1,4 +1,4 @@
-// pdfReceipt.js — checks a PDF receipt before it is stored and read by OCR.
+// pdfReceipt.js: checks a PDF receipt before it is stored and read by OCR.
 //
 // A receipt PDF is short. We read at most OCR_MAX_PAGES pages: the original
 // file is stored whole, but only a copy holding the first pages goes to

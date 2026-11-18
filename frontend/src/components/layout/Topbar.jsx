@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { ChevronIcon, LogoutIcon, BellIcon } from "./icons";
+import { ChevronIcon, LogoutIcon, BellIcon, UserIcon, DocIcon } from "./icons";
+import { Avatar } from "../ui/Avatar";
 import {
   listMyNotifications,
   getUnreadCount,
@@ -10,7 +11,7 @@ import {
 } from "../../api/notificationsApi";
 import { subscribeNotificationsRefresh } from "../../utils/notificationSync";
 import { humanizeNotification } from "../../utils/plainLanguage";
-import { metaFor, relativeTime, groupByDay, routeForNotification } from "../../utils/notificationMeta";
+import { metaFor, relativeTime, groupByDay, routeForNotification, notificationText } from "../../utils/notificationMeta";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { LanguageToggle } from "../../i18n/LanguageToggle";
 import "./Topbar.css";
@@ -18,7 +19,7 @@ import "./Topbar.css";
 const POLL_INTERVAL_MS = 30_000; // check for new notifications every 30s
 const DROPDOWN_LIMIT = 8;
 
-// Purely cosmetic label map for the topbar title/breadcrumb — does not
+// Purely cosmetic label map for the topbar title/breadcrumb, does not
 // affect routing. Falls back to a generic label for any unmatched or
 // dynamic (":id") route rather than showing nothing.
 // Each page renders its own <h1>, so the top bar only shows where the page
@@ -33,20 +34,21 @@ const PAGE_LABELS = [
   { test: (p) => p === "/expenses", trail: ["nav.finance", "nav.expenses"] },
   { test: (p) => p === "/expenses/new", trail: ["nav.finance", "nav.submit_expense"] },
   { test: (p) => p === "/expenses/split", trail: ["nav.finance", "nav.split_receipt"] },
-  { test: (p) => p === "/expenses/trip-cost", trail: ["nav.finance", "nav.trip_cost"] },
   { test: (p) => p === "/requests", trail: ["nav.open_requests"] },
   { test: (p) => p === "/expenses/mine", trail: ["nav.finance", "nav.my_expenses"] },
   { test: (p) => p.startsWith("/tickets/new"), trail: ["nav.tickets", "nav.new_ticket"] },
   { test: (p) => p.startsWith("/tickets"), trail: ["nav.tickets"] },
   { test: (p) => p.startsWith("/tasks/progress-review"), trail: ["nav.tasks", "nav.progress_review"] },
   { test: (p) => p === "/admin/users", trail: ["nav.administration", "nav.user_accounts"] },
+  { test: (p) => p === "/admin/vendors", trail: ["nav.administration", "nav.vendor_list"] },
   { test: (p) => p === "/blockchain/alerts", trail: ["nav.record_protection", "nav.tamper_alerts"] },
   { test: (p) => p === "/notifications", trail: ["nav.notifications"] },
+  { test: (p) => p === "/account", trail: ["nav.settings"] },
 ];
 
 function pageInfoFor(pathname) {
   const match = PAGE_LABELS.find((entry) => entry.test(pathname));
-  return match || { trail: ["Brick x Brick"] };
+  return match || { trail: [] };
 }
 
 export function Topbar({ onMenuClick }) {
@@ -85,7 +87,7 @@ export function Topbar({ onMenuClick }) {
   }, []);
 
   // Poll unread count in the background so the badge stays current even
-  // without opening the dropdown. Unchanged from the prior implementation —
+  // without opening the dropdown. Unchanged from the prior implementation,
   // cancelled/cleared on unmount, so no leaked interval or stale-state write.
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +179,12 @@ export function Topbar({ onMenuClick }) {
 
         <nav className="topbar-trail" aria-label={t("nav.breadcrumb")}>
           <ol>
+            {trail.length === 0 && (
+              <li className="topbar-brand" aria-current="page">
+                <img src="/images/logo.png" alt="" />
+                <span>Brick x Brick</span>
+              </li>
+            )}
             {trail.map((item, i) => (
               <li key={item} aria-current={i === trail.length - 1 ? "page" : undefined}>
                 {t(item)}
@@ -188,6 +196,7 @@ export function Topbar({ onMenuClick }) {
         <span className="topbar-spacer" />
 
         <div className="topbar-actions">
+          <LanguageToggle variant="icon" />
           <div className="topbar-notif" ref={notifRef}>
             <button
               type="button"
@@ -214,6 +223,13 @@ export function Topbar({ onMenuClick }) {
                   )}
                 </div>
 
+                {unreadCount > 0 && (
+                  <p className="topbar-notif-unread">
+                    <span className="topbar-notif-unread-dot" aria-hidden="true" />
+                    {t("notifications.unread_count", { count: unreadCount })}
+                  </p>
+                )}
+
                 <div className="topbar-notif-scroll">
                   {notifications.length === 0 ? (
                     <div className="topbar-notif-empty">
@@ -226,7 +242,7 @@ export function Topbar({ onMenuClick }) {
                         <p className="topbar-notif-group-label">{tv("notifications.group", label)}</p>
                         <ul className="topbar-notif-list">
                           {items.map((n) => {
-                            const { Icon, bg, fg, fallbackKey } = metaFor(n.type);
+                            const { Icon, bg, fg } = metaFor(n.type);
                             const clickable = !n.isread || routeForNotification(n, user?.role);
                             return (
                               <li
@@ -238,7 +254,7 @@ export function Topbar({ onMenuClick }) {
                                   <Icon />
                                 </span>
                                 <span className="topbar-notif-body">
-                                  <p className="topbar-notif-message">{humanizeNotification(n.message, t) || t(fallbackKey)}</p>
+                                  <p className="topbar-notif-message">{notificationText(n, t, humanizeNotification)}</p>
                                   <p className="topbar-notif-time">{relativeTime(n.createdat, t, formatDate)}</p>
                                 </span>
                                 {!n.isread && <span className="topbar-notif-dot" aria-hidden="true" />}
@@ -270,7 +286,7 @@ export function Topbar({ onMenuClick }) {
               aria-haspopup="true"
               aria-expanded={menuOpen}
             >
-              <span className="topbar-avatar">{initial}</span>
+              <Avatar className="topbar-avatar" url={user?.avatarUrl} initial={initial} />
               <span className="topbar-user-text">
                 <span className="topbar-user-name">{user?.name}</span>
                 <span className="topbar-user-role">{user?.role}</span>
@@ -284,13 +300,13 @@ export function Topbar({ onMenuClick }) {
                   <p className="topbar-menu-name">{user?.name}</p>
                   <p className="topbar-menu-email">{user?.email}</p>
                 </div>
-                <LanguageToggle variant="menu" />
                 <Link
                   to="/account"
                   className="topbar-menu-item"
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                 >
+                  <UserIcon />
                   {t("settings.account")}
                 </Link>
                 <Link
@@ -299,6 +315,7 @@ export function Topbar({ onMenuClick }) {
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                 >
+                  <DocIcon />
                   {t("account.terms_privacy")}
                 </Link>
                 <button

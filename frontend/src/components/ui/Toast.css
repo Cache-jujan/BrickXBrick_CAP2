@@ -1,0 +1,80 @@
+/* App-wide toasts (Toast.jsx). Top-right, under the 60px top bar, so they
+   never cover the receipt-scan toasts in the bottom-right corner. */
+.app-toasts {
+  position: fixed;
+  top: 72px;
+  right: 20px;
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.app-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 8px 12px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-left-width: 5px;
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
+  animation: app-toast-in 160ms ease-out;
+}
+.app-toast-success { border-left-color: var(--color-success); }
+.app-toast-error { border-left-color: var(--color-danger); }
+.app-toast-info { border-left-color: var(--color-blueprint, var(--color-ink-soft)); }
+
+.app-toast-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--color-ink-soft);
+}
+.app-toast-success .app-toast-icon { background: var(--color-success); }
+.app-toast-error .app-toast-icon { background: var(--color-danger); }
+
+.app-toast-text {
+  flex: 1;
+  min-width: 0;
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.app-toast-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  padding: 0 6px;
+}
+.app-toast-close:focus-visible { outline: 2px solid var(--color-brick); outline-offset: 2px; }
+
+@keyframes app-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .app-toasts { top: 68px; right: 16px; left: 16px; width: auto; }
+}

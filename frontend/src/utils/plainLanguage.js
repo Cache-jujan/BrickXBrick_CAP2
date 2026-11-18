@@ -41,7 +41,7 @@ export function flagLabel(flagType, tv) {
 
 // Turns the backend's notification text into something a non-technical
 // reader understands. Handles both the old technical format
-// ('Tamper detected: expense "X" (₱123.00) — recomputed hash …') and anything
+// ('Tamper detected: expense "X" (₱123.00), recomputed hash …') and anything
 // else, which is shown unchanged. `t` is the translate function from useLocale().
 const TAMPER_MESSAGE = /^Tamper detected: expense "(.*)" \(₱([\d.,]+)\) — (.*)$/s;
 

@@ -1,7 +1,7 @@
 // Shared notification presentation for mobile: per-type icon + accent colour,
 // relative time, day-grouping, and tap routing. Mirrors
 // frontend/src/utils/notificationMeta.js so the same event looks and routes
-// the same way on web and mobile — just rendered with IconSymbol instead of
+// the same way on web and mobile: just rendered with IconSymbol instead of
 // inline SVGs.
 import type { Href } from "expo-router";
 
@@ -37,8 +37,13 @@ const META: Record<string, Meta> = {
   CheckinFlagged:        { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.checkin_flagged_sm" },
   ProjectAssigned:       { icon: "folder.fill",      bg: "#EAF2FF", fg: "#2563EB", fallbackKey: "notif.fallback.project_assigned" },
   ProjectActivated:      { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.project_activated" },
+  ReceiptScanReady:      { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.scan_ready" },
+  ReceiptScanFailed:     { icon: "xmark.circle.fill",     bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.scan_failed" },
   BOMApproved:           { icon: "checkmark.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.bom_approved" },
   BOMReopened:           { icon: "arrow.triangle.2.circlepath.circle", bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.bom_reopened" },
+  ProjectSuspended:      { icon: "clock.fill",       bg: "#FFF7E0", fg: "#B45309", fallbackKey: "notif.fallback.default" },
+  ProjectResumed:        { icon: "arrow.up.forward.circle.fill", bg: "#DCFCE7", fg: "#16A34A", fallbackKey: "notif.fallback.default" },
+  ProjectTerminated:     { icon: "xmark.circle.fill", bg: "#FFF5F3", fg: "#B42318", fallbackKey: "notif.fallback.default" },
 };
 
 const DEFAULT_META: Meta = { icon: "list.clipboard.fill", bg: "#F1E9DD", fg: "#8A7F6E", fallbackKey: "notif.fallback.default" };
@@ -48,6 +53,17 @@ export function metaFor(type: string): Meta {
 }
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+// Types whose wording the app writes itself, in the user's language, instead of the
+// English text stored by the server.
+const LOCALIZED_TYPES = new Set(["ReceiptScanReady", "ReceiptScanFailed"]);
+
+// The text to show for a notification (list and pop-up).
+export function notificationText(n: AppNotification, t: Translate): string {
+  const { fallbackKey } = metaFor(n.type);
+  if (LOCALIZED_TYPES.has(n.type)) return t(fallbackKey);
+  return n.message || t(fallbackKey);
+}
 
 // `t` and `intlLocale` come from useLocale() so the wording and month names follow the language.
 export function relativeTime(iso: string, t: Translate, intlLocale = "en-PH"): string {
@@ -84,13 +100,13 @@ export function groupByDay(notifications: AppNotification[]): [string, AppNotifi
 }
 
 // Where tapping a notification should go, for the given role. Returns null
-// for "mark read only, no navigation" — matches the web app's routing map.
+// for "mark read only, no navigation", matches the web app's routing map.
 // Return type is Href (not string): with Expo Router's typed routes generated
-// (.expo/types/router.d.ts — present once `expo start` has run locally), a
+// (.expo/types/router.d.ts: present once `expo start` has run locally), a
 // function that returns plain `string` gets widened past the generated route
 // union and every call site's router.push/replace fails to type-check. Each
-// of these is a route we know is valid, so it's asserted `as Href` here —
-// once, at the source — rather than cast at every call site.
+// of these is a route we know is valid, so it's asserted `as Href` here,
+// once, at the source, rather than cast at every call site.
 export function routeForNotification(n: AppNotification, role: "Purchaser" | "Site Manager"): Href | null {
   const type = n.relatedentitytype;
   if (type === "Ticket") {
@@ -103,7 +119,11 @@ export function routeForNotification(n: AppNotification, role: "Purchaser" | "Si
     // A flag points at one check-in: open what was sent, with the PM's comment.
     return (n.relatedentityid ? `/site-manager/checkin/${n.relatedentityid}` : "/site-manager/checkin") as Href;
   }
-  // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet —
+  if (type === "ReceiptScan") {
+    // A finished receipt scan: the Purchaser's Turn In tab lists them; a Site Manager's receipts are on the Receipt tab.
+    return (role === "Purchaser" ? "/turn-in" : "/(tabs)") as Href;
+  }
+  // Milestone/Project/Expense/TamperAlert: no mobile screen for these yet,
   // mark read only (mirrors the web app's "Unknown -> mark read only").
   return null;
 }

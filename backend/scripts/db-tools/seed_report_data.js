@@ -1,4 +1,4 @@
-// seed_report_data.js — F11 demo/test data with known totals.
+// seed_report_data.js: F11 demo/test data with known totals.
 //
 // Creates two Active projects ("F11 Seed A", "F11 Seed B"), a General Manager
 // and a Project Manager account row, and ~9 expenses across statuses, mixed

@@ -1,4 +1,4 @@
-// eval-ocr.js — offline accuracy check for the receipt parser.
+// eval-ocr.js: offline accuracy check for the receipt parser.
 //
 // Runs the parser over the Vision output already saved for the receipts in
 // scripts/receipt-img (rawText in receipt-test-results/receipt-N.json, word

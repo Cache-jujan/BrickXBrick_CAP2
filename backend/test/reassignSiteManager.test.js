@@ -63,7 +63,7 @@ test("clearing the SM while open tasks exist is rejected with 409 (R-03 gap)", a
     }
   );
 
-  // Nothing beyond the count check should have run — the clear never
+  // Nothing beyond the count check should have run: the clear never
   // reaches a point where it could silently leave the old SM with access.
   assert.equal(client.calls.length, 1);
 });

@@ -16,13 +16,25 @@ const {
   DEFAULT_SETTINGS,
 } = require("../src/lib/projectRules");
 
-// --- dates ------------------------------------------------------------------
+// dates
 
 test("dates: development <= construction <= completion is valid", () => {
   assert.deepEqual(
     validateProjectDates({ startDate: "2027-01-04", constructionStartDate: "2027-02-01", endDate: "2027-06-30" }),
     []
   );
+});
+
+test("dates: a year before 2000 (e.g. 0009) is rejected, so it can't break the Reports page", () => {
+  const errors = validateProjectDates({ startDate: "0009-11-07", constructionStartDate: "2027-02-01", endDate: "2027-06-30" });
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].field, "startDate");
+  assert.match(errors[0].message, /years 2000 to 2100/);
+});
+
+test("dates: a year after 2100 is rejected", () => {
+  const errors = validateProjectDates({ startDate: "2027-01-04", constructionStartDate: "2027-02-01", endDate: "9999-06-30" });
+  assert.deepEqual(errors.map((e) => e.field), ["endDate"]);
 });
 
 test("dates: all three may fall on the same day", () => {
@@ -54,7 +66,7 @@ test("dates: completion before construction is rejected", () => {
   assert.equal(errors[0].field, "endDate");
 });
 
-// --- service area -----------------------------------------------------------
+// service area
 
 test("service area: parsing trims, lowercases and drops blanks", () => {
   assert.deepEqual(parseServiceArea(" Consolacion , Liloan,, "), ["consolacion", "liloan"]);
@@ -82,7 +94,7 @@ test("warnings: outside the service area produces a warning, inside does not", (
   assert.equal(warnings[0].code, "OUTSIDE_SERVICE_AREA");
 });
 
-// --- availability -----------------------------------------------------------
+// availability
 
 test("availability: a PM with 0 open projects is available at limit 1", () => {
   assert.equal(evaluateAvailability([], 1).available, true);
@@ -99,7 +111,7 @@ test("availability: an SM with 2 sites is available at limit 3, with 3 is not", 
   assert.equal(evaluateAvailability([{}, {}, {}], 3).available, false);
 });
 
-// --- status transitions ------------------------------------------------------
+// status transitions
 
 test("transitions: Draft -> Active and Active -> Completed are allowed", () => {
   assert.doesNotThrow(() => assertStatusTransition("Draft", "Active"));
@@ -114,7 +126,7 @@ test("transitions: Draft -> Completed and Completed -> Active are rejected with 
   }
 });
 
-// --- settings ---------------------------------------------------------------
+// settings
 
 test("settings: rows override defaults; bad values fall back", async () => {
   const runQuery = async () => ({
@@ -130,7 +142,7 @@ test("settings: rows override defaults; bad values fall back", async () => {
   assert.deepEqual(settings.serviceAreaMunicipalities, ["consolacion", "liloan"]);
 });
 
-// --- assertManagerAvailable --------------------------------------------------
+// assertManagerAvailable
 
 function fakeClient({ user, openProjects }) {
   const calls = [];

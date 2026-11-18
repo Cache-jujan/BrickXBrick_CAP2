@@ -21,9 +21,10 @@ export type ScanContext = {
   projectIds?: string[];
   // The names to show for those projects ("Scanning for ...") without another lookup.
   projectNames?: string[];
-  // "trip": a gas / toll / delivery receipt with no request; it ends on the Trip cost screen.
-  kind?: "trip";
 };
+
+// The server rejected the file because it is not a receipt: there is nothing to type in.
+export const isNotReceipt = (scan: { result?: unknown }) => Boolean((scan.result as { notReceipt?: boolean } | null)?.notReceipt);
 
 export type ScanStatus = "Scanning" | "Ready" | "Failed";
 
