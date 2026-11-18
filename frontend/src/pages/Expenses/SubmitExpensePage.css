@@ -301,7 +301,7 @@
 .xp-details .submit-expense-items { gap: var(--space-2); }
 .xp-details .submit-expense-item-row {
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  align-items: end;
+  align-items: end; /* the Remove button sits on the inputs' baseline row */
   gap: 0 var(--space-3);
   padding: var(--space-3);
   min-width: 0;
@@ -309,7 +309,17 @@
 }
 .xp-details .submit-expense-item-row > :first-child { grid-column: 1 / -1; }
 .xp-details .submit-expense-item-row .field { margin-bottom: var(--space-2); }
-.xp-details .submit-expense-item-row .field-label { font-size: var(--text-xs); }
+/* A label with a "Needed" pill can wrap to two lines in a narrow column. Reserve two lines for every
+   label and sit the text at the bottom, so every input in the row starts at the same height. */
+.xp-details .submit-expense-item-row .field-label {
+  font-size: var(--text-xs);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-end;
+  min-height: 2.8em;
+}
+.xp-details .submit-expense-item-row > :first-child .field-label { min-height: 0; }
 .xp-details .submit-expense-remove-item { margin-bottom: var(--space-2); white-space: nowrap; }
 @container xpd (min-width: 760px) {
   .xp-details .submit-expense-item-row { grid-template-columns: minmax(0, 2.4fr) repeat(3, minmax(0, 1fr)) auto; }

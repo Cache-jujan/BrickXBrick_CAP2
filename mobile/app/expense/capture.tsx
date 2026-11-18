@@ -8,6 +8,7 @@ import * as Crypto from "expo-crypto";
 
 import { FilePreview, type FileState } from "@/components/file-preview";
 import { FlowHeader } from "@/components/flow-header";
+import { ProjectPill } from "@/components/project-pill";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -236,11 +237,7 @@ export default function CaptureScreen() {
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {isSplit && draft.scope && draft.scope.projectNames.length > 0 && (
-          <View style={styles.contextChip}>
-            <Text style={styles.contextTitle} numberOfLines={2}>
-              {t("mx.scoped_chip", { projects: draft.scope.projectNames.join(", ") })}
-            </Text>
-          </View>
+          <ProjectPill label={t("mx.project_label")} name={draft.scope.projectNames.join(", ")} />
         )}
         {!isSplit && (
           <View style={styles.contextChip}>

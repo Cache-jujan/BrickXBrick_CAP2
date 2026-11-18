@@ -31,6 +31,7 @@ import { FlowHeader } from "@/components/flow-header";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { ProjectGroup } from "@/components/project-group";
+import { ProjectPill } from "@/components/project-pill";
 import { StatusChip } from "@/components/status-chip";
 import { groupByProject, outOfScopeTicketIDs } from "@/lib/project-groups";
 import { loadOpenRequests } from "@/lib/cached-api";
@@ -611,6 +612,9 @@ export default function AllocateScreen() {
     ? "incomplete"
     : blockers.length > 0 ? "blocked" : "complete";
 
+  // A receipt snapped from one project's header on To Buy: that project is already known.
+  const lockedProject = scope && scope.projectIds.length === 1 ? scope.projectNames[0] ?? null : null;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlowHeader
@@ -635,6 +639,7 @@ export default function AllocateScreen() {
           </View>
         ) : null}
 
+        {lockedProject ? <ProjectPill label={t("mx.project_label")} name={lockedProject} /> : null}
         <Text style={styles.help}>{t("ck.select_intro")}</Text>
 
         {/* Something is over the limit: say which project and open it, so the fix is one tap away. */}
@@ -667,6 +672,8 @@ export default function AllocateScreen() {
                   {s.projects.map((project) => {
                     const typedQty = project.items.reduce((sum, row) => sum + (row.portion?.quantity ?? 0), 0);
                     const typedCents = project.items.reduce((sum, row) => sum + (row.portion ? toCents(String(row.portion.amount)) ?? 0 : 0), 0);
+                    // Snapped from one project on To Buy: there is no project to pick, just its requests.
+                    if (lockedProject) return <View key={project.projectId}>{project.items.map(renderRequest)}</View>;
                     return (
                       <ProjectGroup
                         key={project.projectId}
