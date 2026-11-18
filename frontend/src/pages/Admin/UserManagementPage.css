@@ -219,3 +219,45 @@
   }
   .users-table.users-accounts .users-action-link { min-height: 44px; display: inline-flex; align-items: center; margin: 0; }
 }
+
+/* Account limits: five roles don't fit on one line, so they sit in a row of cells under the label. */
+.limits-label-solo {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.limits-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.limits-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.limits-cell strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.limits-cell.is-full strong,
+.limits-flag {
+  color: var(--color-warning);
+}
+
+.limits-flag {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .limits-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+

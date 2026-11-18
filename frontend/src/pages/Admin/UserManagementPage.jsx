@@ -300,21 +300,23 @@ function RoleLimitsCard({ usage, onSaved }) {
   return (
     <section className="limits-card" aria-label={t("users.limits_title")}>
       {!editing ? (
-        <div className="limits-row">
-          <div className="limits-text">
-            <span className="limits-label">{t("users.limits_title")}</span>
+        <>
+          <div className="limits-row">
+            <span className="limits-label limits-label-solo">{t("users.limits_title")}</span>
+            <Button variant="secondary" className="btn-sm" onClick={startEdit}>
+              {t("limits.edit")}
+            </Button>
+          </div>
+          <div className="limits-grid">
             {usage.roles.map((row) => (
-              <span key={row.role} className="limits-item">
+              <div key={row.role} className={`limits-cell${row.full ? " is-full" : ""}`}>
                 <span className="limits-role">{row.role}</span>
                 <strong>{t("users.limits_count", { active: row.active, limit: row.limit })}</strong>
-                {row.full && <span className="limits-unit">{row.over ? t("users.limits_over") : t("users.limits_full")}</span>}
-              </span>
+                {row.full && <span className="limits-flag">{row.over ? t("users.limits_over") : t("users.limits_full")}</span>}
+              </div>
             ))}
           </div>
-          <Button variant="secondary" className="btn-sm" onClick={startEdit}>
-            {t("limits.edit")}
-          </Button>
-        </div>
+        </>
       ) : (
         <form className="limits-form" onSubmit={handleSave} noValidate>
           {usage.roles.map((row) => (
