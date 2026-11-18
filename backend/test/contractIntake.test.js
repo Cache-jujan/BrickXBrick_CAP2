@@ -51,7 +51,7 @@ test("a site location is split into municipality, province and address", () => {
 
 test("the name suggestion uses the surname and the kind of building", () => {
   assert.equal(suggestProjectName("CARINA C. FLORES", "Residential Building"), "Flores Residence");
-  assert.equal(suggestProjectName("JUAN DELA CRUZ AND MARIA DELA CRUZ", "Commercial Building"), "Cruz Building");
+  assert.equal(suggestProjectName("JUAN DELA CRUZ AND MARIA DELA CRUZ", "Commercial Building"), "Dela Cruz Building");
   assert.equal(suggestProjectName("MARIA D. SANTOS", ""), "Santos Project");
   assert.equal(suggestProjectName("", "Residential Building"), "");
 });
@@ -108,4 +108,11 @@ test("a very long contract line is cut to the project form's limits", () => {
   assert.ok(proposal.description.length <= 2000);
   assert.ok(proposal.siteAddress.length <= 255);
   assert.ok(proposal.municipality.length <= 100 && proposal.province.length <= 100);
+});
+
+test("a surname particle stays with the surname in the suggested name", () => {
+  assert.equal(suggestProjectName("MARIA D. DELA CRUZ", "Residential Building"), "Dela Cruz Residence");
+  assert.equal(suggestProjectName("JUAN DE LA CRUZ", "Residential Building"), "De la Cruz Residence");
+  assert.equal(suggestProjectName("ANA DEL ROSARIO", "Commercial Building"), "Del Rosario Building");
+  assert.equal(suggestProjectName("CARINA C. FLORES", "Residential Building"), "Flores Residence");
 });

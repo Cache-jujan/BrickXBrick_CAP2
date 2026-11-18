@@ -89,11 +89,16 @@ function splitSiteLocation(siteLocation, serviceArea = []) {
   return { municipality, province, siteAddress: parts.map(titleCase).join(", ") };
 }
 
+const SURNAME_PARTICLES = new Set(["dela", "de", "la", "del", "delos", "los", "las", "san", "santa", "van", "von"]);
+
 /** "CARINA C. FLORES" + "FOUR (4) STOREY RESIDENTIAL BUILDING" -> "Flores Residence". Only a suggestion. */
 function suggestProjectName(ownerName, projectType) {
   const first = String(ownerName || "").split(/\s+(?:AND|&)\s+/i)[0];
   const words = first.replace(/[^\p{L}\s.'-]/gu, " ").split(/\s+/).filter((w) => w.replace(/[.]/g, "").length > 1);
-  const surname = words.length ? titleCase(words[words.length - 1]) : "";
+  // Keep a surname particle with the surname: "Dela Cruz", "De la Cruz", "Del Rosario", "De los Santos".
+  let start = words.length - 1;
+  while (start > 0 && SURNAME_PARTICLES.has(words[start - 1].toLowerCase())) start -= 1;
+  const surname = words.length ? titleCase(words.slice(start).join(" ")) : "";
   if (!surname) return "";
   const noun = projectType === "Residential Building" ? "Residence" : projectType === "Commercial Building" ? "Building" : "Project";
   return `${surname} ${noun}`;
