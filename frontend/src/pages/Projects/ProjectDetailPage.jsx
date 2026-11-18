@@ -718,13 +718,18 @@ export function ProjectDetailPage() {
         <section className="pd-bom" aria-labelledby="pd-contract-title">
           <div className="section-head">
             <h2 id="pd-contract-title">{t("contract.title")}</h2>
-            <Link to={`/projects/${project.projectid}/contract`} className="btn btn-secondary btn-sm">
-              {contract ? t("pd.open_contract") : isGM && !isClosed ? t("pd.add_contract") : t("pd.open_contract")}
-            </Link>
+            {contract && (
+              <Link to={`/projects/${project.projectid}/contract`} className="btn btn-secondary btn-sm">
+                {t("pd.open_contract")}
+              </Link>
+            )}
           </div>
           {!contract && (
             <div className="pd-bom-bar pd-bom-empty">
               <p>{t("pd.contract_none")}</p>
+              {isGM && !isClosed && (
+                <Link to={`/projects/${project.projectid}/contract`} className="btn btn-primary btn-sm">{t("pd.add_contract")}</Link>
+              )}
             </div>
           )}
           {contract && contractSummary && (
