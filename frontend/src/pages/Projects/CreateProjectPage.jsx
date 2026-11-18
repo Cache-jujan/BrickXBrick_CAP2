@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject } from "../../api/projectsApi";
+import { contractBodyFromReading, saveContract } from "../../api/contractApi";
 import {
   getCopySource,
+  getDocumentsChecklist,
   getProjectTemplate,
   listCopySources,
   listProjectTemplates,
@@ -17,6 +19,7 @@ import { ProjectForm, EMPTY_PROJECT_FORM } from "../../components/projects/Proje
 import { ProjectStartGallery } from "../../components/projects/ProjectStartGallery";
 import { DocumentChecklist, EMPTY_SELECTION, selectionToStart } from "../../components/projects/DocumentChecklist";
 import { StructurePreview } from "../../components/projects/StructurePreview";
+import { ContractIntake } from "../../components/projects/ContractIntake";
 import { useLocale } from "../../i18n/LocaleProvider";
 import "./CreateProjectPage.css";
 
@@ -42,9 +45,20 @@ export function CreateProjectPage() {
   const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [loadingChecklist, setLoadingChecklist] = useState(false);
 
+  // Blank project: the permit documents of the chosen project type, ticked by default.
+  // { type, data } so a list is only used for the type it was loaded for.
+  const [blankType, setBlankType] = useState("");
+  const [docsChecklist, setDocsChecklist] = useState(null);
+
   const [saved, setSaved] = useState(null); // { payload, form }
   const [preview, setPreview] = useState(null);
   const [creating, setCreating] = useState(false);
+
+  // Optional: a signed contract that fills the form. `reading` is what the server read from
+  // it; `prefill` is the part of it that goes into the form's fields.
+  const [reading, setReading] = useState(null);
+  const [prefill, setPrefill] = useState(null);
+  const [prefillKey, setPrefillKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +79,23 @@ export function CreateProjectPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setDocsChecklist(null);
+    setSelection(EMPTY_SELECTION);
+    if (choice || !blankType) return undefined;
+    let cancelled = false;
+    getDocumentsChecklist(blankType)
+      .then((data) => {
+        if (!cancelled) setDocsChecklist({ type: blankType, data });
+      })
+      .catch(() => {
+        // No list: the project is created blank, as before.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [blankType, choice]);
 
   const base = useMemo(() => {
     if (!choice) return null;
@@ -102,12 +133,50 @@ export function CreateProjectPage() {
     }
   }
 
+  function applyContract(result) {
+    const p = result.proposal || {};
+    const next = {};
+    for (const key of ["name", "clientName", "description", "projectType", "municipality", "province", "siteAddress"]) {
+      if (p[key]) next[key] = p[key];
+    }
+    setReading(result);
+    setPrefill(next);
+    setPrefillKey((k) => k + 1); // the form reads its starting values once, so it is rebuilt
+  }
+
+  function clearContract() {
+    setReading(null);
+    setPrefill(null);
+    setPrefillKey((k) => k + 1);
+  }
+
+  // The project exists first; the contract read from the file is then saved on it. If that
+  // save fails (for example a missing contractor name), the GM lands on the contract page
+  // to finish it there: the project itself is already created.
+  async function createWithContract(payload) {
+    const project = await createProject(payload);
+    if (reading) {
+      try {
+        await saveContract(project.projectid, contractBodyFromReading(reading));
+      } catch {
+        navigate(`/projects/${project.projectid}/contract`, { replace: true });
+        return;
+      }
+    }
+    navigate(`/projects/${project.projectid}`, { replace: true });
+  }
+
   async function handleBasics(payload, form) {
     setSaved({ payload, form });
     if (!choice) {
-      // Blank sheet: nothing to review.
-      const project = await createProject(payload);
-      navigate(`/projects/${project.projectid}`, { replace: true });
+      // Blank sheet: nothing to review. With a document list for this type, it starts with
+      // the ticked documents only; the PM adds the milestones.
+      const hasList = docsChecklist?.type === payload.projectType && docsChecklist.data.milestones.length > 0;
+      await createWithContract(
+        hasList
+          ? { ...payload, start: selectionToStart({ mode: "documents", projectType: payload.projectType }, selection) }
+          : payload
+      );
       return;
     }
     const result = await previewProjectStructure({
@@ -124,8 +193,7 @@ export function CreateProjectPage() {
     setError("");
     setCreating(true);
     try {
-      const project = await createProject({ ...saved.payload, start: selectionToStart(base, selection) });
-      navigate(`/projects/${project.projectid}`, { replace: true });
+      await createWithContract({ ...saved.payload, start: selectionToStart(base, selection) });
     } catch (err) {
       setError(extractErrorMessage(err, t("cp.err_create")));
       setCreating(false);
@@ -134,11 +202,11 @@ export function CreateProjectPage() {
 
   // Project type: a template fixes it, a past project suggests it, a blank sheet leaves it open.
   const initialValues = useMemo(() => {
-    const form = saved?.form || EMPTY_PROJECT_FORM;
+    const form = saved?.form || { ...EMPTY_PROJECT_FORM, ...(prefill || {}) };
     if (choice?.mode === "template") return { ...form, projectType: choice.projectType };
     if (choice?.mode === "copy" && !saved) return { ...form, projectType: choice.projectType || "" };
     return form;
-  }, [saved, choice]);
+  }, [saved, choice, prefill]);
 
   const stepNames = choice ? [t("cp.step_start"), t("cp.step_details"), t("cp.step_review")] : [t("cp.step_start"), t("cp.step_details")];
   const stepIndex = { start: 0, basics: 1, review: 2 }[step];
@@ -196,8 +264,10 @@ export function CreateProjectPage() {
 
       {step === "basics" && (
         <div className="create-project-card">
+          <p className="create-project-hint">{t("cp.next_steps")}</p>
+          <ContractIntake reading={reading} onRead={applyContract} onClear={clearContract} />
           <ProjectForm
-            key={choice ? `${choice.mode}-${choice.templateId || choice.sourceProjectId}` : "blank"}
+            key={`${choice ? `${choice.mode}-${choice.templateId || choice.sourceProjectId}` : "blank"}-${prefillKey}`}
             mode="create"
             initialValues={initialValues}
             onSubmit={handleBasics}
@@ -208,8 +278,14 @@ export function CreateProjectPage() {
             cancelLabel={t("cp.back")}
             lockProjectType={choice?.mode === "template"}
             siteManagerRequired={Boolean(choice)}
+            contractDurationDays={reading?.proposal?.durationWorkingDays || null}
+            onProjectTypeChange={choice ? null : setBlankType}
             extraSection={
-              checklist ? <DocumentChecklist source={checklist} selection={selection} onChange={setSelection} /> : null
+              checklist ? (
+                <DocumentChecklist source={checklist} selection={selection} onChange={setSelection} />
+              ) : !choice && docsChecklist?.type === blankType && docsChecklist.data.milestones.length > 0 ? (
+                <DocumentChecklist source={docsChecklist.data} selection={selection} onChange={setSelection} />
+              ) : null
             }
           />
         </div>

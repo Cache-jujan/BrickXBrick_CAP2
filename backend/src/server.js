@@ -22,6 +22,8 @@ const projectRoutes = require("./routes/projects");
 const projectTemplateRoutes = require("./routes/projectTemplates");
 const checkinRoutes = require("./routes/checkins");
 const bomRoutes = require("./routes/bom");
+const contractRoutes = require("./routes/contract");
+const contractIntakeRoutes = require("./routes/contractIntake");
 const receiptRoutes = require("./routes/receipts");
 const syncRoutes = require("./routes/sync");
 const taskRoutes = require("./routes/tasks");
@@ -84,6 +86,8 @@ app.use("/api/legal", legalRoutes);               // Terms of Use + Privacy Noti
 app.use("/api/admin/users", adminUsers);          // F1 account management
 app.use("/api/admin/vendors", adminVendors);      // Vendor Master List CRUD
 app.use("/api/projects/:projectId/bom", bomRoutes); // F2 bill of materials
+app.use("/api/contract-intake", contractIntakeRoutes); // F2 start a new project from a signed contract
+app.use("/api/projects/:projectId/contract", contractRoutes); // F2 contract + client payments
 app.use("/api/projects", projectRoutes);          // F2 projects
 app.use("/api/project-templates", projectTemplateRoutes); // F2 start screen: templates / copy a past project
 app.use("/api/checkins", checkinRoutes);          // daily progress check-ins

@@ -18,6 +18,14 @@ export async function getProjectTemplate(templateId) {
   return data;
 }
 
+// GET /api/project-templates/documents?projectType=..., the permit documents of a project type, for a
+// blank project: same shape as a template with kind "documents" (no other tasks). Empty milestones when
+// that type has no list.
+export async function getDocumentsChecklist(projectType) {
+  const { data } = await apiClient.get("/api/project-templates/documents", { params: { projectType } });
+  return data;
+}
+
 // GET /api/project-templates/copy-sources: past projects that can be copied:
 // [{ projectId, name, projectType, status, clientName, municipality, milestoneCount, taskCount }]
 export async function listCopySources() {

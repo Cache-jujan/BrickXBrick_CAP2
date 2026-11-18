@@ -55,6 +55,9 @@ export function EditProjectPage() {
             busyLabel={t("common.saving")}
             cancelTo={`/projects/${id}`}
             budgetLocked={project.bomstatus === "Approved"}
+            datesLocked={project.status !== "Draft"}
+            lockClientName={project.status !== "Draft"}
+            lockProjectType={project.status !== "Draft"}
           />
         </div>
       )}

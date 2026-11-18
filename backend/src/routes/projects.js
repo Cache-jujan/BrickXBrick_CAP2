@@ -3,9 +3,9 @@
 // Lifecycle (Oct 2026 revision; see lib/projectRules.js for the sources):
 //   Draft      created by the GM after the client signs the BOM; PM is assigned
 //              now so planning and procurement can start (adviser item 2)
-//   Active     activated by the GM once the Site Manager is assigned
-//              and the Bill of Materials is approved; tickets and purchases
-//              are only allowed from here
+//   Active     activated by the GM once the Site Manager is assigned,
+//              the Bill of Materials is approved and the signed contract is
+//              recorded; tickets and purchases are only allowed from here
 //   Completed  the GM records the actual completion / turnover date
 //   Suspended  put on hold by the GM with a reason (and, if known, an expected
 //              resume date); no new requests, purchases or check-ins until the
@@ -35,6 +35,7 @@ const {
   hideBudgetFrom,
 } = require("../lib/projectRules");
 const { assertDatesUnlocked } = require("../lib/projectDateLock");
+const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
@@ -78,6 +79,13 @@ function trimOrNull(value) {
   if (value === undefined || value === null) return null;
   const s = String(value).trim();
   return s.length ? s : null;
+}
+
+// Two people saving the same name at the same moment would both pass the check below.
+// Inside a transaction, this takes a lock keyed on the name (released at commit), so the
+// second one waits, then sees the first one's project and is refused.
+async function lockProjectName(client, name) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`project-name:${String(name).trim().toLowerCase()}`]);
 }
 
 // Name must be unique among projects that are still in play (UC-02-01 E1).
@@ -203,6 +211,8 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
     await assertUniqueName(query, fields.name);
 
     const { project, structure, source } = await withTransaction(async (client) => {
+      await lockProjectName(client, fields.name);
+      await assertUniqueName(client, fields.name);
       await assertManagerAvailable(client, { userId: projectManagerId, role: "Project Manager", settings });
       if (siteManagerId) {
         await assertManagerAvailable(client, { userId: siteManagerId, role: "Site Manager", settings });
@@ -259,9 +269,11 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
 
       // One summary line instead of a notification per task.
       const startNote = built.counts.tasks
-        ? ` It starts with ${built.counts.milestones} milestones and ${built.counts.tasks} tasks from ${
-            startRequest.mode === "template" ? `the "${sourceRows.name}" template` : `"${sourceRows.name}"`
-          }; review the dates and owners.`
+        ? startRequest.mode === "documents"
+          ? ` It starts with ${built.counts.tasks} document tasks; add the milestones and review the dates and owners.`
+          : ` It starts with ${built.counts.milestones} milestones and ${built.counts.tasks} tasks from ${
+              startRequest.mode === "template" ? `the "${sourceRows.name}" template` : `"${sourceRows.name}"`
+            }; review the dates and owners.`
         : "";
       await notifyProject(client, {
         recipientId: projectManagerId,
@@ -419,6 +431,8 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
       // Once the project is active the target dates of development and of
       // construction are fixed, for everyone (the completion date can still move).
       assertDatesUnlocked(existing, fields);
+      // The client and the project type are fixed too once the project is active.
+      assertIdentityUnlocked(existing, fields);
       // Client: the price given to the client is the BOM total, so once the
       // BOM is approved the budget follows it (reopen the BOM to change it).
       if (Math.abs(Number(fields.budget) - Number(existing.budget)) > 0.005) {
@@ -428,6 +442,7 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
         }
       }
       if (fields.name.toLowerCase() !== String(existing.name).trim().toLowerCase()) {
+        await lockProjectName(client, fields.name);
         await assertUniqueName(client, fields.name, existing.projectid);
       }
 
@@ -495,7 +510,8 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
 });
 
 // PATCH /:id/activate, GM. Draft -> Active. Requires both managers assigned.
-// The project's Bill of Materials must be approved (routes/bom.js).
+// The project's Bill of Materials must be approved (routes/bom.js) and the
+// signed contract recorded (routes/contract.js).
 router.patch("/:id/activate", requireRole("General Manager"), async (req, res) => {
   try {
     const project = await withTransaction(async (client) => {
@@ -508,6 +524,26 @@ router.patch("/:id/activate", requireRole("General Manager"), async (req, res) =
       const bom = await client.query("SELECT status FROM boms WHERE projectid = $1::uuid", [existing.projectid]);
       if (bom.rows[0]?.status !== "Approved") {
         throw httpError(409, "Approve the project's Bill of Materials before activating");
+      }
+      // The signed contract is recorded before work starts (routes/contract.js).
+      // It is not the budget: the budget stays the approved BOM total plus escalation.
+      const contract = await client.query(
+        "SELECT contractid, downpaymentpercent FROM projectcontracts WHERE projectid = $1::uuid",
+        [existing.projectid]
+      );
+      if (contract.rowCount === 0) {
+        throw httpError(409, "Record the signed contract before activating");
+      }
+      // The down payment is the go signal to start work (pilot contractor). A contract
+      // with a 0% down payment has nothing to wait for.
+      if (Number(contract.rows[0].downpaymentpercent) > 0) {
+        const down = await client.query(
+          "SELECT 1 FROM clientpayments WHERE contractid = $1::uuid AND kind = 'Down Payment' AND voidedat IS NULL",
+          [contract.rows[0].contractid]
+        );
+        if (down.rowCount === 0) {
+          throw httpError(409, "Record the down payment before activating");
+        }
       }
 
       const result = await client.query(

@@ -577,7 +577,11 @@ export function BomPage() {
             </div>
             <div className="bom-total">
               <span className="bom-total-label">{t("bom.target_budget_label")}</span>
-              <span className="bom-total-value">{PESO.format(Number(project?.budget ?? data.projectBudget ?? 0))}</span>
+              <span className="bom-total-value">
+                {Number(project?.budget ?? data.projectBudget ?? 0) > 0
+                  ? PESO.format(Number(project?.budget ?? data.projectBudget ?? 0))
+                  : t("projects.budget_not_set")}
+              </span>
               <span className="bom-total-note">
                 {bom?.status === "Approved"
                   ? t("bom.agreed_plus", { pct: Math.round((bom.escalationRate || 0) * 10000) / 100 })

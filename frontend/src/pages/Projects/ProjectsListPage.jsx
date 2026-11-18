@@ -153,7 +153,7 @@ export function ProjectsListPage() {
                         <span className="muted">{t("projects.not_set")}</span>
                       )}
                     </td>
-                    <td className="num">{PESO.format(p.budget)}</td>
+                    <td className="num">{Number(p.budget) > 0 ? PESO.format(p.budget) : <span className="muted">{t("projects.budget_not_set")}</span>}</td>
                   </tr>
                 );
               })}

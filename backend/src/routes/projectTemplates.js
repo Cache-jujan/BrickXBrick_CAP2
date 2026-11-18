@@ -14,11 +14,12 @@ const { query } = require("../lib/db");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { isUUID } = require("../lib/uuid");
-const { isIsoDate, validateProjectDates } = require("../lib/projectRules");
+const { isIsoDate, validateProjectDates, PROJECT_TYPES } = require("../lib/projectRules");
 const {
   parseStartRequest,
   loadSource,
   loadTemplateSource,
+  loadDocumentsSource,
   loadCopySource,
   buildStructure,
 } = require("../lib/projectStructure");
@@ -146,6 +147,17 @@ router.post("/preview", async (req, res) => {
       source: source ? { kind: source.kind, id: source.id, name: source.name } : null,
       ...structure,
     });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// The permit documents of a project type, for a blank project: ?projectType=Residential Building
+router.get("/documents", async (req, res) => {
+  try {
+    const projectType = String(req.query.projectType || "");
+    if (!PROJECT_TYPES.includes(projectType)) return res.status(400).json({ error: "Choose a project type" });
+    res.json(toChecklist(await loadDocumentsSource(query, projectType)));
   } catch (err) {
     sendError(res, err);
   }

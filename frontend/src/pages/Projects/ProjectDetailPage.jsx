@@ -15,6 +15,7 @@ import { createTask, completeTask } from "../../api/tasksApi";
 import { listExpenses, approveExpense, rejectExpense } from "../../api/expensesApi";
 import { getProjectBlockchainSummary, verifyExpense } from "../../api/blockchainApi";
 import { getBom } from "../../api/bomApi";
+import { getContract } from "../../api/contractApi";
 import { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Badge } from "../../components/ui/Badge";
@@ -81,6 +82,10 @@ export function ProjectDetailPage() {
   const [siteManagerSaving, setSiteManagerSaving] = useState(false);
   // GM lifecycle actions: { kind: "activate" | "suspend" | "resume" | "cancel" | "complete" } while a dialog is open.
   const [statusDialog, setStatusDialog] = useState(null);
+  // Completing below 100% progress needs the GM to confirm the work is finished (a warning, not a block).
+  const [finishConfirmed, setFinishConfirmed] = useState(false);
+  // Activating a project that has no milestones yet needs the GM to confirm (a warning, not a block).
+  const [noPlanConfirmed, setNoPlanConfirmed] = useState(false);
   const [statusInput, setStatusInput] = useState("");
   const [resumeDate, setResumeDate] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
@@ -88,6 +93,8 @@ export function ProjectDetailPage() {
   // F2: the project's Bill of Materials summary (GM and owning PM).
   const [bomInfo, setBomInfo] = useState(null);
   const [bomError, setBomError] = useState("");
+  // F2: the signed contract and client payments summary (GM and owning PM).
+  const [contractInfo, setContractInfo] = useState(null);
   // F3: milestone/task creation happens in-place via modals (was a separate
   // page). taskDialog carries the milestone it targets so the title can name it.
   const [milestoneDialog, setMilestoneDialog] = useState(false);
@@ -182,6 +189,16 @@ export function ProjectDetailPage() {
     return () => { cancelled = true; };
     // Reload when the project's BOM status changes (e.g. after activation).
   }, [id, project?.bomstatus, Boolean(project)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!canReview) return undefined;
+    let cancelled = false;
+    // A project manager who doesn't own this project gets a 403: the card just stays hidden.
+    getContract(id)
+      .then((data) => { if (!cancelled) setContractInfo(data); })
+      .catch(() => { if (!cancelled) setContractInfo(null); });
+    return () => { cancelled = true; };
+  }, [id, canReview, project?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -408,6 +425,8 @@ export function ProjectDetailPage() {
     setStatusError("");
     setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
     setResumeDate("");
+    setFinishConfirmed(false);
+    setNoPlanConfirmed(false);
     setStatusDialog({ kind });
   }
 
@@ -482,10 +501,19 @@ export function ProjectDetailPage() {
   const bom = bomInfo?.bom || null;
   const bomApproved = project.bomstatus === "Approved";
   const bomWarningCount = (bom?.warnings || []).filter((w) => w.level === "warning").length;
+  const contract = contractInfo?.contract || null;
+  const contractSummary = contractInfo?.summary || null;
+  const contractWarnings = (contractSummary?.warnings || []).filter((w) => w.level === "warning").length;
+  const bomPath = `/projects/${project.projectid}/bom`;
+  const contractPath = `/projects/${project.projectid}/contract`;
+  // Where each missing step is finished: the team section on this page, or the page that records it.
+  const goToTeam = { label: t("pd.action_assign"), scrollTo: "pd-team-title" };
   const activationChecks = [
-    { label: t("pd.check_pm"), done: Boolean(project.projectmanagerid) },
-    { label: t("pd.check_sm"), done: hasSiteManager },
+    { key: "pm", label: t("pd.check_pm"), done: Boolean(project.projectmanagerid), action: goToTeam },
+    { key: "sm", label: t("pd.check_sm"), done: hasSiteManager, action: goToTeam },
     {
+      key: "bom",
+      action: { label: bom ? t("pd.review_approve") : t("pd.add_bom"), to: bomPath },
       label:
         bomApproved && bom?.clientAgreedOn
           ? t(bom.clientAgreedBy ? "pd.check_bom_agreed_by" : "pd.check_bom_agreed", {
@@ -495,8 +523,30 @@ export function ProjectDetailPage() {
           : t("pd.check_bom"),
       done: bomApproved,
     },
+    // The signed contract is recorded after the BOM price is agreed (only the GM and PM can see it).
+    ...(canReview
+      ? [{ key: "contract", label: t("pd.check_contract"), done: Boolean(contract), action: { label: t("pd.add_contract"), to: contractPath } }]
+      : []),
+    // The down payment is the go signal to start work. A 0% down payment has nothing to wait for.
+    ...(canReview && !(contract && Number(contract.downPaymentPercent) === 0)
+      ? [{
+          key: "down",
+          label: t("pd.check_down_payment"),
+          done: (contractSummary?.receivedByKind?.["Down Payment"] ?? 0) > 0,
+          // Payments are recorded against the contract, so that comes first.
+          action: contract ? { label: t("contract.record_payment"), to: contractPath } : null,
+          note: contract ? null : t("pd.after_contract"),
+        }]
+      : []),
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
+  const hasNoMilestones = !(Array.isArray(project.milestones) && project.milestones.length > 0);
+  const stepsDone = activationChecks.filter((c) => c.done).length;
+
+  function goToStep(action) {
+    closeStatusDialog();
+    if (action.scrollTo) document.getElementById(action.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="project-detail">
@@ -572,7 +622,7 @@ export function ProjectDetailPage() {
         <div className="pd-group">
           <h2 className="pd-group-title">{t("projects.budget")}</h2>
           <dl>
-            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{PESO.format(budget)}</dd></div>
+            <div><dt>{t("pd.target_budget")}</dt><dd className="num-left">{budget > 0 ? PESO.format(budget) : <span className="pd-dd-note">{t("projects.budget_not_set")}</span>}</dd></div>
             <div>
               <dt>{t("dashboard.approved_spending")}</dt>
               <dd className="num-left">
@@ -621,51 +671,92 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section className="pd-bom" aria-labelledby="pd-bom-title">
+      <section className="pd-bom" aria-labelledby="pd-money-title">
         <div className="section-head">
-          <h2 id="pd-bom-title">{t("nav.bill_of_materials")}</h2>
-          {bom && (
-            <Link to={`/projects/${project.projectid}/bom`} className="btn btn-secondary btn-sm">
-              {isGM && !isClosed && bom.status === "Draft" ? t("pd.review_approve") : t("pd.open_bom")}
-            </Link>
-          )}
+          <h2 id="pd-money-title">{contractInfo ? t("pd.bom_contract_title") : t("nav.bill_of_materials")}</h2>
         </div>
-        {bomError && <Banner tone="error" title={bomError} />}
-        {!bomError && bomInfo && !bom && (
-          <div className="pd-bom-bar pd-bom-empty">
-            <p>
-              {isGM && !isClosed ? t("pd.bom_add_help") : t("pd.bom_none_gm")}
-            </p>
-            {isGM && !isClosed && (
-              <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
+        <div className={`pd-money${contractInfo ? "" : " pd-money-single"}`}>
+          <div className="pd-money-col">
+            <div className="pd-money-head">
+              <h3>{t("nav.bill_of_materials")}</h3>
+              {bom && (
+                <Link to={`/projects/${project.projectid}/bom`} className="btn btn-secondary btn-sm">
+                  {isGM && !isClosed && bom.status === "Draft" ? t("pd.review_approve") : t("pd.open_bom")}
+                </Link>
+              )}
+              {!bomError && bomInfo && !bom && isGM && !isClosed && (
+                <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
+              )}
+            </div>
+            {bomError && <Banner tone="error" title={bomError} />}
+            {!bomError && bomInfo && !bom && (
+              <div className="pd-money-empty">
+                <p>{isGM && !isClosed ? t("pd.bom_add_help") : t("pd.bom_none_gm")}</p>
+              </div>
+            )}
+            {bom && (
+              <>
+                <div className="pd-bom-status">
+                  <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />
+                  <span>
+                    {bom.status === "Approved"
+                      ? bom.approvedAt
+                        ? t("pd.bom_approved_at", { date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })
+                        : t("status.approved")
+                      : bomWarningCount
+                        ? bomWarningCount === 1
+                          ? t("pd.bom_check_one")
+                          : t("pd.bom_check_other", { count: bomWarningCount })
+                        : t("pd.bom_not_approved")}
+                  </span>
+                </div>
+                <dl className="pd-bom-figures pd-money-figures">
+                  <div><dt>{t("pd.items")}</dt><dd>{t("pd.items_in_sections", { items: bom.totals.itemCount, sections: bom.totals.sectionCount })}</dd></div>
+                  {/* BOM figures always show centavos, like the BOM itself */}
+                  <div><dt>{t("bom.materials")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
+                  <div><dt>{t("pd.labor_other")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
+                  <div><dt>{t("pd.total")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
+                </dl>
+              </>
             )}
           </div>
-        )}
-        {bom && (
-          <div className="pd-bom-bar">
-            <div className="pd-bom-status">
-              <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />
-              <span>
-                {bom.status === "Approved"
-                  ? bom.approvedAt
-                    ? t("pd.bom_approved_at", { date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })
-                    : t("status.approved")
-                  : bomWarningCount
-                    ? bomWarningCount === 1
-                      ? t("pd.bom_check_one")
-                      : t("pd.bom_check_other", { count: bomWarningCount })
-                    : t("pd.bom_not_approved")}
-              </span>
+
+          {contractInfo && (
+            <div className="pd-money-col">
+              <div className="pd-money-head">
+                <h3 id="pd-contract-title">{t("contract.title")}</h3>
+                {contract && (
+                  <Link to={`/projects/${project.projectid}/contract`} className="btn btn-secondary btn-sm">
+                    {t("pd.open_contract")}
+                  </Link>
+                )}
+                {!contract && isGM && !isClosed && (
+                  <Link to={`/projects/${project.projectid}/contract`} className="btn btn-primary btn-sm">{t("pd.add_contract")}</Link>
+                )}
+              </div>
+              {!contract && (
+                <div className="pd-money-empty">
+                  <p>{t("pd.contract_none")}</p>
+                </div>
+              )}
+              {contract && contractSummary && (
+                <>
+                  {contractWarnings > 0 && (
+                    <div className="pd-bom-status">
+                      <span>{contractWarnings === 1 ? t("pd.contract_notes_one") : t("pd.contract_notes_other", { count: contractWarnings })}</span>
+                    </div>
+                  )}
+                  <dl className="pd-bom-figures pd-money-figures">
+                    <div><dt>{t("contract.amount")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(contractSummary.contractAmount)}</dd></div>
+                    <div><dt>{t("contract.received")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.receivedTotal)}</dd></div>
+                    <div><dt>{t("contract.to_collect")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.remainingToCollect)}</dd></div>
+                    <div><dt>{t("contract.cash")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.cashPosition)}</dd></div>
+                  </dl>
+                </>
+              )}
             </div>
-            <dl className="pd-bom-figures">
-              <div><dt>{t("pd.items")}</dt><dd>{t("pd.items_in_sections", { items: bom.totals.itemCount, sections: bom.totals.sectionCount })}</dd></div>
-              {/* BOM figures always show centavos, like the BOM itself */}
-              <div><dt>{t("bom.materials")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
-              <div><dt>{t("pd.labor_other")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
-              <div><dt>{t("pd.total")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
-            </dl>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       <section className="pd-team" aria-labelledby="pd-team-title">
@@ -868,16 +959,51 @@ export function ProjectDetailPage() {
                 <h2 id="project-status-title" className="modal-title">
                   {readyToActivate ? t("pd.activate_title") : t("pd.not_ready")}
                 </h2>
-                <ul className="pd-checklist">
+                {!readyToActivate && (
+                  <>
+                    <p className="pd-steps-count">{t("pd.steps_done", { done: stepsDone, total: activationChecks.length })}</p>
+                    <div
+                      className="pd-steps-bar"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={activationChecks.length}
+                      aria-valuenow={stepsDone}
+                      aria-label={t("pd.steps_done", { done: stepsDone, total: activationChecks.length })}
+                    >
+                      <div className="pd-steps-fill" style={{ width: `${(stepsDone / activationChecks.length) * 100}%` }} />
+                    </div>
+                  </>
+                )}
+                <ul className="pd-checklist pd-checklist-steps">
                   {activationChecks.map((c) => (
-                    <li key={c.label} className={c.done ? "pd-check-done" : "pd-check-missing"}>
-                      <span aria-hidden="true">{c.done ? "✓" : "–"}</span> {c.label}
+                    <li key={c.key} className={c.done ? "pd-check-done" : "pd-check-missing"}>
+                      <span className="pd-check-icon" aria-hidden="true">{c.done ? "✓" : ""}</span>
+                      <span className="pd-check-label">
+                        {c.label}
+                        {!c.done && c.note && <small>{c.note}</small>}
+                      </span>
+                      {!c.done && c.action && (
+                        c.action.to ? (
+                          <Link to={c.action.to} className="btn btn-secondary btn-sm" onClick={closeStatusDialog}>{c.action.label}</Link>
+                        ) : (
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => goToStep(c.action)}>{c.action.label}</button>
+                        )
+                      )}
                     </li>
                   ))}
                 </ul>
                 <p className="modal-body">
                   {readyToActivate ? t("pd.activate_body") : t("pd.complete_missing")}
                 </p>
+                {readyToActivate && hasNoMilestones && (
+                  <>
+                    <Banner tone="warning" title={t("pd.activate_no_plan")} />
+                    <label className="pd-confirm-check">
+                      <input type="checkbox" checked={noPlanConfirmed} onChange={(ev) => setNoPlanConfirmed(ev.target.checked)} />
+                      {t("pd.activate_no_plan_confirm")}
+                    </label>
+                  </>
+                )}
               </>
             )}
             {statusDialog.kind === "complete" && (
@@ -890,6 +1016,15 @@ export function ProjectDetailPage() {
                   value={statusInput}
                   onChange={(ev) => setStatusInput(ev.target.value)}
                 />
+                {progressPct < 100 && (
+                  <>
+                    <Banner tone="warning" title={t("pd.complete_warn", { pct: progressPct })} />
+                    <label className="pd-confirm-check">
+                      <input type="checkbox" checked={finishConfirmed} onChange={(ev) => setFinishConfirmed(ev.target.checked)} />
+                      {t("pd.complete_confirm")}
+                    </label>
+                  </>
+                )}
               </>
             )}
             {statusDialog.kind === "suspend" && (
@@ -942,7 +1077,13 @@ export function ProjectDetailPage() {
                 onClick={handleStatusAction}
                 disabled={
                   statusBusy ||
-                  (statusDialog.kind === "activate" ? !readyToActivate : statusDialog.kind === "resume" ? false : !statusInput.trim())
+                  (statusDialog.kind === "activate"
+                    ? !readyToActivate || (hasNoMilestones && !noPlanConfirmed)
+                    : statusDialog.kind === "resume"
+                      ? false
+                      : statusDialog.kind === "complete"
+                        ? !statusInput.trim() || (progressPct < 100 && !finishConfirmed)
+                        : !statusInput.trim())
                 }
               >
                 {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : statusDialog.kind === "suspend" ? t("pd.suspend_btn") : statusDialog.kind === "resume" ? t("pd.resume_btn") : project.activatedat ? t("pd.terminate_btn") : t("pd.cancel_btn")}

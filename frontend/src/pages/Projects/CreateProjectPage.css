@@ -158,6 +158,11 @@
 .pf-form .field {
   min-width: 0;
 }
+/* In the three-date row a long label can wrap to two lines. Keep every label at the top and
+   every date box at the bottom, so the three boxes line up whatever the label length. */
+.pf-form .create-project-row-3 .field-label {
+  margin-bottom: auto;
+}
 .pf-form .field-control {
   width: 100%;
   min-width: 0;
@@ -195,3 +200,70 @@ button.back-link { font-family: inherit; cursor: pointer; }
 .cp-step-done + .cp-step::before, .cp-step-current + .cp-step::before { background: var(--color-border-strong); }
 .cp-step-done + .cp-step::before { background: var(--color-brick); }
 @media (max-width: 520px) { .cp-step-name { display: none; } .cp-step-current .cp-step-name { display: inline; } .cp-step + .cp-step::before { width: 20px; margin: 0 var(--space-2); } }
+
+/* "Set from the BOM later" choice under the budget box. */
+.pf-budget-later {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Optional "start from a signed contract" card on the Details step. A plain block (not the
+   sticky bottom bar): title, one line of help, then the drop box or the filled-in row. */
+.cp-contract {
+  margin-bottom: var(--space-5);
+}
+.cp-contract-title {
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-1);
+}
+.cp-contract-help {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  margin: 0 0 var(--space-3);
+}
+.cp-contract .banner {
+  margin-bottom: var(--space-3);
+}
+.cp-contract-done {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.cp-contract-done-over {
+  border-style: dashed;
+  border-color: var(--color-brick);
+}
+.cp-contract-mark {
+  display: inline-flex;
+  color: var(--color-brick);
+}
+.cp-contract-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.cp-contract-file {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.cp-contract-note {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-ink-soft);
+}
+.cp-contract-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
