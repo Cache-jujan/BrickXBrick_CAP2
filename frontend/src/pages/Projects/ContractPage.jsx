@@ -9,6 +9,7 @@ import { Field } from "../../components/ui/Field";
 import { BackLink } from "../../components/ui/BackLink";
 import { BomDropZone } from "../../components/bom/BomDropZone";
 import { useLocale } from "../../i18n/LocaleProvider";
+import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import "./BomPage.css"; // the contract page shares the BOM page's layout, totals strip and table
 import "./ContractPage.css";
 
@@ -437,7 +438,18 @@ export function ContractPage() {
             <div className="contract-grid">
               {textField("contractDate", "contract.date", { required: true, type: "date", max: manilaToday() })}
               {textField("contractRef", "contract.ref", { maxLength: 100 })}
-              {textField("contractAmount", "contract.amount", { required: true, type: "number", min: "0", step: "0.01", inputMode: "decimal", prefix: "₱" })}
+              {/* Text box so the amount shows thousands commas; the form keeps the plain number. */}
+              <Field
+                label={t("contract.amount")}
+                required
+                inputMode="decimal"
+                placeholder="0.00"
+                maxLength={16}
+                prefix="₱"
+                value={formatAmountInput(form.contractAmount)}
+                error={fieldErrors.contractAmount}
+                onChange={(e) => setField("contractAmount", parseAmountInput(e.target.value))}
+              />
               {textField("downPaymentPercent", "contract.down_pct", { required: true, type: "number", min: "0", max: "100", step: "0.01", inputMode: "decimal" })}
               {textField("retentionPercent", "contract.retention_pct", { required: true, type: "number", min: "0", max: "100", step: "0.01", inputMode: "decimal" })}
               {textField("durationWorkingDays", "contract.duration", { type: "number", min: "1", step: "1", inputMode: "numeric" })}
@@ -722,17 +734,17 @@ export function ContractPage() {
                   {payForm.kind === "Progress Billing" && <span>{t("contract.progress_hint")}</span>}
                 </p>
                 <div className="contract-dialog-grid">
+                  {/* Text box so the amount shows thousands commas; the form keeps the plain number. */}
                   <Field
                     label={t("contract.pay_amount")}
                     required
-                    type="number"
-                    min="0"
-                    step="0.01"
                     inputMode="decimal"
+                    placeholder="0.00"
+                    maxLength={16}
                     prefix="₱"
-                    value={payForm.amount}
+                    value={formatAmountInput(payForm.amount)}
                     error={fieldErrors.amount}
-                    onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))}
+                    onChange={(e) => setPayForm((p) => ({ ...p, amount: parseAmountInput(e.target.value) }))}
                   />
                   <Field
                     label={t("contract.pay_date")}
