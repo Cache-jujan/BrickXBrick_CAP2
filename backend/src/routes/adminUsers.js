@@ -1,6 +1,6 @@
 // adminUsers.js: F1 account actions. System Administrator only.
 const express = require("express");
-const { query } = require("../lib/db");
+const { query, withTransaction } = require("../lib/db");
 const { supabaseAdmin } = require("../lib/supabaseAdmin");
 const { supabaseAnon } = require("../lib/supabaseAnon");
 const { setPasswordUrl } = require("../lib/passwordLink");
@@ -10,6 +10,9 @@ const { roleSlug } = require("../lib/displayName");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const { LIMITS, InputError, text } = require("../lib/inputRules");
+const {
+  loadRoleUsage, validateRoleLimits, saveRoleLimits, roleFull, lockRole, LimitInputError,
+} = require("../lib/roleLimits");
 // Only Gmail addresses are accepted here: 6 to 30 letters, digits or dots before @gmail.com.
 const GMAIL_RE = /^[a-z0-9.]{6,30}@gmail\.com$/;
 
@@ -67,6 +70,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "That email already has an account" });
     }
 
+    // Refuse before sending an invitation when the role is already full.
+    const full = await roleFull(query, role);
+    if (full) return res.status(409).json(full);
+
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { role },
       redirectTo: setPasswordUrl(req),
@@ -77,15 +84,29 @@ router.post("/", async (req, res) => {
     }
     authUserId = data.user.id;
 
-    const result = await query(
-      `INSERT INTO Users (name, fullname, email, supabaseUserId, role, status)
-       VALUES ($1::text, $1::text, $2, $3, $4, 'Active')
-       RETURNING userID, name, email, role, status`,
-      [name, email, authUserId, role]
-    );
-    res.status(201).json(result.rows[0]);
+    // Check again under a lock: two admins creating the same role at the same moment
+    // must not both find room.
+    const created = await withTransaction(async (client) => {
+      const run = (sql, params) => client.query(sql, params);
+      await lockRole(client, role);
+      const stillFull = await roleFull(run, role);
+      if (stillFull) {
+        const err = new Error(stillFull.error);
+        err.roleFull = stillFull;
+        throw err;
+      }
+      const result = await run(
+        `INSERT INTO Users (name, fullname, email, supabaseUserId, role, status)
+         VALUES ($1::text, $1::text, $2, $3, $4, 'Active')
+         RETURNING userID, name, email, role, status`,
+        [name, email, authUserId, role]
+      );
+      return result.rows[0];
+    });
+    res.status(201).json(created);
   } catch (err) {
     if (authUserId) await supabaseAdmin.auth.admin.deleteUser(authUserId);
+    if (err.roleFull) return res.status(409).json(err.roleFull);
     console.error("Request failed:", err);
     res.status(500).json({ error: "Something went wrong. Please try again." });
   }
@@ -98,6 +119,28 @@ router.get("/overview", async (req, res) => {
   } catch (err) {
     console.error("Admin overview failed:", err.message);
     res.status(500).json({ error: "Could not load the overview" });
+  }
+});
+
+// ACCOUNT LIMITS: how many active accounts each role may have (lib/roleLimits.js).
+router.get("/limits", async (req, res) => {
+  try {
+    res.json(await loadRoleUsage(query));
+  } catch (err) {
+    console.error("Account limits failed:", err.message);
+    res.status(500).json({ error: "Could not load the account limits" });
+  }
+});
+
+// Body { limits: { "Project Manager": 3 } }. Lowering a limit never removes anyone.
+router.patch("/limits", async (req, res) => {
+  try {
+    await saveRoleLimits(query, validateRoleLimits(req.body));
+    res.json(await loadRoleUsage(query));
+  } catch (err) {
+    if (err instanceof LimitInputError) return res.status(400).json({ error: err.message, fieldErrors: err.fieldErrors });
+    console.error("Account limits failed:", err.message);
+    res.status(500).json({ error: "Could not save the account limits" });
   }
 });
 
@@ -135,7 +178,7 @@ router.patch("/:id", async (req, res) => {
     }
 
     // Someone with a username shows as "username.role", so a new role renames them.
-    const result = await query(
+    const save = (run) => run(
       `UPDATE Users
           SET role = COALESCE($1, role), status = COALESCE($2, status),
               name = CASE WHEN username IS NULL THEN name ELSE username || '.' || $4 END
@@ -143,8 +186,31 @@ router.patch("/:id", async (req, res) => {
        RETURNING userID, name, email, role, status`,
       [role || null, status || null, req.params.id, roleSlug(role || user.role)]
     );
+
+    // An active account takes a place in its role when it moves into a new role, or an
+    // inactive account comes back. Nothing here ever removes an existing account.
+    const reactivating = status === "Active" && user.status !== "Active";
+    const takesAPlace = (user.status === "Active" && roleChanges) || reactivating;
+    let result;
+    if (takesAPlace) {
+      const targetRole = role || user.role;
+      result = await withTransaction(async (client) => {
+        const run = (sql, params) => client.query(sql, params);
+        await lockRole(client, targetRole);
+        const full = await roleFull(run, targetRole, user.userid);
+        if (full) {
+          const err = new Error(full.error);
+          err.roleFull = full;
+          throw err;
+        }
+        return save(run);
+      });
+    } else {
+      result = await save(query);
+    }
     res.json(result.rows[0]);
   } catch (err) {
+    if (err.roleFull) return res.status(409).json(err.roleFull);
     console.error("Request failed:", err);
     res.status(500).json({ error: "Something went wrong. Please try again." });
   }

@@ -69,12 +69,19 @@ export function AssignmentLimitsCard() {
     <section className="limits-card" aria-label={t("limits.title")}>
       {!editing ? (
         <div className="limits-row">
-          <p className="limits-text">
+          <div className="limits-text">
             <span className="limits-label">{t("limits.title")}</span>
-            Project Manager: <strong>{plural(limits.pm)}</strong> {t("limits.at_a_time")}
-            <span className="limits-sep" aria-hidden="true">·</span>
-            Site Manager: <strong>{plural(limits.sm)}</strong> {t("limits.at_a_time")}
-          </p>
+            <span className="limits-item">
+              <span className="limits-role">Project Manager</span>
+              <strong>{plural(limits.pm)}</strong>
+              <span className="limits-unit">{t("limits.at_a_time")}</span>
+            </span>
+            <span className="limits-item">
+              <span className="limits-role">Site Manager</span>
+              <strong>{plural(limits.sm)}</strong>
+              <span className="limits-unit">{t("limits.at_a_time")}</span>
+            </span>
+          </div>
           <Button variant="secondary" className="btn-sm" onClick={startEdit}>
             {t("limits.edit")}
           </Button>

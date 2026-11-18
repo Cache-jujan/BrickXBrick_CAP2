@@ -18,6 +18,19 @@ export async function updateUser(id, payload) {
   return data;
 }
 
+// GET /api/admin/users/limits -> { min, max, roles: [{ role, limit, active, full, over }] }
+export async function getRoleLimits() {
+  const { data } = await apiClient.get("/api/admin/users/limits");
+  return data;
+}
+
+// PATCH /api/admin/users/limits, payload: { limits: { "Project Manager": 3 } }
+// Lowering a limit never removes anyone; it only blocks new accounts in that role.
+export async function updateRoleLimits(limits) {
+  const { data } = await apiClient.patch("/api/admin/users/limits", { limits });
+  return data;
+}
+
 // POST /api/admin/users/:id/deactivate
 export async function deactivateUser(id) {
   const { data } = await apiClient.post(`/api/admin/users/${id}/deactivate`);
