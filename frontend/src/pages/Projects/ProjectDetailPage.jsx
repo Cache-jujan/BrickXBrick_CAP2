@@ -680,14 +680,14 @@ export function ProjectDetailPage() {
                   {isGM && !isClosed && bom.status === "Draft" ? t("pd.review_approve") : t("pd.open_bom")}
                 </Link>
               )}
+              {!bomError && bomInfo && !bom && isGM && !isClosed && (
+                <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
+              )}
             </div>
             {bomError && <Banner tone="error" title={bomError} />}
             {!bomError && bomInfo && !bom && (
               <div className="pd-money-empty">
                 <p>{isGM && !isClosed ? t("pd.bom_add_help") : t("pd.bom_none_gm")}</p>
-                {isGM && !isClosed && (
-                  <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
-                )}
               </div>
             )}
             {bom && (
@@ -726,13 +726,13 @@ export function ProjectDetailPage() {
                     {t("pd.open_contract")}
                   </Link>
                 )}
+                {!contract && isGM && !isClosed && (
+                  <Link to={`/projects/${project.projectid}/contract`} className="btn btn-primary btn-sm">{t("pd.add_contract")}</Link>
+                )}
               </div>
               {!contract && (
                 <div className="pd-money-empty">
                   <p>{t("pd.contract_none")}</p>
-                  {isGM && !isClosed && (
-                    <Link to={`/projects/${project.projectid}/contract`} className="btn btn-primary btn-sm">{t("pd.add_contract")}</Link>
-                  )}
                 </div>
               )}
               {contract && contractSummary && (

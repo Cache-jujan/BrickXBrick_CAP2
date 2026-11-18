@@ -654,6 +654,11 @@
   align-items: flex-start;
   gap: var(--space-3);
 }
+/* The GM skin gives primary buttons a drop shadow. Inside this panel the Add and Open buttons
+   share the header slot and must look the same weight, so the shadow is dropped here. */
+.gm-skin .pd-money .btn:not(:focus-visible) {
+  box-shadow: none;
+}
 .pd-money-empty p {
   margin: 0;
   color: var(--color-ink-soft);
