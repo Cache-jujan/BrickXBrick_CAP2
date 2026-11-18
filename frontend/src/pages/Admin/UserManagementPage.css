@@ -257,7 +257,21 @@
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
-  .limits-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Editing: one field per role in the same five columns as the summary above. */
+.limits-form.limits-form-roles {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.limits-form-title {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .limits-grid,
+  .limits-form.limits-form-roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .limits-grid,
+  .limits-form.limits-form-roles { grid-template-columns: minmax(0, 1fr); }
+}

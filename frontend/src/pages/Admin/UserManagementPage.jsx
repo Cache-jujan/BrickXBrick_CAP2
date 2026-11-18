@@ -318,7 +318,8 @@ function RoleLimitsCard({ usage, onSaved }) {
           </div>
         </>
       ) : (
-        <form className="limits-form" onSubmit={handleSave} noValidate>
+        <form className="limits-form limits-form-roles" onSubmit={handleSave} noValidate>
+          <span className="limits-label limits-label-solo limits-form-title">{t("users.limits_title")}</span>
           {usage.roles.map((row) => (
             <Field
               key={row.role}
