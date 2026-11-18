@@ -98,7 +98,7 @@ export function ContractIntake({ reading, onRead, onClear }) {
 
       {reading && (
         <div className="cp-contract-actions">
-          <Button type="button" variant="ghost" onClick={onClear} disabled={busy}>
+          <Button type="button" variant="secondary" onClick={onClear} disabled={busy}>
             {t("cp.contract_remove")}
           </Button>
         </div>
