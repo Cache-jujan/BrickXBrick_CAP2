@@ -43,6 +43,7 @@ const LABEL = {
 // Currency markers that sit in their own cell next to an amount ("PHP 49,159").
 const CURRENCY_TEXT = new Set(["PHP", "P", "PESO", "PESOS"]);
 
+const { assertZipIsReasonable } = require("./zipGuard");
 const MAX_ITEMS = 2000;
 
 // "M ATERIAL COST" -> "MATERIALCOST"
@@ -372,6 +373,7 @@ function plainCell(value) {
 }
 
 async function parseBomWorkbook(buffer) {
+  assertZipIsReasonable(buffer); // a tiny file that unpacks to gigabytes is refused before exceljs opens it
   const ExcelJS = require("exceljs");
   const workbook = new ExcelJS.Workbook();
   try {

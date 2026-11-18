@@ -613,3 +613,71 @@
 .pd-term-summary > div { display: flex; gap: 8px; }
 .pd-term-summary dt { font-weight: 600; }
 .pd-term-summary dd { margin: 0; }
+
+/* One panel for the Bill of Materials and the contract: two columns that stack on a narrow
+   screen. Each column has a heading with its "Open" button, then its status and four figures.
+   When the viewer cannot see the contract, the panel is the BOM column alone. */
+.pd-money {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.pd-money-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pd-money-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+}
+.pd-money-col + .pd-money-col {
+  border-left: 1px solid var(--color-border);
+}
+.pd-money-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 32px;
+}
+.pd-money-head h3 {
+  margin: 0;
+  font-size: var(--text-base);
+}
+.pd-money-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+/* The GM skin gives primary buttons a drop shadow. Inside this panel the Add and Open buttons
+   share the header slot and must look the same weight, so the shadow is dropped here. */
+.gm-skin .pd-money .btn:not(:focus-visible) {
+  box-shadow: none;
+}
+.pd-money-empty p {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+.pd-money-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+.pd-money-figures .num {
+  text-align: left !important;
+}
+@media (max-width: 900px) {
+  .pd-money {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pd-money-col + .pd-money-col {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}

@@ -7,6 +7,7 @@ const {
   daysBetween,
   anchorFor,
   parseStartRequest,
+  documentsOnly,
   buildStructure,
   insertStructure,
 } = require("../src/lib/projectStructure");
@@ -195,4 +196,29 @@ test("nothing that belongs to a running project is written", async () => {
   for (const forbidden of ["task_progress_log", "task_documents", "photoEvidenceURL", "completionPercentage", "boms", "bom_items", "tickets", "expenses"]) {
     assert.ok(!text.includes(forbidden), `must not touch ${forbidden}`);
   }
+});
+
+test("documents mode: needs a known project type and reads the ticks", () => {
+  assert.throws(() => parseStartRequest({ mode: "documents" }), /project type/);
+  assert.throws(() => parseStartRequest({ mode: "documents", projectType: "Spaceport" }), /project type/);
+  const r = parseStartRequest({ mode: "documents", projectType: "Residential Building", includeTaskIds: [ID(13)], otherDocuments: [" Lot plan "] });
+  assert.equal(r.mode, "documents");
+  assert.deepEqual([...r.includeTaskIds], [ID(13)]);
+  assert.deepEqual(r.otherDocuments, ["Lot plan"]);
+});
+
+test("documentsOnly keeps just the permit documents and drops empty milestones", () => {
+  const docs = documentsOnly(source(), "Residential Building documents");
+  assert.equal(docs.kind, "documents");
+  assert.deepEqual(docs.milestones.map((m) => m.name), ["Permits"]);
+  assert.deepEqual(docs.milestones[0].tasks.map((t) => t.name), ["Electrical permit", "Fence permit"]);
+});
+
+test("documents mode builds only the ticked documents, with Others, and needs no Site Manager", () => {
+  const docs = documentsOnly(source(), "x");
+  const r = parseStartRequest({ mode: "documents", projectType: "Residential Building", includeTaskIds: [ID(13)], excludeTaskIds: [ID(12)], otherDocuments: ["Lot plan"] });
+  const built = buildStructure(docs, r, DATES);
+  assert.deepEqual(built.milestones.map((m) => m.name), ["Permits"]);
+  assert.deepEqual(built.milestones[0].tasks.map((t) => t.name), ["Fence permit", "Lot plan"]);
+  assert.equal(built.needsSiteManager, false);
 });

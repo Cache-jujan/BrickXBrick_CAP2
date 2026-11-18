@@ -9,6 +9,7 @@ import { Banner } from "../ui/Banner";
 import { ManagerPicker } from "./ManagerPicker";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
+import { addWorkingDays } from "../../utils/workingDays";
 
 export const EMPTY_PROJECT_FORM = {
   name: "",
@@ -87,6 +88,12 @@ export function ProjectForm({
   siteManagerRequired = false,
   onCancel = null,
   cancelLabel = null,
+  // Create only: working days the signed contract allows. With a construction start date
+  // typed, the form offers an estimated completion date (Sundays skipped, holidays not).
+  contractDurationDays = null,
+  // Create only: told the project type on load and whenever it changes (a blank project
+  // shows the document list of that type).
+  onProjectTypeChange = null,
 }) {
   const { t } = useLocale();
   const [form, setForm] = useState(initialValues || EMPTY_PROJECT_FORM);
@@ -122,6 +129,11 @@ export function ProjectForm({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per project; a language change must not refetch
   }, [mode, projectId]);
+
+  useEffect(() => {
+    if (onProjectTypeChange) onProjectTypeChange(form.projectType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.projectType]);
 
   function updateField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -361,6 +373,20 @@ export function ProjectForm({
             />
           </div>
           <p className="create-project-hint">{datesLocked ? t("form.dates_locked_note") : t("form.timeline_hint")}</p>
+          {contractDurationDays && form.constructionStartDate && (() => {
+            const estimate = addWorkingDays(form.constructionStartDate, contractDurationDays);
+            if (!estimate || estimate === form.endDate) return null;
+            const [y, m, d] = estimate.split("-").map(Number);
+            const shown = new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+            return (
+              <p className="create-project-hint">
+                {t("cp.duration_hint", { days: contractDurationDays, date: shown })}{" "}
+                <Button type="button" variant="secondary" onClick={() => updateField("endDate", estimate)}>
+                  {t("cp.duration_use")}
+                </Button>
+              </p>
+            );
+          })()}
 
           </section>
 

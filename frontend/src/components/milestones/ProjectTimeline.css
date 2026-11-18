@@ -148,7 +148,8 @@
 .timeline-popover-task-done { background: #e8f1ec; }
 .timeline-overlay-popover, .timeline-overlay-tooltip { max-width: calc(100vw - 32px); }
 .timeline-popover, .timeline-tooltip { background: rgba(255, 255, 255, .98); border-radius: 10px; box-shadow: 0 15px 30px rgba(52, 45, 36, .18); border: 1px solid var(--color-border); }
-.timeline-popover { width: 286px; padding: 16px; border-top: 5px solid #cba76d; }
+.timeline-popover { width: 286px; padding: 16px; border-top: 5px solid #cba76d; box-sizing: border-box; display: flex; flex-direction: column; max-height: calc(100vh - 16px); }
+.timeline-popover > * { flex: none; }
 .timeline-popover-on-track { border-top-color: #72a890; }
 .timeline-popover-at-risk { border-top-color: #cba76d; }
 .timeline-popover-overdue { border-top-color: #c8877b; }
@@ -163,7 +164,8 @@
 .timeline-popover-progress-head strong { color: var(--color-ink); }
 .timeline-popover-progress { height: 5px; margin-top: 5px; overflow: hidden; border-radius: 5px; background: #eee9e0; }
 .timeline-popover-progress span { display: block; height: 100%; background: #cba76d; }
-.timeline-popover-tasks { display: grid; gap: 7px; margin-top: 12px; }
+/* A long task list (a template's permit documents) scrolls inside the card; the heading and "+ Add Task" stay in view. */
+.timeline-popover-tasks { display: grid; gap: 7px; margin-top: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .timeline-popover-task { padding: 10px; border-radius: 8px; background: #eeece6; }
 .timeline-popover-task strong { display: block; font-size: 11px; line-height: 1.35; }
 .timeline-popover-task span { display: block; margin-top: 4px; color: var(--color-ink-faint); font-size: 10px; line-height: 1.3; }

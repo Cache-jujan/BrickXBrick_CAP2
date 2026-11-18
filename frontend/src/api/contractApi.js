@@ -40,3 +40,32 @@ export async function voidPayment(projectId, paymentId, reason) {
   const { data } = await apiClient.patch(`/api/projects/${projectId}/contract/payments/${paymentId}/void`, { reason });
   return data;
 }
+
+// GM. Reads a signed contract (.docx) BEFORE the project exists, to fill in the New Project form.
+// Returns { fileName, fields, flags, found, proposal, suggested }. Saves nothing.
+// proposal = { name, clientName, description, projectType, municipality, province, siteAddress, durationWorkingDays }.
+export async function readContractForNewProject(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const { data } = await apiClient.post("/api/contract-intake/read", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+const CONTRACT_KEYS = [
+  "contractDate", "contractRef", "ownerName", "contractorName", "contractorRep", "contractorAddress",
+  "scope", "siteLocation", "contractAmount", "downPaymentPercent", "retentionPercent",
+  "durationWorkingDays", "warrantyMonths",
+];
+
+// The values read from the file, as the body for saveContract (blank values are left out).
+export function contractBodyFromReading(reading) {
+  const body = {};
+  for (const key of CONTRACT_KEYS) {
+    const value = reading?.fields?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") body[key] = value;
+  }
+  if (reading?.fileName) body.sourceFileName = reading.fileName;
+  return body;
+}

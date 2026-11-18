@@ -667,87 +667,93 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section className="pd-bom" aria-labelledby="pd-bom-title">
+      <section className="pd-bom" aria-labelledby="pd-money-title">
         <div className="section-head">
-          <h2 id="pd-bom-title">{t("nav.bill_of_materials")}</h2>
-          {bom && (
-            <Link to={`/projects/${project.projectid}/bom`} className="btn btn-secondary btn-sm">
-              {isGM && !isClosed && bom.status === "Draft" ? t("pd.review_approve") : t("pd.open_bom")}
-            </Link>
-          )}
+          <h2 id="pd-money-title">{contractInfo ? t("pd.bom_contract_title") : t("nav.bill_of_materials")}</h2>
         </div>
-        {bomError && <Banner tone="error" title={bomError} />}
-        {!bomError && bomInfo && !bom && (
-          <div className="pd-bom-bar pd-bom-empty">
-            <p>
-              {isGM && !isClosed ? t("pd.bom_add_help") : t("pd.bom_none_gm")}
-            </p>
-            {isGM && !isClosed && (
-              <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
+        <div className={`pd-money${contractInfo ? "" : " pd-money-single"}`}>
+          <div className="pd-money-col">
+            <div className="pd-money-head">
+              <h3>{t("nav.bill_of_materials")}</h3>
+              {bom && (
+                <Link to={`/projects/${project.projectid}/bom`} className="btn btn-secondary btn-sm">
+                  {isGM && !isClosed && bom.status === "Draft" ? t("pd.review_approve") : t("pd.open_bom")}
+                </Link>
+              )}
+              {!bomError && bomInfo && !bom && isGM && !isClosed && (
+                <Link to={`/projects/${project.projectid}/bom`} className="btn btn-primary btn-sm">{t("pd.add_bom")}</Link>
+              )}
+            </div>
+            {bomError && <Banner tone="error" title={bomError} />}
+            {!bomError && bomInfo && !bom && (
+              <div className="pd-money-empty">
+                <p>{isGM && !isClosed ? t("pd.bom_add_help") : t("pd.bom_none_gm")}</p>
+              </div>
+            )}
+            {bom && (
+              <>
+                <div className="pd-bom-status">
+                  <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />
+                  <span>
+                    {bom.status === "Approved"
+                      ? bom.approvedAt
+                        ? t("pd.bom_approved_at", { date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })
+                        : t("status.approved")
+                      : bomWarningCount
+                        ? bomWarningCount === 1
+                          ? t("pd.bom_check_one")
+                          : t("pd.bom_check_other", { count: bomWarningCount })
+                        : t("pd.bom_not_approved")}
+                  </span>
+                </div>
+                <dl className="pd-bom-figures pd-money-figures">
+                  <div><dt>{t("pd.items")}</dt><dd>{t("pd.items_in_sections", { items: bom.totals.itemCount, sections: bom.totals.sectionCount })}</dd></div>
+                  {/* BOM figures always show centavos, like the BOM itself */}
+                  <div><dt>{t("bom.materials")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
+                  <div><dt>{t("pd.labor_other")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
+                  <div><dt>{t("pd.total")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
+                </dl>
+              </>
             )}
           </div>
-        )}
-        {bom && (
-          <div className="pd-bom-bar">
-            <div className="pd-bom-status">
-              <Badge status={bom.status === "Approved" ? "Approved" : "Draft"} />
-              <span>
-                {bom.status === "Approved"
-                  ? bom.approvedAt
-                    ? t("pd.bom_approved_at", { date: formatDate(bom.approvedAt, DATETIME_OPTIONS) })
-                    : t("status.approved")
-                  : bomWarningCount
-                    ? bomWarningCount === 1
-                      ? t("pd.bom_check_one")
-                      : t("pd.bom_check_other", { count: bomWarningCount })
-                    : t("pd.bom_not_approved")}
-              </span>
-            </div>
-            <dl className="pd-bom-figures">
-              <div><dt>{t("pd.items")}</dt><dd>{t("pd.items_in_sections", { items: bom.totals.itemCount, sections: bom.totals.sectionCount })}</dd></div>
-              {/* BOM figures always show centavos, like the BOM itself */}
-              <div><dt>{t("bom.materials")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.materials)}</dd></div>
-              <div><dt>{t("pd.labor_other")}</dt><dd className="num">{PESO_CENTS.format(bom.totals.labor)}</dd></div>
-              <div><dt>{t("pd.total")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(bom.totals.total)}</dd></div>
-            </dl>
-          </div>
-        )}
-      </section>
 
-      {contractInfo && (
-        <section className="pd-bom" aria-labelledby="pd-contract-title">
-          <div className="section-head">
-            <h2 id="pd-contract-title">{t("contract.title")}</h2>
-            <Link to={`/projects/${project.projectid}/contract`} className="btn btn-secondary btn-sm">
-              {contract ? t("pd.open_contract") : isGM && !isClosed ? t("pd.add_contract") : t("pd.open_contract")}
-            </Link>
-          </div>
-          {!contract && (
-            <div className="pd-bom-bar pd-bom-empty">
-              <p>{t("pd.contract_none")}</p>
-            </div>
-          )}
-          {contract && contractSummary && (
-            <div className="pd-bom-bar">
-              <div className="pd-bom-status">
-                <span>
-                  {contractWarnings === 0
-                    ? ""
-                    : contractWarnings === 1
-                      ? t("pd.contract_notes_one")
-                      : t("pd.contract_notes_other", { count: contractWarnings })}
-                </span>
+          {contractInfo && (
+            <div className="pd-money-col">
+              <div className="pd-money-head">
+                <h3 id="pd-contract-title">{t("contract.title")}</h3>
+                {contract && (
+                  <Link to={`/projects/${project.projectid}/contract`} className="btn btn-secondary btn-sm">
+                    {t("pd.open_contract")}
+                  </Link>
+                )}
+                {!contract && isGM && !isClosed && (
+                  <Link to={`/projects/${project.projectid}/contract`} className="btn btn-primary btn-sm">{t("pd.add_contract")}</Link>
+                )}
               </div>
-              <dl className="pd-bom-figures">
-                <div><dt>{t("contract.amount")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(contractSummary.contractAmount)}</dd></div>
-                <div><dt>{t("contract.received")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.receivedTotal)}</dd></div>
-                <div><dt>{t("contract.to_collect")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.remainingToCollect)}</dd></div>
-                <div><dt>{t("contract.cash")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.cashPosition)}</dd></div>
-              </dl>
+              {!contract && (
+                <div className="pd-money-empty">
+                  <p>{t("pd.contract_none")}</p>
+                </div>
+              )}
+              {contract && contractSummary && (
+                <>
+                  {contractWarnings > 0 && (
+                    <div className="pd-bom-status">
+                      <span>{contractWarnings === 1 ? t("pd.contract_notes_one") : t("pd.contract_notes_other", { count: contractWarnings })}</span>
+                    </div>
+                  )}
+                  <dl className="pd-bom-figures pd-money-figures">
+                    <div><dt>{t("contract.amount")}</dt><dd className="num pd-bom-total">{PESO_CENTS.format(contractSummary.contractAmount)}</dd></div>
+                    <div><dt>{t("contract.received")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.receivedTotal)}</dd></div>
+                    <div><dt>{t("contract.to_collect")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.remainingToCollect)}</dd></div>
+                    <div><dt>{t("contract.cash")}</dt><dd className="num">{PESO_CENTS.format(contractSummary.cashPosition)}</dd></div>
+                  </dl>
+                </>
+              )}
             </div>
           )}
-        </section>
-      )}
+        </div>
+      </section>
 
       <section className="pd-team" aria-labelledby="pd-team-title">
         <div className="section-head">
