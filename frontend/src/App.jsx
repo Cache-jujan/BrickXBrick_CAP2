@@ -12,6 +12,7 @@ import { ProjectDetailPage } from "./pages/Projects/ProjectDetailPage";
 import { ProjectCheckinsPage } from "./pages/Projects/ProjectCheckinsPage";
 import { EditProjectPage } from "./pages/Projects/EditProjectPage";
 import { BomPage } from "./pages/Projects/BomPage";
+import { ContractPage } from "./pages/Projects/ContractPage";
 import { ExpensesPage } from "./pages/Expenses/ExpensesPage";
 import { UserManagementPage } from "./pages/Admin/UserManagementPage";
 import { VendorMasterListPage } from "./pages/Admin/VendorMasterListPage";
@@ -149,6 +150,15 @@ export default function App() {
               element={
                 <RoleRoute allow={["General Manager", "Project Manager"]}>
                   <BomPage />
+                </RoleRoute>
+              }
+            />
+            {/* F2: contract and client payments. GM records them; the owning PM reads them. */}
+            <Route
+              path="/projects/:id/contract"
+              element={
+                <RoleRoute allow={["General Manager", "Project Manager"]}>
+                  <ContractPage />
                 </RoleRoute>
               }
             />
