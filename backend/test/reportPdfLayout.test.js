@@ -34,7 +34,7 @@ test("PDF: no picture from the browser; the charts are drawn as shapes", () => {
 test("PDF, several projects: the main table has every figure, a Total row, and one basis (spend to date)", () => {
   const doc = buildReportDocDefinition(make([project(1), project(2)]), options);
   const body = mainTable(doc);
-  assert.deepEqual(body[0].map((c) => c.text), ["Project", "Budget", "Spent this period", "Spent to date", "Budget left\n(Net P&L)", "Budget used", "Work done", "Status"]);
+  assert.deepEqual(body[0].map((c) => c.text), ["Project", "Budget", "Spent this period", "Spent to date", "Budget left", "Budget used", "Work done", "Status"]);
   assert.equal(body.length, 4); // header + 2 projects + total
   assert.equal(body[1][4].text, "700.00"); // budget left = 1000 - 300 to date
   assert.equal(body[1][5].text, "30.0%");
@@ -79,7 +79,7 @@ test("PDF, one project: no Total rows, BIR as a sentence, sections in order", ()
   const doc = buildReportDocDefinition(make([project(1)]), options);
   assert.equal(mainTable(doc).length, 2); // header + the project
   assert.equal(barTable(doc).length, 1);
-  assert.deepEqual(sectionTitles(doc), ["Budget and spend", "Budget used vs work done", "Spending by month", "BIR tax-deductible spend (Formal receipts only)", "How to read this report"]);
+  assert.deepEqual(sectionTitles(doc), ["Budget and spend", "Contract and margin", "Budget used vs work done", "Spending by month", "BIR tax-deductible spend (Formal receipts only)", "How to read this report"]);
   const sentence = doc.content.find((c) => Array.isArray(c.text) && String(c.text[1]).includes("tax-deductible"));
   assert.equal(sentence.text[0].text, "PHP 50.00");
 });

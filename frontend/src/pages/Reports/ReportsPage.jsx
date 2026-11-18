@@ -10,6 +10,8 @@ import { BudgetChart } from "../../components/reports/BudgetChart";
 import { MonthlySpendChart } from "../../components/reports/MonthlySpendChart";
 import { BudgetStands, ProjectHero } from "../../components/reports/ProjectReport";
 import { ProjectsTable } from "../../components/reports/ProjectsTable";
+import { ContractMargin } from "../../components/reports/ContractMargin";
+import { BreakdownPanel } from "../../components/reports/BreakdownPanel";
 import { SpendShare } from "../../components/reports/SpendShare";
 import { ReportFilters } from "../../components/reports/ReportFilters";
 import { SummaryCards } from "../../components/reports/SummaryCards";
@@ -43,6 +45,9 @@ export function ReportsPage() {
   // After an export: { reportId, anchorStatus: "Confirmed" | "Pending", retrying, retryMessage }
   const [exportResult, setExportResult] = useState(null);
   const [exportError, setExportError] = useState("");
+  // "View breakdown": which tab (and project) the side panel is open on, or null.
+  const [breakdown, setBreakdown] = useState(null);
+  const openBreakdown = (tab, projectId = null) => setBreakdown({ tab, projectId });
 
   const selectedProjects = projects.filter((p) => filters.projectIds.includes(p.projectid));
 
@@ -289,6 +294,7 @@ export function ReportsPage() {
                 info={projects.find((p) => p.projectid === summary.projects[0].projectId)}
                 period={summary.period}
                 watchGapPoints={summary.watchGapPoints}
+                onOpen={generated ? openBreakdown : undefined}
               />
               <div className="reports-grid">
                 <Card>
@@ -302,6 +308,11 @@ export function ReportsPage() {
                   <BudgetChart projects={summary.projects} />
                 </Card>
               </div>
+              <Card>
+                <h3 className="reports-section-title">{t("rep.contract_title")}</h3>
+                <p className="reports-chart-note">{t("rep.contract_note")}</p>
+                <ContractMargin projects={summary.projects} totals={summary.totals} />
+              </Card>
               {summary.months?.length > 0 && (
                 <Card>
                   <h3 className="reports-section-title">{t("rep.monthly_title")}</h3>
@@ -312,7 +323,13 @@ export function ReportsPage() {
             </>
           ) : (
             <>
-              <SummaryCards totals={summary.totals} projectCount={summary.projects.length} watchGapPoints={summary.watchGapPoints} />
+              <SummaryCards totals={summary.totals} projectCount={summary.projects.length} watchGapPoints={summary.watchGapPoints} onOpen={generated ? openBreakdown : undefined} />
+
+              <Card>
+                <h3 className="reports-section-title">{t("rep.contract_title")}</h3>
+                <p className="reports-chart-note">{t("rep.contract_note")}</p>
+                <ContractMargin projects={summary.projects} totals={summary.totals} />
+              </Card>
 
               <div className="reports-grid">
                 <Card>
@@ -372,6 +389,15 @@ export function ReportsPage() {
             </Banner>
           )}
         </section>
+      )}
+
+      {breakdown && generated && (
+        <BreakdownPanel
+          filters={generated}
+          tab={breakdown.tab}
+          projectId={breakdown.projectId}
+          onClose={() => setBreakdown(null)}
+        />
       )}
     </div>
   );

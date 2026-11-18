@@ -190,7 +190,7 @@ function buildReportDocDefinition(summary, options) {
     tile("Total budget", formatPhp(t.budget), single ? "Target budget of the project" : `${summary.projects.length} projects`),
     tile("Spent to date", formatPhp(t.cumulativeSpend), `${formatPhp(t.periodSpend)} in this period`),
     tile(
-      "Budget left (Net P&L)",
+      "Budget left",
       formatPhp(left),
       left < 0 ? `Over budget by ${formatPct1(t.varianceToDatePct)}` : leftPct === null ? "No budget set" : `${formatPct1(leftPct)} of the budget left`,
       left < 0 ? { color: COLOR.danger } : {}
@@ -237,7 +237,7 @@ function buildReportDocDefinition(summary, options) {
           head("Budget", "right"),
           head("Spent this period", "right"),
           head("Spent to date", "right"),
-          head("Budget left\n(Net P&L)", "right"),
+          head("Budget left", "right"),
           head("Budget used", "right"),
           head("Work done", "right"),
           head("Status"),
@@ -271,6 +271,60 @@ function buildReportDocDefinition(summary, options) {
     },
   };
   const watching = summary.projects.filter((p) => p.health === "watch").map((p) => p.name);
+
+  // Contract and margin (revenue = the signed contract)
+  const tc = t.contract || { contractCount: 0, projectCount: summary.projects.length };
+  const money = (value) => (value === null || value === undefined ? "n/a" : formatAmount(value));
+  const red = (value) => (typeof value === "number" && value < 0 ? { color: COLOR.danger } : {});
+  const contractRow = (name, c, bold = false) => {
+    const b = bold ? { bold: true } : {};
+    if (!c || c.contractAmount === undefined) {
+      return [{ text: name, ...b }, { text: "No contract recorded", colSpan: 5, color: COLOR.soft, italics: true }, "", "", "", ""];
+    }
+    return [
+      { text: name, ...b },
+      right(money(c.contractAmount), b),
+      right(money(c.collected), b),
+      right(money(c.marginBeforeLabor), { ...b, ...red(c.marginBeforeLabor) }),
+      right(c.laborIncludedInPrices && !c.budgetedLabor ? "in prices" : money(c.budgetedLabor), b),
+      right(money(c.marginAfterLabor), { ...b, ...red(c.marginAfterLabor) }),
+    ];
+  };
+  const contractSection =
+    tc.contractCount === 0
+      ? [
+          { text: "Contract and margin", style: "section" },
+          note("No signed contract is recorded for the selected project(s), so the margin cannot be shown. Record it on the project's Contract page."),
+        ]
+      : [
+          { text: "Contract and margin", style: "section" },
+          {
+            table: {
+              headerRows: 1,
+              widths: ["*", 66, 62, 66, 62, 66],
+              body: [
+                [
+                  head("Project"),
+                  head("Contract amount", "right"),
+                  head("Collected", "right"),
+                  head("Margin before labor", "right"),
+                  head("Planned labor (BOM)", "right"),
+                  head("Margin after labor", "right"),
+                ],
+                ...summary.projects.map((p) => contractRow(p.name, p.contract)),
+                ...(single ? [] : [contractRow(`Total (${tc.contractCount} of ${tc.projectCount} with a contract)`, tc, true)]),
+              ],
+            },
+            layout: rowLines({ total: !single }),
+            fontSize: 8,
+          },
+          note(
+            `Amounts in PHP, up to ${to}. Cash position (collected minus spend to date): ${formatPhp(tc.cashPosition)}${
+              tc.cashPosition < 0 ? ", the company is financing the difference" : ""
+            }.${tc.laborIncludedInPrices ? " Some BOM sections have labor built into the item prices, so that labor cannot be shown separately." : ""}`,
+            red(tc.cashPosition)
+          ),
+        ];
 
   // Spending by month
   const months = summary.months || [];
@@ -340,7 +394,8 @@ function buildReportDocDefinition(summary, options) {
     tilesTable,
     { text: single ? "Budget and spend" : "Budget and spend by project", style: "section" },
     mainTable,
-    note(`Amounts in PHP. Budget left (Net P&L) = budget minus all approved spend up to ${to}. Spent this period = approved spend with receipt dates from ${from} to ${to}.`),
+    note(`Amounts in PHP. Budget left = budget minus all approved spend up to ${to}. Spent this period = approved spend with receipt dates from ${from} to ${to}.`),
+    ...contractSection,
     { text: "Budget used vs work done", style: "section" },
     note("How much of each budget is spent, next to how much of the work is done (average milestone completion). Spending far ahead of the work is the early sign of an overrun.", { margin: [0, 0, 0, 6] }),
     legend([
@@ -400,7 +455,8 @@ function buildReportDocDefinition(summary, options) {
     {
       ul: [
         "Only approved expenses count. Each expense is placed by the date printed on its receipt.",
-        `Budget left (Net P&L) = budget minus all approved spend up to ${to}. Below zero means over budget. Cost variance to date is the same amount with the sign flipped.`,
+        `Budget left = budget minus all approved spend up to ${to}. Below zero means over budget. Cost variance to date is the same amount with the sign flipped.`,
+        "Contract and margin: revenue is the signed contract amount. Margin before labor = contract minus approved spend to date. Margin after planned labor also subtracts the labor in the approved BOM (actual labor is not recorded as spend). Materials still to be bought lower both, so read them next to Work done.",
         "Budget used = spend to date as a share of the budget. Work done = the average completion of the project's milestones when this report was generated.",
         `Status: Over budget when spend to date is above the budget; Watch when budget used is more than ${watchGap} points ahead of work done; otherwise On track.`,
       ],

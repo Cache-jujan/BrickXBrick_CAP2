@@ -1,4 +1,5 @@
 import { Badge } from "../ui/Badge";
+import { BreakdownLink } from "./BreakdownPanel";
 import { Card } from "../ui/Card";
 import { niceDay, projectSpan } from "../../utils/reportFilters";
 import { PESO_EXACT } from "../../utils/plainLanguage";
@@ -19,7 +20,7 @@ const pct = (value) => (value === null || value === undefined ? "n/a" : `${value
  * project: the summary entry; info: the project row from the list (may be missing);
  * period: { from, to }; watchGapPoints: from the summary.
  */
-export function ProjectHero({ project, info, period, watchGapPoints }) {
+export function ProjectHero({ project, info, period, watchGapPoints, onOpen }) {
   const { t, formatDate } = useLocale();
   const day = (value) => niceDay(value, formatDate);
   const used = project.cumulativeUtilizationPct;
@@ -62,11 +63,13 @@ export function ProjectHero({ project, info, period, watchGapPoints }) {
           <div>
             <dt>{t("projects.budget")}</dt>
             <dd>{PESO_EXACT.format(project.budget)}</dd>
+            {onOpen && <BreakdownLink onClick={() => onOpen("budget", project.projectId)} />}
           </div>
           <div>
             <dt>{t("rep.spent_to_date")}</dt>
             <dd>{PESO_EXACT.format(project.cumulativeSpend)}</dd>
             <small>{t("rep.everything_approved", { date: day(period.to) })}</small>
+            {onOpen && <BreakdownLink onClick={() => onOpen("spend", project.projectId)} />}
           </div>
           <div className={remaining < 0 ? "pr-negative" : ""}>
             <dt>{t("rep.remaining")}</dt>
@@ -76,6 +79,7 @@ export function ProjectHero({ project, info, period, watchGapPoints }) {
                 ? `${varianceWords(project.varianceToDate, t)} · ${t("rep.variance_line", { pct: signedPct(project.varianceToDatePct) })}`
                 : t("rep.budget_minus_spent")}
             </small>
+            {onOpen && <BreakdownLink onClick={() => onOpen("budget", project.projectId)} />}
           </div>
           <div className={watch ? "pr-watch" : ""}>
             <dt>{t("rep.work_done")}</dt>
@@ -85,11 +89,13 @@ export function ProjectHero({ project, info, period, watchGapPoints }) {
                 ? t("rep.watch_note", { gap: (used - done).toFixed(0), max: watchGapPoints })
                 : t("rep.work_done_sub", { used: pct(used) })}
             </small>
+            {onOpen && <BreakdownLink onClick={() => onOpen("work", project.projectId)} />}
           </div>
           <div>
             <dt>{t("rep.spent_in_period")}</dt>
             <dd>{PESO_EXACT.format(project.periodSpend)}</dd>
             <small>{t("rep.date_range", { from: day(period.from), to: day(period.to) })}</small>
+            {onOpen && <BreakdownLink onClick={() => onOpen("spend", project.projectId)} />}
           </div>
         </dl>
       </div>
