@@ -498,10 +498,16 @@ export function ProjectDetailPage() {
   const contract = contractInfo?.contract || null;
   const contractSummary = contractInfo?.summary || null;
   const contractWarnings = (contractSummary?.warnings || []).filter((w) => w.level === "warning").length;
+  const bomPath = `/projects/${project.projectid}/bom`;
+  const contractPath = `/projects/${project.projectid}/contract`;
+  // Where each missing step is finished: the team section on this page, or the page that records it.
+  const goToTeam = { label: t("pd.action_assign"), scrollTo: "pd-team-title" };
   const activationChecks = [
-    { label: t("pd.check_pm"), done: Boolean(project.projectmanagerid) },
-    { label: t("pd.check_sm"), done: hasSiteManager },
+    { key: "pm", label: t("pd.check_pm"), done: Boolean(project.projectmanagerid), action: goToTeam },
+    { key: "sm", label: t("pd.check_sm"), done: hasSiteManager, action: goToTeam },
     {
+      key: "bom",
+      action: { label: bom ? t("pd.review_approve") : t("pd.add_bom"), to: bomPath },
       label:
         bomApproved && bom?.clientAgreedOn
           ? t(bom.clientAgreedBy ? "pd.check_bom_agreed_by" : "pd.check_bom_agreed", {
@@ -512,13 +518,28 @@ export function ProjectDetailPage() {
       done: bomApproved,
     },
     // The signed contract is recorded after the BOM price is agreed (only the GM and PM can see it).
-    ...(canReview ? [{ label: t("pd.check_contract"), done: Boolean(contract) }] : []),
+    ...(canReview
+      ? [{ key: "contract", label: t("pd.check_contract"), done: Boolean(contract), action: { label: t("pd.add_contract"), to: contractPath } }]
+      : []),
     // The down payment is the go signal to start work. A 0% down payment has nothing to wait for.
     ...(canReview && !(contract && Number(contract.downPaymentPercent) === 0)
-      ? [{ label: t("pd.check_down_payment"), done: (contractSummary?.receivedByKind?.["Down Payment"] ?? 0) > 0 }]
+      ? [{
+          key: "down",
+          label: t("pd.check_down_payment"),
+          done: (contractSummary?.receivedByKind?.["Down Payment"] ?? 0) > 0,
+          // Payments are recorded against the contract, so that comes first.
+          action: contract ? { label: t("contract.record_payment"), to: contractPath } : null,
+          note: contract ? null : t("pd.after_contract"),
+        }]
       : []),
   ];
   const readyToActivate = activationChecks.every((c) => c.done);
+  const stepsDone = activationChecks.filter((c) => c.done).length;
+
+  function goToStep(action) {
+    closeStatusDialog();
+    if (action.scrollTo) document.getElementById(action.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="project-detail">
@@ -925,10 +946,36 @@ export function ProjectDetailPage() {
                 <h2 id="project-status-title" className="modal-title">
                   {readyToActivate ? t("pd.activate_title") : t("pd.not_ready")}
                 </h2>
-                <ul className="pd-checklist">
+                {!readyToActivate && (
+                  <>
+                    <p className="pd-steps-count">{t("pd.steps_done", { done: stepsDone, total: activationChecks.length })}</p>
+                    <div
+                      className="pd-steps-bar"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={activationChecks.length}
+                      aria-valuenow={stepsDone}
+                      aria-label={t("pd.steps_done", { done: stepsDone, total: activationChecks.length })}
+                    >
+                      <div className="pd-steps-fill" style={{ width: `${(stepsDone / activationChecks.length) * 100}%` }} />
+                    </div>
+                  </>
+                )}
+                <ul className="pd-checklist pd-checklist-steps">
                   {activationChecks.map((c) => (
-                    <li key={c.label} className={c.done ? "pd-check-done" : "pd-check-missing"}>
-                      <span aria-hidden="true">{c.done ? "✓" : "–"}</span> {c.label}
+                    <li key={c.key} className={c.done ? "pd-check-done" : "pd-check-missing"}>
+                      <span className="pd-check-icon" aria-hidden="true">{c.done ? "✓" : ""}</span>
+                      <span className="pd-check-label">
+                        {c.label}
+                        {!c.done && c.note && <small>{c.note}</small>}
+                      </span>
+                      {!c.done && c.action && (
+                        c.action.to ? (
+                          <Link to={c.action.to} className="btn btn-secondary btn-sm" onClick={closeStatusDialog}>{c.action.label}</Link>
+                        ) : (
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => goToStep(c.action)}>{c.action.label}</button>
+                        )
+                      )}
                     </li>
                   ))}
                 </ul>
