@@ -2599,6 +2599,7 @@
     "pd.contract_none": "No contract recorded yet. It is needed before the project can be activated.",
     "pd.open_contract": "Open contract",
     "pd.add_contract": "Add contract",
+    "pd.bom_contract_title": "Bill of Materials and contract",
     "pd.contract_notes_one": "1 note to check",
     "pd.contract_notes_other": "{count} notes to check"
   },
@@ -5202,6 +5203,7 @@
     "pd.contract_none": "Wala pay naitala nga kontrata. Kinahanglan kini sa dili pa ma-activate ang proyekto.",
     "pd.open_contract": "Ablihi ang kontrata",
     "pd.add_contract": "Idugang ang kontrata",
+    "pd.bom_contract_title": "Bill of Materials ug kontrata",
     "pd.contract_notes_one": "1 ka nota nga susihon",
     "pd.contract_notes_other": "{count} ka nota nga susihon"
   },
@@ -7805,6 +7807,7 @@
     "pd.contract_none": "Wala pang naitalang kontrata. Kailangan ito bago ma-activate ang proyekto.",
     "pd.open_contract": "Buksan ang kontrata",
     "pd.add_contract": "Idagdag ang kontrata",
+    "pd.bom_contract_title": "Bill of Materials at kontrata",
     "pd.contract_notes_one": "1 tala na susuriin",
     "pd.contract_notes_other": "{count} tala na susuriin"
   }
