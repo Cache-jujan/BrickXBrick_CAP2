@@ -36,7 +36,12 @@ router.post("/login", async (req, res) => {
     const genericFail = () =>
       res.status(401).json({ error: "Invalid email or password" });
  
-    if (userResult.rowCount === 0) return genericFail();
+    if (userResult.rowCount === 0) {
+      // Burn roughly the same wall time as a real wrong-password attempt, so response time
+      // does not reveal which emails exist. The .invalid TLD is reserved: no real account can match.
+      await supabaseAnon.auth.signInWithPassword({ email: "nobody@invalid.invalid", password: "x" }).catch(() => {});
+      return genericFail();
+    }
     const user = userResult.rows[0];
  
     // A deactivated account only hears so after proving it knows the password,
