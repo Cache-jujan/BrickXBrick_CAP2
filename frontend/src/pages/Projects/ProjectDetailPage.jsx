@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import {
   activateProject,
   cancelProject,
@@ -51,6 +51,7 @@ const CLOSED_STATUSES = ["Completed", "Cancelled", "Archived"];
 
 export function ProjectDetailPage() {
   const { id } = useParams();
+  const routeLocation = useLocation();
   const { user } = useAuth();
   const { t, tv, formatDate } = useLocale();
   const toast = useToast();
@@ -200,6 +201,14 @@ export function ProjectDetailPage() {
       .catch(() => { if (!cancelled) setContractInfo(null); });
     return () => { cancelled = true; };
   }, [id, canReview, project?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Links from the dashboard or a report breakdown can point at a section
+  // (#milestones, #expenses). Scroll there once the page has loaded.
+  useEffect(() => {
+    if (loading || !routeLocation.hash) return;
+    const target = document.getElementById(routeLocation.hash.slice(1));
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loading, routeLocation.hash]);
 
   useEffect(() => {
     let cancelled = false;
@@ -788,7 +797,7 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <div className="project-detail-milestones">
+      <div className="project-detail-milestones" id="milestones">
         {!hasSiteManager && canManage && (
           <Banner tone="info" title={t("pd.no_sm_title")}>
             {t("pd.no_sm_body")}
@@ -806,7 +815,7 @@ export function ProjectDetailPage() {
         />
       </div>
 
-      <div className="section-head">
+      <div className="section-head" id="expenses">
         <h2>{t("nav.expenses")}</h2>
         {!expensesLoading && expenses.length > 0 && (
           <span className="section-head-note">{t("pd.recorded", { count: expenses.length, amount: PESO.format(approvedTotal) })}</span>
