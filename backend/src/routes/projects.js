@@ -81,6 +81,13 @@ function trimOrNull(value) {
   return s.length ? s : null;
 }
 
+// Two people saving the same name at the same moment would both pass the check below.
+// Inside a transaction, this takes a lock keyed on the name (released at commit), so the
+// second one waits, then sees the first one's project and is refused.
+async function lockProjectName(client, name) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`project-name:${String(name).trim().toLowerCase()}`]);
+}
+
 // Name must be unique among projects that are still in play (UC-02-01 E1).
 async function assertUniqueName(target, name, excludeProjectId = null) {
   const result = await runnerOf(target)(
@@ -204,6 +211,8 @@ router.post("/", requireRole("General Manager"), async (req, res) => {
     await assertUniqueName(query, fields.name);
 
     const { project, structure, source } = await withTransaction(async (client) => {
+      await lockProjectName(client, fields.name);
+      await assertUniqueName(client, fields.name);
       await assertManagerAvailable(client, { userId: projectManagerId, role: "Project Manager", settings });
       if (siteManagerId) {
         await assertManagerAvailable(client, { userId: siteManagerId, role: "Site Manager", settings });
@@ -433,6 +442,7 @@ router.patch("/:id", requireRole("General Manager"), async (req, res) => {
         }
       }
       if (fields.name.toLowerCase() !== String(existing.name).trim().toLowerCase()) {
+        await lockProjectName(client, fields.name);
         await assertUniqueName(client, fields.name, existing.projectid);
       }
 
