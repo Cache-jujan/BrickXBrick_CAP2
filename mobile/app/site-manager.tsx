@@ -13,7 +13,7 @@ import { Redirect, router, useFocusEffect, type Href } from "expo-router";
 
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
 import { type AssignedTask } from "@/lib/api";
-import { loadAssignedTasks } from "@/lib/cached-api";
+import { loadAssignedTasks, loadCheckinsToday } from "@/lib/cached-api";
 import { getSession } from "@/lib/auth";
 import { useOnNewNotifications } from "@/lib/notification-events";
 import { ARCHIVE_AFTER_DAYS, dueLabel, projectSummaries, splitTasks, toDay } from "@/lib/sm-dashboard";
@@ -40,7 +40,6 @@ const FILTERS: { key: FilterKey; icon: "calendar" | "clock.arrow.circlepath" | "
   { key: "Completed", icon: "checkmark.circle.fill", tint: "#16A34A", countBg: "#DCFCE7" },
 ];
 
-const PROJECTS_PREVIEW = 3;
 const TASKS_PREVIEW = 5;
 
 function startOfDay(date: Date) {
@@ -72,13 +71,6 @@ function matchesFilter(task: AssignedTask, key: FilterKey, today: number) {
   if (key === "Today") return due === today;
   if (key === "Upcoming") return due > today;
   return due < today;
-}
-
-function greeting(t: (key: string) => string) {
-  const hour = new Date().getHours();
-  if (hour < 12) return t("mobile.good_morning");
-  if (hour < 18) return t("mobile.good_afternoon");
-  return t("mobile.good_evening");
 }
 
 function formatDay(value?: string | null) {
@@ -136,7 +128,6 @@ export default function SiteManagerHomeScreen() {
   const [filter, setFilter] = useState<FilterKey>("Today");
   const [completedView, setCompletedView] = useState<CompletedView>("Recent");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
-  const [showAllProjects, setShowAllProjects] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   // Set when the list on screen is the copy saved on this phone (offline).
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -150,6 +141,8 @@ export default function SiteManagerHomeScreen() {
       const result = await loadAssignedTasks();
       setTasks(result.data);
       setSavedAt(result.fromCache ? result.savedAt : null);
+      // Save today's check-in choices on the phone too, so Check in works offline later.
+      if (!result.fromCache) loadCheckinsToday().catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : t("sm.err_load_tasks"));
     } finally {
@@ -227,6 +220,12 @@ export default function SiteManagerHomeScreen() {
     return byName;
   }, [activeTasks]);
 
+  // Check in goes straight to a project when it is clear which one: the project picked in the
+  // strip, or the only project. With several and none picked, the check-in screen asks once.
+  const checkinProjectId =
+    (projectFilter ? projectInfo.get(projectFilter)?.projectId : undefined) ??
+    (projectInfo.size === 1 ? [...projectInfo.values()][0].projectId : undefined);
+
   const projects = useMemo(() => {
     const byName = new Map<string, ProjectSummary>();
     activeTasks.forEach((task) => {
@@ -274,28 +273,12 @@ export default function SiteManagerHomeScreen() {
 
   if (!session || session.user.role !== "Site Manager") return <Redirect href="/login" />;
 
-  const firstName = session.user.name.split(" ")[0] || "there";
-  const shownProjects = showAllProjects ? projects : projects.slice(0, PROJECTS_PREVIEW);
   const shownTasks = showAllTasks ? visibleTasks : visibleTasks.slice(0, TASKS_PREVIEW);
   const percent = activeTasks.length === 0 ? 0 : Math.round((doneCount / activeTasks.length) * 100);
 
   const now = new Date();
   const dateWeekday = now.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
   const dateMonth = now.toLocaleDateString(undefined, { month: "short" }).toUpperCase();
-
-  // Monday to Sunday of this week, with a dot on days that have an open deadline.
-  const openDueDays = new Set(open.map(dueDay).filter((d): d is number => d !== null));
-  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
-    return {
-      time: d.getTime(),
-      name: d.toLocaleDateString(undefined, { weekday: "short" }),
-      num: d.getDate(),
-      isToday: d.getTime() === today,
-      hasDue: openDueDays.has(d.getTime()),
-    };
-  });
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -305,9 +288,6 @@ export default function SiteManagerHomeScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTasks(true)} />}
       >
-        <Text style={styles.title}>{greeting(t)}, {firstName}.</Text>
-        <Text style={styles.subtitle}>{t("mobile.tasks_subtitle")}</Text>
-
         {(!isOnline || savedAt) && (
           <Text style={styles.offlineNote}>
             {savedAt
@@ -341,17 +321,6 @@ export default function SiteManagerHomeScreen() {
           </View>
         </View>
 
-        {/* This week: a dot marks a day with an open deadline */}
-        <View style={styles.weekRow} accessibilityLabel={t("mobile.this_week")}>
-          {weekDays.map((day) => (
-            <View key={day.time} style={[styles.weekDay, day.isToday && styles.weekDayToday]}>
-              <Text style={[styles.weekName, day.isToday && styles.weekTextToday]}>{day.name}</Text>
-              <Text style={[styles.weekNum, day.isToday && styles.weekTextToday]}>{day.num}</Text>
-              <View style={[styles.weekDot, day.hasDue && { backgroundColor: day.isToday ? "#FFFFFF" : COLORS.primary }]} />
-            </View>
-          ))}
-        </View>
-
         <View style={styles.actionRow}>
           <AppButton
             label={t("mobile.request_ticket")}
@@ -363,11 +332,88 @@ export default function SiteManagerHomeScreen() {
           <AppButton
             label={t("sm.proj_checkin")}
             variant="secondary"
-            onPress={() => router.push("/site-manager/checkin" as Href)}
+            onPress={() => router.push(checkinProjectId ? ({ pathname: "/site-manager/checkin", params: { projectId: checkinProjectId } } as Href) : ("/site-manager/checkin" as Href))}
             accessibilityLabel="Daily progress check-in"
             style={styles.actionSecondary}
           />
         </View>
+
+        {/* Your projects: a swipeable strip. Tapping one narrows the task list right below it. */}
+        {!loading && !shownError && (projects.length > 0 || closedProjects.length > 0) && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t("mobile.your_projects")}</Text>
+              {projectFilter && (
+                <Pressable onPress={() => { setProjectFilter(null); setShowAllTasks(false); }} hitSlop={8}>
+                  <Text style={styles.viewAll}>{t("sm.proj_filter_clear")}</Text>
+                </Pressable>
+              )}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripContent} style={styles.strip}>
+              {projects.map((project) => {
+                const selected = projectFilter === project.name;
+                const finished = project.pending === 0;
+                const pct = project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
+                const info = projectInfo.get(project.name);
+                const next = info?.next ? dueLabel(info.next.date, new Date(), t) : null;
+                const onHold = project.status === "Suspended";
+                const tone = onHold
+                  ? { label: "status.suspended", bar: "#F59E0B", chip: "amber" as const }
+                  : finished
+                  ? { label: "common.done_status", bar: COLORS.success, chip: "success" as const }
+                  : project.atRisk
+                  ? { label: "common.at_risk", bar: "#F59E0B", chip: "amber" as const }
+                  : { label: "common.on_track", bar: COLORS.success, chip: "success" as const };
+                const detailId = info?.projectId && info.projectId !== project.name ? info.projectId : null;
+                return (
+                  <View key={project.name} style={[styles.stripCard, selected && styles.projectCardSelected]}>
+                    <Pressable
+                      onPress={() => { setProjectFilter(selected ? null : project.name); setShowAllTasks(false); }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`${project.name}, ${project.pending} pending`}
+                      style={({ pressed }) => [pressed && styles.projectCardPressed]}
+                    >
+                      <Text style={styles.stripName} numberOfLines={1}>{project.name}</Text>
+                      <View style={styles.projectPill}>
+                        <StatusChip label={t(tone.label)} tone={tone.chip} />
+                      </View>
+                      <View style={styles.projectProgressRow}>
+                        <View style={styles.projectTrack}>
+                          <View style={[styles.projectFill, { width: `${pct}%`, backgroundColor: tone.bar }]} />
+                        </View>
+                        <Text style={styles.projectCount}>{project.done}/{project.total}</Text>
+                      </View>
+                      <Text style={[styles.projectMeta, next ? DUE_TONE[next.tone] : null]} numberOfLines={1}>
+                        {info?.next && next ? `${info.next.label} · ${next.text}` : project.pending === 0 ? t("mobile.no_pending_tasks") : t("mobile.pending_count", { count: project.pending })}
+                      </Text>
+                    </Pressable>
+                    {detailId && (
+                      <Pressable onPress={() => router.push(`/site-manager/project/${detailId}` as Href)} hitSlop={6} style={styles.filterLink} accessibilityRole="button" accessibilityHint={t("sm.proj_open_hint")}>
+                        <Text style={styles.filterLinkText}>{t("sm.proj_details")} ›</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+              {closedProjects.map((project) => (
+                <Pressable
+                  key={project.id}
+                  onPress={() => router.push(`/site-manager/project/${project.id}` as Href)}
+                  style={({ pressed }) => [styles.stripCard, pressed && styles.projectCardPressed]}
+                  accessibilityRole="button"
+                  accessibilityHint={t("sm.proj_open_hint")}
+                  accessibilityLabel={`${project.name}, ${t("status.terminated")}`}
+                >
+                  <Text style={styles.stripName} numberOfLines={1}>{project.name}</Text>
+                  <View style={styles.projectPill}>
+                    <StatusChip label={t("status.terminated")} tone="error" />
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* Filter tabs */}
         <View style={styles.filterBar}>
@@ -407,119 +453,6 @@ export default function SiteManagerHomeScreen() {
           </View>
         ) : (
           <>
-            {/* Your projects */}
-            {(projects.length > 0 || closedProjects.length > 0) && (
-              <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t("mobile.your_projects")}</Text>
-                  {projects.length > PROJECTS_PREVIEW && (
-                    <Pressable onPress={() => setShowAllProjects((v) => !v)} hitSlop={8}>
-                      <Text style={styles.viewAll}>{t(showAllProjects ? "common.show_less" : "common.view_all")} ›</Text>
-                    </Pressable>
-                  )}
-                </View>
-                <View style={styles.cardList}>
-                  {shownProjects.map((project) => {
-                    const selected = projectFilter === project.name;
-                    const finished = project.pending === 0;
-                    const pct = project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
-                    const info = projectInfo.get(project.name);
-                    const next = info?.next ? dueLabel(info.next.date, new Date(), t) : null;
-                    const onHold = project.status === "Suspended";
-                    const tone = onHold
-                      ? { label: "status.suspended", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
-                      : finished
-                      ? { label: "common.done_status", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success }
-                      : project.atRisk
-                      ? { label: "common.at_risk", bg: "#FFF0E0", fg: "#C2410C", bar: "#F59E0B" }
-                      : { label: "common.on_track", bg: COLORS.successBg, fg: "#166534", bar: COLORS.success };
-                    return (
-                      <Pressable
-                        key={project.name}
-                        onPress={() => {
-                          // Opens the project summary; a card with no project id keeps the old tap (filter the tasks below).
-                          if (info?.projectId && info.projectId !== project.name) router.push(`/site-manager/project/${info.projectId}` as Href);
-                          else { setProjectFilter(selected ? null : project.name); setShowAllTasks(false); }
-                        }}
-                        style={({ pressed }) => [styles.projectCard, selected && styles.projectCardSelected, pressed && styles.projectCardPressed]}
-                        accessibilityRole="button"
-                        accessibilityHint={t("sm.proj_open_hint")}
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={`${project.name}, ${project.pending} pending`}
-                      >
-                        <View style={styles.projectIcon}>
-                          <Text style={styles.projectIconText}>▦</Text>
-                        </View>
-                        <View style={styles.projectBody}>
-                          <View style={styles.projectTitleRow}>
-                            <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
-                            <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
-                          </View>
-                          <View style={styles.projectPill}>
-                            <StatusChip label={t(tone.label)} tone={onHold || (project.atRisk && !finished) ? "amber" : "success"} />
-                          </View>
-                          <View style={styles.projectProgressRow}>
-                            <View style={styles.projectTrack}>
-                              <View style={[styles.projectFill, { width: `${pct}%`, backgroundColor: tone.bar }]} />
-                            </View>
-                            <Text style={styles.projectCount}>{t("mobile.tasks_count", { done: project.done, total: project.total })}</Text>
-                          </View>
-                          <Text style={styles.projectPending}>
-                            {project.pending === 0 ? t("mobile.no_pending_tasks") : t("mobile.pending_count", { count: project.pending })}
-                          </Text>
-                          {info?.startDate && (
-                            <Text style={styles.projectMeta}>
-                              {formatDay(info.startDate)} – {info.endDate ? formatDay(info.endDate) : t("mobile.no_end_date")}
-                            </Text>
-                          )}
-                          {info?.next && next && (
-                            <Text style={[styles.projectMeta, DUE_TONE[next.tone]]} numberOfLines={2}>
-                              {t("mobile.nearest_deadline")} {info.next.label} · {next.text}
-                            </Text>
-                          )}
-                          {/* With several projects, the old tap is kept here: show only this project's tasks below. */}
-                          {projects.length > 1 && (
-                            <Pressable
-                              onPress={() => { setProjectFilter(selected ? null : project.name); setShowAllTasks(false); }}
-                              hitSlop={6}
-                              style={styles.filterLink}
-                              accessibilityRole="button"
-                              accessibilityState={{ selected }}
-                            >
-                              <Text style={styles.filterLinkText}>{selected ? t("sm.proj_filter_clear") : t("sm.proj_filter")}</Text>
-                            </Pressable>
-                          )}
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                  {closedProjects.map((project) => (
-                    <Pressable
-                      key={project.id}
-                      onPress={() => router.push(`/site-manager/project/${project.id}` as Href)}
-                      style={({ pressed }) => [styles.projectCard, pressed && styles.projectCardPressed]}
-                      accessibilityRole="button"
-                      accessibilityHint={t("sm.proj_open_hint")}
-                      accessibilityLabel={`${project.name}, ${t("status.terminated")}`}
-                    >
-                      <View style={styles.projectIcon}>
-                        <Text style={styles.projectIconText}>▦</Text>
-                      </View>
-                      <View style={styles.projectBody}>
-                        <View style={styles.projectTitleRow}>
-                          <Text style={styles.projectName} numberOfLines={2}>{project.name}</Text>
-                          <IconSymbol name="chevron.right" size={18} color={COLORS.muted} />
-                        </View>
-                        <View style={styles.projectPill}>
-                          <StatusChip label={t("status.terminated")} tone="error" />
-                        </View>
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
             {/* Tasks for the active filter */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t(showingArchive ? "mobile.task_archive" : ({ Today: "mobile.tasks_today", Upcoming: "mobile.tasks_upcoming", "Past due": "mobile.tasks_past_due", Completed: "mobile.tasks_completed" } as const)[filter])}</Text>
@@ -719,6 +652,10 @@ const styles = StyleSheet.create({
   projectCount: { color: COLORS.muted, fontSize: 12, fontFamily: FONT.semibold },
   projectPending: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, marginTop: 6 },
   projectMeta: { fontFamily: FONT.regular, color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 3 },
+  strip: { marginHorizontal: -20 },
+  stripContent: { gap: 10, paddingHorizontal: 20, paddingVertical: 2 },
+  stripCard: { ...CARD, width: 224, padding: 12 },
+  stripName: { color: COLORS.heading, fontFamily: FONT.extrabold, fontSize: 15 },
   projectChip: { alignSelf: "flex-start", backgroundColor: "#FFF0E6", borderRadius: 16, marginBottom: 10, maxWidth: "100%", paddingHorizontal: 12, paddingVertical: 6 },
   projectChipText: { color: COLORS.primary, fontSize: 12, fontFamily: FONT.extrabold },
 

@@ -12,6 +12,28 @@ function isInProgress(task) {
   return !isDone(task) && (task.status === "In Progress" || Number(task.completionpercentage) > 0);
 }
 
+function Ring({ value }) {
+  const pct = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div className="pb-ring" style={{ "--pb-pct": pct }} role="img" aria-label={`${pct}%`}>
+      <span>{pct}%</span>
+    </div>
+  );
+}
+
+function TaskRow({ task, kind, meta, note }) {
+  return (
+    <li className={`pb-task is-${kind}`}>
+      <span className="pb-dot" aria-hidden="true">{kind === "done" ? "✓" : ""}</span>
+      <div className="pb-task-body">
+        <strong>{task.taskname}</strong>
+        {meta && <span className="pb-meta">{meta}</span>}
+        {note && <span className="pb-note">{note}</span>}
+      </div>
+    </li>
+  );
+}
+
 // What makes up the project's work-progress %: every milestone with the tasks that are done
 // (default view), and on request the in-progress and pending ones. Reads the overview payload
 // the page already has, so it makes no request of its own.
@@ -19,71 +41,65 @@ export function ProgressBreakdownDialog({ project, onClose }) {
   const { t, tv, formatDate } = useLocale();
   const [showOthers, setShowOthers] = useState(false);
   const milestones = project.milestones || [];
-  const anyDone = milestones.some((m) => (m.tasks || []).some(isDone));
+  const all = milestones.flatMap((m) => m.tasks || []);
+  const doneCount = all.filter(isDone).length;
+  const activeCount = all.filter(isInProgress).length;
+  const pendingCount = all.length - doneCount - activeCount;
+  const overall = Number(project.progress || 0);
 
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
       <div className="modal progress-breakdown" role="dialog" aria-modal="true" aria-labelledby="progress-breakdown-title" onClick={(ev) => ev.stopPropagation()}>
         <h2 id="progress-breakdown-title" className="modal-title">{t("pd.progress_breakdown_title")}</h2>
 
-        {!anyDone && !showOthers && <p className="modal-body">{t("pd.progress_breakdown_empty")}</p>}
+        <div className="pb-summary">
+          <Ring value={overall} />
+          <div className="pb-stats">
+            <div className="pb-stat is-done"><b>{doneCount}</b><span>{t("pd.progress_breakdown_done_section")}</span></div>
+            <div className="pb-stat is-active"><b>{activeCount}</b><span>{t("pd.progress_breakdown_inprogress_section")}</span></div>
+            <div className="pb-stat is-pending"><b>{pendingCount}</b><span>{t("pd.progress_breakdown_pending_section")}</span></div>
+          </div>
+        </div>
+
+        {doneCount === 0 && !showOthers && <p className="modal-body">{t("pd.progress_breakdown_empty")}</p>}
 
         {milestones.map((milestone) => {
           const tasks = milestone.tasks || [];
           const done = tasks.filter(isDone);
           const inProgress = tasks.filter(isInProgress);
           const pending = tasks.filter((task) => !isDone(task) && !isInProgress(task));
-          const showDone = done.length > 0;
-          const showMore = showOthers && (inProgress.length > 0 || pending.length > 0);
-          if (!showDone && !showMore) return null;
+          const others = showOthers ? [...inProgress, ...pending] : [];
+          if (done.length === 0 && others.length === 0) return null;
+          const pct = Math.round(Number(milestone.completionpercentage || 0));
           return (
-            <section className="progress-breakdown-milestone" key={milestone.milestoneid}>
-              <h3 className="progress-breakdown-heading">
-                <span>{milestone.name}</span>
-                <span className="progress-breakdown-chip">{Math.round(Number(milestone.completionpercentage || 0))}%</span>
-              </h3>
-              {showDone && (
-                <>
-                  <p className="progress-breakdown-section">{t("pd.progress_breakdown_done_section")}</p>
-                  <ul className="progress-breakdown-list">
-                    {done.map((task) => (
-                      <li key={task.taskid}>
-                        <strong>{task.taskname}</strong>
-                        <span className="progress-breakdown-meta">
-                          {[task.completedat ? formatDate(task.completedat, DATETIME_OPTIONS) : null, task.completedbyname].filter(Boolean).join(" · ")}
-                        </span>
-                        {task.completionnote && <span className="progress-breakdown-note">{task.completionnote}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              {showMore && inProgress.length > 0 && (
-                <>
-                  <p className="progress-breakdown-section">{t("pd.progress_breakdown_inprogress_section")}</p>
-                  <ul className="progress-breakdown-list">
-                    {inProgress.map((task) => (
-                      <li key={task.taskid}>
-                        <strong>{task.taskname}</strong>
-                        <span className="progress-breakdown-meta">{Math.round(Number(task.completionpercentage || 0))}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              {showMore && pending.length > 0 && (
-                <>
-                  <p className="progress-breakdown-section">{t("pd.progress_breakdown_pending_section")}</p>
-                  <ul className="progress-breakdown-list">
-                    {pending.map((task) => (
-                      <li key={task.taskid}>
-                        <strong>{task.taskname}</strong>
-                        <span className="progress-breakdown-meta">{tv("status", task.status || "Pending")}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
+            <section className="pb-milestone" key={milestone.milestoneid}>
+              <header className="pb-milestone-head">
+                <h3>{milestone.name}</h3>
+                <span className="pb-chip">{pct}%</span>
+              </header>
+              <div className="pb-bar"><span style={{ width: `${pct}%` }} /></div>
+              <ul className="pb-tasks">
+                {done.map((task) => (
+                  <TaskRow
+                    key={task.taskid}
+                    task={task}
+                    kind="done"
+                    meta={[task.completedat ? formatDate(task.completedat, DATETIME_OPTIONS) : null, task.completedbyname].filter(Boolean).join(" · ")}
+                    note={task.completionnote}
+                  />
+                ))}
+                {others.map((task) => {
+                  const active = isInProgress(task);
+                  return (
+                    <TaskRow
+                      key={task.taskid}
+                      task={task}
+                      kind={active ? "active" : "pending"}
+                      meta={active ? `${Math.round(Number(task.completionpercentage || 0))}%` : tv("status", task.status || "Pending")}
+                    />
+                  );
+                })}
+              </ul>
             </section>
           );
         })}

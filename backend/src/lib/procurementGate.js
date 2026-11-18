@@ -1,33 +1,34 @@
-// procurementGate.js: the "Receive all initial procurement on site" gate task.
+// procurementGate.js: the "Receive all initial procurement on site" task, and the rule that
+// keeps Construction work closed until Pre-construction is finished.
 //
-// Every project carries one Site Manager task with this requirementCode on its first
-// Construction milestone (migration 066, and the template copy). Until it is Completed
-// (the SM's photo acknowledged by the PM) no OTHER Construction task takes progress.
-// A project with no gate task (older, or no Site Manager when 066 ran) is not gated.
+// Every project carries one Site Manager task with this requirementCode as the FIRST task of
+// its first Construction milestone (migration 066, and the template copy). It is an ordinary
+// task: it no longer blocks the other Construction tasks. What does block Construction is an
+// unfinished Pre-construction (Planning) task: see isBlockedByPreconstruction.
 
 const GATE_CODE = "GATE-PROC-RECEIVED";
 
-const GATE_BLOCKED_MESSAGE =
-  "Site Manager must mark 'Receive all initial procurement on site' as done before Construction work can start.";
+const PRECONSTRUCTION_MESSAGE =
+  "Construction tasks open once every Pre-construction task is done.";
 
-// Is submitting progress on this task blocked by an open gate? `taskId` is the task being worked on.
-async function isBlockedByProcurementGate(query, taskId) {
+// Is this a Construction task of a project that still has an open Pre-construction (Planning) task?
+async function isBlockedByPreconstruction(query, taskId) {
   const result = await query(
-    `SELECT m.phase, t.requirementCode,
+    `SELECT m.phase,
             EXISTS (
-              SELECT 1 FROM tasks g
-                JOIN milestones gm ON gm.milestoneId = g.milestoneId
-               WHERE gm.projectId = m.projectId
-                 AND g.requirementCode = $2
-                 AND g.status <> 'Completed') AS gateOpen
+              SELECT 1 FROM tasks pt
+                JOIN milestones pm ON pm.milestoneId = pt.milestoneId
+               WHERE pm.projectId = m.projectId
+                 AND pm.phase = 'Planning'
+                 AND pt.status <> 'Completed') AS preOpen
        FROM tasks t
        JOIN milestones m ON m.milestoneId = t.milestoneId
       WHERE t.taskId = $1`,
-    [taskId, GATE_CODE]
+    [taskId]
   );
   const row = result.rows[0];
   if (!row) return false;
-  return row.phase === "Construction" && row.requirementcode !== GATE_CODE && row.gateopen === true;
+  return row.phase === "Construction" && row.preopen === true;
 }
 
-module.exports = { GATE_CODE, GATE_BLOCKED_MESSAGE, isBlockedByProcurementGate };
+module.exports = { GATE_CODE, PRECONSTRUCTION_MESSAGE, isBlockedByPreconstruction };

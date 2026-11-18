@@ -22,7 +22,6 @@ const {
 const { submitTaskProgress, getTaskForUser, hasPendingReview, awaitingReview, taskReviewNotice } = require("../lib/taskProgress");
 const { assertProjectNotOnHold, assertProjectNotTerminated } = require("../lib/projectHold");
 const { notify } = require("../lib/notify");
-const { GATE_CODE } = require("../lib/procurementGate");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -45,13 +44,6 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                     p.status AS projectstatus,
                     p.startDate AS projectstartdate,
                     p.endDate AS projectenddate,
-                    (m.phase = 'Construction'
-                     AND t.requirementCode IS DISTINCT FROM $2
-                     AND EXISTS (SELECT 1 FROM tasks g
-                                   JOIN milestones gm ON gm.milestoneId = g.milestoneId
-                                  WHERE gm.projectId = m.projectId
-                                    AND g.requirementCode = $2
-                                    AND g.status <> 'Completed')) AS procurementgateblocked,
                     pending.photoevidenceurl AS pendingphotoevidenceurl,
                     pending.createdat AS pendingsubmittedat,
                     pending.note AS pendingnote,
@@ -75,8 +67,15 @@ router.get("/assigned", requireRole("Site Manager"), async (req, res, next) => {
                      LIMIT 1
                ) latest ON TRUE
               WHERE t.assignedTo = $1
+                -- Construction tasks stay hidden until every Pre-construction task is done.
+                AND NOT (m.phase = 'Construction' AND EXISTS (
+                       SELECT 1 FROM tasks pt
+                         JOIN milestones pm ON pm.milestoneId = pt.milestoneId
+                        WHERE pm.projectId = m.projectId
+                          AND pm.phase = 'Planning'
+                          AND pt.status <> 'Completed'))
               ORDER BY t.dueDate ASC`,
-            [req.user.id, GATE_CODE]
+            [req.user.id]
         );
         res.json(result.rows);
     } catch (err) {
@@ -368,13 +367,13 @@ async function getTaskForCompletion(taskId) {
 // document as evidence (and optionally a note, which the web no longer sends).
 // Construction tasks keep going through POST /:id/progress + the PM
 // Acknowledge/Flag review above; this route refuses them.
-router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, next) => {
+router.patch("/:id/complete", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const note = text(req.body.note, { field: "note", label: "Note", max: LIMITS.note, multiline: true });
 
         const task = await getTaskForCompletion(req.params.id);
 
-        if (task.projectmanagerid !== req.user.id) {
+        if (req.user.role !== "General Manager" && task.projectmanagerid !== req.user.id) {
             const err = new Error("You may only complete tasks on a project you are the Project Manager for");
             err.status = 403;
             throw err;
@@ -427,10 +426,10 @@ router.patch("/:id/complete", requireRole("Project Manager"), async (req, res, n
 // documents dialog ("Attach the barangay clearance here"). Owning PM only: the GM can read
 // documents but not edit the task. A completed task is locked.
 const MAX_INSTRUCTION = 500;
-router.patch("/:id/instruction", requireRole("Project Manager"), async (req, res, next) => {
+router.patch("/:id/instruction", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const task = await getPlanningTaskContext(req.params.id);
-        if (task.projectmanagerid !== req.user.id) {
+        if (req.user.role !== "General Manager" && task.projectmanagerid !== req.user.id) {
             const err = new Error("You may only edit tasks on a project you are the Project Manager for");
             err.status = 403;
             throw err;

@@ -17,7 +17,7 @@ const PLANNABLE_STATUSES = ["Draft", "Active"];
 const router = express.Router();
 router.use(requireAuth);
 
-async function getOwnedProject(projectId, userId) {
+async function getOwnedProject(projectId, user) {
     const result = await query(
         `SELECT projectId, projectManagerId, siteManagerId, status,
                 startDate, constructionStartDate, endDate
@@ -30,7 +30,8 @@ async function getOwnedProject(projectId, userId) {
         throw err;
     }
     const project = result.rows[0];
-    if (project.projectmanagerid !== userId) {
+    // The General Manager can do everything the Project Manager can in the milestone section.
+    if (user.role !== "General Manager" && project.projectmanagerid !== user.id) {
         const err = new Error("You may only manage milestones on a project you are the Project Manager for");
         err.status = 403;
         throw err;
@@ -90,7 +91,7 @@ async function getMilestoneWithProject(milestoneId) {
 }
 
 // POST /: PM creates a milestone under a project they manage.
-router.post("/", requireRole("Project Manager"), async (req, res, next) => {
+router.post("/", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const { projectID, dueDate } = req.body;
         // D-12: the web UI trims before posting, but the API accepted a
@@ -114,7 +115,7 @@ router.post("/", requireRole("Project Manager"), async (req, res, next) => {
             throw err;
         }
 
-        const project = await getOwnedProject(projectID, req.user.id);
+        const project = await getOwnedProject(projectID, req.user);
 
         // Non-blocking: the PM is told but never stopped, they may have a
         // real reason for a date outside the usual window.
@@ -199,7 +200,7 @@ router.get("/attention", requireRole("Project Manager"), async (req, res, next) 
 // "Edit timeline" modal can say so before the PM tries. Owning PM only, on a
 // Draft or Active project, like the edit itself. Declared before "/:id".
 // -> { locks: { [taskId]: "progress" | "documents" } }
-router.get("/timeline/locks", requireRole("Project Manager"), async (req, res, next) => {
+router.get("/timeline/locks", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const { projectId } = req.query;
         if (!isUUID(projectId)) {
@@ -207,7 +208,7 @@ router.get("/timeline/locks", requireRole("Project Manager"), async (req, res, n
             err.status = 400;
             throw err;
         }
-        await getOwnedProject(projectId, req.user.id);
+        await getOwnedProject(projectId, req.user);
         res.json({ locks: await loadTimelineLocks(query, projectId) });
     } catch (err) {
         next(err);
@@ -221,7 +222,7 @@ router.get("/timeline/locks", requireRole("Project Manager"), async (req, res, n
 //         tasks:      [{ taskID, taskName?, dueDate?, remove? }] }
 // 409 (with details.errors) when something can't be saved: a completed task, or
 // a task with progress or documents being deleted. Nothing is saved then.
-router.patch("/timeline", requireRole("Project Manager"), async (req, res, next) => {
+router.patch("/timeline", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const { projectID } = req.body || {};
         if (!isUUID(projectID)) {
@@ -230,7 +231,7 @@ router.patch("/timeline", requireRole("Project Manager"), async (req, res, next)
             throw err;
         }
         const changes = parseTimelineChanges(req.body);
-        const project = await getOwnedProject(projectID, req.user.id);
+        const project = await getOwnedProject(projectID, req.user);
         const result = await withTransaction((client) => applyTimelineChanges(client, project, changes));
         res.json(result);
     } catch (err) {
@@ -246,7 +247,7 @@ const TASK_HANDLERS = ["GM", "PM"];
 // Planning milestones (#5): there's no Site Manager involvement at all,
 // the task is just "Handled by: GM" or "Handled by: PM" (informational),
 // assignedTo stays NULL, and only a PM can later mark it done.
-router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next) => {
+router.post("/:id/tasks", requireRole("Project Manager", "General Manager"), async (req, res, next) => {
     try {
         const { dueDate, handledBy } = req.body;
         const taskName = text(req.body.taskName, { field: "taskName", label: "Task name", max: LIMITS.taskName });
@@ -259,7 +260,7 @@ router.post("/:id/tasks", requireRole("Project Manager"), async (req, res, next)
 
         const milestone = await getMilestoneWithProject(req.params.id);
 
-        if (milestone.projectmanagerid !== req.user.id) {
+        if (req.user.role !== "General Manager" && milestone.projectmanagerid !== req.user.id) {
             const err = new Error("You may only add tasks to a milestone on a project you are the Project Manager for");
             err.status = 403;
             throw err;

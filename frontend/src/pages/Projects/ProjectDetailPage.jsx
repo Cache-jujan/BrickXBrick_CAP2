@@ -484,9 +484,9 @@ export function ProjectDetailPage() {
   const progressPct = Math.round(Number(project.progress || 0));
   const location = [project.siteaddress, project.municipality, project.province].filter(Boolean).join(", ");
 
-  // Only the owning Project Manager may add milestones/tasks, mirrors
+  // The General Manager or the owning Project Manager may plan milestones/tasks, mirrors
   // getOwnedProject's check in backend/src/routes/milestones.js.
-  const canManage = user.role === "Project Manager" && project.projectmanagerid === user.id && !isClosed;
+  const canManage = (isGM || (user.role === "Project Manager" && project.projectmanagerid === user.id)) && !isClosed;
   // Planning-task documents: the GM (any project) or the owning PM may open
   // them (the backend enforces the same); changing them stops once the
   // project is closed or the task is completed.
@@ -611,12 +611,6 @@ export function ProjectDetailPage() {
       {(project.warnings || []).map((w) => (
         <Banner key={w.code} tone="warning" title={w.message} />
       ))}
-
-      {project.procurementGateCompleted === false && (project.milestones || []).some((m) => m.phase === "Construction") && (
-        <Banner tone="warning" title={t("pd.gate_banner_title")}>
-          {t("pd.gate_banner_body", { name: t("pd.gate_task_name_default") })}
-        </Banner>
-      )}
 
       {project.description && <p className="pd-description">{project.description}</p>}
 

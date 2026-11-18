@@ -12,7 +12,7 @@
 const db = require("./db");
 const r2 = require("./r2");
 const { notifySafely } = require("./notify");
-const { GATE_BLOCKED_MESSAGE, isBlockedByProcurementGate } = require("./procurementGate");
+const { PRECONSTRUCTION_MESSAGE, isBlockedByPreconstruction } = require("./procurementGate");
 
 class TaskProgressError extends Error {
   constructor(status, code, message) {
@@ -81,11 +81,11 @@ async function submitTaskProgress(input, deps = {}) {
     throw new TaskProgressError(409, "TASK_CLOSED", "This task is already completed and cannot be resubmitted");
   }
 
-  // The Site Manager's procurement gate must be done before other Construction work takes progress
+  // Construction work opens once every Pre-construction task is done
   // (online and offline sync alike; checked before any photo is stored).
-  if (await isBlockedByProcurementGate(query, taskId)) {
-    const error = new TaskProgressError(409, "PROCUREMENT_GATE", GATE_BLOCKED_MESSAGE);
-    error.details = { code: "PROCUREMENT_GATE" };
+  if (await isBlockedByPreconstruction(query, taskId)) {
+    const error = new TaskProgressError(409, "PRECONSTRUCTION_OPEN", PRECONSTRUCTION_MESSAGE);
+    error.details = { code: "PRECONSTRUCTION_OPEN" };
     throw error;
   }
 

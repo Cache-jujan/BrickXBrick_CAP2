@@ -34,6 +34,8 @@ export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete, canEdi
   const [instruction, setInstruction] = useState(task.attachmentinstruction || "");
   const [editingInstruction, setEditingInstruction] = useState(false);
   const [instructionDraft, setInstructionDraft] = useState("");
+  // The document waiting on the "Remove?" confirmation modal.
+  const [removing, setRemoving] = useState(null);
 
   async function load() {
     try {
@@ -127,7 +129,7 @@ export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete, canEdi
   }
 
   async function handleRemove(doc) {
-    if (!window.confirm(t("docs.confirm_remove", { name: doc.fileName }))) return;
+    setRemoving(null);
     setBusy(true);
     setError("");
     try {
@@ -141,6 +143,7 @@ export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete, canEdi
   }
 
   return (
+    <>
     <div className="modal-overlay" role="presentation" onClick={() => { if (!busy) onClose(); }}>
       <div className="modal task-docs" role="dialog" aria-modal="true" aria-labelledby="task-docs-title" onClick={(ev) => ev.stopPropagation()}>
         <h2 id="task-docs-title" className="modal-title">{t("docs.title", { name: task.taskname })}</h2>
@@ -192,7 +195,7 @@ export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete, canEdi
                   </span>
                 </div>
                 {canEdit && (
-                  <button type="button" className="task-docs-remove" onClick={() => handleRemove(doc)} disabled={busy}>
+                  <button type="button" className="task-docs-remove" onClick={() => setRemoving(doc)} disabled={busy}>
                     {t("common.remove")}
                   </button>
                 )}
@@ -231,5 +234,18 @@ export function TaskDocumentsDialog({ task, canEdit, onClose, onComplete, canEdi
         {canEdit && !instruction && <p className="task-docs-hint">{t("docs.hint")}</p>}
       </div>
     </div>
+    {removing && (
+      <div className="modal-overlay" role="presentation" onClick={() => setRemoving(null)}>
+        <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="task-docs-remove-title" onClick={(ev) => ev.stopPropagation()}>
+          <h2 id="task-docs-remove-title" className="modal-title">{t("common.remove")}</h2>
+          <p className="modal-body">{t("docs.confirm_remove", { name: removing.fileName })}</p>
+          <div className="modal-actions">
+            <Button variant="secondary" onClick={() => setRemoving(null)}>{t("common.cancel")}</Button>
+            <Button variant="danger" onClick={() => handleRemove(removing)}>{t("common.remove")}</Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

@@ -181,8 +181,6 @@ export default function SiteManagerTaskDetailScreen() {
   // D-04: flag only ever lived on the log row, the SM had no way to see
   // that a submission was flagged, let alone why, short of asking the PM.
   const flagged = task?.latestreviewstatus === "Flagged";
-  // The procurement gate task is still open: other Construction tasks can't take progress yet.
-  const gateBlocked = !!task?.procurementgateblocked && task?.status !== "Completed";
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -362,13 +360,6 @@ export default function SiteManagerTaskDetailScreen() {
               </View>
             )}
 
-            {gateBlocked && (
-              <View style={styles.flagCard}>
-                <Text style={styles.flagTitle}>{t("sm.gate_blocked_title")}</Text>
-                <Text style={styles.flagBody}>{t("sm.gate_blocked_body")}</Text>
-              </View>
-            )}
-
             {awaitingReview && (
               <View style={styles.reviewCard} accessibilityLiveRegion="polite">
                 <Text style={styles.reviewEyebrow}>{t("sm.current_submission")}</Text>
@@ -417,7 +408,7 @@ export default function SiteManagerTaskDetailScreen() {
               </View>
             )}
 
-            {task.status !== "Completed" && !awaitingReview && !gateBlocked && (!queued || showForm) && (
+            {task.status !== "Completed" && !awaitingReview && (!queued || showForm) && (
               <View style={styles.submissionSection}>
                 <Text style={styles.sectionTitle}>{t("sm.progress_update")}</Text>
                 <Text style={styles.sectionSubtitle}>{t("sm.one_photo")}</Text>
