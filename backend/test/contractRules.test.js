@@ -11,6 +11,7 @@ const {
   contractChangeProblem,
   priceDifference,
   bomContractWarning,
+  sameName,
   ledgerSummary,
 } = require("../src/lib/contractRules");
 
@@ -198,4 +199,19 @@ test("a BOM total that differs from the recorded contract gives a warning, never
   assert.equal(higher.code, "CONTRACT_DIFFERS_FROM_BOM");
   assert.match(higher.message, /₱58,016\.25 higher than this BOM total \(₱1,241,983\.75\)/);
   assert.match(bomContractWarning(1200000, 1241983.75).message, /₱41,983\.75 lower/);
+});
+
+test("the contract owner is compared with the project client loosely, and only warns", () => {
+  assert.equal(sameName("Juan A. Dela Cruz", "Juan Dela Cruz"), true);
+  assert.equal(sameName("MR. JUAN DELA CRUZ", "juan  dela cruz"), true);
+  assert.equal(sameName("Dela Cruz, Juan", "Juan Dela Cruz"), true);
+  assert.equal(sameName("Maria Santos", "Juan Dela Cruz"), false);
+  assert.equal(sameName("", "Juan Dela Cruz"), true);
+  const contract = { contractAmount: 1000000, downPaymentPercent: 20, retentionPercent: 10, ownerName: "Maria Santos" };
+  const different = ledgerSummary({ contract, payments: [], spent: 0, clientName: "Juan Dela Cruz" });
+  assert.ok(different.warnings.some((w) => w.code === "CLIENT_NAME_DIFFERS" && w.level === "warning"));
+  const same = ledgerSummary({ contract: { ...contract, ownerName: "Juan A. Dela Cruz" }, payments: [], spent: 0, clientName: "Juan Dela Cruz" });
+  assert.ok(!same.warnings.some((w) => w.code === "CLIENT_NAME_DIFFERS"));
+  const unknown = ledgerSummary({ contract, payments: [], spent: 0 });
+  assert.ok(!unknown.warnings.some((w) => w.code === "CLIENT_NAME_DIFFERS"));
 });

@@ -232,6 +232,32 @@ function priceDifference(contractAmount, agreedPrice) {
   return { agreedPrice: round2(price), difference, differs: Math.abs(difference) >= TOLERANCE };
 }
 
+const NAME_TITLES = new Set(["mr", "mrs", "ms", "miss", "engr", "ar", "atty", "dr", "sir", "maam"]);
+
+/** A name as a set of words: no case, no punctuation, no titles, no single-letter initials. */
+function nameWords(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !NAME_TITLES.has(w));
+}
+
+/**
+ * True when two names plausibly name the same person or company: every word of
+ * the shorter one is in the longer one ("Juan A. Dela Cruz" matches "Juan Dela
+ * Cruz"). Two empty names are not compared.
+ */
+function sameName(a, b) {
+  const wa = nameWords(a);
+  const wb = nameWords(b);
+  if (wa.length === 0 || wb.length === 0) return true;
+  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  return short.every((w) => long.includes(w));
+}
+
 /**
  * Shown when the GM is about to approve a BOM whose total is not the amount on
  * the recorded contract. It is a warning that needs a tick, never a block:
@@ -256,9 +282,10 @@ function bomContractWarning(contractAmount, bomPrice) {
  *   agreedPrice   the price agreed on the approved BOM, or null when the BOM isn't approved
  *   projectBudget the project's budget (agreed price + escalation), or null
  *   workDonePercent  average milestone completion, or null when there are no milestones
+ *   clientName    the client named on the project, compared with the contract owner
  * Income is not budget: nothing here changes the spending budget.
  */
-function ledgerSummary({ contract, payments, spent, agreedPrice = null, projectBudget = null, workDonePercent = null }) {
+function ledgerSummary({ contract, payments, spent, agreedPrice = null, projectBudget = null, workDonePercent = null, clientName = null }) {
   const live = payments.filter((p) => !p.voidedAt);
   const schedule = paymentSchedule(contract);
   const received = sumOf(live);
@@ -294,6 +321,13 @@ function ledgerSummary({ contract, payments, spent, agreedPrice = null, projectB
       code: "CONTRACT_DIFFERS_FROM_AGREED_PRICE",
       level: "warning",
       message: `The contract amount (${peso(schedule.contractAmount)}) differs from the price agreed on the approved BOM (${peso(difference.agreedPrice)}) by ${peso(Math.abs(difference.difference))}.`,
+    });
+  }
+  if (!sameName(contract.ownerName, clientName)) {
+    warnings.push({
+      code: "CLIENT_NAME_DIFFERS",
+      level: "warning",
+      message: `The contract owner (${contract.ownerName}) is not the client named on the project (${clientName}). Check that both are the same person.`,
     });
   }
   const budget = Number(projectBudget);
@@ -333,5 +367,6 @@ module.exports = {
   contractChangeProblem,
   priceDifference,
   bomContractWarning,
+  sameName,
   ledgerSummary,
 };

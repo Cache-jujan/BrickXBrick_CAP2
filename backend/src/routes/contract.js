@@ -201,6 +201,7 @@ async function buildPayload(target, project, user) {
     agreedPrice: price?.approved ? price.price : null,
     projectBudget: num(project.budget),
     workDonePercent: figures.workDonePercent,
+    clientName: project.clientname,
   });
   return { ...base, contract, payments, summary };
 }
