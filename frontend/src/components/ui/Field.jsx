@@ -23,7 +23,8 @@ export function Field({
     <label className={`field ${className}`}>
       <span className="field-label">
         {label}
-        {required && <span className="field-required"> *</span>}
+        {/* A no-break space keeps the star on the same line as the last word of the label. */}
+        {required && <span className="field-required">{"\u00A0"}*</span>}
         {missing && <span className="field-missing-tag">{t("gap.needed")}</span>}
       </span>
       {prefix ? (

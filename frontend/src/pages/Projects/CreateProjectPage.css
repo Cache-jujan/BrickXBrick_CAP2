@@ -158,6 +158,11 @@
 .pf-form .field {
   min-width: 0;
 }
+/* In the three-date row a long label can wrap to two lines. Keep every label at the top and
+   every date box at the bottom, so the three boxes line up whatever the label length. */
+.pf-form .create-project-row-3 .field-label {
+  margin-bottom: auto;
+}
 .pf-form .field-control {
   width: 100%;
   min-width: 0;
