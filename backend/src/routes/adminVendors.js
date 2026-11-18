@@ -13,8 +13,14 @@ router.use(requireAuth, requireRole("System Administrator"));
 const PERMIT_TYPES = ["Permit", "PTU", "ATP"];
 // Philippine TIN: 9 digits in groups of 3 (123-456-789), plus an optional branch code of 3 to 5 digits.
 const TIN_RE = /^\d{3}-\d{3}-\d{3}(-\d{3,5})?$/;
+// A phone number is typed freely (+63 917 555 0101, (032) 123-4567) but must be 7 to 15 digits.
+const PHONE_RE = /^[0-9+()\-\s]+$/;
+function validPhone(value) {
+  const digits = value.replace(/\D/g, "");
+  return PHONE_RE.test(value) && digits.length >= 7 && digits.length <= 15;
+}
 
-const COLUMNS = `vendorID AS "vendorID", vendorName AS "vendorName", location,
+const COLUMNS = `vendorID AS "vendorID", vendorName AS "vendorName", location, phone,
   tin, birPermitType AS "birPermitType", birPermitNumber AS "birPermitNumber",
   createdAt AS "createdAt"`;
 
@@ -22,6 +28,10 @@ const COLUMNS = `vendorID AS "vendorID", vendorName AS "vendorName", location,
 function readFields(body) {
   const vendorName = text(body?.vendorName, { field: "vendorName", label: "Vendor name", max: LIMITS.vendorName, required: true });
   const location = text(body?.location, { field: "location", label: "Location", max: 200 });
+  const phone = text(body?.phone, { field: "phone", label: "Phone number", max: 30 });
+  if (phone && !validPhone(phone)) {
+    throw new InputError("Phone number must have 7 to 15 digits, for example +63 917 555 0101", "phone");
+  }
   const tin = text(body?.tin, { field: "tin", label: "TIN", max: 20 });
   if (tin && !TIN_RE.test(tin)) {
     throw new InputError("TIN must look like 123-456-789-00000", "tin");
@@ -34,7 +44,7 @@ function readFields(body) {
   if (birPermitNumber && !birPermitType) {
     throw new InputError("Choose the BIR permit type for this number", "birPermitType");
   }
-  return { vendorName, location, tin, birPermitType, birPermitNumber: birPermitType ? birPermitNumber : null };
+  return { vendorName, location, phone, tin, birPermitType, birPermitNumber: birPermitType ? birPermitNumber : null };
 }
 
 function sendInputError(res, err) {
@@ -71,10 +81,10 @@ router.post("/", async (req, res) => {
       return res.status(409).json({ error: "A vendor with this name is already on the list", fieldErrors: [{ field: "vendorName", message: "Already on the list" }] });
     }
     const r = await query(
-      `INSERT INTO VendorMasterList (addedBy, vendorName, location, tin, birPermitType, birPermitNumber)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO VendorMasterList (addedBy, vendorName, location, phone, tin, birPermitType, birPermitNumber)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${COLUMNS}`,
-      [req.user.id, f.vendorName, f.location, f.tin, f.birPermitType, f.birPermitNumber]
+      [req.user.id, f.vendorName, f.location, f.phone, f.tin, f.birPermitType, f.birPermitNumber]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -103,11 +113,11 @@ router.patch("/:id", async (req, res) => {
     }
     const r = await query(
       `UPDATE VendorMasterList
-          SET vendorName = $1, location = $2, tin = $3, birPermitType = $4,
-              birPermitNumber = $5
-        WHERE vendorID = $6
+          SET vendorName = $1, location = $2, phone = $3, tin = $4, birPermitType = $5,
+              birPermitNumber = $6
+        WHERE vendorID = $7
        RETURNING ${COLUMNS}`,
-      [f.vendorName, f.location, f.tin, f.birPermitType, f.birPermitNumber, id]
+      [f.vendorName, f.location, f.phone, f.tin, f.birPermitType, f.birPermitNumber, id]
     );
     if (r.rowCount === 0) return res.status(404).json({ error: "Vendor not found" });
     res.json(r.rows[0]);
