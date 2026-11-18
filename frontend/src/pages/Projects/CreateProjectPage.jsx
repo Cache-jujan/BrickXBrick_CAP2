@@ -196,6 +196,7 @@ export function CreateProjectPage() {
 
       {step === "basics" && (
         <div className="create-project-card">
+          <p className="create-project-hint">{t("cp.next_steps")}</p>
           <ProjectForm
             key={choice ? `${choice.mode}-${choice.templateId || choice.sourceProjectId}` : "blank"}
             mode="create"
