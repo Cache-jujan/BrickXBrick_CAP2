@@ -533,6 +533,15 @@
   color: var(--color-ink-soft);
 }
 
+.pd-confirm-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
 .pd-checklist-steps li {
   display: flex;
   align-items: center;

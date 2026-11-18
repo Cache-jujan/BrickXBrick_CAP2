@@ -82,6 +82,8 @@ export function ProjectDetailPage() {
   const [siteManagerSaving, setSiteManagerSaving] = useState(false);
   // GM lifecycle actions: { kind: "activate" | "suspend" | "resume" | "cancel" | "complete" } while a dialog is open.
   const [statusDialog, setStatusDialog] = useState(null);
+  // Completing below 100% progress needs the GM to confirm the work is finished (a warning, not a block).
+  const [finishConfirmed, setFinishConfirmed] = useState(false);
   const [statusInput, setStatusInput] = useState("");
   const [resumeDate, setResumeDate] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
@@ -421,6 +423,7 @@ export function ProjectDetailPage() {
     setStatusError("");
     setStatusInput(kind === "complete" ? new Date().toISOString().slice(0, 10) : "");
     setResumeDate("");
+    setFinishConfirmed(false);
     setStatusDialog({ kind });
   }
 
@@ -994,6 +997,15 @@ export function ProjectDetailPage() {
                   value={statusInput}
                   onChange={(ev) => setStatusInput(ev.target.value)}
                 />
+                {progressPct < 100 && (
+                  <>
+                    <Banner tone="warning" title={t("pd.complete_warn", { pct: progressPct })} />
+                    <label className="pd-confirm-check">
+                      <input type="checkbox" checked={finishConfirmed} onChange={(ev) => setFinishConfirmed(ev.target.checked)} />
+                      {t("pd.complete_confirm")}
+                    </label>
+                  </>
+                )}
               </>
             )}
             {statusDialog.kind === "suspend" && (
@@ -1046,7 +1058,13 @@ export function ProjectDetailPage() {
                 onClick={handleStatusAction}
                 disabled={
                   statusBusy ||
-                  (statusDialog.kind === "activate" ? !readyToActivate : statusDialog.kind === "resume" ? false : !statusInput.trim())
+                  (statusDialog.kind === "activate"
+                    ? !readyToActivate
+                    : statusDialog.kind === "resume"
+                      ? false
+                      : statusDialog.kind === "complete"
+                        ? !statusInput.trim() || (progressPct < 100 && !finishConfirmed)
+                        : !statusInput.trim())
                 }
               >
                 {statusBusy ? t("common.saving") : statusDialog.kind === "activate" ? t("pd.activate_btn") : statusDialog.kind === "complete" ? t("pd.complete_btn") : statusDialog.kind === "suspend" ? t("pd.suspend_btn") : statusDialog.kind === "resume" ? t("pd.resume_btn") : project.activatedat ? t("pd.terminate_btn") : t("pd.cancel_btn")}
