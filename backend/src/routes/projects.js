@@ -944,10 +944,12 @@ router.get("/:id/overview", requireRole(...PROJECT_MANAGEMENT_ROLES), async (req
     if (milestones.length > 0) {
       // assignedToName: the timeline shows who a task is assigned to; the bare
       // tasks row only has the assignedTo user id, so it always read "Unassigned".
+      // completedByName: the progress breakdown names who closed each task.
       const tasksResult = await query(
-        `SELECT t.*, u.name AS assignedtoname
+        `SELECT t.*, u.name AS assignedtoname, cb.name AS completedbyname
            FROM tasks t
            LEFT JOIN users u ON u.userid = t.assignedto
+           LEFT JOIN users cb ON cb.userid = t.completedby
           WHERE t.milestoneId = ANY($1)
           ORDER BY t.dueDate ASC, t.sortOrder ASC NULLS LAST`,
         [milestoneIds]

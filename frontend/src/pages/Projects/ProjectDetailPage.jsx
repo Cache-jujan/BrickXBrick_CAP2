@@ -26,6 +26,7 @@ import { Field } from "../../components/ui/Field";
 import { ProgressBar } from "../../components/milestones/ProgressBar";
 import { ProjectTimeline } from "../../components/milestones/ProjectTimeline";
 import { TaskDocumentsDialog } from "../../components/milestones/TaskDocumentsDialog";
+import { ProgressBreakdownDialog } from "../../components/milestones/ProgressBreakdownDialog";
 import { EditTimelineModal } from "../../components/milestones/EditTimelineModal";
 import { ManagerPicker } from "../../components/projects/ManagerPicker";
 import { BackLink } from "../../components/ui/BackLink";
@@ -117,6 +118,7 @@ export function ProjectDetailPage() {
   // directly. { task } while a confirm dialog is open.
   // Planning-task documents dialog: the task whose files are open, or null.
   const [docsTask, setDocsTask] = useState(null);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   // The PM's "Edit timeline" modal (rename, re-date, delete milestones and tasks).
   const [timelineDialog, setTimelineDialog] = useState(false);
   // Site Manager assignment moved from an always-open picker into a modal.
@@ -622,10 +624,10 @@ export function ProjectDetailPage() {
             <div className="pd-progress">
               <dt>{t("pd.work_progress")}</dt>
               <dd>
-                <div className="pd-progress-track">
+                <button type="button" className="pd-progress-track pd-progress-clickable" onClick={() => setBreakdownOpen(true)} aria-haspopup="dialog" title={t("pd.progress_breakdown_title")}>
                   <ProgressBar value={progressPct} />
                   <span className="pd-progress-pct">{progressPct}%</span>
-                </div>
+                </button>
               </dd>
             </div>
           </dl>
@@ -1168,6 +1170,7 @@ export function ProjectDetailPage() {
           onSaved={handleTimelineSaved}
         />
       )}
+      {breakdownOpen && <ProgressBreakdownDialog project={project} onClose={() => setBreakdownOpen(false)} />}
       {docsTask && (
         <TaskDocumentsDialog
           task={docsTask}
