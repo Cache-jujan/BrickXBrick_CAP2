@@ -37,6 +37,7 @@ import {
   setCheckinPhotoUrls,
   markCheckinSynced,
   markCheckinRejected,
+  markLabelSynced,
   purgeSyncedCheckins,
 } from "@/lib/sync/db";
 import {
@@ -116,6 +117,7 @@ async function uploadQueuedScans(rows, upload, removeFile, result) {
       const path = markScanUploaded(row.scan_id);
       await removeFile(path);
       result.scans.uploaded += 1;
+      result.syncedItems.push(markLabelSynced(row.scan_id) ?? { kind: "scan", title: null });
     } catch (error) {
       if (error?.unauthorized) throw error; // stop: syncAllPending decides what a refused sign-in means
       if (error instanceof PhotoUploadRejected) {
@@ -155,6 +157,7 @@ async function syncOnce(deps) {
     checkins: { synced: 0, rejected: 0 },
     rejectedItems: [],
     postponedItems: [],
+    syncedItems: [], // [{ kind, title, project, amount }] what was sent, for the pop-up
   };
   if (!session) return result; // signed out: nothing may be sent under another identity
 
@@ -222,12 +225,15 @@ async function syncOnce(deps) {
       if (expenseIds.has(id)) {
         markSynced(id);
         result.expenses.synced += 1;
+        result.syncedItems.push(markLabelSynced(id) ?? { kind: "expense", title: null });
       } else if (taskIds.has(id)) {
         markTaskUpdateSynced(id);
         result.tasks.synced += 1;
+        result.syncedItems.push(markLabelSynced(id) ?? { kind: "task_update", title: null });
       } else if (checkinIds.has(id)) {
         markCheckinSynced(id);
         result.checkins.synced += 1;
+        result.syncedItems.push(markLabelSynced(id) ?? { kind: "daily_checkin", title: null });
       }
     }
     const answered = new Set([...syncedIds, ...rejected.map((r) => r.id)]);
@@ -268,6 +274,7 @@ async function syncOnce(deps) {
 }
 
 // Returns { synced, rejected, expenses: {synced, rejected}, tasks: {synced, rejected},
+//           syncedItems: [{ kind, title, project, amount }] (named lines for the pop-up),
 //           scans: {uploaded, rejected}, checkins: {synced, rejected},
 //           rejectedItems: [{ kind, id, code, message }],
 //           postponedItems: [{ kind, id, message }] }  (not sent yet, will retry)

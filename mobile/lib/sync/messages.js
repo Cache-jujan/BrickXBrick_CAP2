@@ -73,6 +73,35 @@ export function describeRejection(code, serverMessage, t) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const MAX_REASONS = 3;
+const MAX_NAMED = 5;
+
+// 6125 -> "₱6,125.00" (same output as lib/money.ts formatPeso; kept here so this
+// file stays plain JavaScript that the Node tests can load).
+export function pesoText(amount) {
+  const cents = Math.round(Math.abs(Number(amount)) * 100);
+  const whole = Math.floor(cents / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${Number(amount) < 0 ? "-" : ""}₱${whole}.${String(cents % 100).padStart(2, "0")}`;
+}
+
+/**
+ * One readable line for a synced item: "Padeena Enterprises · Santos Residence · ₱6,125.00"
+ * or "Pour slab · Santos Residence". item: { kind, title, project, amount }. An
+ * item queued before names were kept (title null) gets a plain kind word.
+ * Used by the Sync complete pop-up and the Recently synced list.
+ */
+export function describeSyncedItem(item, t) {
+  if (!item) return "";
+  const fallback = {
+    expense: t ? t("sync.kind_expense") : "Expense",
+    task_update: t ? t("sync.kind_task") : "Task update",
+    daily_checkin: t ? t("sync.kind_checkin") : "Daily check-in",
+    scan: t ? t("sync.kind_scan") : "Receipt photo",
+  }[item.kind] ?? (t ? t("sync.kind_item") : "Item");
+  const parts = [item.title || fallback];
+  if (item.project) parts.push(item.project);
+  if (item.amount !== null && item.amount !== undefined && Number.isFinite(Number(item.amount))) parts.push(pesoText(item.amount));
+  return parts.join(" · ");
+}
 
 /**
  * One message per sync run (10.8). `result` is what syncAllPending returns:
@@ -91,6 +120,16 @@ export function buildSyncSummary(result, t) {
   if (result.checkins?.synced > 0) lines.push(count(result.checkins.synced, "sync.checkin") ?? `${plural(result.checkins.synced, "check-in", "check-ins")} sent`);
   if (result.scans?.uploaded > 0) {
     lines.push(count(result.scans.uploaded, "sync.receipt") ?? `${plural(result.scans.uploaded, "receipt", "receipts")} uploaded for reading (see Scanned receipts)`);
+  }
+
+  // Name what was sent (vendor or task, project, amount), so the person can see
+  // exactly which items went. Only when the sync result carries the names.
+  const named = (result.syncedItems || []).filter(Boolean);
+  if (named.length > 0) {
+    const shown = named.slice(0, MAX_NAMED);
+    lines.push(...shown.map((item) => `• ${describeSyncedItem(item, t)}`));
+    const more = named.length - shown.length;
+    if (more > 0) lines.push(t ? t("sync.and_more", { count: more }) : `• and ${more} more`);
   }
 
   if (result.rejected > 0) {

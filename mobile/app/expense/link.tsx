@@ -7,7 +7,8 @@ import * as Crypto from "expo-crypto";
 import { useExpenseDraft } from "@/lib/expense-draft-context";
 import { dismissScan } from "@/lib/receipt-scans";
 import { resubmitExpense, submitExpense } from "@/lib/api";
-import { canEnqueue, queueExpense } from "@/lib/sync/db";
+import { canEnqueue, labelSyncItem, queueExpense } from "@/lib/sync/db";
+import { getSession } from "@/lib/auth";
 import { useNetwork } from "@/lib/sync/network-context";
 import { isNetworkError } from "@/lib/sync/messages";
 import { COLORS, FONT } from "@/constants/expense-flow-colors";
@@ -114,7 +115,8 @@ export default function LinkScreen() {
         const gate = canEnqueue();
         if (!gate.allowed) throw new Error(gate.message);
 
-        const queued = queueExpense(Crypto.randomUUID(), {
+        const offlineId = Crypto.randomUUID();
+        const queued = queueExpense(offlineId, {
           ticketID: ticket.ticketId,
           vendorName: ocrResult.vendorName,
           amount: amountNum,
@@ -130,6 +132,15 @@ export default function LinkScreen() {
         if (!queued) {
           throw new Error(t("mx.offline_save_failed"));
         }
+        // A readable name for the "Sync complete" pop-up and "Recently synced".
+        labelSyncItem({
+          itemId: offlineId,
+          userId: getSession()?.user.id,
+          kind: "expense",
+          title: ocrResult.vendorName || ticket.subject,
+          project: ticket.projectName,
+          amount: amountNum,
+        });
 
         refreshPendingCount();
         if (draft.scanID) dismissScan(draft.scanID).catch(() => {});

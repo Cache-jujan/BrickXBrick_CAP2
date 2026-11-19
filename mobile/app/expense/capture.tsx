@@ -20,7 +20,7 @@ import { PDF_MIME_TYPE, formatBytes, receiptFileProblem, receiptMimeType } from 
 import { getSession } from "@/lib/auth";
 import { formatPeso } from "@/lib/money";
 import { useLocale } from "@/lib/i18n-context";
-import { queueScan } from "@/lib/sync/db";
+import { labelSyncItem, queueScan } from "@/lib/sync/db";
 import { copyFileToQueue, deleteQueuedPhoto } from "@/lib/sync/task-photo";
 
 type ProjectChoice = { id: string; name: string };
@@ -142,8 +142,9 @@ export default function CaptureScreen() {
     let copied: string | null = null;
     try {
       copied = await copyFileToQueue(file.uri, file.name);
+      const scanId = Crypto.randomUUID();
       const result = queueScan({
-        scanId: Crypto.randomUUID(),
+        scanId,
         userId: session.user.id,
         filePath: copied,
         fileName: file.name,
@@ -157,6 +158,8 @@ export default function CaptureScreen() {
         setStatus("error");
         return;
       }
+      // A readable name for the "Sync complete" pop-up and "Recently synced".
+      labelSyncItem({ itemId: scanId, userId: session.user.id, kind: "scan", title: file.name, project: draft.ticket?.projectName ?? null });
       refreshPendingCount();
       setStatus("idle");
       // A receipt scanned with no request picked (the normal case) stays on this screen, ready for the next one.

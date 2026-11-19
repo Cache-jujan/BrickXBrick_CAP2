@@ -26,6 +26,7 @@ import {
   getPendingTaskUpdateForTask,
   getRejectedTaskUpdates,
   queueTaskUpdate,
+  labelSyncItem,
 } from "@/lib/sync/db";
 import { describeLoadError, describeRejection, isNetworkError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -215,8 +216,9 @@ export default function SiteManagerTaskDetailScreen() {
     let copiedPath: string | null = null;
     try {
       copiedPath = await copyPhotoToQueue(photo.uri);
+      const queuedId = updateId ?? Crypto.randomUUID();
       const result = queueTaskUpdate({
-        updateId: updateId ?? Crypto.randomUUID(),
+        updateId: queuedId,
         taskId: task.taskid,
         userId: session.user.id,
         photoPath: copiedPath,
@@ -227,6 +229,8 @@ export default function SiteManagerTaskDetailScreen() {
         setSubmitError(result.message ?? t("sm.err_offline_save"));
         return;
       }
+      // A readable name for the "Sync complete" pop-up and "Recently synced".
+      labelSyncItem({ itemId: queuedId, userId: session.user.id, kind: "task_update", title: task.taskname, project: task.projectname ?? null });
       if (result.replacedPhotoPath) await deleteQueuedPhoto(result.replacedPhotoPath);
       refreshPendingCount();
       loadLocal();

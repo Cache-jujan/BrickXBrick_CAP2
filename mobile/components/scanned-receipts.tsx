@@ -49,7 +49,7 @@ export function ScannedReceipts({
 
   function open(scan: ReceiptScan) {
     if (scan.status === "Ready") openReady(scan);
-    else if (scan.status === "Failed") openManual(scan);
+    else if (scan.status === "Failed") openManual(scan, {}, () => onDismiss(scan));
     else openScanning(scan);
   }
 

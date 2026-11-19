@@ -24,6 +24,9 @@ type TrayRow = {
   vendor: string | null;
   amount: number | null;
   createdAt: string;
+  fileName: string | null;
+  request: string | null;
+  project: string | null;
   scan?: ReceiptScan;
   queued?: QueuedScan;
 };
@@ -54,7 +57,7 @@ export default function TurnInScreen() {
   function open(row: TrayRow) {
     if (row.scan) {
       if (row.state === "review") openReady(row.scan);
-      else if (row.state === "failed" || row.state === "not_receipt") openManual(row.scan);
+      else if (row.state === "failed" || row.state === "not_receipt") openManual(row.scan, {}, () => row.scan && tray.removeScan(row.scan));
       else openScanning(row.scan);
     } else if (row.state === "upload_failed") {
       confirmRemove(row);
@@ -94,6 +97,10 @@ export default function TurnInScreen() {
           const chip = CHIP[row.state];
           const rejected = row.state === "upload_failed";
           const notReceipt = row.state === "not_receipt";
+          // Vendor once read; until then the request it was snapped for, so a rejected
+          // file still says which purchase it was meant for.
+          const title = row.vendor ?? row.request ?? t("mobile.receipt");
+          const forLine = [row.vendor ? row.request : null, row.project].filter(Boolean).join(" · ");
           return (
           <View style={styles.card}>
             <Pressable
@@ -104,7 +111,7 @@ export default function TurnInScreen() {
               <View style={styles.rowMain}>
                 <View style={styles.titleRow}>
                   {needsAttention(row.state) ? <AttentionDot /> : null}
-                  <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{row.vendor ?? t("mobile.receipt")}</Text>
+                  <Text style={[styles.rowTitle, styles.flex]} numberOfLines={1}>{title}</Text>
                 </View>
                 <Text style={[styles.rowMeta, (rejected || notReceipt) && { color: COLORS.errorText }]} numberOfLines={2}>
                   {rejected
@@ -113,6 +120,8 @@ export default function TurnInScreen() {
                       ? row.scan?.errorMessage ?? t("scan.status_not_receipt")
                       : scanTimeLabel(row.createdAt, t, intlLocale)}
                 </Text>
+                {forLine ? <Text style={styles.rowMeta} numberOfLines={1}>{forLine}</Text> : null}
+                {notReceipt ? <Text style={styles.rowMeta}>{t("ti.tap_for_details")}</Text> : null}
                 <View style={styles.chipRow}>
                   {row.state === "reading" ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
                   <StatusChip label={t(chip.labelKey)} tone={chip.tone} />
@@ -120,7 +129,7 @@ export default function TurnInScreen() {
               </View>
               {row.amount != null ? <Text style={styles.amount}>{formatPeso(row.amount)}</Text> : null}
             </Pressable>
-            <Pressable onPress={() => confirmRemove(row)} style={styles.removeBtn} accessibilityRole="button" accessibilityLabel={`${t("common.remove")}: ${row.vendor ?? t("mobile.receipt")}`}>
+            <Pressable onPress={() => confirmRemove(row)} style={styles.removeBtn} accessibilityRole="button" accessibilityLabel={`${t("common.remove")}: ${title}`}>
               <Text style={styles.removeText}>{t("common.remove")}</Text>
             </Pressable>
           </View>

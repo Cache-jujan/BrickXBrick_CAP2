@@ -9,6 +9,18 @@
 //   failed        the server could not read it; type it in against the photo
 //   not_receipt   the file is not a receipt; nothing to type in
 //   review        read and ready for the Purchaser to check
+//
+// Every row also says what it was snapped for, when the app knows:
+//   request  the request it was opened from (null for "snap now" receipts)
+//   project  that request's project, or the projects a "snap now" receipt was scoped to
+//   fileName the photo or PDF that was sent
+
+/** What a receipt was snapped for, from the context saved with it. */
+export function snappedFor(context) {
+  const ticket = context?.ticket ?? null;
+  const scoped = Array.isArray(context?.projectNames) && context.projectNames.length ? context.projectNames.join(", ") : null;
+  return { request: ticket?.subject ?? null, project: ticket?.projectName ?? scoped };
+}
 
 export function trayRows(scans, queued) {
   const rows = [];
@@ -21,6 +33,8 @@ export function trayRows(scans, queued) {
       vendor: null,
       amount: null,
       createdAt: row.created_at,
+      fileName: row.file_name ?? null,
+      ...snappedFor(row.context),
       queued: row,
     });
   }
@@ -34,6 +48,8 @@ export function trayRows(scans, queued) {
       vendor: scan.status === "Ready" ? scan.result?.vendorName ?? null : null,
       amount: scan.status === "Ready" && Number.isFinite(amount) ? amount : null,
       createdAt: scan.createdAt,
+      fileName: scan.context?.fileName ?? null,
+      ...snappedFor(scan.context),
       scan,
     });
   }

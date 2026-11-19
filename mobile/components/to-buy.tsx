@@ -22,6 +22,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useLocale } from "@/lib/i18n-context";
 import { getSession } from "@/lib/auth";
 import { ScannedReceipts, type QueuedScan } from "@/components/scanned-receipts";
+import { RecentSyncs } from "@/components/recent-syncs";
 import { RequestDetailsSheet } from "@/components/request-details-sheet";
 import { PurchaseOrderSheet } from "@/components/purchase-order-sheet";
 import { dismissScan, type ReceiptScan } from "@/lib/receipt-scans";
@@ -290,6 +291,9 @@ export function ToBuy() {
             }}
           />
         ) : null}
+
+        {/* F10: what this phone sent on the last syncs (the Site Manager sees it on their home screen). */}
+        {!isSiteManager ? <RecentSyncs /> : null}
 
         {shownError && <StateCard kind="error" title={t("mobile.requests_load_error")} body={shownError} onRetry={load} />}
 

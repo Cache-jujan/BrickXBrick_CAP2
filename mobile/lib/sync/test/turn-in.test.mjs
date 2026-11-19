@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { trayRows, traySummary } from "../../turn-in.js";
+import { snappedFor, trayRows, traySummary } from "../../turn-in.js";
 
 const scan = (id, over = {}) => ({ scanID: id, status: "Ready", createdAt: "2026-10-24T09:00:00Z", result: { vendorName: "Padeena", amount: "6100.50" }, ...over });
 const queued = (id, over = {}) => ({ scan_id: id, sync_status: "PENDING", created_at: "2026-10-24T10:00:00Z", ...over });
@@ -41,4 +41,23 @@ test("summary counts every receipt and totals the ones already read", () => {
 test("tolerates non-arrays and unreadable amounts", () => {
   assert.deepEqual(trayRows(undefined, null), []);
   assert.equal(trayRows([scan("a", { result: { vendorName: "V", amount: null } })], [])[0].amount, null);
+});
+
+test("a receipt opened from a request names that request and its project", () => {
+  const ticket = { subject: "Cement 40kg", projectName: "Mabolo Duplex" };
+  const [row] = trayRows([scan("n", { status: "Failed", result: { notReceipt: true }, context: { mode: "single", ticket, fileName: "IMG_1.jpg" } })], []);
+  assert.equal(row.request, "Cement 40kg");
+  assert.equal(row.project, "Mabolo Duplex");
+  assert.equal(row.fileName, "IMG_1.jpg");
+});
+
+test("a snap-now receipt names the projects it was scoped to, or none", () => {
+  assert.deepEqual(snappedFor({ mode: "split", ticket: null, projectNames: ["A", "B"] }), { request: null, project: "A, B" });
+  assert.deepEqual(snappedFor({ mode: "split", ticket: null }), { request: null, project: null });
+  assert.deepEqual(snappedFor(null), { request: null, project: null });
+});
+
+test("a receipt still on the phone keeps its request and file name", () => {
+  const [row] = trayRows([], [queued("q", { file_name: "r.pdf", context: { ticket: { subject: "Rebar", projectName: "P1" } } })]);
+  assert.deepEqual([row.request, row.project, row.fileName], ["Rebar", "P1", "r.pdf"]);
 });

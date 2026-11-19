@@ -26,6 +26,7 @@ import { MainHeader } from "@/components/main-header";
 import { SmBottomBar } from "@/components/sm-bottom-bar";
 import { AppButton } from "@/components/app-button";
 import { StateCard } from "@/components/state-card";
+import { RecentSyncs } from "@/components/recent-syncs";
 import { StatusChip } from "@/components/status-chip";
 import { useLocale } from "@/lib/i18n-context";
 
@@ -438,6 +439,9 @@ export default function SiteManagerHomeScreen() {
             );
           })}
         </View>
+
+        {/* F10: what this phone sent on the last syncs (task updates, check-ins, receipt photos). */}
+        <RecentSyncs />
 
         {shownError ? (
           <View style={styles.stateWrap}>
