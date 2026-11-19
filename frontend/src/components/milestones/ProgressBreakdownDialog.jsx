@@ -8,9 +8,6 @@ const DATETIME_OPTIONS = { dateStyle: "medium", timeStyle: "short" };
 function isDone(task) {
   return task.status === "Completed";
 }
-function isInProgress(task) {
-  return !isDone(task) && (task.status === "In Progress" || Number(task.completionpercentage) > 0);
-}
 
 function Ring({ value }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
@@ -35,16 +32,15 @@ function TaskRow({ task, kind, meta, note }) {
 }
 
 // What makes up the project's work-progress %: every milestone with the tasks that are done
-// (default view), and on request the in-progress and pending ones. Reads the overview payload
+// (default view), and on request the not-started ones. Reads the overview payload
 // the page already has, so it makes no request of its own.
 export function ProgressBreakdownDialog({ project, onClose }) {
-  const { t, tv, formatDate } = useLocale();
+  const { t, formatDate } = useLocale();
   const [showOthers, setShowOthers] = useState(false);
   const milestones = project.milestones || [];
   const all = milestones.flatMap((m) => m.tasks || []);
   const doneCount = all.filter(isDone).length;
-  const activeCount = all.filter(isInProgress).length;
-  const pendingCount = all.length - doneCount - activeCount;
+  const pendingCount = all.length - doneCount;
   const overall = Number(project.progress || 0);
 
   return (
@@ -56,7 +52,6 @@ export function ProgressBreakdownDialog({ project, onClose }) {
           <Ring value={overall} />
           <div className="pb-stats">
             <div className="pb-stat is-done"><b>{doneCount}</b><span>{t("pd.progress_breakdown_done_section")}</span></div>
-            <div className="pb-stat is-active"><b>{activeCount}</b><span>{t("pd.progress_breakdown_inprogress_section")}</span></div>
             <div className="pb-stat is-pending"><b>{pendingCount}</b><span>{t("pd.progress_breakdown_pending_section")}</span></div>
           </div>
         </div>
@@ -66,9 +61,7 @@ export function ProgressBreakdownDialog({ project, onClose }) {
         {milestones.map((milestone) => {
           const tasks = milestone.tasks || [];
           const done = tasks.filter(isDone);
-          const inProgress = tasks.filter(isInProgress);
-          const pending = tasks.filter((task) => !isDone(task) && !isInProgress(task));
-          const others = showOthers ? [...inProgress, ...pending] : [];
+          const others = showOthers ? tasks.filter((task) => !isDone(task)) : [];
           if (done.length === 0 && others.length === 0) return null;
           const pct = Math.round(Number(milestone.completionpercentage || 0));
           return (
@@ -88,17 +81,9 @@ export function ProgressBreakdownDialog({ project, onClose }) {
                     note={task.completionnote}
                   />
                 ))}
-                {others.map((task) => {
-                  const active = isInProgress(task);
-                  return (
-                    <TaskRow
-                      key={task.taskid}
-                      task={task}
-                      kind={active ? "active" : "pending"}
-                      meta={active ? `${Math.round(Number(task.completionpercentage || 0))}%` : tv("status", task.status || "Pending")}
-                    />
-                  );
-                })}
+                {others.map((task) => (
+                  <TaskRow key={task.taskid} task={task} kind="pending" />
+                ))}
               </ul>
             </section>
           );
