@@ -146,6 +146,24 @@ export function initDb() {
       error_message TEXT
     );
   `);
+  // A readable line for each queued item (vendor, task name, project, amount),
+  // written when it is saved and stamped synced_at when the server accepts it.
+  // The queue rows themselves are deleted right after a sync and do not all
+  // carry a name (a task update only has its task id), so this is what the
+  // "Sync complete" pop-up and the "Recently synced" list read. Display only:
+  // nothing is sent from here.
+  exec(`
+    CREATE TABLE IF NOT EXISTS sync_labels (
+      item_id    TEXT PRIMARY KEY NOT NULL,
+      user_id    TEXT NOT NULL,
+      kind       TEXT NOT NULL,
+      title      TEXT NOT NULL,
+      project    TEXT,
+      amount     REAL,
+      created_at TEXT NOT NULL,
+      synced_at  TEXT
+    );
+  `);
   purgeExpired();
 }
 
@@ -159,6 +177,70 @@ export function purgeExpired() {
   run("DELETE FROM offline_task_updates WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
   run("DELETE FROM offline_scans WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
   run("DELETE FROM offline_checkins WHERE created_at < ? AND sync_status != 'PENDING';", [cutoff]);
+  // Labels: synced ones leave the "Recently synced" list after 72 hours; a label
+  // whose item is no longer queued and never synced (replaced, dismissed) goes now.
+  run("DELETE FROM sync_labels WHERE synced_at IS NOT NULL AND synced_at < ?;", [cutoff]);
+  run(
+    `DELETE FROM sync_labels WHERE synced_at IS NULL AND item_id NOT IN (
+       SELECT uuid FROM offline_expenses UNION SELECT update_id FROM offline_task_updates
+       UNION SELECT client_id FROM offline_checkins UNION SELECT scan_id FROM offline_scans);`
+  );
+}
+
+// sync labels (display only)
+
+// Remember how to name a queued item. Never throws: a missing label only means
+// the pop-up and the list show a generic line, the item itself still syncs.
+// kind: "expense" | "task_update" | "daily_checkin" | "scan"
+/**
+ * @param {{ itemId: string, userId?: string | null, kind: string, title: string,
+ *           project?: string | null, amount?: number | null, now?: Date }} label
+ */
+export function labelSyncItem({ itemId, userId, kind, title, project = null, amount = null, now = new Date() }) {
+  if (!db || !itemId || !userId || !title) return;
+  try {
+    const value = amount === null || amount === undefined || !Number.isFinite(Number(amount)) ? null : Number(amount);
+    run(
+      `INSERT OR REPLACE INTO sync_labels (item_id, user_id, kind, title, project, amount, created_at, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL);`,
+      [itemId, userId, kind, String(title), project ? String(project) : null, value, now.toISOString()]
+    );
+  } catch {
+    // cosmetic only
+  }
+}
+
+// Stamp a label synced and return it ({ kind, title, project, amount, syncedAt })
+// for the pop-up, or null when the item was queued before labels existed.
+export function markLabelSynced(itemId, now = new Date()) {
+  if (!db) return null;
+  try {
+    run("UPDATE sync_labels SET synced_at = ? WHERE item_id = ?;", [now.toISOString(), itemId]);
+    const row = first("SELECT kind, title, project, amount, synced_at FROM sync_labels WHERE item_id = ?;", [itemId]);
+    return row ? { kind: row.kind, title: row.title, project: row.project, amount: row.amount, syncedAt: row.synced_at } : null;
+  } catch {
+    return null;
+  }
+}
+
+// What this person's phone sent in the last 72 hours, newest first.
+export function getRecentSynced(userId, now = Date.now(), limit = 50) {
+  if (!db || !userId) return [];
+  const cutoff = new Date(now - MAX_AGE_MS).toISOString();
+  return all(
+    `SELECT item_id, kind, title, project, amount, created_at, synced_at FROM sync_labels
+      WHERE user_id = ? AND synced_at IS NOT NULL AND synced_at >= ?
+      ORDER BY synced_at DESC LIMIT ?;`,
+    [userId, cutoff, limit]
+  ).map((row) => ({
+    id: row.item_id,
+    kind: row.kind,
+    title: row.title,
+    project: row.project,
+    amount: row.amount,
+    savedAt: row.created_at,
+    syncedAt: row.synced_at,
+  }));
 }
 
 // the one queue rule

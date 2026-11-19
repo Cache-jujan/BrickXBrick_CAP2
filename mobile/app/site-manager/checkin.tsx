@@ -37,6 +37,7 @@ import {
   getPendingCheckinSlots,
   getRejectedCheckins,
   queueCheckin,
+  labelSyncItem,
 } from "@/lib/sync/db";
 import { describeCheckinRejection, describeLoadError, plainError } from "@/lib/sync/messages";
 import { useNetwork } from "@/lib/sync/network-context";
@@ -260,8 +261,9 @@ export default function SiteManagerCheckinScreen() {
     try {
       for (const photo of photos) copied.push(await copyPhotoToQueue(photo.uri));
       const now = new Date();
+      const clientId = Crypto.randomUUID();
       const result = queueCheckin({
-        clientId: Crypto.randomUUID(),
+        clientId,
         userId: session.user.id,
         projectId: projectId as string,
         checkinDate: manilaDate(now),
@@ -279,6 +281,14 @@ export default function SiteManagerCheckinScreen() {
         setSaveError(result.message ?? t("ci.err_save_queue"));
         return;
       }
+      // A readable name for the "Sync complete" pop-up and "Recently synced".
+      labelSyncItem({
+        itemId: clientId,
+        userId: session.user.id,
+        kind: "daily_checkin",
+        title: t("sync.checkin_title", { slot: slotName(slot as string) }),
+        project: projectName(projectId as string),
+      });
       for (const path of result.replacedPhotoPaths ?? []) await deleteQueuedPhoto(path);
       refreshPendingCount();
       readLocal();

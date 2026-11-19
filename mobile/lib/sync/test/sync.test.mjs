@@ -12,6 +12,7 @@ const { fs } = await import("./file-system-shim.mjs");
 const { setSession, unauthorized, refresh } = await import("./auth-shim.mjs");
 const q = await import("../db.js");
 const { syncAllPending } = await import("../sync.js");
+const { buildSyncSummary } = await import("../messages.js");
 
 const SM = { token: "t", user: { id: "sm-1", role: "Site Manager" } };
 const PURCHASER = { token: "t", user: { id: "p-1", role: "Purchaser" } };
@@ -316,7 +317,7 @@ test("nothing pending: no network call at all", async () => {
   setup();
   const result = await syncAllPending();
   assert.equal(calls.fetches.length, 0);
-  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, scans: { uploaded: 0, rejected: 0 }, checkins: { synced: 0, rejected: 0 }, rejectedItems: [], postponedItems: [] });
+  assert.deepEqual(result, { synced: 0, rejected: 0, expenses: { synced: 0, rejected: 0 }, tasks: { synced: 0, rejected: 0 }, scans: { uploaded: 0, rejected: 0 }, checkins: { synced: 0, rejected: 0 }, rejectedItems: [], postponedItems: [], syncedItems: [] });
 });
 
 test("expenses still sync exactly as before (response shape unchanged)", async () => {
@@ -456,4 +457,67 @@ test("photo upload refused because a submission is already waiting for review ->
   const result = await syncAllPending();
   assert.equal(result.tasks.rejected, 1);
   assert.equal(q.getRejectedTaskUpdates()[0].error_code, "SUPERSEDED");
+});
+
+// F10: what synced is named, in the pop-up and the "Recently synced" list.
+
+test("synced items are named in the result and kept in Recently synced for 72 hours", async () => {
+  setup(PURCHASER);
+  const a = uid();
+  q.queueExpense(a, { vendorName: "Padeena Enterprises", amount: 6125 });
+  q.labelSyncItem({ itemId: a, userId: "p-1", kind: "expense", title: "Padeena Enterprises", project: "Santos Residence", amount: 6125 });
+  const result = await syncAllPending();
+  assert.deepEqual(result.syncedItems.map((i) => [i.kind, i.title, i.project, i.amount]), [["expense", "Padeena Enterprises", "Santos Residence", 6125]]);
+  const message = buildSyncSummary(result).message;
+  assert.match(message, /1 expense synced/);
+  assert.match(message, /• Padeena Enterprises · Santos Residence · ₱6,125\.00/);
+  const recent = q.getRecentSynced("p-1");
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].title, "Padeena Enterprises");
+  assert.equal(q.getRecentSynced("someone-else").length, 0); // per person
+  // 73 hours later it has left the list, and the tidy-up removes it
+  assert.equal(q.getRecentSynced("p-1", Date.now() + 73 * 60 * 60 * 1000).length, 0);
+});
+
+test("a task update is named by task and project; a rejected item is NOT listed as synced", async () => {
+  setup();
+  const ok = queueTask("t1");
+  const bad = queueTask("t2");
+  q.labelSyncItem({ itemId: ok.updateId, userId: "sm-1", kind: "task_update", title: "Pour slab", project: "Santos Residence" });
+  q.labelSyncItem({ itemId: bad.updateId, userId: "sm-1", kind: "task_update", title: "Install rebar", project: "Santos Residence" });
+  serverReply = async () => ({ body: { syncedIds: [ok.updateId], rejected: [{ id: bad.updateId, code: "TASK_CLOSED", message: "closed" }] } });
+  const result = await syncAllPending();
+  assert.deepEqual(result.syncedItems.map((i) => i.title), ["Pour slab"]);
+  assert.deepEqual(q.getRecentSynced("sm-1").map((r) => r.title), ["Pour slab"]);
+  assert.match(buildSyncSummary(result).message, /• Pour slab · Santos Residence/);
+});
+
+test("an item queued before names were kept still syncs and shows a plain kind word", async () => {
+  setup(PURCHASER);
+  const a = uid();
+  q.queueExpense(a, { vendorName: "Old", amount: 1 }); // no label
+  const result = await syncAllPending();
+  assert.equal(result.synced, 1);
+  assert.match(buildSyncSummary(result).message, /• Expense$/m);
+  assert.equal(q.getRecentSynced("p-1").length, 0); // nothing to list without a name
+});
+
+test("the pop-up names at most 5 items, then 'and N more'", async () => {
+  setup(PURCHASER);
+  for (let i = 0; i < 7; i += 1) {
+    const id = uid();
+    q.queueExpense(id, { vendorName: `V${i}`, amount: 1 });
+    q.labelSyncItem({ itemId: id, userId: "p-1", kind: "expense", title: `Vendor ${i}`, amount: 1 });
+  }
+  const message = buildSyncSummary(await syncAllPending()).message;
+  assert.equal((message.match(/^• Vendor/gm) || []).length, 5);
+  assert.match(message, /• and 2 more$/);
+});
+
+test("a label for an item that was replaced or dismissed is tidied away", () => {
+  setup();
+  q.labelSyncItem({ itemId: "not-queued", userId: "sm-1", kind: "task_update", title: "Gone" });
+  q.purgeExpired();
+  assert.equal(q.getRecentSynced("sm-1").length, 0);
+  assert.equal(shim.rawDb().prepare("SELECT COUNT(*) AS c FROM sync_labels").get().c, 0);
 });
