@@ -20,6 +20,9 @@ function CameraModal({ onPhoto, onClose, onChoose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [state, setState] = useState("starting"); // starting | live | denied | error
+  // Receipts snapped in this sitting. The camera stays open after each one (like the phone's
+  // "Snap another"), so a stack of receipts is a few taps; Done closes it.
+  const [shots, setShots] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +61,7 @@ function CameraModal({ onPhoto, onClose, onChoose }) {
     canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0);
     canvas.toBlob((blob) => {
-      if (blob) onPhoto(new File([blob], `receipt-${Date.now()}.jpg`, { type: "image/jpeg" }));
+      if (blob) { onPhoto(new File([blob], `receipt-${Date.now()}.jpg`, { type: "image/jpeg" })); setShots((n) => n + 1); }
     }, "image/jpeg", 0.92);
   }
 
@@ -72,13 +75,15 @@ function CameraModal({ onPhoto, onClose, onChoose }) {
           {state === "denied" && <p className="camera-note">{t("cam.denied")}</p>}
           {state === "error" && <p className="camera-note">{t("cam.error")}</p>}
         </div>
-        {state === "live" && <p className="camera-hint">{t("cam.hint")}</p>}
+        {state === "live" && (
+          <p className="camera-hint" role="status">{shots > 0 ? t("cam.snapped", { count: shots }) : t("cam.hint")}</p>
+        )}
         <div className="modal-actions">
-          <Button type="button" variant="secondary" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>{shots > 0 ? t("cam.done") : t("common.cancel")}</Button>
           {(state === "denied" || state === "error") && (
             <Button type="button" variant="secondary" onClick={onChoose}>{t("cam.choose_instead")}</Button>
           )}
-          <Button type="button" onClick={snap} disabled={state !== "live"}>{t("cam.take")}</Button>
+          <Button type="button" onClick={snap} disabled={state !== "live"}>{shots > 0 ? t("cam.snap_another") : t("cam.take")}</Button>
         </div>
       </div>
     </div>
@@ -139,7 +144,7 @@ export function ReceiptCapture({ onFile, disabled, uploading }) {
       {cameraOpen && createPortal(
         <CameraModal
           onClose={() => setCameraOpen(false)}
-          onPhoto={(file) => { setCameraOpen(false); accept(file); }}
+          onPhoto={(file) => accept(file)}
           onChoose={() => { setCameraOpen(false); imageInput.current?.click(); }}
         />,
         document.body

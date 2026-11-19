@@ -52,5 +52,30 @@
   .mode-tab span { overflow: hidden; text-overflow: ellipsis; }
 }
 
-.mode-link { font-size: var(--text-sm, 0.875rem); color: var(--color-text-muted, #6b6355); text-decoration: underline; }
-.mode-link:hover { color: var(--mode); }
+/* The switch to the other mode is a real button, not a faint link: PMs and GMs missed it. */
+.mode-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 0 16px;
+  border: 2px solid var(--mode); border-radius: 999px;
+  background: var(--color-surface); color: var(--mode);
+  font-size: var(--text-sm, 0.875rem); font-weight: 700; text-decoration: none; white-space: nowrap;
+}
+.mode-link svg { width: 18px; height: 18px; }
+.mode-link:hover { background: var(--mode); color: #fff; }
+.mode-link:focus-visible { outline: 3px solid color-mix(in srgb, var(--mode) 40%, transparent); outline-offset: 2px; }
+
+/* Two-way switch: the page you are on is filled, the other is outlined. */
+.mode-switch { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.mode-seg {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 16px 6px 12px;
+  border: 2px solid var(--color-border-strong); border-radius: var(--radius-md, 10px);
+  background: var(--color-surface); color: var(--color-ink); text-decoration: none;
+}
+.mode-seg svg { width: 22px; height: 22px; flex: 0 0 auto; }
+.mode-seg span { display: grid; line-height: 1.2; }
+.mode-seg strong { font-size: var(--text-sm, 0.875rem); }
+.mode-seg small { font-size: var(--text-xs, 0.75rem); opacity: 0.85; }
+.mode-seg:hover { border-color: var(--color-ink-soft); }
+.mode-seg:focus-visible { outline: 3px solid color-mix(in srgb, var(--mode) 40%, transparent); outline-offset: 2px; }
+.mode-seg-on, .mode-seg-on:hover { background: var(--mode); border-color: var(--mode); color: #fff; }
+@media (max-width: 760px) { .mode-switch { width: 100%; } .mode-seg { flex: 1 1 0; } }

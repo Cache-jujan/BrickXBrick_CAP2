@@ -38,8 +38,8 @@ const { assertDatesUnlocked } = require("../lib/projectDateLock");
 const { assertIdentityUnlocked } = require("../lib/projectIdentityLock");
 const { parseStartRequest, loadSource, buildStructure, insertStructure } = require("../lib/projectStructure");
 const { notifyGeneralManagers } = require("../lib/notify");
-const { findOpenItems, notifyProjectCompleted } = require("../lib/projectCompletion");        
-const { notifyRemovedManager } = require("../lib/managerChangeNotice");      
+const { GATE_CODE } = require("../lib/procurementGate");
+const { closeOpenTicketsForProject } = require("../lib/projectClosure");
 const { LIMITS, InputError, text, amount } = require("../lib/inputRules");
 
 const router = express.Router();
@@ -618,6 +618,8 @@ router.patch("/:id/cancel", requireRole("General Manager"), async (req, res) => 
           [existing.projectid, reason, req.user.id]
         );
       }
+      // Open requests nobody bought anything for are closed with the project.
+      await closeOpenTicketsForProject(client, existing.projectid, req.user.id);
       // Tell the people on the project. "Terminated" once it had been activated,
       // "cancelled" for a Draft that never started.
       const row = result.rows[0];

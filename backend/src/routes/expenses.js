@@ -1,6 +1,4 @@
 // expenses.js: F6 expense submission + ticket linking, plus review access.
-// Table 35 (Expenses) already exists in 001_initial_schema.sql, no migration
-// needed. This route just exposes it.
 
 const express = require("express");
 const { query, withTransaction } = require("../lib/db");

@@ -685,6 +685,8 @@ router.get("/expense-linkable", requireRole("General Manager", "Project Manager"
               -- Acknowledged: still being bought (a part purchase leaves a request open). Resolved: done or closed short.
               WHERE t.status IN ('Acknowledged', 'Resolved')
                 AND t.ticketType = 'Material Request'
+                -- Purchases only happen on an Active project (expenses.js assertProjectActive).
+                AND p.status = 'Active'
                 -- not yet fulfilled: same rule as lib/ticketAvailability.js
                 AND (
                   (t.quantity IS NULL AND NOT EXISTS (

@@ -157,7 +157,10 @@ export function useOpenWantedScan(mode, openScan) {
     if (!wanted) return;
     const scan = scans.find((x) => x.scanID === wanted);
     if (!scan || scan.status === "Scanning") return; // still reading, or the list has not loaded yet
-    const home = scan.context?.source === "web" && SCAN_PAGES[scan.context.mode] ? scan.context.mode : "submit";
+    // ?as=<page> is the user's own choice (e.g. "split this receipt"), so it beats where the scan began.
+    const asked = params.get("as");
+    const home = SCAN_PAGES[asked] ? asked
+      : scan.context?.source === "web" && SCAN_PAGES[scan.context.mode] ? scan.context.mode : "submit";
     if (home !== mode) {
       navigate(`${SCAN_PAGES[home]}?scan=${wanted}`, { replace: true });
       return;

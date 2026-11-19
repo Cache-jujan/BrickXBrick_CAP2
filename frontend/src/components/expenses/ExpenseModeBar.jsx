@@ -37,11 +37,17 @@ export function ExpenseModeBar({ mode, role }) {
           <p>{t(current.useKey)}</p>
         </div>
       </div>
-      {/* One receipt for one request is the normal case; the split is the exception, so it is a small link. */}
-      <nav className="mode-bar-tabs" aria-label={t("mode.nav_label")}>
-        <NavLink to={mode === "split" ? "/expenses/new" : "/expenses/split"} end className="mode-link">
-          {mode === "split" ? t("mode.back_to_single") : t("mode.use_split")}
-        </NavLink>
+      {/* Both ways in are always shown, so you can see which one you are in and switch. */}
+      <nav className="mode-switch" aria-label={t("mode.nav_label")}>
+        {[
+          { id: "submit", to: "/expenses/new", label: "mode.tab_single", hint: "mode.tab_single_hint", Icon: ReceiptIcon },
+          { id: "split", to: "/expenses/split", label: "mode.tab_split", hint: "mode.tab_split_hint", Icon: SplitIcon },
+        ].map((m) => (
+          <NavLink key={m.id} to={m.to} end className={`mode-seg${mode === m.id ? " mode-seg-on" : ""}`} aria-current={mode === m.id ? "page" : undefined}>
+            <m.Icon />
+            <span><strong>{t(m.label)}</strong><small>{t(m.hint)}</small></span>
+          </NavLink>
+        ))}
       </nav>
       {role && <span className="mode-bar-role">{role}</span>}
     </header>

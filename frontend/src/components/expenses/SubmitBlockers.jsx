@@ -1,6 +1,6 @@
 import { useLocale } from "../../i18n/LocaleProvider";
 
-const SHOWN = 3;
+const SHOWN = 8;
 
 /**
  * The line next to a greyed-out Submit button: why it is greyed out. Lists what is still missing

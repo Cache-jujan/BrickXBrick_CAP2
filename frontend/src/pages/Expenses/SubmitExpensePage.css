@@ -415,3 +415,18 @@
 .xp-qty-over .xp-qty-this { background: var(--color-danger); }
 .xp-qty-warn { color: var(--color-danger); font-weight: 600; }
 
+
+/* Which request a receipt line belongs to. Colour is backed by the words, never alone. */
+.xp-line-tag { grid-column: 1 / -1; margin: 0; padding: 4px 10px; border-radius: 6px; font-size: var(--text-sm, 0.875rem); font-weight: 600; width: fit-content; }
+.xp-line-tag-selected { background: #e6f4ea; color: #14532d; }
+.xp-line-tag-other { background: #fdecea; color: #8a1c13; }
+.xp-line-tag-none { background: var(--color-surface-muted, #f1efe9); color: var(--color-ink-soft, #5b5546); }
+
+/* One line above Submit: says what this page does with the receipt, and the way out. */
+.xp-scope { margin: var(--space-3) 0 0; padding: 10px 14px; border-radius: var(--radius-md, 10px); border: 1px solid color-mix(in srgb, var(--mode) 35%, transparent); background: var(--mode-tint); color: var(--color-ink); font-size: var(--text-sm, 0.875rem); font-weight: 600; }
+.xp-scope-empty { background: var(--color-surface); }
+.xp-scope a, .xp-split-cta { color: var(--mode-dark); font-weight: 700; }
+.xp-split-cta { display: inline-block; margin-top: 6px; }
+
+.xp-fit-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.xp-fit-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

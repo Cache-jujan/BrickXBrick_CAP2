@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { submitExpense } from "../../api/expensesApi";
 import { listExpenseLinkableTickets } from "../../api/ticketsApi";
 import { extractErrorMessage } from "../../api/client";
@@ -19,7 +20,7 @@ import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
 import { formatAmountInput, parseAmountInput } from "../../utils/amountInput";
 import { editLine, withUnitPrice, unitPriceForPayload } from "../../utils/lineItemMath";
 import { isReceiptType } from "../../utils/receiptFile";
-import { matchedQuantity, receiptProgress, receiptTotalQuantity } from "../../utils/requestProgress";
+import { lineMatchesRequest, lineOwners, matchedQuantity, receiptProgress, receiptTotalQuantity } from "../../utils/requestProgress";
 import "./SubmitExpensePage.css";
 import { useLocale } from "../../i18n/LocaleProvider";
 
@@ -71,6 +72,7 @@ export function draftFromScan(result) {
     birPermitNumber: result.birPermitNumber || "",
     birNumber: result.birNumber || "",
     receiptImageURL: result.receiptImageURL || "",
+    note: "", // a scan has no note; the form reads it as text
     lineItems: extractedItems.length
       ? extractedItems
       : [{
@@ -257,9 +259,28 @@ export function SubmitExpensePage() {
   const completes = progress ? progress.completes : true;
   const unitText = selectedTicket?.unit ? ` ${selectedTicket.unit}` : "";
   const needsNote = amountCents !== null && leftCents !== null && amountCents < leftCents && completes;
-  const noteMissing = needsNote && !draft.note.trim();
+  const noteMissing = needsNote && !(draft.note ?? "").trim();
+  // Which request each receipt line belongs to. A receipt for other requests than the chosen one
+  // would charge the wrong request, so say so before the server has to refuse it.
+  const owners = lineOwners(draft.lineItems, tickets, selectedTicketId);
+  const otherNames = [...new Set(owners.flatMap((o) => (o?.state === "other" ? o.others.map((x) => x.materialType || x.subject) : [])))];
+  const hasSelectedLine = owners.some((o) => o?.state === "selected");
+  const wrongRequest = Boolean(selectedTicket) && otherNames.length > 0 && !hasSelectedLine;
+  const mixedRequests = Boolean(selectedTicket) && otherNames.length > 0 && hasSelectedLine;
+  // Where "split this receipt" goes: the same scan, opened on the split page.
+  const splitLink = `/expenses/split${activeScanID ? `?scan=${activeScanID}&as=split` : ""}`;
+  // Look-alike requests (same material, different size): the ones this receipt's lines and total fit.
+  const receiptQty = receiptTotalQuantity(namedLineItems);
+  const fitting = tickets.filter((tk) => {
+    if (tk.ticketID === selectedTicketId || !namedLineItems.some((line) => lineMatchesRequest(line, tk))) return false;
+    if (amountCents !== null && (tk.remainingBudget == null || amountCents > Math.round(Number(tk.remainingBudget) * 100))) return false;
+    const qty = matchedQuantity(namedLineItems, tk.materialType, tk.bomItemID, tk.ticketID) ?? receiptQty;
+    return tk.remainingQuantity == null || qty <= Number(tk.remainingQuantity) + 0.0001;
+  });
+  const showFitting = fitting.length > 0 && (!selectedTicket || overBudget || Boolean(progress?.over));
   const canSubmit = Boolean(
     selectedTicket
+      && !wrongRequest
       && !noBudget
       && !overBudget
       && !noteMissing
@@ -288,6 +309,7 @@ export function SubmitExpensePage() {
     missing.vendor && t("submit.vendor_name"),
     missing.amount && t("submit.receipt_total"),
     missing.date && t("my_expenses.receipt_date"),
+    wrongRequest && t("gap.wrong_request"),
     noBudget && t("bd.none_title"),
     overBudget && t("bd.over_title"),
     noteMissing && t("bd.note_title"),
@@ -302,7 +324,9 @@ export function SubmitExpensePage() {
     setPageError("");
     setPageNotice("");
     if (!selectedTicket || !draft.receiptImageURL || !canSubmit) {
-      setPageError(t("errors.submit_incomplete"));
+      // The button stays clickable so this can say exactly what is missing.
+      setPageError(gaps.length ? `${t("gap.title")} ${gaps.join("; ")}.` : t("errors.submit_incomplete"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -317,7 +341,7 @@ export function SubmitExpensePage() {
         receiptDate: draft.receiptDate,
         category: draft.category,
         receiptImageURL: draft.receiptImageURL,
-        submitNote: draft.note.trim() || undefined,
+        submitNote: (draft.note ?? "").trim() || undefined,
         tin: draft.tin.trim() || null,
         birPermitNumber: draft.birPermitNumber.trim() || null,
         birNumber: draft.birNumber.trim() || null,
@@ -351,7 +375,14 @@ export function SubmitExpensePage() {
       }
     } catch (error) {
       // Keep the draft so the user can fix the problem and retry.
-      setPageError(extractErrorMessage(error, t("errors.submit_failed")));
+      console.error("Submit expense failed:", error);
+      // Three different failures: the server answered (show its message), the request never got
+      // an answer (server down or network), or the page itself threw before sending (a bug).
+      setPageError(
+        error?.response ? extractErrorMessage(error, t("errors.submit_failed"))
+        : error?.isAxiosError ? t("errors.server_unreachable")
+        : t("errors.page_error", { detail: error?.message || String(error) })
+      );
     } finally {
       busyRef.current = false;
       setSubmitting(false);
@@ -395,7 +426,11 @@ export function SubmitExpensePage() {
 
             <ReceiptCapture onFile={handleReceiptPick} disabled={uploading} uploading={uploading} />
 
-            <ReceiptScanTray mode="submit" activeScanID={activeScanID} onOpen={openScan} />
+            <ReceiptScanTray mode="submit" activeScanID={activeScanID} onOpen={openScan} onCancelOpen={() => {
+              // The receipt in the form was cancelled: empty the form so it cannot be submitted.
+              setActiveScanID(""); setDraft({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
+              setSelectedTicketId(""); setReceiptName(""); setOcrNotice(""); setVendorInfo({ autoFilled: [], conflicts: [] });
+            }} />
 
             {draft.receiptImageURL && (
               <div className="submit-expense-receipt-preview">
@@ -441,7 +476,7 @@ export function SubmitExpensePage() {
                 { value: "", label: loadingTickets ? t("submit.loading_tickets") : t("submit.choose_ticket"), pinned: true },
                 ...tickets.map((ticket) => ({
                   value: ticket.ticketID,
-                  label: `${ticket.projectName} — ${ticket.subject} (${ticket.vendorName || t("submit.vendor_not_specified")})`,
+                  label: `${ticket.projectName} — ${ticket.subject} · ${ticket.materialType ?? ""} · ${t("fit.left", { qty: `${Number(ticket.remainingQuantity ?? ticket.quantity ?? 0)}${ticket.unit ? ` ${ticket.unit}` : ""}`, money: ticket.remainingBudget != null ? pesoText(Math.round(Number(ticket.remainingBudget) * 100)) : "—" })} (${ticket.vendorName || t("submit.vendor_not_specified")})`,
                   searchText: ticket.materialType ?? "",
                 })),
               ]}
@@ -456,6 +491,31 @@ export function SubmitExpensePage() {
                 {selectedTicket.quantity != null && <span>{t("submit.requested_quantity", { quantity: selectedTicket.quantity })}</span>}
                 {leftCents !== null && <strong>{t("bd.left", { remaining: pesoText(leftCents) })}</strong>}
               </div>
+            )}
+            {showFitting && (
+              <Banner tone={selectedTicket ? "warning" : "info"} title={t(selectedTicket ? "fit.title_over" : "fit.title")}>
+                {t("fit.body")}
+                <ul className="xp-fit-list">
+                  {fitting.map((tk) => (
+                    <li key={tk.ticketID}>
+                      <span>{tk.subject} · {t("fit.left", { qty: `${Number(tk.remainingQuantity ?? tk.quantity ?? 0)}${tk.unit ? ` ${tk.unit}` : ""}`, money: tk.remainingBudget != null ? pesoText(Math.round(Number(tk.remainingBudget) * 100)) : "—" })}</span>
+                      <Button type="button" variant="secondary" onClick={() => handleTicketChange(tk.ticketID)}>{t("fit.use")}</Button>
+                    </li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
+            {wrongRequest && (
+              <Banner tone="error" title={t("wrong.title")}>
+                {t("wrong.body", { chosen: selectedTicket.materialType || selectedTicket.subject, others: otherNames.join(", ") })}{" "}
+                <Link className="xp-split-cta" to={splitLink}>{t("mode.use_split")}</Link>
+              </Banner>
+            )}
+            {mixedRequests && (
+              <Banner tone="warning" title={t("mixed.title")}>
+                {t("mixed.body", { others: otherNames.join(", ") })}{" "}
+                <Link className="xp-split-cta" to={splitLink}>{t("mode.use_split")}</Link>
+              </Banner>
             )}
             {progress && (
               <div className={`xp-qty${progress.over ? " xp-qty-over" : ""}`}>
@@ -549,6 +609,15 @@ export function SubmitExpensePage() {
                   <Field label={t("submit.item_amount")} required missing={gapOfLines.rows[index]?.amount} inputMode="decimal" value={formatAmountInput(item.amount)} onChange={(event) => updateLineItem(index, "amount", parseAmountInput(event.target.value))} />
                   <Field label={t("split.quantity_fees")} required missing={gapOfLines.rows[index]?.qty} type="number" min="0" step="0.01" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
                   <Field label={t("submit.unit_price")} inputMode="decimal" placeholder={t("submit.calculated")} value={formatAmountInput(item.unitPrice)} onChange={(event) => updateLineItem(index, "unitPrice", parseAmountInput(event.target.value))} />
+                  {selectedTicket && owners[index] && (
+                    <p className={`xp-line-tag xp-line-tag-${owners[index].state}`} role="status">
+                      {owners[index].state === "selected"
+                        ? t("tag.this_request")
+                        : owners[index].state === "other"
+                          ? t("tag.other_request", { name: owners[index].others.map((x) => x.materialType || x.subject).join(", ") })
+                          : t("tag.no_request")}
+                    </p>
+                  )}
                   <Button type="button" variant="ghost" className="submit-expense-remove-item" onClick={() => removeLineItem(index)} disabled={draft.lineItems.length <= 1} aria-label={t("submit.remove_item_n", { n: index + 1 })}>{t("common.remove")}</Button>
                 </div>
               ))}
@@ -556,9 +625,15 @@ export function SubmitExpensePage() {
           </section>
         </Card>
 
+        <p className={`xp-scope${selectedTicket ? "" : " xp-scope-empty"}`} role="status">
+          {selectedTicket
+            ? t("scope.one", { name: selectedTicket.materialType || selectedTicket.subject, project: selectedTicket.projectName })
+            : t("scope.none")}
+          {" "}<Link to={splitLink}>{t("scope.split_instead")}</Link>
+        </p>
         <div className="submit-expense-footer xp-footer">
           <SubmitBlockers gaps={gaps} note={t("submit.footer_note")} />
-          <Button type="submit" disabled={!canSubmit}>{submitting ? t("common.submitting") : t("nav.submit_expense")}</Button>
+          <Button type="submit" disabled={submitting} aria-disabled={!canSubmit}>{submitting ? t("common.submitting") : t("nav.submit_expense")}</Button>
         </div>
       </form>
     </div>

@@ -42,6 +42,22 @@ const QUICK_REASONS = [
   { key: "ck.under_alt", text: "Bought a cheaper alternative." },
 ];
 
+/** A fresh id for one receipt (UUID; the server needs one to make a retry safe). */
+function newReceiptID() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+/** What a typed quantity box may hold: digits and one dot, two decimals. */
+const cleanQty = (text) => {
+  const t = String(text).replace(",", ".").replace(/[^0-9.]/g, "");
+  const [whole, ...rest] = t.split(".");
+  return rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+};
+const roundQty = (n) => Math.round(n * 100) / 100;
+
 /** Create an empty receipt draft with its own editable line item. */
 const blankDraft = () => ({ ...EMPTY_DRAFT, lineItems: [{ ...EMPTY_DRAFT.lineItems[0] }] });
 /** Format a numeric amount as Philippine pesos with two decimal places. */
@@ -88,6 +104,13 @@ export function SplitReceiptPage() {
   const [pickingIndex, setPickingIndex] = useState(null);
   // Why the receipt went over (extra quantity, spending past the allowance). The PM reads it.
   const [note, setNote] = useState("");
+  // The checklist: what is typed for each request ("lineIndex:ticketID" -> text), the requests that
+  // match the receipt's lines (fixed by the first preview so the rows do not jump), and one id for
+  // this receipt so a retry cannot save it twice (the server answers a repeat with the first result).
+  const [qty, setQty] = useState({});
+  const [candidates, setCandidates] = useState(null);
+  const candidatesRef = useRef(null);
+  const [commonReceiptID, setCommonReceiptID] = useState(newReceiptID);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +186,26 @@ export function SplitReceiptPage() {
     [JSON.stringify(validLineItems)]
   );
 
+  // Typed quantities for the server: every listed request is sent, 0 meaning "not this one".
+  const rowKey = (c) => `${c.lineIndexes[0]}:${c.ticketID}`;
+  const quantityTargets = useMemo(() => {
+    if (!candidates) return {};
+    return Object.fromEntries(
+      candidates.map((c) => {
+        const n = Number(qty[rowKey(c)]);
+        return [rowKey(c), Number.isFinite(n) && n > 0 ? roundQty(n) : 0];
+      })
+    );
+  }, [candidates, qty]);
+
+  // Edited lines mean the old rows no longer fit: start the checklist again from a fresh preview.
+  const linesKey = JSON.stringify([splitLines, lineTargets]);
+  useEffect(() => {
+    candidatesRef.current = null;
+    setCandidates(null);
+    setQty({});
+  }, [linesKey]);
+
   const readyToPreview = Boolean(
     draft.receiptImageURL && draft.vendorName.trim() && draft.receiptDate && amountIsValid && allLinesValid && totalMatches
   );
@@ -191,6 +234,10 @@ export function SplitReceiptPage() {
     setPreviewError("");
     setSubmitProblems([]);
     setNote("");
+    candidatesRef.current = null;
+    setCandidates(null);
+    setQty({});
+    setCommonReceiptID(newReceiptID());
   }
 
   // Picking a file only uploads it and puts it in the tray; the receipt you are splitting stays
@@ -244,19 +291,42 @@ export function SplitReceiptPage() {
     setPreviewing(true);
     setPreviewError("");
     const timer = setTimeout(() => {
-      previewAllocation(splitLines, { excludeTicketIDs: excluded, feeTargets, lineTargets })
+      previewAllocation(splitLines, { excludeTicketIDs: excluded, feeTargets, lineTargets, quantityTargets })
         .then((next) => {
           if (cancelled) return;
           setPlan(next);
-          // Remember every request we have seen so an excluded one stays listed
-          // and can be switched back on.
+          // Remember every request we have seen (names, unit, what is left to buy).
           setKnown((prev) => {
             const merged = { ...prev };
+            for (const c of next.candidates ?? []) merged[c.ticketID] = { ...merged[c.ticketID], ...c };
             for (const p of next.portions) {
-              merged[p.ticketID] = { ticketID: p.ticketID, projectName: p.projectName, materialType: p.materialType };
+              const before = merged[p.ticketID] ?? {};
+              merged[p.ticketID] = {
+                ...before,
+                ticketID: p.ticketID,
+                projectName: p.projectName,
+                materialType: p.materialType,
+                unit: before.unit ?? p.unit,
+                remainingQuantity: before.remainingQuantity ?? p.remainingBefore,
+              };
             }
             return merged;
           });
+          // The first answer lists every request that matches the lines. Keep that list, and start
+          // each box at what the system would split by itself (oldest request first), to adjust.
+          if (!candidatesRef.current) {
+            const list = next.candidates ?? [];
+            candidatesRef.current = list;
+            setCandidates(list);
+            const start = {};
+            for (const c of list) {
+              const first = c.lineIndexes[0];
+              const portion = next.portions.find((p) => p.ticketID === c.ticketID);
+              const got = portion ? portion.lines.filter((l) => l.lineIndex === first).reduce((s, l) => s + Number(l.quantity), 0) : 0;
+              start[`${first}:${c.ticketID}`] = got > 0 ? String(roundQty(got)) : "";
+            }
+            setQty(start);
+          }
         })
         .catch((error) => {
           if (cancelled) return;
@@ -271,7 +341,7 @@ export function SplitReceiptPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, lineTargets, refreshKey, t]);
+  }, [allocating, result, allLinesValid, splitLines, excluded, feeTargets, lineTargets, quantityTargets, refreshKey, t]);
 
   /** Clear submission problems and refresh the preview to include newly opened requests. */
   function retryPreview() {
@@ -349,6 +419,8 @@ export function SplitReceiptPage() {
         excludeTicketIDs: excluded,
         feeTargets,
         lineTargets,
+        quantityTargets,
+        commonReceiptID,
         note: note.trim() || undefined,
       });
       setResult(saved);
@@ -456,7 +528,7 @@ export function SplitReceiptPage() {
 
           <ReceiptCapture onFile={handleReceiptPick} disabled={uploading} uploading={uploading} />
 
-          <ReceiptScanTray mode="split" activeScanID={activeScanID} onOpen={openScan} />
+          <ReceiptScanTray mode="split" activeScanID={activeScanID} onOpen={openScan} onCancelOpen={() => { setActiveScanID(""); startOver(); }} />
 
           {draft.receiptImageURL && (
             <div className="submit-expense-receipt-preview">
@@ -582,7 +654,7 @@ export function SplitReceiptPage() {
             <div className="submit-expense-section-heading">
               <div>
                 <h2 id="split-allocate-heading">{t("split.step3_title")}</h2>
-                <p>{t("split.step3_help")}</p>
+                <p>{t("ck.select_intro")}</p>
               </div>
               {previewing && <span className="submit-expense-progress" role="status">{t("split.updating")}</span>}
             </div>
@@ -675,53 +747,95 @@ export function SplitReceiptPage() {
               </div>
             )}
 
-            <div className="split-portions">
-              {requestIDs.map((ticketID) => {
-                const portion = portionByTicket.get(ticketID);
-                const isExcluded = excluded.includes(ticketID);
-                const info = known[ticketID];
-                const warning = warningFor(ticketID);
+            {/* The checklist: one block per receipt line, one row per open request that asks for it. Type how
+                much of the line goes to each request, or press Allocate. The server works out the amounts. */}
+            <div className="split-checklist">
+              {splitLines.map((line, i) => ({ line, i })).filter(({ line }) => line.quantity > 0).map(({ line, i }) => {
+                const rows = (candidates ?? []).filter((c) => c.lineIndexes[0] === i);
+                const done = roundQty((plan?.portions ?? []).flatMap((p) => p.lines).filter((l) => l.lineIndex === i).reduce((sum, l) => sum + Number(l.quantity), 0));
+                const leftQty = roundQty((plan?.unmatched ?? []).filter((u) => u.lineIndex === i).reduce((sum, u) => sum + Number(u.quantity), 0));
+                const noRequest = candidates && rows.length === 0;
                 return (
-                  <div key={ticketID} className={`split-portion${isExcluded ? " split-portion-excluded" : ""}`}>
-                    <div className="split-portion-head">
+                  <section key={i} className="split-line-card" aria-label={line.description}>
+                    <header className="split-line-card-head">
                       <div>
-                        <strong>{portion?.projectName ?? info?.projectName ?? t("split.request")}</strong>
-                        <span className="split-muted"> · {portion?.materialType ?? info?.materialType}</span>
+                        <strong>{line.description}</strong>
+                        <span className="split-muted"> · {line.quantity} · {peso(line.amount)}</span>
                       </div>
-                      <label className="split-exclude">
-                        <input type="checkbox" checked={isExcluded} onChange={(e) => toggleExcluded(ticketID, e.target.checked)} />
-                        {t("split.not_for_request")}
-                      </label>
-                    </div>
-                    {portion && !isExcluded && (
-                      <>
-                        <div className="split-portion-summary">
-                          <span>{t("split.units", { quantity: portion.quantity })}</span>
-                          <span>{peso(portion.amount)}</span>
-                          <span className={portion.resolvesTicket ? "split-done" : "split-open"}>
-                            {portion.resolvesTicket ? t("split.completes") : t("split.stays_open", { remaining: portion.remainingAfter })}
-                          </span>
-                          {warning && <span className="split-over">{t("split.over_budget_left", { amount: warning.remainingBudget })}</span>}
-                          {Number(portion.extraQuantity) > 0 && <span className="split-over">{t("split.extra_badge", { qty: portion.extraQuantity })}</span>}
+                      <span className={`split-chip ${leftQty > 0 ? "split-chip-warn" : "split-chip-ok"}`}>
+                        {t("ck.alloc_of", { done, total: line.quantity })}
+                      </span>
+                    </header>
+                    {noRequest ? (
+                      <Banner tone="error" title={t("ck.no_request_title")}>
+                        {t("ck.no_request_body", { qty: line.quantity, material: line.description })} {t("ck.contact_sm")}
+                      </Banner>
+                    ) : rows.map((c) => {
+                      const key = rowKey(c);
+                      const typed = qty[key] ?? "";
+                      const portion = portionByTicket.get(c.ticketID);
+                      const over = (plan?.overruns ?? []).find((o) => o.lineIndex === i && o.ticketID === c.ticketID);
+                      const issue = budgetIssues.find((b) => b.ticketID === c.ticketID);
+                      const blocked = issue && issue.code !== "UNDERSPEND_NOTE_REQUIRED";
+                      const unit = c.unit ? ` ${c.unit}` : "";
+                      const takenByOthers = rows.filter((r) => r !== c).reduce((sum, r) => sum + (Number(qty[rowKey(r)]) || 0), 0);
+                      const stillNeeded = c.remainingQuantity ?? Infinity;
+                      const fill = Math.max(0, roundQty(Math.min(line.quantity - takenByOthers, stillNeeded)));
+                      return (
+                        <div key={key} className={`split-request-row${Number(typed) > 0 ? " split-request-row-on" : ""}`}>
+                          <div className="split-request-info">
+                            <strong>{c.projectName}</strong>
+                            <span className="split-muted">
+                              {c.materialType}
+                              {c.requestedQuantity != null && ` · ${t("ck.req_line", { requested: `${c.requestedQuantity}${unit}`, left: `${c.remainingQuantity ?? "?"}${unit}` })}`}
+                            </span>
+                          </div>
+                          <div className="split-request-input">
+                            <label>
+                              <span>{t("ck.allocate_qty")}</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                maxLength={9}
+                                value={typed}
+                                aria-invalid={over ? "true" : undefined}
+                                onChange={(e) => { setSubmitProblems([]); setQty((prev) => ({ ...prev, [key]: cleanQty(e.target.value) })); }}
+                              />
+                            </label>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={!(fill > 0) || Number(typed) === fill}
+                              onClick={() => { setSubmitProblems([]); setQty((prev) => ({ ...prev, [key]: String(fill) })); }}
+                            >
+                              {rows.length === 1 ? t("ck.allocate_all") : t("ck.allocate_rest")}
+                            </Button>
+                          </div>
+                          {over && (
+                            <p className="split-over" role="alert">
+                              {over.kind === "request" ? t("ck.over_request", { max: over.max }) : t("ck.over_receipt", { max: over.max })}
+                            </p>
+                          )}
+                          {portion && Number(typed) > 0 && !over && (
+                            <p className="split-request-calc">
+                              <strong>{peso(portion.amount)}</strong>
+                              <span className={portion.resolvesTicket ? "split-done" : "split-open"}>
+                                {portion.resolvesTicket ? t("split.completes") : t("split.stays_open", { remaining: portion.remainingAfter })}
+                              </span>
+                              <span className={blocked ? "split-over" : "split-done"}>
+                                {blocked ? (issue.code === "NO_APPROVED_BUDGET" ? t("ck.no_budget_set") : t("ck.exceeds_budget")) : t("ck.within_budget")}
+                              </span>
+                              {Number(portion.extraQuantity) > 0 && <span className="split-over">{t("split.extra_badge", { qty: portion.extraQuantity })}</span>}
+                            </p>
+                          )}
                         </div>
-                        <table className="split-lines">
-                          <thead><tr><th>{t("split.col_line")}</th><th>{t("split.col_qty")}</th><th>{t("dashboard.amount")}</th></tr></thead>
-                          <tbody>
-                            {portion.lines.map((line) => (
-                              <tr key={`${line.lineIndex}-${line.quantity}`}>
-                                <td>{line.description}</td>
-                                <td>{line.quantity}</td>
-                                <td>{peso(line.amount)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </>
-                    )}
-                  </div>
+                      );
+                    })}
+                    {candidates && rows.length > 0 && leftQty > 0 && <p className="split-muted">{t("ck.left_qty", { qty: leftQty })}</p>}
+                  </section>
                 );
               })}
-              {plan && requestIDs.length === 0 && (
+              {plan && !candidates && (
                 <Banner
                   tone="info"
                   title={t("split.no_open_title")}
@@ -761,11 +875,20 @@ export function SplitReceiptPage() {
               </div>
             )}
 
-            {plan && (
-              <p className="split-totals">
-                {t("split.totals", { allocated: peso(plan.allocated), total: peso(plan.linesTotal) })}
-              </p>
-            )}
+            {plan && (() => {
+              const remainingCents = toCents(draft.amount) - toCents(plan.allocated);
+              const full = plan.ok && remainingCents === 0 && toCents(plan.linesTotal) === toCents(draft.amount);
+              const state = !full ? "incomplete" : budgetBlockers.length > 0 ? "blocked" : "complete";
+              return (
+                <div className={`split-totals-bar split-totals-${state}`} role="status">
+                  <span>{t("ck.receipt_total_label")} <strong>{peso(draft.amount)}</strong></span>
+                  <span>{t("ck.allocated_label")} <strong>{peso(plan.allocated)}</strong></span>
+                  <span>{t("ck.remaining_label")} <strong>{peso(remainingCents / 100)}</strong></span>
+                  {full && budgetBlockers.length === 0 && <span className="split-totals-badge">{t("ck.fully_allocated")}</span>}
+                  {full && budgetBlockers.length > 0 && <span className="split-totals-badge">{t("ck.allocated_blocked")}</span>}
+                </div>
+              );
+            })()}
 
             <div className="submit-expense-footer">
               <SubmitBlockers gaps={[budgetBlockers.length > 0 && t("bd.over_title"), needsReason && !reasonOk && t("gap.split_reason")].filter(Boolean)} note={t("split.footer_note")} />

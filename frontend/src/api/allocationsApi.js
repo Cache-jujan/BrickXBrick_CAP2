@@ -12,8 +12,9 @@ export async function listOpenRequests() {
 /**
  * Preview a receipt split without saving expenses.
  * @param {Array<{description: string, quantity: number, amount: number}>} lineItems Receipt lines.
- * @param {{excludeTicketIDs?: string[], feeTargets?: Object<string, string>, lineTargets?: Object<string, string>}} [options]
- *   Requests to exclude, fee destinations by line index, and lines matched to a request by hand (line index to ticket id).
+ * @param {{excludeTicketIDs?: string[], feeTargets?: Object<string, string>, lineTargets?: Object<string, string>, quantityTargets?: Object<string, number>}} [options]
+ *   Requests to exclude, fee destinations by line index, lines matched to a request by hand (line index to ticket id),
+ *   and typed quantities ("lineIndex:ticketID" to quantity): a line with any typed quantity is split exactly so.
  * @returns {Promise<object>} The server's allocation plan and validation results.
  */
 export async function previewAllocation(lineItems, options = {}) {
@@ -22,6 +23,7 @@ export async function previewAllocation(lineItems, options = {}) {
     excludeTicketIDs: options.excludeTicketIDs || [],
     feeTargets: options.feeTargets || {},
     lineTargets: options.lineTargets || {},
+    quantityTargets: options.quantityTargets || {},
   });
   return data;
 }

@@ -5,20 +5,26 @@
 const hundredths = (value) => Math.round(Number(value) * 100);
 const normalize = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
+/** True when a receipt line is for this request (same rule matchedQuantity uses). */
+export function lineMatchesRequest(line, { materialType, bomItemID, ticketID }) {
+  if (!line) return false;
+  // The receipt reader already tied this line to one request: that tag decides.
+  if (line.matchedTicketID != null) return String(line.matchedTicketID) === String(ticketID);
+  const requestedName = normalize(materialType);
+  const description = normalize(line.description);
+  return bomItemID
+    ? line.bomItemID === bomItemID
+      || (line.matchedTicketID != null && String(line.matchedTicketID) === String(ticketID))
+      || (!line.bomItemID && description === requestedName)
+    : requestedName !== "" && description.includes(requestedName);
+}
+
 /** Quantity of only the receipt lines for the requested material; null when none match or a matched line has no quantity. */
 export function matchedQuantity(lines, materialType, bomItemID, ticketID) {
-  const requestedName = normalize(materialType);
   let found = false;
   let sum = 0;
   for (const line of lines ?? []) {
-    if (!line) continue;
-    const description = normalize(line.description);
-    const matches = bomItemID
-      ? line.bomItemID === bomItemID
-        || (line.matchedTicketID != null && String(line.matchedTicketID) === String(ticketID))
-        || (!line.bomItemID && description === requestedName)
-      : requestedName !== "" && description.includes(requestedName);
-    if (!matches) continue;
+    if (!lineMatchesRequest(line, { materialType, bomItemID, ticketID })) continue;
     const raw = line.quantity;
     const qty = raw === "" || raw == null ? NaN : Number(raw);
     if (!Number.isFinite(qty)) return null;
@@ -26,6 +32,21 @@ export function matchedQuantity(lines, materialType, bomItemID, ticketID) {
     sum += qty;
   }
   return found ? sum : null;
+}
+
+/**
+ * Which request each named receipt line belongs to, so the page can tag it.
+ * state: "selected" (the chosen request), "other" (another open request, in `others`),
+ * "none" (no open request matches). Blank lines get null.
+ */
+export function lineOwners(lines, tickets, selectedTicketId) {
+  return (lines ?? []).map((line) => {
+    if (!line || !normalize(line.description)) return null;
+    const hits = (tickets ?? []).filter((ticket) => lineMatchesRequest(line, ticket));
+    if (hits.some((ticket) => ticket.ticketID === selectedTicketId)) return { state: "selected", others: [] };
+    if (hits.length > 0) return { state: "other", others: hits };
+    return { state: "none", others: [] };
+  });
 }
 
 /** Total quantity on every line (the receipt total); a line with no quantity counts as 1. */

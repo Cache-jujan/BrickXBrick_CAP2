@@ -10,7 +10,7 @@ import "./ReceiptScanTray.css";
  *
  * @param {{ mode: "submit"|"split", activeScanID: string, onOpen: (scan: object) => void }} props
  */
-export function ReceiptScanTray({ mode, activeScanID, onOpen }) {
+export function ReceiptScanTray({ mode, activeScanID, onOpen, onCancelOpen }) {
   const { t } = useLocale();
   const { scans, dismissScan } = useReceiptScans();
   const rows = scans.filter((s) => s.context?.source === "web" && s.context?.mode === mode);
@@ -47,11 +47,15 @@ export function ReceiptScanTray({ mode, activeScanID, onOpen }) {
                     {t("scan.enter_by_hand")}
                   </Button>
                 )}
-                {scan.status !== "Scanning" && (
-                  <Button type="button" variant="ghost" onClick={() => dismissScan(scan.scanID)} aria-label={`${t("common.remove")}: ${name}`}>
-                    {t("common.remove")}
-                  </Button>
-                )}
+                {/* Cancel while it is still being read; Remove once it is done. Both drop it from the list. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => { dismissScan(scan.scanID); if (open) onCancelOpen?.(scan); }}
+                  aria-label={`${scan.status === "Scanning" ? t("scan.cancel") : t("common.remove")}: ${name}`}
+                >
+                  {scan.status === "Scanning" ? t("scan.cancel") : t("common.remove")}
+                </Button>
               </span>
             </li>
           );
