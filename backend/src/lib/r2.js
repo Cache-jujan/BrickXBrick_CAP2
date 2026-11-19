@@ -115,7 +115,10 @@ async function getSignedReadUrl(key, { expiresIn = SIGNED_URL_TTL_SECONDS } = {}
 // getSignedReadUrlFromPublicUrl(url, opts) -> a signed URL for a stored URL, or null when
 // the URL is not one of ours (an outside link is never signed).
 async function getSignedReadUrlFromPublicUrl(url, opts) {
-    const key = keyFromPublicUrl(url);
+    // A stored URL can carry a ?query or #fragment after the key (demo rows use ?demo=R1 to make
+    // otherwise identical receipts distinct). It is never part of the object name, so drop it
+    // here. keyFromPublicUrl stays strict: uploads and submissions still reject such URLs.
+    const key = typeof url === "string" ? keyFromPublicUrl(url.replace(/[?#].*$/s, "")) : null;
     return key ? getSignedReadUrl(key, opts) : null;
 }
 
