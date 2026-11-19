@@ -101,3 +101,13 @@ test("r2: a stored URL is signed for an hour, and the signed URL maps back to th
   assert.equal(await r2.getSignedReadUrlFromPublicUrl("https://elsewhere.test/x.jpg"), null);
   assert.equal(r2.storedUrlFromSignedUrl("https://elsewhere.test/bkt/x.jpg"), null);
 });
+
+test("r2: a stored URL with a ?query suffix signs the same object; keyFromPublicUrl still rejects it", async () => {
+  const plain = await r2.getSignedReadUrlFromPublicUrl("https://pub.test/receipts/a.jpg");
+  const suffixed = await r2.getSignedReadUrlFromPublicUrl("https://pub.test/receipts/a.jpg?demo=R1");
+  assert.ok(suffixed.includes("/receipts/a.jpg?X-Amz-"));
+  assert.ok(!suffixed.includes("demo="));
+  assert.equal(r2.storedUrlFromSignedUrl(suffixed), "https://pub.test/receipts/a.jpg");
+  assert.equal(r2.keyFromPublicUrl("https://pub.test/receipts/a.jpg?demo=R1"), null);
+  assert.ok(plain);
+});
